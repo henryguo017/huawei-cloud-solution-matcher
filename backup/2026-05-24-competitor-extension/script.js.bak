@@ -1,0 +1,532 @@
+const Config = {
+    API_BASE_URL: 'http://localhost:8000/api',
+    ANIMATION: {
+        PARTICLE_COUNT: 80,
+        CONNECTION_DISTANCE: 150,
+        PARTICLE_SPEED: 0.5
+    },
+    INDUSTRIES: [
+        '智慧农业', '工业互联网', '智慧园区', '智慧城市', '智慧交通',
+        '智慧教育', '智慧医疗', '智慧金融', '智慧能源', '智慧文旅'
+    ],
+    COMPETITORS: ['阿里云', '腾讯云', 'AWS', 'Azure', '百度云']
+};
+
+const State = {
+    currentPage: 'solution',
+    loadingStates: {
+        match: false,
+        analyze: false,
+        rebuild: false,
+        clear: false
+    },
+    knowledgeStats: null,
+    resultCache: {}
+};
+
+class ParticleSystem {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.particles = [];
+        this.animationId = null;
+        this.init();
+    }
+
+    init() {
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        
+        for (let i = 0; i < Config.ANIMATION.PARTICLE_COUNT; i++) {
+            this.particles.push({
+                x: Math.random() * this.canvas.width,
+                y: Math.random() * this.canvas.height,
+                vx: (Math.random() - 0.5) * Config.ANIMATION.PARTICLE_SPEED,
+                vy: (Math.random() - 0.5) * Config.ANIMATION.PARTICLE_SPEED,
+                radius: Math.random() * 2 + 1
+            });
+        }
+        
+        this.animate();
+    }
+
+    resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+    }
+
+    update() {
+        this.particles.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            
+            if (p.x < 0 || p.x > this.canvas.width) p.vx *= -1;
+            if (p.y < 0 || p.y > this.canvas.height) p.vy *= -1;
+        });
+    }
+
+    draw() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        this.particles.forEach((p1, i) => {
+            this.particles.slice(i + 1).forEach(p2 => {
+                const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                if (dist < Config.ANIMATION.CONNECTION_DISTANCE) {
+                    this.ctx.beginPath();
+                    this.ctx.strokeStyle = `rgba(100, 150, 255, ${1 - dist / Config.ANIMATION.CONNECTION_DISTANCE})`;
+                    this.ctx.lineWidth = 0.5;
+                    this.ctx.moveTo(p1.x, p1.y);
+                    this.ctx.lineTo(p2.x, p2.y);
+                    this.ctx.stroke();
+                }
+            });
+        });
+        
+        this.particles.forEach(p => {
+            this.ctx.beginPath();
+            this.ctx.fillStyle = 'rgba(100, 150, 255, 0.6)';
+            this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+    }
+
+    animate() {
+        this.update();
+        this.draw();
+        this.animationId = requestAnimationFrame(() => this.animate());
+    }
+
+    destroy() {
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+        }
+    }
+}
+
+const API = {
+    async match(demand) {
+        const response = await fetch(`${Config.API_BASE_URL}/match`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ demand })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`匹配失败: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    },
+
+    async analyze(competitor, industry) {
+        const response = await fetch(`${Config.API_BASE_URL}/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ competitor, industry })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`分析失败: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    },
+
+    async getKnowledgeStats() {
+        const response = await fetch(`${Config.API_BASE_URL}/knowledge/stats`);
+        
+        if (!response.ok) {
+            throw new Error(`获取统计失败: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    },
+
+    async rebuildKnowledge() {
+        const response = await fetch(`${Config.API_BASE_URL}/knowledge/rebuild`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`重建失败: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    },
+
+    async clearKnowledge() {
+        const response = await fetch(`${Config.API_BASE_URL}/knowledge/clear`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`清空失败: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    }
+};
+
+const UI = {
+    showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    },
+
+    setButtonLoading(button, loading) {
+        if (loading) {
+            button.classList.add('loading');
+            button.disabled = true;
+        } else {
+            button.classList.remove('loading');
+            button.disabled = false;
+        }
+    },
+
+    switchPage(pageName) {
+        document.querySelectorAll('.page').forEach(page => {
+            page.classList.remove('active');
+        });
+        document.getElementById(`page-${pageName}`).classList.add('active');
+        
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        document.querySelector(`.nav-item[data-page="${pageName}"]`).classList.add('active');
+        
+        State.currentPage = pageName;
+    },
+
+    renderMarkdown(content) {
+        if (typeof marked !== 'undefined') {
+            return marked.parse(content);
+        }
+        return content.replace(/\n/g, '<br>');
+    },
+
+    renderSources(container, sources) {
+        if (!sources || sources.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-secondary);">无参考文档</p>';
+            return;
+        }
+        
+        container.innerHTML = sources.map((doc, i) => `
+            <div class="source-item">
+                <p><strong>文档 ${i + 1}:</strong> ${doc.metadata?.source || '未知'}</p>
+                <p><strong>行业:</strong> ${doc.metadata?.industry || '未知'}</p>
+                <p><strong>内容摘要:</strong> ${doc.page_content?.substring(0, 200) || ''}...</p>
+            </div>
+        `).join('<hr style="border-color: rgba(255,255,255,0.1); margin: 16px 0;">');
+    },
+
+    downloadFile(content, filename) {
+        const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+};
+
+const KnowledgeUI = {
+    chart: null,
+
+    async loadStats() {
+        try {
+            const stats = await API.getKnowledgeStats();
+            State.knowledgeStats = stats;
+            
+            const accuracy = stats.accuracy || 50;
+            
+            document.getElementById('stat-documents').textContent = stats.total_documents || 0;
+            document.getElementById('stat-industries').textContent = stats.supported_industries?.length || 0;
+            document.getElementById('stat-accuracy').textContent = `${accuracy}%`;
+            document.getElementById('kb-total-docs').textContent = stats.total_documents || 0;
+            document.getElementById('kb-total-industries').textContent = stats.supported_industries?.length || 0;
+            document.getElementById('kb-accuracy').textContent = `${accuracy}%`;
+            
+            this.renderChart(stats.industry_counts || {});
+        } catch (error) {
+            console.error('加载统计失败:', error);
+            UI.showToast('加载统计数据失败，请检查后端服务', 'warning');
+        }
+    },
+
+    renderChart(industryCounts) {
+        const canvas = document.getElementById('industry-chart');
+        if (!canvas) return;
+        
+        const labels = Object.keys(industryCounts);
+        const data = Object.values(industryCounts);
+        
+        if (this.chart) {
+            this.chart.destroy();
+        }
+        
+        this.chart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '文档数量',
+                    data: data,
+                    backgroundColor: 'rgba(255, 0, 0, 0.6)',
+                    borderColor: 'rgba(255, 0, 0, 1)',
+                    borderWidth: 1,
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `文档数量: ${context.raw}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 50,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#B0B8C8',
+                            stepSize: 10,
+                            font: {
+                                size: 12
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: '文档数量',
+                            color: '#B0B8C8',
+                            font: {
+                                size: 14
+                            }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#FFFFFF',
+                            font: {
+                                size: 13
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+};
+
+function initEventListeners() {
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const page = item.dataset.page;
+            UI.switchPage(page);
+            
+            if (page === 'knowledge') {
+                KnowledgeUI.loadStats();
+            }
+        });
+    });
+    
+    const mobileToggle = document.getElementById('mobile-menu-toggle');
+    const sidebar = document.querySelector('.sidebar');
+    
+    mobileToggle?.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+    });
+    
+    const demandInput = document.getElementById('demand-input');
+    const charCount = document.getElementById('demand-char-count');
+    
+    demandInput?.addEventListener('input', () => {
+        const length = demandInput.value.length;
+        charCount.textContent = length;
+        
+        if (length > 2000) {
+            charCount.style.color = 'var(--error)';
+        } else {
+            charCount.style.color = 'var(--text-secondary)';
+        }
+    });
+    
+    const matchBtn = document.getElementById('match-btn');
+    matchBtn?.addEventListener('click', async () => {
+        const demand = demandInput.value.trim();
+        
+        if (!demand) {
+            UI.showToast('请输入客户需求描述', 'warning');
+            return;
+        }
+        
+        if (demand.length > 2000) {
+            UI.showToast('需求描述不能超过2000字符', 'warning');
+            return;
+        }
+        
+        UI.setButtonLoading(matchBtn, true);
+        
+        try {
+            const result = await API.match(demand);
+            
+            const resultContainer = document.getElementById('solution-result');
+            const resultContent = document.getElementById('solution-content');
+            const sourcesContainer = document.getElementById('solution-sources');
+            
+            resultContent.innerHTML = UI.renderMarkdown(result.answer);
+            UI.renderSources(sourcesContainer, result.source_documents);
+            resultContainer.style.display = 'block';
+            
+            State.resultCache.solution = result;
+            
+            UI.showToast('匹配完成！', 'success');
+        } catch (error) {
+            console.error('匹配失败:', error);
+            UI.showToast(error.message || '匹配失败，请重试', 'error');
+        } finally {
+            UI.setButtonLoading(matchBtn, false);
+        }
+    });
+    
+    document.getElementById('clear-solution-btn')?.addEventListener('click', () => {
+        demandInput.value = '';
+        charCount.textContent = '0';
+        document.getElementById('solution-result').style.display = 'none';
+        State.resultCache.solution = null;
+    });
+    
+    document.getElementById('download-solution-btn')?.addEventListener('click', () => {
+        if (State.resultCache.solution) {
+            UI.downloadFile(
+                State.resultCache.solution.answer,
+                '华为云解决方案建议书.md'
+            );
+        }
+    });
+    
+    const analyzeBtn = document.getElementById('analyze-btn');
+    analyzeBtn?.addEventListener('click', async () => {
+        const competitor = document.getElementById('competitor-select').value;
+        const industry = document.getElementById('industry-select').value;
+        
+        UI.setButtonLoading(analyzeBtn, true);
+        
+        try {
+            const result = await API.analyze(competitor, industry);
+            
+            const resultContainer = document.getElementById('competitor-result');
+            const resultContent = document.getElementById('competitor-content');
+            const sourcesContainer = document.getElementById('competitor-sources');
+            
+            resultContent.innerHTML = UI.renderMarkdown(result.answer);
+            UI.renderSources(sourcesContainer, result.source_documents);
+            resultContainer.style.display = 'block';
+            
+            State.resultCache.competitor = { ...result, competitor, industry };
+            
+            UI.showToast('分析完成！', 'success');
+        } catch (error) {
+            console.error('分析失败:', error);
+            UI.showToast(error.message || '分析失败，请重试', 'error');
+        } finally {
+            UI.setButtonLoading(analyzeBtn, false);
+        }
+    });
+    
+    document.getElementById('clear-competitor-btn')?.addEventListener('click', () => {
+        document.getElementById('competitor-result').style.display = 'none';
+        State.resultCache.competitor = null;
+    });
+    
+    document.getElementById('download-competitor-btn')?.addEventListener('click', () => {
+        if (State.resultCache.competitor) {
+            const { competitor, industry, answer } = State.resultCache.competitor;
+            UI.downloadFile(
+                answer,
+                `华为云vs${competitor}_${industry}行业竞争分析报告.md`
+            );
+        }
+    });
+    
+    const rebuildBtn = document.getElementById('rebuild-btn');
+    rebuildBtn?.addEventListener('click', async () => {
+        UI.setButtonLoading(rebuildBtn, true);
+        
+        try {
+            const result = await API.rebuildKnowledge();
+            UI.showToast(`知识库重建完成！共添加 ${result.count || 0} 个文档片段`, 'success');
+            await KnowledgeUI.loadStats();
+        } catch (error) {
+            console.error('重建失败:', error);
+            UI.showToast(error.message || '重建失败，请重试', 'error');
+        } finally {
+            UI.setButtonLoading(rebuildBtn, false);
+        }
+    });
+    
+    const clearKbBtn = document.getElementById('clear-kb-btn');
+    const confirmDialog = document.getElementById('confirm-clear');
+    const confirmCheckbox = document.getElementById('confirm-checkbox');
+    const confirmClearBtn = document.getElementById('confirm-clear-btn');
+    
+    clearKbBtn?.addEventListener('click', () => {
+        confirmDialog.style.display = 'flex';
+    });
+    
+    confirmClearBtn?.addEventListener('click', async () => {
+        if (!confirmCheckbox.checked) {
+            UI.showToast('请先确认清空知识库', 'warning');
+            return;
+        }
+        
+        try {
+            await API.clearKnowledge();
+            UI.showToast('知识库已清空', 'success');
+            confirmDialog.style.display = 'none';
+            confirmCheckbox.checked = false;
+            await KnowledgeUI.loadStats();
+        } catch (error) {
+            console.error('清空失败:', error);
+            UI.showToast(error.message || '清空失败，请重试', 'error');
+        }
+    });
+}
+
+function init() {
+    const canvas = document.getElementById('particle-canvas');
+    if (canvas) {
+        new ParticleSystem(canvas);
+    }
+    
+    initEventListeners();
+    
+    KnowledgeUI.loadStats();
+}
+
+document.addEventListener('DOMContentLoaded', init);

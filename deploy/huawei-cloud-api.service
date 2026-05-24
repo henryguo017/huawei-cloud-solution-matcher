@@ -1,0 +1,17 @@
+[Unit]
+Description=Huawei Cloud Solution Matcher API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/huawei-cloud-solution-matcher
+Environment="PATH=/var/www/huawei-cloud-solution-matcher/venv/bin"
+ExecStart=/var/www/huawei-cloud-solution-matcher/venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 --workers 4
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

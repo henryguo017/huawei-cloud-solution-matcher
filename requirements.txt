@@ -1,0 +1,68 @@
+# 核心Web框架
+streamlit==1.35.0
+
+# LangChain生态（固定兼容版本）
+langchain==0.1.20
+langchain-community==0.0.38
+langchain-openai==0.1.7
+langchain-core==0.1.53
+langchain-text-splitters==0.0.2
+langsmith==0.1.147
+
+# OpenAI SDK
+openai==1.30.1
+
+# 向量数据库（使用预编译版本，无需本地编译）
+chromadb==0.4.24
+chroma-hnswlib==0.7.3
+
+# 本地向量模型 (国内镜像加速)
+sentence-transformers==2.7.0
+
+# 文档处理
+pypdf==4.2.0
+python-dotenv==1.0.1
+
+# 报告导出功能
+python-docx==0.8.11
+reportlab==4.0.4
+jinja2==3.1.2
+
+# 数据处理与可视化
+pandas==2.2.2
+plotly==5.22.0
+
+# 其他依赖
+python-multipart==0.0.9
+protobuf==4.25.3
+packaging==23.2
+tenacity==8.3.0
+rich==13.7.1
+pillow==10.3.0
+cachetools==5.3.3
+
+# 解决opentelemetry依赖冲突的固定版本
+opentelemetry-api==1.24.0
+opentelemetry-sdk==1.24.0
+opentelemetry-exporter-otlp-proto-grpc==1.24.0
+opentelemetry-exporter-otlp-proto-common==1.24.0
+opentelemetry-proto==1.24.0
+opentelemetry-instrumentation==0.45b0
+opentelemetry-instrumentation-asgi==0.45b0
+opentelemetry-instrumentation-fastapi==0.45b0
+opentelemetry-semantic-conventions==0.45b0
+opentelemetry-util-http==0.45b0
+
+# FastAPI Web框架（用于RESTful API）
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+
+# HTTP请求库
+requests==2.31.0
+
+# JWT认证
+PyJWT>=2.8.0
+
+# 密码加密
+passlib[bcrypt]>=1.7.4

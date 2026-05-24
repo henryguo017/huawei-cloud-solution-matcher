@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 华为云解决方案匹配系统</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            background: 
+                linear-gradient(135deg, rgba(199, 0, 11, 0.03) 0%, transparent 40%),
+                linear-gradient(225deg, rgba(74, 144, 226, 0.04) 0%, transparent 40%),
+                linear-gradient(180deg, #FAFBFC 0%, #F5F7FA 30%, #EEF1F5 70%, #F8F9FB 100%);
+            background-attachment: fixed;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(199, 0, 11, 0.04) 0%, transparent 30%),
+                radial-gradient(circle at 85% 85%, rgba(74, 144, 226, 0.05) 0%, transparent 30%),
+                radial-gradient(circle at 50% 30%, rgba(100, 100, 100, 0.02) 0%, transparent 40%),
+                radial-gradient(circle at 30% 70%, rgba(199, 0, 11, 0.02) 0%, transparent 35%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.20;
+        }
+        
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 80px 20px 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .login-box {
+            width: 100%;
+            max-width: 420px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+        }
+        
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .login-logo {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .login-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--neutral-800);
+            margin-bottom: 8px;
+        }
+        
+        .login-subtitle {
+            font-size: 14px;
+            color: var(--neutral-500);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--neutral-700);
+            margin-bottom: 8px;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--neutral-200);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.1);
+        }
+        
+        .captcha-group {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .captcha-input {
+            flex: 1;
+        }
+        
+        .captcha-image {
+            width: 120px;
+            height: 44px;
+            border: 1px solid var(--neutral-200);
+            border-radius: 8px;
+            cursor: pointer;
+            object-fit: cover;
+            background: var(--neutral-50);
+        }
+        
+        .login-button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 8px;
+        }
+        
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(199, 0, 11, 0.3);
+        }
+        
+        .login-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .login-footer {
+            text-align: center;
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--neutral-100);
+        }
+        
+        .login-footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .login-footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .error-message {
+            background: rgba(245, 34, 45, 0.1);
+            color: var(--error);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .back-link {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            color: var(--neutral-600);
+            text-decoration: none;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .back-link:hover {
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="particle-canvas"></canvas>
+    
+    <header class="navbar">
+        <div class="navbar-container">
+            <div class="navbar-brand">
+                <span class="brand-icon">☁️</span>
+                <span class="brand-text">华为云解决方案匹配系统</span>
+            </div>
+        </div>
+    </header>
+    
+    <a id="back-link" href="#" class="back-link">← 返回首页</a>
+    
+    <div class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <div class="login-logo">🔐</div>
+                <h1 class="login-title">用户登录</h1>
+                <p class="login-subtitle">登录后可使用个性化功能</p>
+            </div>
+            
+            <div id="error-message" class="error-message"></div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" id="username" class="form-input" placeholder="请输入用户名" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" id="password" class="form-input" placeholder="请输入密码" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">验证码</label>
+                    <div class="captcha-group">
+                        <input type="text" id="captcha" class="form-input captcha-input" placeholder="请输入验证码" required maxlength="4">
+                        <img id="captcha-img" class="captcha-image" title="点击刷新验证码">
+                    </div>
+                </div>
+                
+                <button type="submit" class="login-button" id="login-btn">登录</button>
+            </form>
+            
+            <div class="login-footer">
+                <p>还没有账户？ <a id="register-link" href="#">立即注册</a></p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        const BASE_URL = window.location.origin;
+        let captchaKey = '';
+        
+        document.getElementById('register-link').href = BASE_URL + '/register.html';
+        document.getElementById('back-link').href = BASE_URL + '/index.html';
+        
+        async function loadCaptcha() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/captcha`);
+                const data = await response.json();
+                
+                captchaKey = data.captcha_key;
+                document.getElementById('captcha-img').src = data.captcha_image;
+            } catch (error) {
+                console.error('加载验证码失败:', error);
+            }
+        }
+        
+        document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
+        
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const captchaValue = document.getElementById('captcha').value;
+            
+            const loginBtn = document.getElementById('login-btn');
+            const errorMsg = document.getElementById('error-message');
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登录中...';
+            errorMsg.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        captcha_key: captchaKey,
+                        captcha_value: captchaValue
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    localStorage.setItem('access_token', data.access_token);
+                    localStorage.setItem('user_info', JSON.stringify(data.user));
+                    
+                    window.location.href = BASE_URL + '/index.html';
+                } else {
+                    errorMsg.textContent = data.detail || '登录失败';
+                    errorMsg.style.display = 'block';
+                    loadCaptcha();
+                }
+            } catch (error) {
+                errorMsg.textContent = '网络错误，请稍后重试';
+                errorMsg.style.display = 'block';
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登录';
+            }
+        });
+        
+        loadCaptcha();
+    </script>
+    
+    <script src="/static/script.js"></script>
+</body>
+</html>

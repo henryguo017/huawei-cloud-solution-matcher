@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="华为云解决方案智能匹配系统">
+    <title>华为云解决方案匹配系统</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="welcome-styles.css">
+</head>
+<body>
+    <canvas id="particle-canvas"></canvas>
+    
+    <!-- 欢迎引导页 -->
+    <div id="welcome-page" class="welcome-page">
+        <div class="welcome-overlay"></div>
+        <canvas id="welcome-particle-canvas"></canvas>
+        
+        <div class="welcome-content">
+            <div class="welcome-badge">✨ AI 智能匹配系统</div>
+            
+            <h1 class="welcome-title">
+                <span class="title-gradient">华为云解决方案</span>
+                <br>
+                <span class="title-highlight">智能匹配系统</span>
+            </h1>
+            
+            <p class="welcome-subtitle">
+                让销售方案准备时间从 <strong class="highlight-time">2小时</strong> 缩短至 <strong class="highlight-time">1分钟</strong>
+            </p>
+            
+            <div class="welcome-stats">
+                <div class="stat-box">
+                    <div class="stat-number" data-target="59">0</div>
+                    <div class="stat-label">匹配准确率 %</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number" data-target="95">0</div>
+                    <div class="stat-label">效率提升 %</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number" data-target="3">0</div>
+                    <div class="stat-label">覆盖行业数</div>
+                </div>
+            </div>
+            
+            <div class="welcome-features">
+                <div class="feature-item">
+                    <span class="feature-icon">🔍</span>
+                    <span class="feature-text">智能匹配解决方案</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">⚔️</span>
+                    <span class="feature-text">竞争对手分析</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📚</span>
+                    <span class="feature-text">知识库管理</span>
+                </div>
+            </div>
+            
+            <div class="welcome-actions">
+                <button id="start-experience-btn" class="btn btn-primary btn-lg">
+                    <span class="btn-icon">🚀</span>
+                    <span class="btn-text">立即体验</span>
+                </button>
+                <div class="skip-option">
+                    <button id="skip-welcome-btn" class="btn btn-ghost">
+                        <span class="btn-text">跳过引导</span>
+                    </button>
+                    <label class="skip-checkbox-label">
+                        <input type="checkbox" id="skip-permanently-checkbox">
+                        <span class="skip-checkbox-text">下次不再显示</span>
+                    </label>
+                </div>
+            </div>
+            
+            <p class="welcome-hint">💡 也可以点击右上角"快速体验"按钮随时体验</p>
+        </div>
+    </div>
+    
+    <!-- Demo 案例选择器 -->
+    <div id="demo-selector-modal" class="demo-modal" style="display: none;">
+        <div class="demo-modal-overlay"></div>
+        <div class="demo-modal-content glass-card">
+            <div class="demo-modal-header">
+                <h3>🎯 选择 Demo 案例</h3>
+                <button class="demo-close-btn" id="close-demo-modal">✕</button>
+            </div>
+            <div class="demo-cases">
+                <div class="demo-case" data-case="manufacturing">
+                    <div class="case-icon">🏭</div>
+                    <div class="case-info">
+                        <h4>制造业预测性维护</h4>
+                        <p>50台生产设备的故障预测与停机优化</p>
+                    </div>
+                </div>
+                <div class="demo-case" data-case="agriculture">
+                    <div class="case-icon">🌾</div>
+                    <div class="case-info">
+                        <h4>智慧农业植物方舱</h4>
+                        <p>环境监测、自动化管理与产量提升</p>
+                    </div>
+                </div>
+                <div class="demo-case" data-case="park">
+                    <div class="case-icon">🏢</div>
+                    <div class="case-info">
+                        <h4>智慧园区管理</h4>
+                        <p>安防、能源、停车综合管理</p>
+                    </div>
+                </div>
+            </div>
+            <div class="demo-modal-footer">
+                <p class="demo-tip">💡 选择案例后将自动填充需求并演示匹配过程</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 演示提示 -->
+    <div id="demo-notice" class="demo-notice" style="display: none;">
+        <span class="notice-icon">💡</span>
+        <span class="notice-text">这是演示结果，您可以输入自己的需求进行匹配</span>
+        <button class="notice-close" id="close-demo-notice">✕</button>
+    </div>
+    
+    <!-- 快速体验按钮（固定在右上角） -->
+    <button id="quick-demo-btn" class="quick-demo-btn" title="快速体验 Demo">
+        <span class="demo-icon">🎯</span>
+        <span class="demo-text">快速体验</span>
+    </button>
+    
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <span class="logo-icon">☁️</span>
+                    <h1 class="logo-text">华为云</h1>
+                </div>
+                <p class="version">版本 1.0.0</p>
+            </div>
+            
+            <div class="stats-card glass-card">
+                <h3 class="stats-title">📊 系统状态</h3>
+                <div class="stat-item">
+                    <span class="stat-label">知识库文档数</span>
+                    <span class="stat-value" id="stat-documents">--</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">覆盖行业数</span>
+                    <span class="stat-value" id="stat-industries">--</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">匹配准确率</span>
+                    <span class="stat-value" id="stat-accuracy">87%</span>
+                </div>
+            </div>
+            
+            <nav class="nav-menu">
+                <button class="nav-item active" data-page="solution">
+                    <span class="nav-icon">🔍</span>
+                    <span class="nav-text">解决方案智能匹配</span>
+                </button>
+                <button class="nav-item" data-page="competitor">
+                    <span class="nav-icon">⚔️</span>
+                    <span class="nav-text">竞争对手方案分析</span>
+                </button>
+                <button class="nav-item" data-page="knowledge">
+                    <span class="nav-icon">📚</span>
+                    <span class="nav-text">知识库管理</span>
+                </button>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <h4>📖 使用说明</h4>
+                <ol>
+                    <li>在知识库管理页面构建知识库</li>
+                    <li>在解决方案匹配页面输入客户需求</li>
+                    <li>在竞争对手分析页面选择参数</li>
+                </ol>
+            </div>
+        </aside>
+        
+        <main class="main-content">
+            <button class="mobile-menu-toggle" id="mobile-menu-toggle">☰</button>
+            
+            <div id="page-solution" class="page active">
+                <header class="page-header">
+                    <h2 class="page-title">🔍 华为云解决方案智能匹配</h2>
+                    <p class="page-subtitle">输入客户的业务需求和痛点，系统将自动匹配最适合的华为云行业解决方案</p>
+                </header>
+                
+                <div class="content-card glass-card">
+                    <div class="form-group">
+                        <label class="form-label">✍️ 客户需求描述</label>
+                        <textarea 
+                            id="demand-input" 
+                            class="textarea-input" 
+                            rows="8" 
+                            placeholder="例如：我们是一家中型制造企业，有50台生产设备，经常因为设备突发故障导致生产线停工，每次停工损失约5万元。我们希望能够实现设备的预测性维护，提前发现故障隐患，减少停机时间。"></textarea>
+                        <div class="char-counter">
+                            <span id="demand-char-count">0</span> / 2000 字符
+                        </div>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-primary" id="match-btn">
+                            <span class="btn-text">开始匹配</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                        <button class="btn btn-secondary" id="clear-solution-btn">清空</button>
+                    </div>
+                </div>
+                
+                <div id="solution-result" class="result-container" style="display: none;">
+                    <div class="result-header">
+                        <span class="result-badge success">✅ 匹配完成</span>
+                    </div>
+                    <div class="result-content glass-card" id="solution-content"></div>
+                    <div class="result-actions">
+                        <button class="btn btn-download" id="download-solution-btn">
+                            📥 下载方案文档
+                        </button>
+                    </div>
+                    <details class="source-documents glass-card">
+                        <summary class="source-summary">📚 查看参考的解决方案文档</summary>
+                        <div id="solution-sources"></div>
+                    </details>
+                </div>
+            </div>
+            
+            <div id="page-competitor" class="page">
+                <header class="page-header">
+                    <h2 class="page-title">⚔️ 竞争对手方案智能分析</h2>
+                    <p class="page-subtitle">选择竞争对手和行业，系统将自动生成华为云的差异化优势和销售应对话术</p>
+                </header>
+                
+                <div class="content-card glass-card">
+                    <div class="select-row">
+                        <div class="form-group">
+                            <label class="form-label">选择竞争对手</label>
+                            <select id="competitor-select" class="select-input">
+                                <option value="阿里云">阿里云</option>
+                                <option value="腾讯云">腾讯云</option>
+                                <option value="AWS">AWS</option>
+                                <option value="Azure">Azure</option>
+                                <option value="百度云">百度云</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择行业</label>
+                            <select id="industry-select" class="select-input">
+                                <option value="智慧农业">智慧农业</option>
+                                <option value="工业互联网">工业互联网</option>
+                                <option value="智慧园区">智慧园区</option>
+                                <option value="智慧城市">智慧城市</option>
+                                <option value="智慧交通">智慧交通</option>
+                                <option value="智慧教育">智慧教育</option>
+                                <option value="智慧医疗">智慧医疗</option>
+                                <option value="智慧金融">智慧金融</option>
+                                <option value="智慧能源">智慧能源</option>
+                                <option value="智慧文旅">智慧文旅</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-primary" id="analyze-btn">
+                            <span class="btn-text">开始分析</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                        <button class="btn btn-secondary" id="clear-competitor-btn">清空</button>
+                    </div>
+                </div>
+                
+                <div id="competitor-result" class="result-container" style="display: none;">
+                    <div class="result-header">
+                        <span class="result-badge success">✅ 分析完成</span>
+                    </div>
+                    <div class="result-content glass-card" id="competitor-content"></div>
+                    <div class="result-actions">
+                        <button class="btn btn-download" id="download-competitor-btn">
+                            📥 下载竞争分析报告
+                        </button>
+                    </div>
+                    <details class="source-documents glass-card">
+                        <summary class="source-summary">📚 查看参考的解决方案文档</summary>
+                        <div id="competitor-sources"></div>
+                    </details>
+                </div>
+            </div>
+            
+            <div id="page-knowledge" class="page">
+                <header class="page-header">
+                    <h2 class="page-title">📚 华为云解决方案知识库管理</h2>
+                    <p class="page-subtitle">管理系统的解决方案知识库，支持一键导入华为云官方解决方案文档</p>
+                </header>
+                
+                <div class="stats-grid">
+                    <div class="stat-card glass-card">
+                        <div class="stat-card-value" id="kb-total-docs">--</div>
+                        <div class="stat-card-label">总文档片段数</div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-card-value" id="kb-total-industries">--</div>
+                        <div class="stat-card-label">覆盖行业数</div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-card-value" id="kb-accuracy">--%</div>
+                        <div class="stat-card-label">匹配准确率</div>
+                    </div>
+                </div>
+                
+                <div class="content-card glass-card">
+                    <h3 class="card-title">📈 行业分布</h3>
+                    <div class="chart-container">
+                        <canvas id="industry-chart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="content-card glass-card">
+                    <h3 class="card-title">⚙️ 知识库操作</h3>
+                    <div class="button-row">
+                        <button class="btn btn-primary" id="rebuild-btn">
+                            <span class="btn-text">🔄 重建知识库</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                        <button class="btn btn-danger" id="clear-kb-btn">🗑️ 清空知识库</button>
+                    </div>
+                    <div id="confirm-clear" class="confirm-dialog" style="display: none;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="confirm-checkbox">
+                            <span>确认清空知识库</span>
+                        </label>
+                        <button class="btn btn-danger btn-sm" id="confirm-clear-btn">确认清空</button>
+                    </div>
+                </div>
+                
+                <div class="info-card glass-card">
+                    <h4>💡 提示</h4>
+                    <ol>
+                        <li>将华为云官方解决方案PDF或TXT文档放入 <code>data/sample_solutions/行业名称/</code> 目录</li>
+                        <li>点击"重建知识库"按钮，系统将自动导入所有文档</li>
+                        <li>支持的行业包括：智慧农业、工业互联网、智慧园区等10个行业</li>
+                    </ol>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <div id="toast-container"></div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="script.js"></script>
+    <script src="welcome-script.js"></script>
+</body>
+</html>
