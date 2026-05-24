@@ -30,7 +30,7 @@ os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 您已配置 DeepSeek API：
 ```
 LLM_PROVIDER=deepseek
-DEEPSEEK_API_KEY=sk-521ad10aad5a44b181881461ab7e941b
+DEEPSEEK_API_KEY=your-deepseek-api-key-here
 ```
 
 DeepSeek 是国内公司，API 应该可以在国内访问。
@@ -113,7 +113,7 @@ import requests
 
 url = "https://api.deepseek.com/v1/chat/completions"
 headers = {
-    "Authorization": "Bearer sk-521ad10aad5a44b181881461ab7e941b",
+    "Authorization": "Bearer YOUR_API_KEY_HERE",
     "Content-Type": "application/json"
 }
 data = {
