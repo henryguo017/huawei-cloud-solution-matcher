@@ -30,6 +30,7 @@ class SourceDocument(BaseModel):
 class MatchResponse(BaseModel):
     answer: str = Field(..., description="匹配结果（Markdown格式）")
     source_documents: List[SourceDocument] = Field(default_factory=list, description="参考文档列表")
+    history_id: Optional[int] = Field(default=None, description="本次匹配的历史记录ID，用于后续更新优化方案")
 
 class AnalyzeResponse(BaseModel):
     answer: str = Field(..., description="分析结果（Markdown格式）")
@@ -54,6 +55,38 @@ class HealthResponse(BaseModel):
     version: str = Field(..., description="版本号")
     services: Dict[str, bool] = Field(..., description="各服务状态")
 
+class RefineSolutionRequest(BaseModel):
+    original_demand: str = Field(..., description="原始客户需求")
+    current_solution: str = Field(..., description="当前方案内容（Markdown）")
+    follow_up: str = Field(..., description="用户的追问/优化要求")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(default_factory=list, description="历史追问对话记录")
+
+class RefineSolutionResponse(BaseModel):
+    refined_solution: str = Field(..., description="优化后的方案（Markdown格式）")
+    follow_up: str = Field(..., description="本次追问内容")
+
+class UpdateSolutionRequest(BaseModel):
+    solution: str = Field(..., description="更新后的完整方案内容（Markdown格式）")
+
+class UpdateSolutionResponse(BaseModel):
+    success: bool = Field(..., description="更新是否成功")
+    message: str = Field(default="方案已更新", description="操作消息")
+
+
+class DashboardStatsResponse(BaseModel):
+    industry_coverage: Dict[str, int] = Field(default_factory=dict, description="各行业文档覆盖数量")
+    match_trends: List[Dict[str, Any]] = Field(default_factory=list, description="最近7天匹配趋势")
+    competitor_frequency: Dict[str, int] = Field(default_factory=dict, description="竞品分析频次统计")
+    recent_matches: int = Field(default=0, description="近7天匹配次数")
+    recent_analyses: int = Field(default=0, description="近7天分析次数")
+    match_growth: Optional[float] = Field(default=None, description="方案匹配7日环比涨幅（百分比），None表示前一区间无数据（新增长）")
+    analyze_growth: Optional[float] = Field(default=None, description="竞品分析7日环比涨幅（百分比），None表示前一区间无数据（新增长）")
+    total_documents: int = Field(default=0, description="知识库文档总数")
+    accuracy: int = Field(default=87, description="匹配准确率（百分比）")
+    system_uptime: str = Field(default="--", description="系统运行时间")
+    last_update: str = Field(default="--", description="最后更新时间")
+    version: str = Field(default="v1.0.0", description="系统版本号")
+
 
 class ExportRequest(BaseModel):
     report_type: str = Field(..., description="报告类型: solution/competitor")
@@ -71,3 +104,38 @@ class ExportResultResponse(BaseModel):
     download_url: Optional[str] = Field(default=None, description="下载链接")
     file_size: Optional[int] = Field(default=None, description="文件大小（字节）")
     error_message: Optional[str] = Field(default=None, description="错误信息")
+
+# ========== 历史记录（方案匹配回溯 & 对比） ==========
+
+class MatchHistoryItem(BaseModel):
+    id: int = Field(..., description="记录ID")
+    demand_text: str = Field(..., description="客户需求描述")
+    industry: str = Field(default="", description="识别出的行业")
+    created_at: str = Field(..., description="创建时间")
+
+class MatchHistoryDetail(BaseModel):
+    id: int = Field(..., description="记录ID")
+    demand_text: str = Field(..., description="客户需求描述")
+    solution: str = Field(..., description="完整方案内容（Markdown）")
+    industry: str = Field(default="", description="识别出的行业")
+    sources: List[Dict[str, Any]] = Field(default_factory=list, description="参考文档列表")
+    created_at: str = Field(..., description="创建时间")
+
+class MatchHistoryListResponse(BaseModel):
+    items: List[MatchHistoryItem] = Field(default_factory=list, description="历史记录列表")
+    total: int = Field(default=0, description="总记录数")
+
+class CompareRequest(BaseModel):
+    id_a: int = Field(..., description="方案A的记录ID")
+    id_b: int = Field(..., description="方案B的记录ID")
+
+class CompareResponse(BaseModel):
+    item_a: MatchHistoryDetail = Field(..., description="方案A详情")
+    item_b: MatchHistoryDetail = Field(..., description="方案B详情")
+
+class CompareSummaryRequest(BaseModel):
+    id_a: int = Field(..., description="方案A的记录ID")
+    id_b: int = Field(..., description="方案B的记录ID")
+
+class CompareSummaryResponse(BaseModel):
+    summary: str = Field(..., description="AI智能对比总结")

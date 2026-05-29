@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
-<link rel="stylesheet" href="style.css?v=20260529">
-<link rel="stylesheet" href="welcome-styles.css?v=20260529">
+    <link rel="stylesheet" href="style.css?v=20260530s">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260530s">
 </head>
 <body>
     <canvas id="particle-canvas"></canvas>
@@ -141,6 +141,14 @@
                     <span class="nav-icon">⚔️</span>
                     <span class="nav-text">竞争分析</span>
                 </button>
+                <button class="navbar-item" data-page="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Dashboard</span>
+                </button>
+                <button class="navbar-item" data-page="history">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-text">历史记录</span>
+                </button>
                 <button class="navbar-item" data-page="knowledge">
                     <span class="nav-icon">📚</span>
                     <span class="nav-text">知识库</span>
@@ -181,6 +189,14 @@
             <span class="nav-icon">⚔️</span>
             <span class="nav-text">竞争分析</span>
         </button>
+        <button class="mobile-item" data-page="dashboard">
+            <span class="nav-icon">📊</span>
+            <span class="nav-text">Dashboard</span>
+        </button>
+        <button class="mobile-item" data-page="history">
+            <span class="nav-icon">📋</span>
+            <span class="nav-text">历史记录</span>
+        </button>
         <button class="mobile-item" data-page="knowledge">
             <span class="nav-icon">📚</span>
             <span class="nav-text">知识库</span>
@@ -218,12 +234,73 @@
                         <button class="btn btn-secondary" id="clear-solution-btn">清空</button>
                     </div>
                 </div>
-                
+
+                <!-- 方案匹配进度面板 -->
+                <div id="match-progress-panel" class="progress-panel" style="display: none;">
+                    <div class="progress-header">
+                        <div class="progress-spinner"></div>
+                        <span class="progress-title">正在为您匹配最佳方案...</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="match-progress-bar"></div>
+                    </div>
+                    <div class="progress-steps" id="match-progress-steps">
+                        <div class="progress-step" data-step="0">
+                            <div class="step-icon">🧠</div>
+                            <div class="step-info">
+                                <div class="step-label">理解客户需求</div>
+                                <div class="step-desc">分析业务痛点与关键诉求</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="1">
+                            <div class="step-icon">🔍</div>
+                            <div class="step-info">
+                                <div class="step-label">检索知识库</div>
+                                <div class="step-desc">从 172 个文档片段中匹配相关方案</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="2">
+                            <div class="step-icon">✨</div>
+                            <div class="step-info">
+                                <div class="step-label">生成解决方案</div>
+                                <div class="step-desc">AI 专家撰写定制化方案建议</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                    </div>
+                    <div class="progress-time">
+                        <span class="time-elapsed" id="match-time-elapsed">已用时 0.0s</span>
+                    </div>
+                </div>
+
                 <div id="solution-result" class="result-container" style="display: none;">
                     <div class="result-header">
                         <span class="result-badge success">✅ 匹配完成</span>
                     </div>
                     <div class="result-content content-card" id="solution-content"></div>
+                    <!-- 方案追问优化区域 -->
+                    <div class="follow-up-section" id="follow-up-section" style="display: none;">
+                        <div class="follow-up-divider">
+                            <span class="follow-up-divider-text">💬 方案追问优化</span>
+                            <button class="btn-link" id="clear-follow-up-btn">清空历史</button>
+                        </div>
+                        <div class="follow-up-history" id="follow-up-history"></div>
+                        <div class="follow-up-loading" id="follow-up-loading" style="display: none;">
+                            <div class="follow-up-loading-dot"></div>
+                            <div class="follow-up-loading-dot"></div>
+                            <div class="follow-up-loading-dot"></div>
+                            <span>正在优化方案...</span>
+                        </div>
+                        <div class="follow-up-input-area">
+                            <textarea id="follow-up-input" placeholder="输入追问内容，例如：把价格部分再详细一点"></textarea>
+                            <button class="btn btn-primary btn-sm" id="send-follow-up-btn">发送</button>
+                        </div>
+                        <div class="follow-up-actions" id="follow-up-actions" style="display: none;">
+                            <button class="btn btn-success btn-sm" id="apply-refined-btn">✅ 使用此优化结果</button>
+                        </div>
+                    </div>
                     <div class="result-actions">
                         <button class="btn btn-primary" id="download-solution-btn">
                             📥 下载方案文档
@@ -293,7 +370,55 @@
                         <button class="btn btn-secondary" id="clear-competitor-btn">清空</button>
                     </div>
                 </div>
-                
+
+                <!-- 竞品分析进度面板 -->
+                <div id="analyze-progress-panel" class="progress-panel" style="display: none;">
+                    <div class="progress-header">
+                        <div class="progress-spinner"></div>
+                        <span class="progress-title">正在生成竞争分析报告...</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="analyze-progress-bar"></div>
+                    </div>
+                    <div class="progress-steps" id="analyze-progress-steps">
+                        <div class="progress-step" data-step="0">
+                            <div class="step-icon">🔍</div>
+                            <div class="step-info">
+                                <div class="step-label">检索华为云方案</div>
+                                <div class="step-desc">调取华为云该行业解决方案资料</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="1">
+                            <div class="step-icon">📊</div>
+                            <div class="step-info">
+                                <div class="step-label">检索竞品资料</div>
+                                <div class="step-desc">调取竞品行业方案与优劣势分析</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="2">
+                            <div class="step-icon">🧠</div>
+                            <div class="step-info">
+                                <div class="step-label">分析竞争态势</div>
+                                <div class="step-desc">对比双方方案，提炼差异化优势</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="3">
+                            <div class="step-icon">💬</div>
+                            <div class="step-info">
+                                <div class="step-label">生成销售话术</div>
+                                <div class="step-desc">撰写应对策略与实战销售话术</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                    </div>
+                    <div class="progress-time">
+                        <span class="time-elapsed" id="analyze-time-elapsed">已用时 0.0s</span>
+                    </div>
+                </div>
+
                 <div id="competitor-result" class="result-container" style="display: none;">
                     <div class="result-header">
                         <span class="result-badge success">✅ 分析完成</span>
@@ -308,6 +433,106 @@
                         <summary class="source-summary">📚 查看参考的解决方案文档</summary>
                         <div id="competitor-sources"></div>
                     </details>
+                </div>
+            </div>
+            
+            <!-- Dashboard 数据仪表盘页面 -->
+            <div id="page-dashboard" class="page">
+                <header class="page-header">
+                    <h2 class="page-title">📊 数据仪表盘 Dashboard</h2>
+                    <p class="page-subtitle">实时监控系统的使用数据、行业覆盖与竞品分析洞察</p>
+                </header>
+                
+                <!-- KPI 统计卡片 -->
+                <div class="dashboard-kpi-grid">
+                    <div class="dashboard-kpi-card">
+                        <div class="kpi-icon">🔍</div>
+                        <div class="kpi-content">
+                            <div class="kpi-value" id="dash-total-matches">--</div>
+                            <div class="kpi-label">近7天匹配</div>
+                        </div>
+                        <div class="kpi-trend" id="dash-match-trend">↗ +12%</div>
+                    </div>
+                    <div class="dashboard-kpi-card">
+                        <div class="kpi-icon">⚔️</div>
+                        <div class="kpi-content">
+                            <div class="kpi-value" id="dash-total-analyses">--</div>
+                            <div class="kpi-label">近7天分析</div>
+                        </div>
+                        <div class="kpi-trend" id="dash-analyze-trend">↗ +8%</div>
+                    </div>
+                    <div class="dashboard-kpi-card">
+                        <div class="kpi-icon">📁</div>
+                        <div class="kpi-content">
+                            <div class="kpi-value" id="dash-total-docs">--</div>
+                            <div class="kpi-label">知识库文档</div>
+                        </div>
+                        <div class="kpi-trend static">实时</div>
+                    </div>
+                    <div class="dashboard-kpi-card">
+                        <div class="kpi-icon">🎯</div>
+                        <div class="kpi-content">
+                            <div class="kpi-value" id="dash-accuracy">--%</div>
+                            <div class="kpi-label">匹配准确率</div>
+                        </div>
+                        <div class="kpi-trend static">AI驱动</div>
+                    </div>
+                </div>
+                
+                <!-- 图表区域 -->
+                <div class="dashboard-charts-grid">
+                    <!-- 行业覆盖热力图 -->
+                    <div class="dashboard-chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-title">🌡️ 行业覆盖热力图</h3>
+                            <span class="chart-subtitle">各行业解决方案文档覆盖度</span>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="industry-heatmap-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 最近匹配趋势图 -->
+                    <div class="dashboard-chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-title">📈 最近匹配趋势</h3>
+                            <span class="chart-subtitle">近7天解决方案匹配活跃度</span>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="match-trend-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 竞品分析频次统计 -->
+                    <div class="dashboard-chart-card wide">
+                        <div class="chart-header">
+                            <h3 class="chart-title">🏆 竞品分析频次 Top12</h3>
+                            <span class="chart-subtitle">各竞争对手被分析的次数统计</span>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="competitor-freq-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 系统信息栏 -->
+                <div class="dashboard-info-bar">
+                    <div class="info-item">
+                        <span class="info-label">系统版本</span>
+                        <span class="info-value" id="dash-version">v1.0.0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">运行时间</span>
+                        <span class="info-value" id="dash-uptime">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">最后更新</span>
+                        <span class="info-value" id="dash-last-update">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">数据状态</span>
+                        <span class="info-value status-online">● 实时同步</span>
+                    </div>
                 </div>
             </div>
             
@@ -349,6 +574,18 @@
                         </button>
                         <button class="btn btn-danger" id="clear-kb-btn">🗑️ 清空知识库</button>
                     </div>
+
+                    <!-- 知识库重建进度面板 -->
+                    <div id="rebuild-progress-panel" class="progress-panel" style="display: none; margin-top: 20px;">
+                        <div class="progress-header">
+                            <div class="progress-spinner"></div>
+                            <span class="progress-title">正在重建知识库...</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar indeterminate" id="rebuild-progress-bar"></div>
+                        </div>
+                        <div class="rebuild-status" id="rebuild-status-text">正在读取文档目录...</div>
+                    </div>
                     <div id="confirm-clear" class="confirm-dialog" style="display: none;">
                         <label class="checkbox-label">
                             <input type="checkbox" id="confirm-checkbox">
@@ -367,14 +604,88 @@
                     </ol>
                 </div>
             </div>
+
+            <!-- 历史记录页面 -->
+            <div id="page-history" class="page">
+                <header class="page-header">
+                    <h2 class="page-title">📋 方案匹配历史记录</h2>
+                    <p class="page-subtitle">随时调阅过往方案，支持两两对比差异，体现"以客户为中心"的沉淀思维</p>
+                </header>
+
+                <!-- 对比模式遮罩层 -->
+                <div id="history-compare-panel" class="history-compare-overlay" style="display: none;">
+                    <div class="history-compare-content">
+                        <div class="compare-header">
+                            <h3>⚖️ 方案对比</h3>
+                            <button class="btn-close" id="close-compare">✕</button>
+                        </div>
+                        <div class="compare-body" id="compare-body">
+                            <!-- 左右分栏由 JS 动态生成 -->
+                        </div>
+                        <!-- AI 智能总结区域（底部） -->
+                        <div class="compare-ai-summary-bottom" id="compare-ai-summary-bottom" style="display: none;">
+                            <div class="ai-summary-label">
+                                <span class="ai-icon">✨</span>
+                                <span>AI 智能对比总结</span>
+                            </div>
+                            <div class="ai-summary-content result-content" id="ai-summary-content"></div>
+                        </div>
+                        <div class="compare-ai-action" id="compare-ai-action">
+                            <button class="btn btn-primary ai-summary-btn" id="btn-ai-summary">
+                                <span class="ai-btn-icon">✨</span>
+                                <span>AI 智能总结</span>
+                            </button>
+                            <div class="ai-summary-loading" id="ai-summary-loading" style="display: none;">
+                                <div class="loading-spinner"></div>
+                                <span>AI 正在分析对比中...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 详情弹窗 -->
+                <div id="history-detail-modal" class="history-modal" style="display: none;">
+                    <div class="history-modal-content">
+                        <div class="modal-header">
+                            <h3>📄 方案详情</h3>
+                            <button class="btn-close" id="close-detail">✕</button>
+                        </div>
+                        <div class="modal-body" id="detail-body">
+                            <!-- 由 JS 动态生成 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作栏 -->
+                <div class="history-toolbar">
+                    <div class="history-toolbar-left">
+                        <span id="history-count">共 0 条记录</span>
+                    </div>
+                    <div class="history-toolbar-right">
+                        <span id="compare-hint" class="compare-hint">选择两条记录进行对比</span>
+                        <button class="btn btn-primary" id="btn-do-compare" disabled>开始对比</button>
+                        <button class="btn btn-secondary" id="btn-clear-compare" style="display: none;">取消对比</button>
+                    </div>
+                </div>
+
+                <!-- 历史记录列表 -->
+                <div id="history-list" class="history-list">
+                    <!-- 由 JS 动态生成 -->
+                    <div class="history-empty">
+                        <div class="empty-icon">📋</div>
+                        <p>暂无历史记录</p>
+                        <p class="empty-sub">在「解决方案匹配」页面输入需求并匹配后，方案会自动保存到这里</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </main>
-    
+
     <div id="toast-container"></div>
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" onerror="window.__markedFailed=true"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" onerror="window.__chartFailed=true"></script>
-    <script src="script.js"></script>
-    <script src="welcome-script.js"></script>
+    <script src="script.js?v=20260530s"></script>
+    <script src="welcome-script.js?v=20260530s"></script>
 </body>
 </html>

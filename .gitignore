@@ -226,3 +226,5 @@ data/vector_db/
 
 # Temp test scripts
 test_rebuild.py
+data/usage_logs.db
+nul
