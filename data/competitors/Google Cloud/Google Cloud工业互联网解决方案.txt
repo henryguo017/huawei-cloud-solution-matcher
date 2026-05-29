@@ -1,0 +1,26 @@
+# Google Cloud工业互联网解决方案
+
+## 公司概况
+Google Cloud在工业领域主要靠AI/ML和数据分析能力。
+
+## 工业互联网核心方案
+
+### 1. Google Cloud Manufacturing
+- 工业数据平台（BigQuery + Dataflow）
+- 预测性维护和质量分析
+
+### 2. AI工业视觉
+- Vertex AI用于缺陷检测
+- AutoML视觉模型训练
+
+### 3. 供应链优化
+- Google Cloud Supply Chain Twin
+- AI驱动的供应链可见性和优化
+
+## 竞争优势
+- AI/ML技术领先
+- 供应链数字孪生
+
+## 核心劣势（中国市场）
+- 工业OT生态不足
+- 无法服务中国制造业

@@ -66,6 +66,32 @@ class DocumentLoader:
         """分割文档为小块"""
         return self.text_splitter.split_documents(documents)
 
+
+def load_documents_from_directory(directory, chunk_size=1000, chunk_overlap=200):
+    """模块级函数：加载目录文档并分割为chunk，供知识库重建调用"""
+    if not os.path.exists(directory):
+        raise FileNotFoundError(f"目录不存在: {directory}")
+
+    loader = DocumentLoader()
+    # 按传入参数重建 splitter（覆盖类构造函数中的默认值）
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    loader.text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        length_function=len,
+        is_separator_regex=False
+    )
+
+    raw_docs = loader.load_directory(directory)
+    if not raw_docs:
+        print(f"[WARN] 目录 {directory} 下未找到任何支持的文件(.txt/.pdf)")
+        return []
+
+    chunks = loader.split_documents(raw_docs)
+    print(f"[OK] 加载 {len(raw_docs)} 个原始文档 → 分割为 {len(chunks)} 个chunk (chunk_size={chunk_size}, overlap={chunk_overlap})")
+    return chunks
+
+
 # 测试代码
 if __name__ == "__main__":
     try:

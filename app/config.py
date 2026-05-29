@@ -61,19 +61,20 @@ DETECTION_TIMEOUT = int(os.getenv("DETECTION_TIMEOUT", "5"))
 
 # ==================== 知识库配置 ====================
 KNOWLEDGE_BASE_DIRECTORY = os.getenv("KNOWLEDGE_BASE_DIRECTORY", "./data/sample_solutions")
+COMPETITOR_DIRECTORY = os.getenv("COMPETITOR_DIRECTORY", "./data/competitors")
 
 # ==================== 支持的行业列表 ====================
 SUPPORTED_INDUSTRIES = [
     "智慧农业",
     "工业互联网",
     "智慧园区",
-    "智慧教育",
+    "智慧城市",
     "智慧医疗",
-    "金融科技",
-    "政务云",
-    "能源行业",
-    "交通物流",
-    "零售电商"
+    "智慧金融",
+    "智慧能源",
+    "智慧交通",
+    "智慧教育",
+    "智慧文旅"
 ]
 
 # ==================== 支持的竞争对手列表 ====================

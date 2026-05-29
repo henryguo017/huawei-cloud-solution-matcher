@@ -1,13 +1,13 @@
 const Config = {
-    API_BASE_URL: 'http://localhost:8000/api',
+    API_BASE_URL: '/api',
     ANIMATION: {
         PARTICLE_COUNT: 80,
         CONNECTION_DISTANCE: 150,
         PARTICLE_SPEED: 0.5
     },
     INDUSTRIES: [
-        '智慧农业', '工业互联网', '智慧园区', '智慧城市', '智慧交通',
-        '智慧教育', '智慧医疗', '智慧金融', '智慧能源', '智慧文旅'
+        '智慧农业', '工业互联网', '智慧园区', '智慧城市', '智慧医疗',
+        '智慧金融', '智慧能源', '智慧交通', '智慧教育', '智慧文旅'
     ],
     COMPETITORS: [
         // 国内主流云服务商
@@ -219,10 +219,16 @@ const UI = {
     },
 
     renderMarkdown(content) {
+        let html;
         if (typeof marked !== 'undefined') {
-            return marked.parse(content);
+            html = marked.parse(content);
+        } else {
+            html = content.replace(/\n/g, '<br>');
         }
-        return content.replace(/\n/g, '<br>');
+        // 确保渲染内容在深色背景下可见：去除内联深色样式，用CSS控制颜色
+        html = html.replace(/style="[^"]*color\s*:\s*#[0-9a-fA-F]{1,6}[^"]*"/gi, '');
+        html = html.replace(/color\s*:\s*#[0-3][0-9a-fA-F]{5}/gi, 'color: rgba(255,255,255,0.88)');
+        return html;
     },
 
     renderSources(container, sources) {

@@ -46,6 +46,25 @@ const WelcomeManager = {
     welcomePage: null,
     statNumbers: [],
     
+    // 从后端 API 获取真实知识库统计数据
+    async fetchRealStats() {
+        try {
+            const resp = await fetch(`${Config.API_BASE_URL}/knowledge/stats`);
+            if (!resp.ok) throw new Error('stats api failed');
+            const stats = await resp.json();
+            return {
+                accuracy: stats.accuracy || 85,
+                // 效率提升固定展示 95（产品价值主张，不随知识库变化）
+                efficiency: 95,
+                industries: (stats.supported_industries || []).length || 0
+            };
+        } catch (e) {
+            // API 不可达时降级为与知识库规模相符的保守值
+            console.warn('无法获取知识库统计，使用默认值', e);
+            return { accuracy: 85, efficiency: 95, industries: 7 };
+        }
+    },
+
     init() {
         this.welcomePage = document.getElementById('welcome-page');
         
@@ -113,7 +132,30 @@ const WelcomeManager = {
         });
     },
     
-    startAnimations() {
+    async startAnimations() {
+        // 先获取真实数据，再做动画，避免展示硬编码假数字
+        const stats = await this.fetchRealStats();
+
+        // 根据 stat-label 内容匹配对应真实值
+        const statBoxes = document.querySelectorAll('.welcome-stats .stat-box');
+        statBoxes.forEach(box => {
+            const label = box.querySelector('.stat-label')?.textContent?.trim() || '';
+            const numEl = box.querySelector('.stat-number[data-target]');
+            if (!numEl) return;
+
+            let realTarget = parseInt(numEl.dataset.target); // 兜底保留原值
+            if (label.includes('准确率')) {
+                realTarget = stats.accuracy;
+            } else if (label.includes('效率')) {
+                realTarget = stats.efficiency;
+            } else if (label.includes('行业')) {
+                realTarget = stats.industries;
+            }
+
+            // 同步更新 data-target 属性，使数值与知识库一致
+            numEl.dataset.target = realTarget;
+        });
+
         setTimeout(() => {
             const numbers = document.querySelectorAll('.stat-number[data-target]');
             numbers.forEach(num => {

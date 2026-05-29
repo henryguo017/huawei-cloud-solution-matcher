@@ -1,0 +1,26 @@
+# Google Cloud智慧金融解决方案
+
+## 公司概况
+Google Cloud在金融行业主要依靠AI/ML和数据分析能力竞争。
+
+## 智慧金融核心方案
+
+### 1. Google Cloud for Financial Services
+- AI驱动的反洗钱（AML AI）
+- 智能风控和欺诈检测
+- 客户智能和精准营销
+
+### 2. 数据分析
+- BigQuery用于金融大数据分析
+- 实时流处理（Dataflow）
+
+### 3. AI金融应用
+- Vertex AI平台用于信用模型、风险模型
+- GenAI（Gemini）在金融文档处理、研报生成的应用
+
+## 竞争优势
+- AI/ML和大数据分析能力突出
+- Gemini大模型在金融领域的应用潜力
+
+## 核心劣势（中国市场）
+- 无法服务中国金融机构

@@ -1,0 +1,29 @@
+# 微软Azure智慧医疗解决方案
+
+## 公司概况
+Azure在医疗健康领域有完整布局，包括Microsoft Cloud for Healthcare。
+
+## 智慧医疗核心方案
+
+### 1. Microsoft Cloud for Healthcare
+- 符合HIPAA的医疗数据平台
+- 临床数据管理和互操作性（FHIR标准）
+- 远程医疗方案（Microsoft Teams for Healthcare）
+
+### 2. Azure AI医疗
+- Nuance DAX（AI临床文档助手，2022年197亿美元收购）
+- 医学影像AI分析
+- 药物研发AI平台
+
+### 3. 基因组学
+- Azure Genomics服务
+- 大规模基因组数据处理和分析
+
+## 竞争优势
+- Nuance在医疗AI文档领域的市场领导地位
+- Azure OpenAI在医疗场景的应用
+- Microsoft 365/TEAMS在医疗机构的渗透
+
+## 核心劣势（中国市场）
+- 医疗数据合规不可行
+- 中国医院不使用Nuance/Azure

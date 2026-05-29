@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Vector database (generated binary files)
+data/vector_db/
+
+# Editor / assistant internals
+.codebuddy/
+.workbuddy/
+
+# Temp test scripts
+test_rebuild.py
