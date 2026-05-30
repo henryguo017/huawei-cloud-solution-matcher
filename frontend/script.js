@@ -940,7 +940,7 @@ const HistoryUI = {
         container.innerHTML = this.items.map(item => {
             const isSelected = this.selectedIds.has(item.id);
             const dateStr = item.created_at ? item.created_at.replace('T', ' ').substring(0, 16) : '--';
-            const demandPreview = (item.demand_text || '').substring(0, 120);
+            const demandPreview = (item.demand_text || '').substring(0, 200);
             return `
                 <div class="history-item ${isSelected ? 'selected' : ''}" data-id="${item.id}" onclick="HistoryUI.onItemClick(event, ${item.id})">
                     <div class="history-item-checkbox">${isSelected ? '✓' : ''}</div>
@@ -949,7 +949,7 @@ const HistoryUI = {
                             <span class="history-item-date">${dateStr}</span>
                             ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
                         </div>
-                        <div class="history-item-demand">${this.escapeHtml(demandPreview)}${item.demand_text && item.demand_text.length > 120 ? '...' : ''}</div>
+                        <div class="history-item-demand">${this.escapeHtml(demandPreview)}${item.demand_text && item.demand_text.length > 200 ? '...' : ''}</div>
                     </div>
                     <div class="history-item-actions">
                         <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); HistoryUI.showDetail(${item.id})">查看</button>
