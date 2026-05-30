@@ -88,7 +88,7 @@ class UpdateSolutionResponse(BaseModel):
 class DashboardStatsResponse(BaseModel):
     industry_coverage: Dict[str, int] = Field(default_factory=dict, description="各行业文档覆盖数量")
     match_trends: List[Dict[str, Any]] = Field(default_factory=list, description="最近7天匹配趋势")
-    competitor_frequency: Dict[str, int] = Field(default_factory=dict, description="竞品分析频次统计")
+    competitor_frequency: Dict[str, float] = Field(default_factory=dict, description="竞品分析频次统计（百分比，全局共享）")
     recent_matches: int = Field(default=0, description="近7天匹配次数")
     recent_analyses: int = Field(default=0, description="近7天分析次数")
     match_growth: Optional[float] = Field(default=None, description="方案匹配7日环比涨幅（百分比），None表示前一区间无数据（新增长）")
@@ -122,6 +122,7 @@ class ExportResultResponse(BaseModel):
 class MatchHistoryItem(BaseModel):
     id: int = Field(..., description="记录ID")
     demand_text: str = Field(..., description="客户需求描述")
+    solution_preview: str = Field(default="", description="方案内容预览（前500字）")
     industry: str = Field(default="", description="识别出的行业")
     created_at: str = Field(..., description="创建时间")
 
@@ -136,6 +137,9 @@ class MatchHistoryDetail(BaseModel):
 class MatchHistoryListResponse(BaseModel):
     items: List[MatchHistoryItem] = Field(default_factory=list, description="历史记录列表")
     total: int = Field(default=0, description="总记录数")
+    page: int = Field(default=1, description="当前页码")
+    page_size: int = Field(default=20, description="每页条数")
+    total_pages: int = Field(default=0, description="总页数")
 
 class CompareRequest(BaseModel):
     id_a: int = Field(..., description="方案A的记录ID")
@@ -158,6 +162,7 @@ class CompetitorHistoryItem(BaseModel):
     id: int = Field(..., description="记录ID")
     competitor: str = Field(..., description="竞品名称")
     industry: str = Field(default="", description="行业名称")
+    analysis_preview: str = Field(default="", description="分析报告预览（前500字）")
     created_at: str = Field(..., description="创建时间")
 
 class CompetitorHistoryDetail(BaseModel):
@@ -171,3 +176,6 @@ class CompetitorHistoryDetail(BaseModel):
 class CompetitorHistoryListResponse(BaseModel):
     items: List[CompetitorHistoryItem] = Field(default_factory=list, description="历史记录列表")
     total: int = Field(default=0, description="总记录数")
+    page: int = Field(default=1, description="当前页码")
+    page_size: int = Field(default=20, description="每页条数")
+    total_pages: int = Field(default=0, description="总页数")

@@ -53,6 +53,13 @@ class UsageLoggerService:
                     created_at  DATETIME DEFAULT (datetime('now', 'localtime'))
                 )
             """)
+            # user_id 列（v=20260530zn — 用户数据隔离）
+            try:
+                conn.execute("ALTER TABLE usage_logs ADD COLUMN user_id INTEGER")
+            except:
+                pass  # 列已存在
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_user ON usage_logs(user_id)")
+
             # 为查询性能创建索引
             conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_type ON usage_logs(action_type)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_date ON usage_logs(created_at)")
@@ -85,41 +92,50 @@ class UsageLoggerService:
             
             # type 列索引必须在 ALTER TABLE 之后创建
             conn.execute("CREATE INDEX IF NOT EXISTS idx_history_type ON match_history(type)")
+
+            # 添加 user_id 列（v=20260530zn — 登录系统集成）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN user_id INTEGER")
+            except:
+                pass  # 列已存在
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_history_user ON match_history(user_id)")
             conn.commit()
             logger.info(f"使用日志数据库已初始化: {self.db_path}")
 
-    def log_match(self, demand_text: str = ""):
+    def log_match(self, demand_text: str = "", user_id: Optional[int] = None):
         """
         记录一次解决方案匹配操作
 
         Args:
             demand_text: 用户需求文本（可选，用于审计）
+            user_id: 用户ID（可选，用于数据隔离）
         """
         try:
             detail = {"demand_length": len(demand_text)} if demand_text else {}
             with self._get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO usage_logs (action_type, detail) VALUES (?, ?)",
-                    ("match", json.dumps(detail, ensure_ascii=False))
+                    "INSERT INTO usage_logs (action_type, detail, user_id) VALUES (?, ?, ?)",
+                    ("match", json.dumps(detail, ensure_ascii=False), user_id)
                 )
                 conn.commit()
         except Exception as e:
             logger.error(f"记录 match 日志失败: {e}")
 
-    def log_analyze(self, competitor: str, industry: str):
+    def log_analyze(self, competitor: str, industry: str, user_id: Optional[int] = None):
         """
         记录一次竞品分析操作
 
         Args:
             competitor: 竞品名称
             industry: 行业名称
+            user_id: 用户ID（可选，用于数据隔离）
         """
         try:
             detail = {"competitor": competitor, "industry": industry}
             with self._get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO usage_logs (action_type, detail) VALUES (?, ?)",
-                    ("analyze", json.dumps(detail, ensure_ascii=False))
+                    "INSERT INTO usage_logs (action_type, detail, user_id) VALUES (?, ?, ?)",
+                    ("analyze", json.dumps(detail, ensure_ascii=False), user_id)
                 )
                 conn.commit()
         except Exception as e:
@@ -145,24 +161,31 @@ class UsageLoggerService:
             logger.error(f"获取总计数失败: {e}")
             return {"match": 0, "analyze": 0}
 
-    def get_recent_counts(self, days: int = 7) -> Dict[str, int]:
+    def get_recent_counts(self, days: int = 7, user_id: Optional[int] = None) -> Dict[str, int]:
         """
         获取最近 N 天的操作次数统计
 
         Args:
             days: 统计天数（默认7天）
+            user_id: 用户ID（可选，过滤指定用户）
 
         Returns:
             {"match": int, "analyze": int}
         """
         try:
             with self._get_connection() as conn:
+                where_user = ""
+                params = []
+                if user_id is not None:
+                    where_user = "AND user_id = ?"
+                    params.append(user_id)
                 cursor = conn.execute(f"""
                     SELECT action_type, COUNT(*) as count
                     FROM usage_logs
                     WHERE date(created_at) >= date('now', 'localtime', '-{days-1} days')
+                    {where_user}
                     GROUP BY action_type
-                """)
+                """, params)
                 result = {"match": 0, "analyze": 0}
                 for row in cursor.fetchall():
                     result[row["action_type"]] = row["count"]
@@ -171,12 +194,13 @@ class UsageLoggerService:
             logger.error(f"获取最近{days}天计数失败: {e}")
             return {"match": 0, "analyze": 0}
 
-    def get_daily_trends(self, days: int = 5) -> List[Dict[str, Any]]:
+    def get_daily_trends(self, days: int = 5, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         获取最近 N 天的每日操作趋势
 
         Args:
             days: 天数（默认7天）
+            user_id: 用户ID（可选，过滤指定用户）
 
         Returns:
             [{"date": "MM-DD", "matches": int, "analyses": int}, ...]
@@ -187,20 +211,27 @@ class UsageLoggerService:
                 today = datetime.now()
                 results = []
 
+                where_user = ""
+                params_extra = []
+                if user_id is not None:
+                    where_user = "AND user_id = ?"
+                    params_extra = [user_id]
+
                 for i in range(days - 1, -1, -1):
                     date = today - timedelta(days=i)
                     date_str = date.strftime("%Y-%m-%d")
                     display_str = date.strftime("%m-%d")
 
                     cursor = conn.execute(
-                        """
+                        f"""
                         SELECT
                             SUM(CASE WHEN action_type = 'match' THEN 1 ELSE 0 END) as matches,
                             SUM(CASE WHEN action_type = 'analyze' THEN 1 ELSE 0 END) as analyses
                         FROM usage_logs
                         WHERE date(created_at) = date(?)
+                        {where_user}
                         """,
-                        (date_str,)
+                        (date_str, *params_extra)
                     )
                     row = cursor.fetchone()
                     results.append({
@@ -214,17 +245,26 @@ class UsageLoggerService:
             logger.error(f"获取每日趋势失败: {e}")
             return []
 
-    def get_competitor_frequency(self) -> Dict[str, int]:
+    def get_competitor_frequency(self, user_id: Optional[int] = None) -> Dict[str, int]:
         """
         获取各竞品被分析的次数统计
+
+        Args:
+            user_id: 用户ID（可选，过滤指定用户）
 
         Returns:
             {"竞品名": 次数, ...}
         """
         try:
             with self._get_connection() as conn:
+                where_user = ""
+                params = []
+                if user_id is not None:
+                    where_user = "AND user_id = ?"
+                    params.append(user_id)
                 cursor = conn.execute(
-                    "SELECT detail FROM usage_logs WHERE action_type = 'analyze'"
+                    f"SELECT detail FROM usage_logs WHERE action_type = 'analyze' {where_user}",
+                    params
                 )
                 freq = {}
                 for row in cursor.fetchall():
@@ -239,9 +279,13 @@ class UsageLoggerService:
             logger.error(f"获取竞品频次失败: {e}")
             return {}
 
-    def get_growth_rates(self, days: int = 7) -> Dict[str, Optional[float]]:
+    def get_growth_rates(self, days: int = 7, user_id: Optional[int] = None) -> Dict[str, Optional[float]]:
         """
         获取最近N天 vs 前N天的环比增长率（7日环比）
+
+        Args:
+            days: 统计天数（默认7天）
+            user_id: 用户ID（可选，过滤指定用户）
 
         - 最近N天：today - (N-1) ~ today
         - 前N天：   today - (2N-1) ~ today - N
@@ -254,6 +298,12 @@ class UsageLoggerService:
         """
         try:
             with self._get_connection() as conn:
+                where_user = ""
+                params = []
+                if user_id is not None:
+                    where_user = "AND user_id = ?"
+                    params = [user_id]
+
                 # 最近N天（含今天）
                 cursor = conn.execute(f"""
                     SELECT
@@ -261,7 +311,8 @@ class UsageLoggerService:
                         SUM(CASE WHEN action_type = 'analyze' THEN 1 ELSE 0 END) AS analyses
                     FROM usage_logs
                     WHERE date(created_at) >= date('now', 'localtime', '-{days-1} days')
-                """)
+                    {where_user}
+                """, params)
                 recent = cursor.fetchone()
 
                 # 前N天
@@ -272,7 +323,8 @@ class UsageLoggerService:
                     FROM usage_logs
                     WHERE date(created_at) >= date('now', 'localtime', '-{days*2-1} days')
                       AND date(created_at) <= date('now', 'localtime', '-{days} days')
-                """)
+                    {where_user}
+                """, params)
                 previous = cursor.fetchone()
 
                 match_recent  = recent["matches"]  or 0
@@ -320,7 +372,7 @@ class UsageLoggerService:
 
     # ========== 历史记录（方案匹配回溯 & 对比） ==========
 
-    def save_match_history(self, demand_text: str, solution: str, industry: str = "", sources: List[Dict[str, Any]] = None) -> Optional[int]:
+    def save_match_history(self, demand_text: str, solution: str, industry: str = "", sources: List[Dict[str, Any]] = None, user_id: Optional[int] = None) -> Optional[int]:
         """
         保存一次匹配方案到历史记录
 
@@ -330,12 +382,13 @@ class UsageLoggerService:
         try:
             with self._get_connection() as conn:
                 cursor = conn.execute(
-                    "INSERT INTO match_history (demand_text, solution, industry, sources) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id) VALUES (?, ?, ?, ?, ?)",
                     (
                         demand_text,
                         solution,
                         industry,
-                        json.dumps(sources or [], ensure_ascii=False)
+                        json.dumps(sources or [], ensure_ascii=False),
+                        user_id
                     )
                 )
                 conn.commit()
@@ -406,20 +459,60 @@ class UsageLoggerService:
         except Exception as e:
             logger.warning(f"历史记录清理失败（不影响保存）: {e}")
 
-    def get_match_history_list(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """获取匹配历史记录列表（按时间倒序）"""
+    def get_match_history_count(self, user_id: Optional[int] = None) -> int:
+        """获取匹配历史记录总数"""
         try:
             with self._get_connection() as conn:
-                cursor = conn.execute(
-                    """
-                    SELECT id, demand_text, industry, created_at
-                    FROM match_history
-                    WHERE type = 'match'
-                    ORDER BY created_at DESC
-                    LIMIT ?
-                    """,
-                    (limit,)
-                )
+                if user_id is not None:
+                    cursor = conn.execute("SELECT COUNT(*) AS cnt FROM match_history WHERE type = 'match' AND user_id = ?", (user_id,))
+                else:
+                    cursor = conn.execute("SELECT COUNT(*) AS cnt FROM match_history WHERE type = 'match'")
+                return cursor.fetchone()["cnt"]
+        except Exception as e:
+            logger.error(f"获取匹配历史总数失败: {e}")
+            return 0
+
+    def get_competitor_history_count(self, user_id: Optional[int] = None) -> int:
+        """获取竞品分析历史记录总数"""
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    cursor = conn.execute("SELECT COUNT(*) AS cnt FROM match_history WHERE type = 'analyze' AND user_id = ?", (user_id,))
+                else:
+                    cursor = conn.execute("SELECT COUNT(*) AS cnt FROM match_history WHERE type = 'analyze'")
+                return cursor.fetchone()["cnt"]
+        except Exception as e:
+            logger.error(f"获取竞品分析历史总数失败: {e}")
+            return 0
+
+    def get_match_history_list(self, limit: int = 50, offset: int = 0, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """获取匹配历史记录列表（按时间倒序，支持分页）"""
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    cursor = conn.execute(
+                        """
+                        SELECT id, demand_text, industry, solution, created_at
+                        FROM match_history
+                        WHERE type = 'match' AND user_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                        OFFSET ?
+                        """,
+                        (user_id, limit, offset)
+                    )
+                else:
+                    cursor = conn.execute(
+                        """
+                        SELECT id, demand_text, industry, solution, created_at
+                        FROM match_history
+                        WHERE type = 'match'
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                        OFFSET ?
+                        """,
+                        (limit, offset)
+                    )
                 rows = cursor.fetchall()
                 results = []
                 for row in rows:
@@ -427,6 +520,7 @@ class UsageLoggerService:
                         "id": row["id"],
                         "demand_text": row["demand_text"],
                         "industry": row["industry"] or "",
+                        "solution": row["solution"] or "",
                         "created_at": row["created_at"]
                     })
                 return results
@@ -461,7 +555,7 @@ class UsageLoggerService:
 
     # ========== 竞品分析历史记录 ==========
 
-    def save_competitor_history(self, competitor: str, industry: str, analysis: str, sources: List[Dict[str, Any]] = None) -> Optional[int]:
+    def save_competitor_history(self, competitor: str, industry: str, analysis: str, sources: List[Dict[str, Any]] = None, user_id: Optional[int] = None) -> Optional[int]:
         """
         保存一次竞品分析结果到历史记录
 
@@ -471,13 +565,14 @@ class UsageLoggerService:
         try:
             with self._get_connection() as conn:
                 cursor = conn.execute(
-                    "INSERT INTO match_history (demand_text, solution, industry, sources, type, competitor) VALUES (?, ?, ?, ?, 'analyze', ?)",
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, type, competitor, user_id) VALUES (?, ?, ?, ?, 'analyze', ?, ?)",
                     (
                         competitor,  # demand_text 存竞品名
                         analysis,    # solution 存分析报告
                         industry,
                         json.dumps(sources or [], ensure_ascii=False),
-                        competitor
+                        competitor,
+                        user_id
                     )
                 )
                 conn.commit()
@@ -487,20 +582,34 @@ class UsageLoggerService:
             logger.error(f"保存竞品分析历史记录失败: {e}")
             return None
 
-    def get_competitor_history_list(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """获取竞品分析历史记录列表（按时间倒序）"""
+    def get_competitor_history_list(self, limit: int = 50, offset: int = 0, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """获取竞品分析历史记录列表（按时间倒序，支持分页）"""
         try:
             with self._get_connection() as conn:
-                cursor = conn.execute(
-                    """
-                    SELECT id, demand_text, industry, competitor, created_at
-                    FROM match_history
-                    WHERE type = 'analyze'
-                    ORDER BY created_at DESC
-                    LIMIT ?
-                    """,
-                    (limit,)
-                )
+                if user_id is not None:
+                    cursor = conn.execute(
+                        """
+                        SELECT id, demand_text, industry, competitor, solution, created_at
+                        FROM match_history
+                        WHERE type = 'analyze' AND user_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                        OFFSET ?
+                        """,
+                        (user_id, limit, offset)
+                    )
+                else:
+                    cursor = conn.execute(
+                        """
+                        SELECT id, demand_text, industry, competitor, solution, created_at
+                        FROM match_history
+                        WHERE type = 'analyze'
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                        OFFSET ?
+                        """,
+                        (limit, offset)
+                    )
                 rows = cursor.fetchall()
                 results = []
                 for row in rows:
@@ -508,6 +617,7 @@ class UsageLoggerService:
                         "id": row["id"],
                         "competitor": row["competitor"] or row["demand_text"] or "",
                         "industry": row["industry"] or "",
+                        "solution": row["solution"] or "",
                         "created_at": row["created_at"]
                     })
                 return results

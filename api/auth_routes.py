@@ -64,7 +64,13 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
 
 @router.post("/logout")
 async def logout(current_user: dict = Depends(get_current_user)):
-    return {"message": "已退出登录"}
+    result = AuthService.logout(current_user["id"])
+    if not result["success"]:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result["message"]
+        )
+    return {"message": result["message"]}
 
 @router.patch("/profile")
 async def update_profile(
@@ -169,3 +175,22 @@ async def get_favorites(
     )
     
     return {"favorites": favorites, "total": len(favorites)}
+
+@router_favorites.delete("/{favorite_id}")
+async def remove_favorite(
+    favorite_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    result = AuthService.remove_favorite(current_user["id"], favorite_id)
+    
+    if not result["success"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result["message"]
+        )
+    
+    return {"message": result["message"]}
+
+# 将子路由挂载到主 auth router 下
+router.include_router(router_history)
+router.include_router(router_favorites)

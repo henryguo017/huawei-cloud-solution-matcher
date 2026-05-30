@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from api.routes import router
 from api.export_routes import router as export_router
+from api.auth_routes import router as auth_router
 from app.config import APP_NAME, APP_VERSION
 import logging
 import time
@@ -69,6 +70,13 @@ async def log_requests(request: Request, call_next):
         
         response.headers["X-Process-Time"] = str(process_time)
         
+        # 所有前端静态资源禁止浏览器缓存（解决切换账号后页面不更新的问题）
+        path = request.url.path
+        if path == "/" or path == "/index.html" or path.endswith(('.html', '.css', '.js', '.svg', '.png', '.jpg', '.ico', '.json', '.woff', '.woff2')):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        
         return response
     except Exception as e:
         logger.error(f"请求异常: {request.method} {request.url} - 错误: {e}")
@@ -87,6 +95,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(router, prefix="/api")
 app.include_router(export_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
@@ -151,8 +160,10 @@ async def startup_event():
     logger.info("=" * 50)
     
     try:
-        from app.utils.db_init import init_database
+        from app.utils.db_init import init_database, init_admin_user
         init_database()
+        init_admin_user()
+        logger.info("数据库初始化完成")
     except Exception as e:
         logger.warning(f"数据库初始化警告: {e}")
     

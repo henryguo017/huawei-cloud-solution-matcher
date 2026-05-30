@@ -295,6 +295,9 @@ const DemoManager = {
 
         UI.switchPage('solution');
 
+        // 标记为快速体验，绕过登录检查和历史记录
+        if (typeof State !== 'undefined') State.isQuickDemo = true;
+        
         setTimeout(() => {
             this.fillDemand(demandInput, caseData.demand, () => {
                 matchBtn.click();

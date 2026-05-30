@@ -24,7 +24,10 @@ from app.services.competitor_analyzer import CompetitorAnalyzerService
 from app.services.knowledge_base import KnowledgeBaseService
 from app.services.usage_logger import UsageLoggerService
 from app.config import APP_NAME, APP_VERSION
+from typing import Optional
 import logging
+
+from api.auth_dependencies import get_current_user, get_current_user_optional
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +68,8 @@ async def health_check():
 @router.post("/match", response_model=MatchResponse, tags=["解决方案匹配"])
 async def match_solution(
     request: MatchRequest,
-    matcher: SolutionMatcherService = Depends(get_solution_matcher)
+    matcher: SolutionMatcherService = Depends(get_solution_matcher),
+    user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
     解决方案智能匹配接口
@@ -89,35 +93,37 @@ async def match_solution(
         
         logger.info("解决方案匹配成功")
         
-        # 记录使用日志
-        try:
-            usage_logger = get_usage_logger()
-            usage_logger.log_match(request.demand)
-        except Exception as log_err:
-            logger.warning(f"记录使用日志失败: {log_err}")
-
-        # 保存到历史记录（用于回溯和对比）
-        try:
-            usage_logger = get_usage_logger()
-            industry_hint = ""
+        # 保存到历史记录 + 记录使用日志（仅登录用户）
+        history_id = None
+        if user and user.get('id'):
             try:
-                # 尝试从 answer 或 source_docs 提取行业关键词
-                for doc in result.get("source_documents", []):
-                    if hasattr(doc, "metadata") and doc.metadata:
-                        ind = doc.metadata.get("industry", "")
-                        if ind:
-                            industry_hint = ind
-                            break
-            except:
-                pass
-            history_id = usage_logger.save_match_history(
-                demand_text=request.demand,
-                solution=result["answer"],
-                industry=industry_hint,
-                sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", [])]
-            )
-        except Exception as hist_err:
-            logger.warning(f"保存匹配历史记录失败: {hist_err}")
+                usage_logger = get_usage_logger()
+                usage_logger.log_match(request.demand, user_id=user['id'])
+            except Exception as log_err:
+                logger.warning(f"记录使用日志失败: {log_err}")
+
+        if user and user.get('id'):
+            try:
+                usage_logger = get_usage_logger()
+                industry_hint = ""
+                try:
+                    for doc in result.get("source_documents", []):
+                        if hasattr(doc, "metadata") and doc.metadata:
+                            ind = doc.metadata.get("industry", "")
+                            if ind:
+                                industry_hint = ind
+                                break
+                except:
+                    pass
+                history_id = usage_logger.save_match_history(
+                    demand_text=request.demand,
+                    solution=result["answer"],
+                    industry=industry_hint,
+                    sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", [])],
+                    user_id=user['id']
+                )
+            except Exception as hist_err:
+                logger.warning(f"保存匹配历史记录失败: {hist_err}")
 
         return MatchResponse(
             answer=result["answer"],
@@ -134,7 +140,8 @@ async def match_solution(
 @router.post("/analyze", response_model=AnalyzeResponse, tags=["竞争对手分析"])
 async def analyze_competitor(
     request: AnalyzeRequest,
-    analyzer: CompetitorAnalyzerService = Depends(get_competitor_analyzer)
+    analyzer: CompetitorAnalyzerService = Depends(get_competitor_analyzer),
+    user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
     竞争对手方案分析接口
@@ -157,19 +164,21 @@ async def analyze_competitor(
         
         logger.info("竞争对手分析成功")
         
-        # 记录使用日志
+        # 记录使用日志（仅登录用户保存历史）
         history_id = None
-        try:
-            usage_logger = get_usage_logger()
-            usage_logger.log_analyze(request.competitor, request.industry)
-            history_id = usage_logger.save_competitor_history(
-                competitor=request.competitor,
-                industry=request.industry,
-                analysis=result["answer"],
-                sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", []) if hasattr(d, "metadata")]
-            )
-        except Exception as log_err:
-            logger.warning(f"记录使用日志或保存历史失败: {log_err}")
+        if user and user.get('id'):
+            try:
+                usage_logger = get_usage_logger()
+                usage_logger.log_analyze(request.competitor, request.industry, user_id=user['id'])
+                history_id = usage_logger.save_competitor_history(
+                    competitor=request.competitor,
+                    industry=request.industry,
+                    analysis=result["answer"],
+                    sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", []) if hasattr(d, "metadata")],
+                    user_id=user['id']
+                )
+            except Exception as log_err:
+                logger.warning(f"记录使用日志或保存历史失败: {log_err}")
         
         return AnalyzeResponse(
             answer=result["answer"],
@@ -262,6 +271,7 @@ async def clear_knowledge(
 
 @router.get("/dashboard/stats", response_model=DashboardStatsResponse, tags=["数据仪表盘"])
 async def get_dashboard_stats(
+    current_user: dict = Depends(get_current_user),
     kb_service: KnowledgeBaseService = Depends(get_knowledge_base),
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
@@ -283,34 +293,51 @@ async def get_dashboard_stats(
         industry_coverage = kb_stats.get("industry_counts", {})
         
         # ========== 真实使用日志统计 ==========
+        user_id = current_user.get('id')
+
         # 获取最近7天操作次数（用于 KPI 卡片）
-        recent_counts = usage_logger.get_recent_counts(days=7)
+        recent_counts = usage_logger.get_recent_counts(days=7, user_id=user_id)
         recent_matches = recent_counts.get("match", 0)
         recent_analyses = recent_counts.get("analyze", 0)
 
         # 获取最近7天每日趋势（真实日志）
-        match_trends = usage_logger.get_daily_trends(days=7)
-        
-        # 获取竞品分析频次（真实日志）
-        competitor_frequency = usage_logger.get_competitor_frequency()
-        
+        match_trends = usage_logger.get_daily_trends(days=7, user_id=user_id)
+
+        # 获取竞品分析频次（全局数据，所有用户共享 → 转换为百分比防泄露）
+        competitor_frequency_raw = usage_logger.get_competitor_frequency(user_id=None)  # 全局，不限用户
+        total_analyses = sum(competitor_frequency_raw.values())
+        if total_analyses > 0:
+            competitor_frequency = {
+                k: round(v / total_analyses * 100, 1)
+                for k, v in sorted(competitor_frequency_raw.items(), key=lambda x: -x[1])
+            }
+        else:
+            competitor_frequency = {}
+
         # 获取涨幅（7日环比）
-        growth_rates = usage_logger.get_growth_rates(days=7)
+        growth_rates = usage_logger.get_growth_rates(days=7, user_id=user_id)
         match_growth = growth_rates.get("match_growth", None)
         analyze_growth = growth_rates.get("analyze_growth", None)
 
-        # 如果日志为空，提供兜底：从竞品文档目录生成基础数据
+        # 如果日志为空，提供兜底：从竞品文档目录生成基础数据（同样转为百分比）
         if not competitor_frequency:
             competitor_dir = os.getenv("COMPETITOR_DIRECTORY", "./data/competitors")
             if os.path.exists(competitor_dir):
+                fallback_raw = {}
                 for competitor in os.listdir(competitor_dir):
                     comp_path = os.path.join(competitor_dir, competitor)
                     if os.path.isdir(comp_path):
                         try:
                             files = [f for f in os.listdir(comp_path) if f.endswith((".txt", ".pdf", ".md"))]
-                            competitor_frequency[competitor] = len(files)
+                            fallback_raw[competitor] = len(files)
                         except:
                             pass
+                total_fallback = sum(fallback_raw.values())
+                if total_fallback > 0:
+                    competitor_frequency = {
+                        k: round(v / total_fallback * 100, 1)
+                        for k, v in sorted(fallback_raw.items(), key=lambda x: -x[1])
+                    }
         
         # 系统运行时间
         try:
@@ -348,27 +375,52 @@ async def get_dashboard_stats(
 
 @router.get("/history/list", response_model=MatchHistoryListResponse, tags=["历史记录"])
 async def get_match_history_list(
-    limit: int = 50,
+    current_user: dict = Depends(get_current_user),
+    page: int = 1,
+    page_size: int = 20,
+    limit: int = 100,
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """
     获取方案匹配历史记录列表
 
-    按时间倒序返回最近的匹配记录，用于调阅和对比
+    按时间倒序返回最近的匹配记录，支持分页
     """
     try:
-        items = usage_logger.get_match_history_list(limit=limit)
+        # 参数校验
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 20
+        if page_size > 100:
+            page_size = 100
+        if limit < 1:
+            limit = 100
+
+        # 获取总数
+        total = usage_logger.get_match_history_count(user_id=current_user.get('id'))
+
+        # 计算分页
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+        offset = (page - 1) * page_size
+        effective_limit = min(page_size, limit)
+
+        items = usage_logger.get_match_history_list(limit=effective_limit, offset=offset, user_id=current_user.get('id'))
         return MatchHistoryListResponse(
             items=[
                 MatchHistoryItem(
                     id=item["id"],
                     demand_text=item["demand_text"],
+                    solution_preview=(item.get("solution") or "")[:500],
                     industry=item["industry"],
                     created_at=item["created_at"]
                 )
                 for item in items
             ],
-            total=len(items)
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
         )
     except Exception as e:
         logger.error(f"获取历史记录列表失败: {e}")
@@ -380,6 +432,7 @@ async def get_match_history_list(
 @router.get("/history/{history_id}", response_model=MatchHistoryDetail, tags=["历史记录"])
 async def get_match_history_detail(
     history_id: int,
+    current_user: dict = Depends(get_current_user),
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """
@@ -414,6 +467,7 @@ async def get_match_history_detail(
 @router.post("/history/compare", response_model=CompareResponse, tags=["历史记录"])
 async def compare_match_history(
     request: CompareRequest,
+    current_user: dict = Depends(get_current_user),
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """
@@ -466,6 +520,7 @@ async def compare_match_history(
 @router.post("/history/ai-summary", response_model=CompareSummaryResponse, tags=["历史记录"])
 async def compare_ai_summary(
     request: CompareSummaryRequest,
+    current_user: dict = Depends(get_current_user),
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """为两条历史记录生成AI智能对比总结"""
@@ -515,6 +570,7 @@ async def compare_ai_summary(
 async def update_history_solution(
     history_id: int,
     request: UpdateSolutionRequest,
+    current_user: dict = Depends(get_current_user),
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """更新历史记录中的方案内容（用于追问优化后保存最终版）"""
@@ -537,6 +593,7 @@ async def update_history_solution(
 async def update_competitor_history_solution(
     history_id: int,
     request: UpdateSolutionRequest,
+    current_user: dict = Depends(get_current_user),
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """更新竞品分析历史记录中的分析内容（用于追问优化后保存最终版）"""
@@ -558,27 +615,52 @@ async def update_competitor_history_solution(
 
 @router.get("/competitor/history/list", response_model=CompetitorHistoryListResponse, tags=["历史记录"])
 async def get_competitor_history_list(
-    limit: int = 50,
+    current_user: dict = Depends(get_current_user),
+    page: int = 1,
+    page_size: int = 20,
+    limit: int = 100,
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """
     获取竞品分析历史记录列表
 
-    按时间倒序返回最近的竞品分析记录
+    按时间倒序返回最近的竞品分析记录，支持分页
     """
     try:
-        items = usage_logger.get_competitor_history_list(limit=limit)
+        # 参数校验
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 20
+        if page_size > 100:
+            page_size = 100
+        if limit < 1:
+            limit = 100
+
+        # 获取总数
+        total = usage_logger.get_competitor_history_count(user_id=current_user.get('id'))
+
+        # 计算分页
+        total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+        offset = (page - 1) * page_size
+        effective_limit = min(page_size, limit)
+
+        items = usage_logger.get_competitor_history_list(limit=effective_limit, offset=offset, user_id=current_user.get('id'))
         return CompetitorHistoryListResponse(
             items=[
                 CompetitorHistoryItem(
                     id=item["id"],
                     competitor=item["competitor"],
                     industry=item["industry"],
+                    analysis_preview=(item.get("solution") or "")[:500],
                     created_at=item["created_at"]
                 )
                 for item in items
             ],
-            total=len(items)
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
         )
     except Exception as e:
         logger.error(f"获取竞品分析历史列表失败: {e}")
@@ -590,6 +672,7 @@ async def get_competitor_history_list(
 @router.get("/competitor/history/{history_id}", response_model=CompetitorHistoryDetail, tags=["历史记录"])
 async def get_competitor_history_detail(
     history_id: int,
+    current_user: dict = Depends(get_current_user),
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """

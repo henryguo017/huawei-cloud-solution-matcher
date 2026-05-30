@@ -20,12 +20,22 @@ async def get_current_user(
         )
     
     user_id = payload.get("user_id")
+    token_version = payload.get("token_version", 0)
     user = AuthService.get_user_by_id(user_id)
     
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 验证 token_version：如果 Token 中的版本低于数据库中的版本，说明用户已登出过
+    db_token_version = user.get('token_version', 1)
+    if token_version < db_token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="令牌已失效，请重新登录",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -51,9 +61,15 @@ async def get_current_user_optional(
             return None
         
         user_id = payload.get("user_id")
+        token_version = payload.get("token_version", 0)
         user = AuthService.get_user_by_id(user_id)
         
         if not user or user['status'] != 'active':
+            return None
+        
+        # 验证 token_version：与 get_current_user() 保持一致
+        db_token_version = user.get('token_version', 1)
+        if token_version < db_token_version:
             return None
         
         return user

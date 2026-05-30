@@ -1,9 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from app.utils.auth_utils import hash_password
 
 def get_db_connection():
     db_path = "./data/users.db"
@@ -29,9 +27,16 @@ def init_database():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login TIMESTAMP,
             failed_login_count INTEGER DEFAULT 0,
-            locked_until TIMESTAMP
+            locked_until TIMESTAMP,
+            token_version INTEGER DEFAULT 1
         )
     """)
+    
+    # 迁移：为已有数据库添加 token_version 列
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")
@@ -129,7 +134,7 @@ def init_admin_user():
         conn.close()
         return
     
-    password_hash = pwd_context.hash("admin123")
+    password_hash = hash_password("admin123")
     
     cursor.execute("""
         INSERT INTO users (username, email, password_hash, role, status)

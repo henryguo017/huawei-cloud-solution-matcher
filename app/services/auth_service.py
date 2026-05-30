@@ -106,7 +106,8 @@ class AuthService:
             access_token, expires_in = create_access_token(
                 user_dict['id'],
                 user_dict['username'],
-                user_dict['role']
+                user_dict['role'],
+                user_dict.get('token_version', 1)
             )
             
             cursor.execute("""
@@ -150,6 +151,24 @@ class AuthService:
         if user:
             return dict(user)
         return None
+    
+    @staticmethod
+    def logout(user_id: int) -> dict:
+        """登出：递增 token_version 使该用户所有旧 JWT 立即失效"""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE users SET token_version = token_version + 1 WHERE id = ?",
+                (user_id,)
+            )
+            conn.commit()
+            return {"success": True, "message": "已退出登录"}
+        except Exception as e:
+            conn.rollback()
+            return {"success": False, "message": f"登出失败: {str(e)}"}
+        finally:
+            conn.close()
     
     @staticmethod
     def add_history(user_id: int, history_data: HistoryCreate) -> dict:
@@ -242,6 +261,22 @@ class AuthService:
         return favorites
 
     @staticmethod
+    def remove_favorite(user_id: int, favorite_id: int) -> dict:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("DELETE FROM favorites WHERE id=? AND user_id=?", (favorite_id, user_id))
+            if cursor.rowcount == 0:
+                return {"success": False, "message": "收藏不存在或无权操作"}
+            conn.commit()
+            return {"success": True, "message": "已取消收藏"}
+        except Exception as e:
+            return {"success": False, "message": f"取消收藏失败: {str(e)}"}
+        finally:
+            conn.close()
+    
+    @staticmethod
     def update_profile(user_id: int, email: str) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -300,11 +335,14 @@ class AuthService:
                 usage_conn.row_factory = sqlite3.Row
                 cursor = usage_conn.cursor()
                 
-                cursor.execute("SELECT COUNT(*) as cnt FROM usage_logs WHERE action='match' AND user_id=?", (user_id,))
+                cursor.execute("SELECT COUNT(*) as cnt FROM usage_logs WHERE action_type='match' AND user_id=?", (user_id,))
                 stats["match_count"] = cursor.fetchone()["cnt"]
                 
-                cursor.execute("SELECT COUNT(*) as cnt FROM usage_logs WHERE action='analyze' AND user_id=?", (user_id,))
+                cursor.execute("SELECT COUNT(*) as cnt FROM usage_logs WHERE action_type='analyze' AND user_id=?", (user_id,))
                 stats["analyze_count"] = cursor.fetchone()["cnt"]
+                
+                cursor.execute("SELECT COUNT(*) as cnt FROM match_history WHERE user_id=?", (user_id,))
+                stats["history_count"] = cursor.fetchone()["cnt"]
                 
                 usage_conn.close()
             except Exception:
@@ -314,9 +352,6 @@ class AuthService:
         cursor = conn.cursor()
         
         try:
-            cursor.execute("SELECT COUNT(*) as cnt FROM history WHERE user_id=?", (user_id,))
-            stats["history_count"] = cursor.fetchone()["cnt"]
-            
             cursor.execute("SELECT COUNT(*) as cnt FROM favorites WHERE user_id=?", (user_id,))
             stats["favorites_count"] = cursor.fetchone()["cnt"]
         except Exception:

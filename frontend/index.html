@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
-    <link rel="stylesheet" href="style.css?v=20260530zc">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260530zc">
+    <link rel="stylesheet" href="style.css?v=20260530zy">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260530zu">
 </head>
 <body>
     <canvas id="particle-canvas"></canvas>
@@ -153,6 +153,10 @@
                     <span class="nav-icon">📚</span>
                     <span class="nav-text">知识库</span>
                 </button>
+                <button class="navbar-item" data-page="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">系统设置</span>
+                </button>
             </nav>
             
             <div class="navbar-status">
@@ -173,8 +177,24 @@
                     <span class="status-label">准确率</span>
                     <span class="status-value" id="nav-accuracy">--%</span>
                 </div>
+                <div class="status-divider"></div>
+                <button id="nav-login-btn" class="nav-login-btn" title="登录 / 注册">
+                    <span class="nav-icon">👤</span>
+                    <span class="nav-text">登录</span>
+                </button>
+                <div id="nav-user-menu" class="nav-user-menu" style="display: none;">
+                    <button id="nav-user-avatar-btn" class="nav-user-avatar-btn" title="用户菜单">
+                        <span class="user-avatar-icon">👤</span>
+                        <span class="user-name" id="nav-user-name"></span>
+                        <span class="dropdown-arrow">▾</span>
+                    </button>
+                    <div id="user-dropdown" class="user-dropdown" style="display: none;">
+                        <button class="dropdown-item" id="dropdown-profile">👤 个人信息</button>
+                        <button class="dropdown-item" id="dropdown-logout">🚪 退出登录</button>
+                    </div>
+                </div>
             </div>
-            
+
             <button class="navbar-toggle" id="navbar-toggle">☰</button>
         </div>
     </header>
@@ -200,6 +220,10 @@
         <button class="mobile-item" data-page="knowledge">
             <span class="nav-icon">📚</span>
             <span class="nav-text">知识库</span>
+        </button>
+        <button class="mobile-item" data-page="settings">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-text">系统设置</span>
         </button>
     </nav>
     
@@ -304,6 +328,9 @@
                     <div class="result-actions">
                         <button class="btn btn-primary" id="download-solution-btn">
                             📥 下载方案文档
+                        </button>
+                        <button class="btn btn-favorite-result" id="fav-solution-btn">
+                            ☆ 收藏方案
                         </button>
                     </div>
                     <details class="source-documents content-card">
@@ -448,6 +475,9 @@
                         <button class="btn btn-primary" id="download-competitor-btn">
                             📥 下载竞争分析报告
                         </button>
+                        <button class="btn btn-favorite-result" id="fav-competitor-btn">
+                            ☆ 收藏报告
+                        </button>
                     </div>
                     <details class="source-documents content-card">
                         <summary class="source-summary">📚 查看参考的解决方案文档</summary>
@@ -526,8 +556,8 @@
                     <!-- 竞品分析频次统计 -->
                     <div class="dashboard-chart-card wide">
                         <div class="chart-header">
-                            <h3 class="chart-title">🏆 竞品分析频次 Top12</h3>
-                            <span class="chart-subtitle">各竞争对手被分析的次数统计</span>
+                            <h3 class="chart-title">🏆 热门对比方向 Top12</h3>
+                            <span class="chart-subtitle">全部用户分析占比（数据脱敏，仅展示比例）</span>
                         </div>
                         <div class="chart-body">
                             <canvas id="competitor-freq-chart"></canvas>
@@ -577,7 +607,30 @@
                         <div class="stat-card-label">匹配准确率</div>
                     </div>
                 </div>
-                
+
+                <!-- 知识库空状态（当无文档时显示） -->
+                <div id="kb-empty-state" class="empty-state-card content-card" style="display: none;">
+                    <div class="empty-state-content">
+                        <div class="empty-state-icon">📂</div>
+                        <h3 class="empty-state-title">知识库暂无数据</h3>
+                        <p class="empty-state-desc">上传文档或初始化示例数据来开始使用</p>
+                        <div class="empty-state-steps">
+                            <div class="empty-state-step">
+                                <span class="step-number">1</span>
+                                <span>将方案文档放入 <code>data/sample_solutions/行业名称/</code> 目录</span>
+                            </div>
+                            <div class="empty-state-step">
+                                <span class="step-number">2</span>
+                                <span>点击下方"重建知识库"按钮</span>
+                            </div>
+                            <div class="empty-state-step">
+                                <span class="step-number">3</span>
+                                <span>系统自动处理文档并建立索引</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="content-card">
                     <h3 class="card-title">📈 行业分布</h3>
                     <div class="chart-container">
@@ -640,50 +693,6 @@
                     </div>
                 </header>
 
-                <!-- 对比模式遮罩层 -->
-                <div id="history-compare-panel" class="history-compare-overlay" style="display: none;">
-                    <div class="history-compare-content">
-                        <div class="compare-header">
-                            <h3>⚖️ 方案对比</h3>
-                            <button class="btn-close" id="close-compare">✕</button>
-                        </div>
-                        <div class="compare-body" id="compare-body">
-                            <!-- 左右分栏由 JS 动态生成 -->
-                        </div>
-                        <!-- AI 智能总结区域（底部） -->
-                        <div class="compare-ai-summary-bottom" id="compare-ai-summary-bottom" style="display: none;">
-                            <div class="ai-summary-label">
-                                <span class="ai-icon">✨</span>
-                                <span>AI 智能对比总结</span>
-                            </div>
-                            <div class="ai-summary-content result-content" id="ai-summary-content"></div>
-                        </div>
-                        <div class="compare-ai-action" id="compare-ai-action">
-                            <button class="btn btn-primary ai-summary-btn" id="btn-ai-summary">
-                                <span class="ai-btn-icon">✨</span>
-                                <span>AI 智能总结</span>
-                            </button>
-                            <div class="ai-summary-loading" id="ai-summary-loading" style="display: none;">
-                                <div class="loading-spinner"></div>
-                                <span>AI 正在分析对比中...</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 详情弹窗 -->
-                <div id="history-detail-modal" class="history-modal" style="display: none;">
-                    <div class="history-modal-content">
-                        <div class="modal-header">
-                            <h3>📄 方案详情</h3>
-                            <button class="btn-close" id="close-detail">✕</button>
-                        </div>
-                        <div class="modal-body" id="detail-body">
-                            <!-- 由 JS 动态生成 -->
-                        </div>
-                    </div>
-                </div>
-
                 <!-- 操作栏 & 对比工具（仅方案匹配支持对比） -->
                 <div id="history-compare-section">
                 <div class="history-toolbar">
@@ -704,18 +713,437 @@
                     <div class="history-empty">
                         <div class="empty-icon">📋</div>
                         <p>暂无历史记录</p>
-                        <p class="empty-sub">在「解决方案匹配」页面输入需求并匹配后，方案会自动保存到这里</p>
+                        <p class="empty-sub">使用「解决方案匹配」或「竞争分析」功能后，记录会自动保存到这里</p>
+                        <div class="empty-state-actions">
+                            <button class="btn btn-primary btn-sm" onclick="document.querySelector('[data-page=\'solution\']').click()">
+                                🔍 去匹配方案
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="document.querySelector('[data-page=\'competitor\']').click()">
+                                ⚔️ 去分析竞品
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 分页组件 -->
+                <div id="pagination-container" class="pagination-container" style="display: none;">
+                    <div class="pagination-info">
+                        <span id="pagination-info">第 1-20 条，共 0 条</span>
+                    </div>
+                    <div class="pagination-buttons" id="pagination-buttons">
+                        <!-- 由 JS 动态生成 -->
                     </div>
                 </div>
             </div>
+
+            <!-- 系统设置页面 -->
+            <div id="page-settings" class="page">
+                <header class="page-header">
+                    <h2 class="page-title">⚙️ 系统设置</h2>
+                    <p class="page-subtitle">管理系统偏好、显示选项和数据配置</p>
+                </header>
+
+                <!-- 显示设置 -->
+                <div class="content-card">
+                    <h3 class="card-title">🎨 显示设置</h3>
+                    <div class="settings-grid">
+                        <div class="setting-item" id="setting-animation-toggle">
+                            <div class="setting-info">
+                                <div class="setting-label">页面动画</div>
+                                <div class="setting-desc">启用页面切换和交互动画效果</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item" id="setting-skeleton-toggle">
+                            <div class="setting-info">
+                                <div class="setting-label">骨架屏加载</div>
+                                <div class="setting-desc">数据加载时显示骨架屏占位动画</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item" id="setting-particle-toggle">
+                            <div class="setting-info">
+                                <div class="setting-label">粒子背景</div>
+                                <div class="setting-desc">显示动态粒子背景效果</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 功能设置 -->
+                <div class="content-card">
+                    <h3 class="card-title">⚡ 功能设置</h3>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-label">每页显示条数</div>
+                                <div class="setting-desc">历史记录列表每页显示的条目数量</div>
+                            </div>
+                            <select id="setting-page-size" class="setting-select">
+                                <option value="10">10条</option>
+                                <option value="20" selected>20条</option>
+                                <option value="50">50条</option>
+                            </select>
+                        </div>
+                        <div class="setting-item" id="setting-autosave-toggle">
+                            <div class="setting-info">
+                                <div class="setting-label">自动保存</div>
+                                <div class="setting-desc">方案和分析结果自动保存到历史记录</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item" id="setting-welcome-toggle">
+                            <div class="setting-info">
+                                <div class="setting-label">欢迎引导页</div>
+                                <div class="setting-desc">启动时显示欢迎引导页面</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统信息 -->
+                <div class="content-card">
+                    <h3 class="card-title">📋 系统信息</h3>
+                    <div class="settings-info-grid">
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">系统版本</span>
+                            <span class="settings-info-value" id="settings-version">v1.0.0</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">API 状态</span>
+                            <span class="settings-info-value" id="settings-api-status">检查中...</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">连接状态</span>
+                            <span class="settings-info-value" id="settings-api-indicator" style="font-size: 14px;">● 检查中</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">数据库类型</span>
+                            <span class="settings-info-value">SQLite</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">后端引擎</span>
+                            <span class="settings-info-value">FastAPI</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">前端框架</span>
+                            <span class="settings-info-value">Vanilla JS</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="settings-actions">
+                    <button class="btn btn-primary" id="settings-save-btn">
+                        💾 保存设置
+                    </button>
+                    <button class="btn btn-secondary" id="settings-reset-btn">
+                        🔄 恢复默认
+                    </button>
+                </div>
+            </div>
         </div>
+
     </main>
+
+    <!-- 全局错误边界（移到 body 级别避免被 main 层叠上下文限制） -->
+    <div id="global-error-boundary" class="global-error-boundary" style="display: none;">
+        <div class="global-error-content">
+            <div class="global-error-emoji">⚠️</div>
+            <h3 id="error-boundary-title" class="global-error-title">系统遇到了一点问题</h3>
+            <p id="error-boundary-message" class="global-error-message">请尝试刷新页面或稍后再试</p>
+            <p id="error-boundary-detail" class="global-error-detail" style="display: none;"></p>
+            <div class="global-error-actions">
+                <button class="btn btn-primary" onclick="location.reload()">🔄 刷新页面</button>
+                <button class="btn btn-secondary" id="error-boundary-close">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 内联错误提示（移到 body 级别） -->
+    <div id="global-inline-error" class="global-inline-error" style="display: none;">
+        <div class="global-inline-error-content">
+            <span class="global-inline-error-icon">⚠️</span>
+            <span id="global-error-text" class="global-inline-error-text">发生了错误</span>
+            <button class="btn btn-primary btn-sm" id="global-error-retry" style="display: none;">重试</button>
+            <button class="global-inline-error-close" id="global-error-close">✕</button>
+        </div>
+    </div>
+
+    <!-- 历史记录 - 对比模式遮罩层（移到 body 级别避免被 main 层叠上下文限制） -->
+    <div id="history-compare-panel" class="history-compare-overlay" style="display: none;">
+        <div class="history-compare-content">
+            <div class="compare-header">
+                <h3>⚖️ 方案对比</h3>
+                <button class="btn-close" id="close-compare">✕</button>
+            </div>
+            <div class="compare-body" id="compare-body">
+                <!-- 左右分栏由 JS 动态生成 -->
+            </div>
+            <!-- AI 智能总结区域（底部） -->
+            <div class="compare-ai-summary-bottom" id="compare-ai-summary-bottom" style="display: none;">
+                <div class="ai-summary-label">
+                    <span class="ai-icon">✨</span>
+                    <span>AI 智能对比总结</span>
+                </div>
+                <div class="ai-summary-content result-content" id="ai-summary-content"></div>
+            </div>
+            <div class="compare-ai-action" id="compare-ai-action">
+                <button class="btn btn-primary ai-summary-btn" id="btn-ai-summary">
+                    <span class="ai-btn-icon">✨</span>
+                    <span>AI 智能总结</span>
+                </button>
+                <div class="ai-summary-loading" id="ai-summary-loading" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <span>AI 正在分析对比中...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 历史记录 - 详情弹窗（移到 body 级别避免被 main 层叠上下文限制） -->
+    <div id="history-detail-modal" class="history-modal" style="display: none;">
+        <div class="history-modal-content">
+            <div class="modal-header">
+                <h3>📄 方案详情</h3>
+                <button class="btn-close" id="close-detail">✕</button>
+            </div>
+            <div class="modal-body" id="detail-body">
+                <!-- 由 JS 动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 个人中心面板 -->
+    <div id="profile-panel" class="profile-panel" style="display: none;">
+        <div class="profile-backdrop" id="profile-backdrop"></div>
+        <div class="profile-drawer">
+            <!-- Header -->
+            <div class="profile-header">
+                <h3>👤 个人中心</h3>
+                <button class="btn-close" id="close-profile">✕</button>
+            </div>
+
+            <!-- User Avatar & Name Section -->
+            <div class="profile-user-card">
+                <div class="profile-avatar" id="profile-avatar">G</div>
+                <div class="profile-user-info">
+                    <div class="profile-username" id="profile-username"></div>
+                    <div class="profile-role" id="profile-role">普通用户</div>
+                </div>
+            </div>
+
+            <!-- Stats Overview -->
+            <div class="profile-section">
+                <h4 class="profile-section-title">📊 使用概览</h4>
+                <div class="profile-stats-grid">
+                    <div class="profile-stat-item">
+                        <div class="profile-stat-value" id="stat-match">0</div>
+                        <div class="profile-stat-label">智能匹配</div>
+                    </div>
+                    <div class="profile-stat-item">
+                        <div class="profile-stat-value" id="stat-analyze">0</div>
+                        <div class="profile-stat-label">竞品分析</div>
+                    </div>
+                    <div class="profile-stat-item">
+                        <div class="profile-stat-value" id="stat-favorites">0</div>
+                        <div class="profile-stat-label">收藏方案</div>
+                    </div>
+                    <div class="profile-stat-item">
+                        <div class="profile-stat-value" id="stat-history">0</div>
+                        <div class="profile-stat-label">历史记录</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Favorites Section -->
+            <div class="profile-section" id="profile-favorites-section">
+                <h4 class="profile-section-title">⭐ 收藏方案（<span id="fav-count">0</span>）</h4>
+                <div id="fav-list-empty" class="profile-fav-empty">暂无收藏方案，去匹配结果里收藏吧～</div>
+                <div id="fav-list" class="profile-fav-list" style="display: none;">
+                    <!-- JS populated -->
+                </div>
+            </div>
+
+            <!-- Account Info -->
+            <div class="profile-section">
+                <h4 class="profile-section-title">📧 基本信息</h4>
+                <div class="profile-info-list">
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">用户名</span>
+                        <span class="profile-info-value" id="info-username">-</span>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">邮箱</span>
+                        <div class="profile-info-value-row">
+                            <span class="profile-info-value" id="info-email" style="color: var(--text-secondary);">未设置</span>
+                            <button class="profile-edit-btn" id="btn-edit-email">编辑</button>
+                        </div>
+                    </div>
+                    <div class="profile-info-row profile-email-edit-row" id="email-edit-row" style="display: none;">
+                        <span class="profile-info-label"></span>
+                        <div class="profile-email-edit">
+                            <input type="email" id="input-new-email" placeholder="请输入新邮箱" class="profile-input">
+                            <button class="btn btn-primary btn-sm" id="btn-save-email">保存</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-cancel-email">取消</button>
+                        </div>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">角色</span>
+                        <span class="profile-info-value" id="info-role">-</span>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">注册时间</span>
+                        <span class="profile-info-value" id="info-created">-</span>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">最后登录</span>
+                        <span class="profile-info-value" id="info-last-login">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Settings -->
+            <div class="profile-section">
+                <h4 class="profile-section-title">🔒 安全设置</h4>
+                <div id="password-section-view">
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">登录密码</span>
+                        <span class="profile-info-value" style="color: var(--text-secondary);">********</span>
+                        <button class="profile-edit-btn" id="btn-change-password">修改</button>
+                    </div>
+                </div>
+                <div id="password-section-edit" style="display: none;">
+                    <div class="profile-password-form">
+                        <div class="profile-form-group">
+                            <label class="profile-form-label">旧密码</label>
+                            <input type="password" id="input-old-password" placeholder="请输入旧密码" class="profile-input">
+                        </div>
+                        <div class="profile-form-group">
+                            <label class="profile-form-label">新密码</label>
+                            <input type="password" id="input-new-password" placeholder="至少6位" class="profile-input">
+                        </div>
+                        <div class="profile-form-group">
+                            <label class="profile-form-label">确认新密码</label>
+                            <input type="password" id="input-confirm-password" placeholder="再次输入新密码" class="profile-input">
+                        </div>
+                        <div id="profile-password-error" class="profile-error" style="display: none;"></div>
+                        <div class="profile-form-actions">
+                            <button class="btn btn-primary btn-sm" id="btn-save-password">保存修改</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-cancel-password">取消</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logout -->
+            <div class="profile-section">
+                <button class="btn btn-danger profile-logout-btn" id="btn-profile-logout">
+                    🚪 退出登录
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录/注册弹窗 -->
+    <div id="auth-modal-overlay" class="auth-modal-overlay" style="display: none;">
+        <div class="auth-modal">
+            <button class="auth-modal-close" id="auth-modal-close">✕</button>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">登录</button>
+                <button class="auth-tab" data-tab="register">注册</button>
+            </div>
+
+            <!-- 登录表单 -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-input" id="login-username" placeholder="请输入用户名" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-input" id="login-password" placeholder="请输入密码" required autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">验证码</label>
+                    <div class="captcha-row">
+                        <input type="text" class="form-input captcha-input" id="login-captcha" placeholder="请输入验证码" required maxlength="4" autocomplete="off">
+                        <img id="login-captcha-img" class="captcha-img" src="" alt="验证码" title="点击刷新">
+                    </div>
+                </div>
+                <div id="login-error" class="auth-error" style="display: none;"></div>
+                <div id="login-auto-fill-hint" class="login-auto-fill-hint" style="display: none;">
+                    ⚠️ 当前将登录为：<strong id="login-hint-username"></strong>
+                    <br><small>如不是你的账号，请手动修改用户名</small>
+                </div>
+                <button type="submit" class="auth-submit-btn" id="login-submit-btn">
+                    <span class="btn-text">登录</span>
+                    <span class="btn-spinner" style="display: none;">⏳</span>
+                </button>
+            </form>
+
+            <!-- 注册表单 -->
+            <form id="register-form" class="auth-form" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-input" id="register-username" placeholder="3-50位字符" required minlength="3" maxlength="50" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">邮箱 <span class="form-label-hint">(选填)</span></label>
+                    <input type="email" class="form-input" id="register-email" placeholder="请输入邮箱" autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-input" id="register-password" placeholder="至少6位" required minlength="6" maxlength="50" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">确认密码</label>
+                    <input type="password" class="form-input" id="register-password-confirm" placeholder="再次输入密码" required autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">验证码</label>
+                    <div class="captcha-row">
+                        <input type="text" class="form-input captcha-input" id="register-captcha" placeholder="请输入验证码" required maxlength="4" autocomplete="off">
+                        <img id="register-captcha-img" class="captcha-img" src="" alt="验证码" title="点击刷新">
+                    </div>
+                </div>
+                <div id="register-error" class="auth-error" style="display: none;"></div>
+                <button type="submit" class="auth-submit-btn" id="register-submit-btn">
+                    <span class="btn-text">注册</span>
+                    <span class="btn-spinner" style="display: none;">⏳</span>
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <span id="auth-switch-text">还没有账号？</span>
+                <button type="button" id="auth-switch-btn" class="auth-switch-link">立即注册</button>
+            </div>
+        </div>
+    </div>
 
     <div id="toast-container"></div>
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" onerror="window.__markedFailed=true"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" onerror="window.__chartFailed=true"></script>
-    <script src="script.js?v=20260530zc"></script>
-    <script src="welcome-script.js?v=20260530zc"></script>
+    <script src="script.js?v=20260530af"></script>
+    <script src="welcome-script.js?v=20260530zu"></script>
 </body>
 </html>

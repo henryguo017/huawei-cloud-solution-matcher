@@ -1,92 +1,135 @@
 # 华为云解决方案智能匹配系统
 
-> 基于大模型 + 向量数据库的华为云行业解决方案智能匹配系统，让销售方案准备时间从 **2小时缩短至1分钟**。
+> 基于大模型（LLM）+ 向量数据库的华为云行业解决方案智能匹配系统，让销售方案准备时间从 **2小时缩短至1分钟**。
 
-## 🌟 功能亮点
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109.0-009688.svg)](https://fastapi.tiangolo.com/)
+
+---
+
+## 功能亮点
 
 ### 核心能力
-- ✅ **智能方案匹配** — 输入客户需求，AI自动匹配华为云行业解决方案并生成定制化方案
-- ✅ **竞争对手分析** — 分析竞争对手方案，生成华为云差异化优势和实战销售话术
-- ✅ **追问迭代优化** — 对匹配方案和竞品分析结果进行多轮追问，逐步精化输出
-- ✅ **历史记录管理** — 方案匹配/竞品分析两套独立历史记录，支持查看详情、双方案对比、AI智能对比总结
-- ✅ **报告导出** — 支持 Word (docx) 和 PDF 格式导出方案报告和竞品分析报告
-- ✅ **数据仪表盘** — 行业覆盖统计、7日匹配趋势、竞品分析频次、系统运行时间等真实运营数据
-- ✅ **知识库管理** — 支持向量知识库构建、统计、重建和清空，覆盖10大行业
+
+- **智能方案匹配** — 输入客户需求，AI 自动匹配华为云行业解决方案并生成定制化方案
+- **竞争对手分析** — 覆盖 12 家竞品（阿里云/AWS/腾讯云等），生成华为云差异化优势和实战销售话术
+- **追问迭代优化** — 对匹配方案和竞品分析结果进行多轮追问，逐步精化输出
+- **历史记录管理** — 方案匹配/竞品分析两套独立历史记录，支持查看详情、双方案对比、AI 智能对比总结
+- **用户系统** — 注册/登录/个人中心，支持 JWT 认证、图形验证码、密码 bcrypt 加密
+- **报告导出** — 支持 Word (docx) 和 PDF 格式导出方案报告和竞品分析报告
+- **数据仪表盘** — 行业覆盖统计、7日匹配趋势、竞品分析频次、系统运行时间等真实运营数据
+- **知识库管理** — 支持向量知识库构建、统计、重建和清空，覆盖 10 大行业、44 份方案文档
 
 ### 交互体验
-- 🎯 **Demo 案例** — 制造业预测性维护、智慧农业、智慧园区等一键体验案例
-- ✨ **欢迎引导页** — 粒子动画背景、数字滚动统计、可选择跳过并记住偏好
-- 🎨 **科技感 UI** — 玻璃态卡片、流式渐变按钮、粒子网络动画、深色主题
-- 📱 **响应式设计** — 支持桌面端和移动端自适应布局
 
-## 📦 项目结构
+- **欢迎引导页** — 粒子动画背景、数字滚动统计、可选择跳过并记住偏好
+- **Demo 案例** — 制造业预测性维护、智慧农业、智慧园区等一键体验
+- **科技感 UI** — 玻璃态卡片、流式渐变按钮、粒子网络动画、深色/浅色主题
+- **响应式设计** — 支持桌面端和移动端自适应布局
+- **SPA 架构** — 纯 Vanilla JS 前端，零框架依赖，极致轻量
+
+---
+
+## 项目结构
 
 ```
 huawei-cloud-solution-matcher/
 ├── api/                          # FastAPI 后端
-│   ├── main.py                   # 应用入口 & 中间件
-│   ├── routes.py                 # 核心路由（匹配/分析/知识库/历史/追问）
-│   ├── models.py                 # Pydantic 请求/响应模型
+│   ├── main.py                   # 应用入口、中间件、路由注册
+│   ├── auth_routes.py            # 认证路由（注册/登录/登出/个人资料）
+│   ├── auth_dependencies.py      # JWT 认证依赖注入（token_version 校验）
 │   ├── export_routes.py          # 报告导出路由
-│   ├── dependencies.py           # 依赖注入
+│   ├── models.py                 # Pydantic 请求/响应模型
+│   └── middleware.py             # CORS、请求日志、缓存控制中间件
 ├── app/                          # 核心业务模块
 │   ├── config.py                 # 全局配置（LLM/向量库/行业/竞品）
-│   ├── models/                   # 模型层
-│   │   ├── llm.py                # 多模型适配（DeepSeek/OpenAI/阿里/百度）
-│   │   ├── vector_db.py          # ChromaDB 向量库
-│   │   └── export_models.py      # 导出数据模型
-│   ├── services/                 # 业务服务
-│   │   ├── solution_matcher.py   # 方案匹配服务
+│   ├── services/                 # 业务服务层
+│   │   ├── auth_service.py       # 用户认证服务（注册/登录/登出/token_version）
+│   │   ├── solution_matcher.py   # 方案匹配服务（LLM + 向量检索）
 │   │   ├── competitor_analyzer.py # 竞品分析服务
-│   │   ├── knowledge_base.py     # 知识库管理服务
-│   │   ├── usage_logger.py       # 使用日志 & 历史记录
-│   │   └── report_generator.py   # Word/PDF 报告生成
+│   │   ├── knowledge_base.py     # 知识库管理服务（ChromaDB）
+│   │   ├── usage_logger.py       # 使用日志 & 历史记录服务
+│   │   └── report_generator.py   # Word/PDF 报告生成服务
+│   ├── models/                   # 模型层
+│   │   ├── llm.py               # 多模型适配（DeepSeek/OpenAI/阿里/百度）
+│   │   ├── vector_db.py          # ChromaDB 向量库封装
+│   │   └── export_models.py     # 导出数据模型
 │   └── utils/                    # 工具模块
-│       ├── document_loader.py    # 文档加载解析
-│       ├── word_generator.py     # Word文档生成
-│       └── network_checker.py    # 网络检测
-├── frontend/                     # 前端界面
-│   ├── index.html                # 主页面
-│   ├── style.css                 # 主样式
-│   ├── script.js                 # 主逻辑
+│       ├── auth_utils.py          # JWT 生成/验证、密码哈希
+│       ├── db_init.py             # SQLite 数据库初始化（users.db）
+│       ├── document_loader.py    # 文档加载解析（PDF/TXT）
+│       ├── network_checker.py    # 网络连通性检测（多 LLM 提供商）
+│       └── embedding_model.py    # 本地嵌入模型管理（BGE-small-zh）
+├── frontend/                     # 前端界面（SPA，Vanilla JS）
+│   ├── index.html                # 主页面（6个 SPA 视图）
+│   ├── style.css                 # 主样式（科技感深色主题、玻璃态、粒子动画）
+│   ├── script.js                 # 主逻辑（SPA 路由、API 调用、DOM 操作）
 │   ├── welcome-styles.css        # 欢迎页样式
-│   └── welcome-script.js         # 欢迎页逻辑
+│   └── welcome-script.js         # 欢迎页逻辑（粒子动画、数字滚动）
 ├── data/                         # 数据目录
-│   ├── sample_solutions/         # 10大行业解决方案文档
-│   ├── competitors/              # 12家竞品分析文档
+│   ├── sample_solutions/         # 10 大行业解决方案文档（44 个文件）
+│   ├── competitors/              # 12 家竞品分析文档（82 个文件）
 │   ├── vector_db/                # ChromaDB 持久化向量库
-│   ├── embedding_model/          # 本地嵌入模型缓存
-│   ├── exports/                  # 导出文件目录
-│   └── usage_logs.db             # 使用日志 SQLite 数据库
+│   ├── embedding_model/          # 本地嵌入模型缓存（BGE-small-zh-v1.5）
+│   ├── exports/                  # 导出报告文件目录
+│   ├── users.db                  # 用户认证 SQLite 数据库
+│   ├── usage_logs.db            # 使用日志 SQLite 数据库
+│   └── captcha.db               # 图形验证码 SQLite 数据库
 ├── deploy/                       # 部署配置
-│   ├── nginx.conf                # Nginx 反向代理配置
-│   ├── supervisor.conf           # Supervisor 进程守护
-│   └── huawei-matcher.service    # Systemd 服务文件
+│   ├── nginx.conf                # Nginx 反向代理配置（HTTPS）
+│   ├── supervisor.conf           # Supervisor 进程守护（4 worker）
+│   └── huawei-matcher.service   # Systemd 服务文件
 ├── backup/                       # 历史版本备份
-├── requirements.txt              # Python 依赖
+├── requirements.txt               # Python 依赖清单
 ├── install.bat                   # Windows 一键安装脚本
 ├── start_api.bat                 # Windows 启动脚本
-├── Dockerfile                    # Docker 镜像
-├── docker-compose.yml            # Docker Compose 编排
+├── .env.example                  # 环境变量模板
 ├── DEPLOY.md                     # 部署指南
 ├── QUICKSTART.md                 # 快速上手指南
 └── README.md                     # 本文件
 ```
 
-## 🚀 快速开始
+---
+
+## 技术栈
+
+| 层次           | 技术                              | 用途                                 |
+| -------------- | --------------------------------- | ------------------------------------ |
+| **Web 框架**   | FastAPI 0.109.0 + Uvicorn 0.27.0 | 高性能异步 RESTful API                |
+| **AI 框架**    | LangChain 0.1.20                  | LLM 应用编排、Prompt 模板            |
+| **大模型**      | DeepSeek / OpenAI / 阿里百炼 / 百度文心 | 自然语言理解与生成（可切换，4 家） |
+| **向量数据库**  | ChromaDB 0.4.24                   | 文档向量化存储与语义检索             |
+| **嵌入模型**    | BGE-small-zh-v1.5 (BAAI)          | 中文文本向量化（384 维，本地运行）  |
+| **文档处理**    | PyPDF 4.2.0                       | PDF 文档加载与解析                  |
+| **报告导出**    | python-docx 0.8.11 + ReportLab 4.0.4 | Word / PDF 报告生成               |
+| **数据验证**    | Pydantic v2.5.3                   | 请求/响应模型定义                    |
+| **认证**        | PyJWT + passlib(bcrypt)            | JWT 令牌 + 密码哈希（12 轮）        |
+| **数据库**      | SQLite 3（2 个独立库）            | 用户认证 / 使用日志                 |
+| **前端**        | HTML5 + CSS3 + Vanilla JS          | 零框架依赖，SPA 架构                |
+| **图表**        | Chart.js 4.4.0                    | 仪表盘图表（热力图、趋势图、频次图）|
+| **部署**        | Nginx + Supervisor + Systemd       | 反向代理 + 进程守护 + 服务管理      |
+
+---
+
+## 快速开始
 
 ### 环境要求
+
 - Python 3.8+
 - 至少一个 LLM API Key（DeepSeek / OpenAI / 阿里云百炼 / 百度文心）
+- 磁盘空间 ≥ 2GB（用于本地嵌入模型）
 
 ### 1. 安装依赖
 
 **Windows:**
+
 ```bash
 install.bat
 ```
 
-**Linux/Mac:**
+**Linux / macOS:**
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate
@@ -109,16 +152,29 @@ LLM_PROVIDER=deepseek
 # 或 OpenAI
 OPENAI_API_KEY=sk-xxxxxxxx
 LLM_PROVIDER=openai
+
+# 或阿里云百炼
+DASHSCOPE_API_KEY=sk-xxxxxxxx
+LLM_PROVIDER=dashscope
+
+# 或百度文心
+QIANFAN_API_KEY=xxxxxxxx
+QIANFAN_SECRET_KEY=xxxxxxxx
+LLM_PROVIDER=wenxin
 ```
+
+> **离线模式**：设置 `OFFLINE_MODE=true`，使用本地预先下载的嵌入模型，无需访问 HuggingFace。
 
 ### 3. 启动服务
 
 **Windows:**
+
 ```bash
 start_api.bat
 ```
 
-**Linux/Mac:**
+**Linux / macOS:**
+
 ```bash
 source venv/bin/activate
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -126,129 +182,176 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### 4. 访问应用
 
-- 🌐 **应用首页**: http://localhost:8000
-- 📖 **Swagger 文档**: http://localhost:8000/docs
-- 📚 **ReDoc 文档**: http://localhost:8000/redoc
+| 地址                     | 说明              |
+| ------------------------ | ----------------- |
+| http://localhost:8000    | 应用首页（SPA）   |
+| http://localhost:8000/docs | Swagger 交互式文档 |
+| http://localhost:8000/redoc | ReDoc 文档       |
 
-## 📡 API 接口概览
+### 5. 默认管理员账号
 
-### 方案匹配
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/match` | 智能匹配华为云解决方案 |
-| POST | `/api/solution/refine` | 方案追问优化（多轮迭代） |
+| 字段     | 值                    |
+| -------- | --------------------- |
+| 用户名   | `admin`               |
+| 密码     | `admin123`            |
+| 邮箱     | `admin@huawei.com`    |
 
-### 竞品分析
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/analyze` | 竞争对手方案分析 |
-| POST | `/api/competitor/refine` | 竞品分析追问优化（多轮迭代） |
+> 首次登录后请立即修改密码。
 
-### 历史记录
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/history/list` | 方案匹配历史列表 |
-| GET | `/api/history/{id}` | 方案匹配历史详情 |
-| PATCH | `/api/history/{id}/solution` | 更新历史方案内容 |
-| POST | `/api/history/compare` | 双方案对比 |
-| POST | `/api/history/ai-summary` | AI 智能对比总结 |
-| GET | `/api/competitor/history/list` | 竞品分析历史列表 |
-| GET | `/api/competitor/history/{id}` | 竞品分析历史详情 |
-| PATCH | `/api/competitor/history/{id}/solution` | 更新竞品分析历史 |
+---
 
-### 知识库管理
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/knowledge/stats` | 知识库统计 |
-| POST | `/api/knowledge/rebuild` | 重建知识库 |
-| POST | `/api/knowledge/clear` | 清空知识库 |
+## API 接口概览
 
-### 报告导出
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/export/report` | 导出 Word/PDF 报告 |
-| GET | `/api/export/task/{id}` | 查询导出任务状态 |
-| GET | `/api/export/download/{id}` | 下载报告文件 |
+### 认证接口 `/api/auth`
 
-### 数据仪表盘
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/dashboard/stats` | 获取仪表盘统计数据 |
+| 方法 | 路径                          | 认证   | 说明                     |
+| ---- | ----------------------------- | ------ | ------------------------ |
+| POST | `/api/auth/register`          | 无     | 用户注册（含图形验证码） |
+| POST | `/api/auth/login`             | 无     | 用户登录（含图形验证码） |
+| GET  | `/api/auth/captcha`           | 无     | 获取图形验证码（Base64） |
+| GET  | `/api/auth/me`                | Required | 获取当前用户信息        |
+| POST | `/api/auth/logout`            | Required | 退出登录（失效 Token）  |
+| PATCH| `/api/auth/profile`           | Required | 更新个人资料            |
+| POST | `/api/auth/change-password`   | Required | 修改密码                |
+| GET  | `/api/auth/stats`             | Required | 用户使用统计            |
 
-### 系统
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/health` | 健康检查 |
+### 方案匹配 `/api`
 
-## 🎯 使用场景
+| 方法 | 路径                          | 认证     | 说明                     |
+| ---- | ----------------------------- | -------- | ------------------------ |
+| POST | `/api/match`                  | Optional | 智能匹配华为云解决方案   |
+| POST | `/api/solution/refine`        | 无       | 方案追问优化（多轮迭代） |
 
-### 场景一：快速匹配方案
-1. 在输入框粘贴客户需求（如"制造业企业想做设备预测性维护"）
-2. 点击「智能匹配」，AI 自动检索知识库并生成方案
-3. 方案不满意？点击「追问优化」继续迭代
-4. 满意后点击「导出 Word」或「导出 PDF」保存
+### 竞品分析 `/api`
 
-### 场景二：竞品攻坚
-1. 切换到「竞品分析」标签
-2. 选择竞品（如"阿里云"）和行业（如"智慧农业"）
-3. 获取竞品 vs 华为云的优劣势对比和销售话术
-4. 通过追问功能深入对比技术架构、价格、生态等维度
+| 方法 | 路径                          | 认证     | 说明                     |
+| ---- | ----------------------------- | -------- | ------------------------ |
+| POST | `/api/analyze`                | Optional | 竞争对手方案分析         |
+| POST | `/api/competitor/refine`     | 无       | 竞品分析追问优化         |
 
-### 场景三：方案回顾与对比
-1. 点击「历史记录」，查看过往方案
-2. 选择两条历史记录进行并排对比
-3. 使用「AI智能总结」自动生成对比报告
+### 历史记录 `/api`（需登录）
 
-### 场景四：运营数据分析
-1. 点击「仪表盘」，查看系统使用数据
-2. 行业覆盖统计、7日匹配趋势、竞品分析频次一目了然
+| 方法 | 路径                                      | 说明                         |
+| ---- | ----------------------------------------- | ---------------------------- |
+| GET  | `/api/history/list`                       | 方案匹配历史列表（分页）     |
+| GET  | `/api/history/{id}`                       | 方案匹配历史详情             |
+| PATCH| `/api/history/{id}/solution`               | 更新方案内容（追问后保存）   |
+| POST | `/api/history/compare`                    | 双方案对比                   |
+| POST | `/api/history/ai-summary`                 | AI 智能对比总结              |
+| GET  | `/api/competitor/history/list`            | 竞品分析历史列表             |
+| GET  | `/api/competitor/history/{id}`            | 竞品分析历史详情             |
 
-## 🛠️ 技术栈
+### 知识库管理 `/api`
 
-| 层次 | 技术 | 用途 |
-|------|------|------|
-| **Web框架** | FastAPI + Uvicorn | 高性能异步 RESTful API |
-| **AI框架** | LangChain | LLM 应用编排 |
-| **大模型** | DeepSeek / OpenAI / 阿里百炼 / 百度文心 | 自然语言理解与生成 |
-| **向量数据库** | ChromaDB | 文档向量化存储与语义检索 |
-| **嵌入模型** | BGE-small-zh-v1.5 (BAAI) | 中文文本向量化 |
-| **文档处理** | PyPDF + Sentence-Transformers | PDF解析 + 文本分块 |
-| **报告导出** | python-docx + ReportLab | Word (docx) / PDF 生成 |
-| **可视化** | Chart.js + Plotly | 仪表盘图表 |
-| **数据库** | SQLite | 使用日志持久化 |
-| **前端** | HTML5 + CSS3 + Vanilla JS | 零框架依赖，极致轻量 |
-| **部署** | Docker + Nginx + Supervisor | 容器化 + 反向代理 + 进程守护 |
+| 方法 | 路径                          | 说明                     |
+| ---- | ----------------------------- | ------------------------ |
+| GET  | `/api/knowledge/stats`        | 知识库统计信息           |
+| POST | `/api/knowledge/rebuild`      | 重建知识库（重新向量化） |
+| POST | `/api/knowledge/clear`        | 清空知识库               |
 
-## 🐳 Docker 部署
+### 报告导出 `/api`
 
-```bash
-# 构建镜像
-docker build -t huawei-cloud-matcher .
+| 方法 | 路径                                  | 说明                         |
+| ---- | ------------------------------------- | ---------------------------- |
+| POST | `/api/export/report`                  | 导出 Word/PDF 报告          |
+| GET  | `/api/export/task/{task_id}`          | 查询导出任务状态             |
+| GET  | `/api/export/download/{task_id}`       | 下载报告文件                 |
 
-# 启动服务
-docker-compose up -d
+### 数据仪表盘 `/api`（需登录）
 
-# 查看日志
-docker-compose logs -f
-```
+| 方法 | 路径                          | 说明                         |
+| ---- | ----------------------------- | ---------------------------- |
+| GET  | `/api/dashboard/stats`        | 获取仪表盘统计数据           |
 
-## 📚 相关文档
+### 系统 `/api`
 
-- [快速上手指南](QUICKSTART.md)
-- [部署指南](DEPLOY.md)
-- [网络配置指南](NETWORK_GUIDE.md)
+| 方法 | 路径                          | 说明                         |
+| ---- | ----------------------------- | ---------------------------- |
+| GET  | `/api/health`                 | 健康检查                     |
 
-## 🌍 支持行业（10个）
+---
+
+## 认证机制
+
+### JWT Token 认证
+
+- **算法**：HS256
+- **Token 有效期**：24 小时（`JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 1440`）
+- **Token payload**：`user_id`、`username`、`role`、`token_version`、`exp`、`iat`
+- **Token 失效机制**：登出时递增 `token_version`，使所有旧 Token 立即失效
+
+### 安全措施
+
+| 措施                      | 说明                                               |
+| ------------------------- | -------------------------------------------------- |
+| **密码加密**              | bcrypt 12 轮哈希，不可逆存储                       |
+| **Token 版本控制**        | `token_version` 字段，登出即失效，无需等待过期     |
+| **登录失败锁定**          | 连续失败 5 次锁定账户 15 分钟                     |
+| **图形验证码**            | 4 位字母+数字，PIL 生成，5 分钟过期，一次性使用  |
+| **Cache-Control**         | 前端文件强制 `no-store`，防止浏览器缓存敏感页面     |
+| **CORS 可控**            | 通过 `CORS_ORIGINS` 环境变量配置允许的源          |
+
+### 认证模式
+
+| 接口类型     | 认证方式                | 说明                                       |
+| ------------ | ----------------------- | ------------------------------------------ |
+| 方案匹配     | `get_current_user_optional` | 未登录可使用，但不保存历史记录           |
+| 竞品分析     | `get_current_user_optional` | 同上                                     |
+| 历史记录     | `get_current_user`      | 必须登录                                   |
+| 仪表盘       | `get_current_user`      | 必须登录                                   |
+| 个人中心     | `get_current_user`      | 必须登录                                   |
+
+---
+
+## 数据库架构
+
+系统使用 **2 个独立的 SQLite 数据库**，轻量且无需额外安装数据库服务。
+
+### 数据库 1：`data/users.db`（用户认证）
+
+| 表名             | 用途                     | 关键字段                                                   |
+| ----------------- | ------------------------ | ---------------------------------------------------------- |
+| `users`           | 用户主表                 | id, username, email, password_hash, role, token_version...  |
+| `history`         | 通用操作历史             | id, user_id, query_type, query_content, result_content...   |
+| `favorites`       | 方案收藏                 | id, user_id, solution_name, solution_content, industry...   |
+| `user_preferences`| 用户偏好设置             | id, user_id, preferred_industries, theme, language...       |
+| `captchas`        | 图形验证码               | id, captcha_key, captcha_value, expires_at...              |
+| `login_logs`      | 登录日志（预留）         | id, user_id, username, ip_address, login_status...          |
+
+### 数据库 2：`data/usage_logs.db`（使用日志）
+
+| 表名             | 用途                     | 关键字段                                                   |
+| ----------------- | ------------------------ | ---------------------------------------------------------- |
+| `usage_logs`      | 操作日志                 | id, action_type, detail, user_id, created_at...            |
+| `match_history`   | 方案匹配/竞品分析历史    | id, demand_text, solution, industry, type, user_id...       |
+
+> `match_history` 每种类型最多保留 100 条记录（`MAX_MATCH_HISTORY = 100`）。
+
+### 数据库 3：ChromaDB 向量库（`data/vector_db/`）
+
+- **Collection 名称**：`huawei_solutions`
+- **存储内容**：行业解决方案文档片段 + 竞品方案文档片段
+- **元数据**：`source`（文件名）、`industry`（行业名）
+- **嵌入维度**：384（BGE-small-zh-v1.5）
+- **检索 top_k**：5
+
+---
+
+## 知识库
+
+### 覆盖行业（10 个）
 
 智慧农业 · 工业互联网 · 智慧园区 · 智慧城市 · 智慧医疗 · 智慧金融 · 智慧能源 · 智慧交通 · 智慧教育 · 智慧文旅
 
-## ⚔️ 支持竞品分析（12家）
+### 支持竞品分析（12 家）
 
-**国内**: 阿里云 · 腾讯云 · 字节跳动火山引擎 · 天翼云 · 移动云 · 联通云
-**国际**: AWS · 微软Azure · Google Cloud · Oracle Cloud
-**行业**: 西门子 · 施耐德电气
+| 类别   | 竞品                                                         |
+| ------ | ------------------------------------------------------------ |
+| 国内   | 阿里云 · 腾讯云 · 天翼云 · 移动云 · 联通云 · 字节跳动火山引擎 |
+| 国际   | AWS · 微软 Azure · Google Cloud · Oracle Cloud                |
+| 行业   | 西门子 · 施耐德电气                                         |
 
-## 📝 知识库扩展
+### 扩展知识库
 
 将方案文档按行业分类放入对应目录，然后重建知识库：
 
@@ -261,29 +364,99 @@ data/sample_solutions/
 └── ...
 ```
 
-```
-data/competitors/
-├── 阿里云/
-│   └── 阿里云行业方案对比.txt
-├── AWS/
-│   └── AWS对标分析.pdf
-└── ...
-```
-
 在前端「知识库管理」页面点击「重建知识库」，或调用 API：
 
 ```bash
 curl -X POST http://localhost:8000/api/knowledge/rebuild
 ```
 
-## 🤝 贡献指南
+---
+
+## 使用场景
+
+### 场景一：快速匹配方案
+
+1. 在输入框粘贴客户需求（如"制造业企业想做设备预测性维护"）
+2. 点击「智能匹配」，AI 自动检索知识库并生成方案
+3. 方案不满意？在追问框输入优化指令继续迭代
+4. 满意后点击「导出 Word」或「导出 PDF」保存
+
+### 场景二：竞品攻坚
+
+1. 切换到「竞品分析」标签
+2. 选择竞品（如"阿里云"）和行业（如"智慧农业"）
+3. 获取竞品 vs 华为云的优劣势对比和销售话术
+4. 通过追问功能深入对比技术架构、价格、生态等维度
+
+### 场景三：方案回顾与对比
+
+1. 登录后点击「历史记录」，查看过往方案
+2. 选择两条历史记录进行并排对比
+3. 使用「AI 智能总结」自动生成对比报告
+
+### 场景四：运营数据分析
+
+1. 登录后点击「仪表盘」，查看系统使用数据
+2. 行业覆盖统计、7 日匹配趋势、竞品分析频次一目了然
+
+---
+
+## Docker 部署
+
+```bash
+# 构建镜像
+docker build -t huawei-cloud-matcher .
+
+# 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+```
+
+> 注意：当前 `Dockerfile` 和 `docker-compose.yml` 需要进一步完善配置。
+
+---
+
+## 生产环境部署（Linux）
+
+### 架构
+
+```
+用户浏览器
+    └──> Nginx (HTTPS, 443)
+            └──> FastAPI (uvicorn, 127.0.0.1:8000, 4 workers)
+                        ├──> SQLite (users.db / usage_logs.db)
+                        └──> ChromaDB (vector_db/)
+```
+
+### 步骤
+
+1. **Nginx 配置**：参考 `deploy/nginx.conf`，配置 HTTPS（TLSv1.2/1.3）、静态文件服务、API 反向代理
+2. **Supervisor 配置**：参考 `deploy/supervisor.conf`，管理 4 个 uvicorn worker
+3. **Systemd 配置**：参考 `deploy/huawei-matcher.service`，开机自启
+
+---
+
+
+## 相关文档
+
+- [快速上手指南](QUICKSTART.md)
+- [部署指南](DEPLOY.md)
+- [网络配置指南](NETWORK_GUIDE.md)
+
+---
+
+## 贡献指南
 
 欢迎提交 Issue 和 Pull Request！
 
-## 📄 许可证
+---
+
+## 许可证
 
 MIT License
 
 ---
 
-**Made with ❤️ for Huawei Cloud**
+**Made with for Huawei Cloud**

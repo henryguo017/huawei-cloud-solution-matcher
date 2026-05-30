@@ -226,5 +226,13 @@ data/vector_db/
 
 # Temp test scripts
 test_rebuild.py
-data/usage_logs.db
-nul
+test_api_debug.py
+
+# All SQLite database files (users.db, captcha.db, usage_logs.db, etc.)
+*.db
+
+# Misplaced data directory inside api/
+api/data/
+
+# Streamlit secrets (may contain API keys)
+.streamlit/secrets.toml

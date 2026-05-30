@@ -1,11 +1,11 @@
 from app.models.llm import get_llm_response
-from app.services.knowledge_base import KnowledgeBaseService
 
 class SolutionMatcherService:
     """DeepSeek版本 解决方案匹配服务"""
     
     def __init__(self):
-        self.kb_service = KnowledgeBaseService()
+        from api.dependencies import get_knowledge_base
+        self.kb_service = get_knowledge_base()
 
         # 固定提示词模板，输出格式不变
         self.prompt_template = """
@@ -46,9 +46,24 @@ class SolutionMatcherService:
         """
 
     def match(self, customer_demand):
-        # 1. 知识库检索相关内容
-        docs = self.kb_service.search(customer_demand)
-        context_content = "\n".join([doc.page_content for doc in docs])
+        # 1. 知识库检索相关内容（知识库为空则跳过向量搜索，避免 chromadb segfault）
+        try:
+            stats = self.kb_service.get_stats()
+            kb_empty = (stats.get("total_documents", 0) == 0)
+        except Exception:
+            kb_empty = True
+        
+        if kb_empty:
+            docs = []
+            context_content = ""
+        else:
+            try:
+                docs = self.kb_service.search(customer_demand)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"向量检索异常，回退到 LLM 模式: {e}")
+                docs = []
+            context_content = "\n".join([doc.page_content for doc in docs])
         
         # 如果知识库为空，使用通用提示词
         if not docs or not context_content.strip():

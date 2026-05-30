@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
-from passlib.context import CryptContext
+import bcrypt
 from app.config import (
     JWT_SECRET_KEY, 
     JWT_ALGORITHM, 
@@ -9,22 +9,27 @@ from app.config import (
     BCRYPT_ROUNDS
 )
 
-pwd_context = CryptContext(
-    schemes=["bcrypt"], 
-    deprecated="auto",
-    bcrypt__rounds=BCRYPT_ROUNDS
-)
+def _truncate_password(password: str) -> bytes:
+    """截断密码到 bcrypt 72 字节上限"""
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        return password_bytes[:72]
+    return password_bytes
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    pwd_bytes = _truncate_password(password)
+    salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    pwd_bytes = _truncate_password(plain_password)
+    return bcrypt.checkpw(pwd_bytes, hashed_password.encode('utf-8'))
 
 def create_access_token(
     user_id: int,
     username: str,
     role: str,
+    token_version: int = 1,
     expires_delta: Optional[timedelta] = None
 ) -> tuple[str, int]:
     if expires_delta:
@@ -38,6 +43,7 @@ def create_access_token(
         "user_id": user_id,
         "username": username,
         "role": role,
+        "token_version": token_version,
         "exp": expire,
         "iat": datetime.utcnow()
     }
@@ -52,5 +58,5 @@ def decode_access_token(token: str) -> Optional[dict]:
         return payload
     except jwt.ExpiredSignatureError:
         return None
-    except jwt.JWTError:
+    except Exception:
         return None
