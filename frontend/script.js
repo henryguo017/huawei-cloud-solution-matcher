@@ -2685,6 +2685,11 @@ function initEventListeners() {
             document.getElementById('profile-role').textContent = userData.role === 'admin' ? '管理员' : '普通用户';
             document.getElementById('info-username').textContent = userData.username;
             document.getElementById('info-email').textContent = userData.email || '未设置';
+            // 如果有邮箱则显示邮箱行，否则保持隐藏
+            const emailDisplayRow = document.getElementById('email-display-row');
+            if (userData.email) {
+                if (emailDisplayRow) emailDisplayRow.style.display = '';
+            }
             document.getElementById('info-role').textContent = userData.role === 'admin' ? '管理员' : '普通用户';
 
             // Format dates
@@ -2720,6 +2725,8 @@ function initEventListeners() {
 
     // 编辑邮箱
     document.getElementById('btn-edit-email')?.addEventListener('click', () => {
+        // 隐藏显示行，显示编辑行
+        document.getElementById('email-display-row').style.display = 'none';
         document.getElementById('email-edit-row').style.display = '';
         const currentEmail = document.getElementById('info-email').textContent;
         document.getElementById('input-new-email').value = currentEmail !== '未设置' ? currentEmail : '';
@@ -2728,6 +2735,12 @@ function initEventListeners() {
 
     document.getElementById('btn-cancel-email')?.addEventListener('click', () => {
         document.getElementById('email-edit-row').style.display = 'none';
+        // 恢复显示行（仅当邮箱已设置时）
+        const email = document.getElementById('info-email').textContent;
+        const emailDisplayRow = document.getElementById('email-display-row');
+        if (email !== '未设置' && emailDisplayRow) {
+            emailDisplayRow.style.display = '';
+        }
     });
 
     document.getElementById('btn-save-email')?.addEventListener('click', async () => {
@@ -2751,6 +2764,8 @@ function initEventListeners() {
             if (resp.ok) {
                 document.getElementById('info-email').textContent = email;
                 document.getElementById('email-edit-row').style.display = 'none';
+                // 保存成功后显示邮箱行
+                document.getElementById('email-display-row').style.display = '';
                 alert('邮箱更新成功');
             } else {
                 alert(data.detail || '更新失败');
@@ -2908,6 +2923,11 @@ function initEventListeners() {
             const resultContent = document.getElementById('solution-content');
             const sourcesContainer = document.getElementById('solution-sources');
             
+            if (!resultContainer || !resultContent) {
+                console.warn('方案结果容器未找到，可能页面已切换');
+                return;
+            }
+            
             resultContent.innerHTML = UI.renderMarkdown(result.answer);
             UI.renderSources(sourcesContainer, result.source_documents);
             resultContainer.style.display = 'block';
@@ -3014,6 +3034,11 @@ function initEventListeners() {
             const resultContainer = document.getElementById('competitor-result');
             const resultContent = document.getElementById('competitor-content');
             const sourcesContainer = document.getElementById('competitor-sources');
+            
+            if (!resultContainer || !resultContent) {
+                console.warn('竞品分析结果容器未找到，可能页面已切换');
+                return;
+            }
             
             resultContent.innerHTML = UI.renderMarkdown(result.answer);
             UI.renderSources(sourcesContainer, result.source_documents);
