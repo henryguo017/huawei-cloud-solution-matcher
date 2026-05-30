@@ -1631,19 +1631,20 @@ const DashboardUI = {
                 datasets: [{
                     label: '分析占比',
                     data: data,
+                    // 彩虹色：暖→冷，从高到低依次对应
                     backgroundColor: [
-                        'rgba(199, 0, 11, 0.85)',
-                        'rgba(199, 0, 11, 0.75)',
-                        'rgba(199, 0, 11, 0.65)',
-                        'rgba(74, 144, 226, 0.7)',
-                        'rgba(74, 144, 226, 0.6)',
-                        'rgba(74, 144, 226, 0.5)',
-                        'rgba(82, 196, 26, 0.6)',
-                        'rgba(82, 196, 26, 0.5)',
-                        'rgba(250, 173, 20, 0.6)',
-                        'rgba(250, 173, 20, 0.5)',
-                        'rgba(199, 0, 11, 0.55)',
-                        'rgba(74, 144, 226, 0.4)'
+                        'rgba(255, 59, 48, 0.88)',   // 1. 红 (最暖)
+                        'rgba(255, 107, 53, 0.88)',  // 2. 橙红
+                        'rgba(255, 149, 0, 0.88)',   // 3. 橙
+                        'rgba(255, 204, 2, 0.88)',   // 4. 琥珀/黄
+                        'rgba(52, 199, 89, 0.88)',   // 5. 黄绿
+                        'rgba(48, 209, 88, 0.88)',   // 6. 翠绿
+                        'rgba(0, 199, 190, 0.88)',   // 7. 青
+                        'rgba(50, 173, 230, 0.88)',  // 8. 天蓝
+                        'rgba(0, 122, 255, 0.88)',   // 9. 蓝
+                        'rgba(88, 86, 214, 0.88)',   // 10. 靛
+                        'rgba(175, 82, 222, 0.88)',  // 11. 紫
+                        'rgba(191, 90, 242, 0.88)'   // 12. 紫罗兰 (最冷)
                     ],
                     borderRadius: 6,
                     borderSkipped: false
@@ -2281,6 +2282,7 @@ const FavoriteManager = {
         const id = parseInt(el.dataset.id);
         const name = el.dataset.favName || '';
         const industry = el.dataset.favIndustry || '';
+        console.log('[Fav:ToggleFromItem] 开始收藏操作', { id, name, industry, type: HistoryUI.currentType });
         if (!id) {
             UI.showToast('记录ID无效', 'warning');
             return;
@@ -2295,21 +2297,27 @@ const FavoriteManager = {
             const fullContent = HistoryUI.currentType === 'analyze'
                 ? (item.analysis || '')
                 : (item.solution || '');
+            console.log('[Fav:ToggleFromItem] 获取到详情，调用toggle()', { contentLen: fullContent.length });
             this.toggle(name, fullContent, industry).then(() => {
+                console.log('[Fav:ToggleFromItem] toggle()完成，更新按钮', { isFav: this.isFavorited(name) });
                 const btn = el.querySelector('.fav-action-btn');
                 if (btn) {
                     btn.textContent = this.isFavorited(name) ? '⭐ 已收藏' : '☆ 收藏';
                     btn.className = this.isFavorited(name) ? 'btn-favorite active fav-action-btn' : 'btn-favorite fav-action-btn';
                 }
+            }).catch(e => {
+                console.error('[Fav:ToggleFromItem] toggle()异常', e);
             });
-        }).catch(() => {
-            UI.showToast('获取方案详情失败', 'warning');
+        }).catch((e) => {
+            console.error('[Fav:ToggleFromItem] 获取详情失败', e);
+            UI.showToast('获取方案详情失败，请重试', 'warning');
         });
     },
 
     // Toggle favorite: add if not, remove if already
     async toggle(solutionName, solutionContent, industry) {
         const token = AuthManager.getToken();
+        console.log('[Fav:Toggle] 进入toggle()', { solutionName, isFav: this.isFavorited(solutionName), hasToken: !!token, favSetSize: this.favoriteNames.size });
         if (!token) { UI.showToast('请先登录', 'warning'); return; }
 
         if (this.isFavorited(solutionName)) {
@@ -2320,12 +2328,15 @@ const FavoriteManager = {
                 });
                 const data = await resp.json();
                 const fav = data.favorites.find(f => f.solution_name === solutionName);
+                console.log('[Fav:Toggle] 取消收藏', { found: !!fav, favId: fav?.id });
                 if (fav) {
                     await this._remove(fav.id);
                     this.favoriteNames.delete(solutionName);
                     UI.showToast('已取消收藏', 'info');
+                    this.loadForProfile();  // 刷新侧边栏收藏列表
                 }
             } catch(e) {
+                console.error('[Fav:Toggle] 取消收藏失败', e);
                 UI.showToast('取消收藏失败', 'warning');
             }
         } else {
@@ -2343,13 +2354,18 @@ const FavoriteManager = {
                     })
                 });
                 const data = await resp.json();
+                console.log('[Fav:Toggle] 添加收藏响应', { ok: resp.ok, status: resp.status, detail: data.detail || data.message });
                 if (resp.ok) {
                     this.favoriteNames.add(solutionName);
                     UI.showToast('⭐ 已收藏', 'success');
+                    const refreshResult = await this.loadForProfile();  // 刷新侧边栏收藏列表
+                    console.log('[Fav:Toggle] loadForProfile结果', { refreshed: refreshResult });
                 } else {
+                    console.warn('[Fav:Toggle] 添加收藏API返回失败', data);
                     UI.showToast(data.detail || '收藏失败', 'warning');
                 }
             } catch(e) {
+                console.error('[Fav:Toggle] 添加收藏异常', e);
                 UI.showToast('收藏失败', 'warning');
             }
         }
@@ -2367,25 +2383,47 @@ const FavoriteManager = {
     // Load favorites for display in personal center
     async loadForProfile() {
         const token = AuthManager.getToken();
-        if (!token) return;
+        if (!token) return false;
         try {
             const resp = await fetch('/api/auth/favorites?page_size=50', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!resp.ok) return;
+            if (!resp.ok) {
+                console.error('[Fav:LoadProfile] API请求失败', { status: resp.status });
+                return false;
+            }
             const data = await resp.json();
-            this.favoriteNames = new Set(data.favorites.map(f => f.solution_name));
+            const newNames = new Set(data.favorites.map(f => f.solution_name));
+            console.log('[Fav:LoadProfile] 加载完成', {
+                count: data.favorites.length,
+                names: [...newNames],
+                prevNames: [...this.favoriteNames]
+            });
+            this.favoriteNames = newNames;
             
             const listEl = document.getElementById('fav-list');
             const emptyEl = document.getElementById('fav-list-empty');
             const countEl = document.getElementById('fav-count');
+            
+            console.log('[Fav:LoadProfile] DOM元素', {
+                listEl: !!listEl,
+                emptyEl: !!emptyEl,
+                countEl: !!countEl
+            });
+            
+            if (!listEl || !emptyEl) {
+                // Elements don't exist yet — they will when profile panel opens
+                console.log('[Fav:LoadProfile] 侧边栏元素不存在，仅更新内存数据');
+                if (countEl) countEl.textContent = data.favorites.length;
+                return true;
+            }
             
             if (countEl) countEl.textContent = data.favorites.length;
             
             if (data.favorites.length === 0) {
                 listEl.style.display = 'none';
                 emptyEl.style.display = '';
-                return;
+                return true;
             }
             
             emptyEl.style.display = 'none';
@@ -2403,8 +2441,11 @@ const FavoriteManager = {
                     </div>
                 `;
             }).join('');
+            console.log('[Fav:LoadProfile] 侧边栏渲染完成', { count: data.favorites.length });
+            return true;
         } catch(e) {
-            console.error('Load favorites error:', e);
+            console.error('[Fav:LoadProfile] 异常', e);
+            return false;
         }
     },
 
@@ -2917,6 +2958,13 @@ function initEventListeners() {
             const result = await API.match(demand, controller.signal);
             
             // API返回，显示完成
+            console.log('[SolutionMatch] API返回结果:', {
+                hasAnswer: !!result?.answer,
+                answerLength: result?.answer?.length || 0,
+                answerPreview: result?.answer?.substring(0, 100) || '(empty)',
+                sourceCount: result?.source_documents?.length || 0,
+                historyId: result?.history_id
+            });
             MatchProgress.success('方案匹配完成！');
             
             const resultContainer = document.getElementById('solution-result');
@@ -2924,11 +2972,31 @@ function initEventListeners() {
             const sourcesContainer = document.getElementById('solution-sources');
             
             if (!resultContainer || !resultContent) {
-                console.warn('方案结果容器未找到，可能页面已切换');
+                console.warn('[SolutionMatch] 方案结果容器未找到，可能页面已切换', {
+                    resultContainer: !!resultContainer,
+                    resultContent: !!resultContent,
+                    sourcesContainer: !!sourcesContainer
+                });
+                UI.showToast('匹配完成，但页面元素丢失，请刷新后重试', 'warning');
                 return;
             }
             
-            resultContent.innerHTML = UI.renderMarkdown(result.answer);
+            // 检查 answer 是否有效
+            if (!result || !result.answer || (typeof result.answer === 'string' && result.answer.trim() === '')) {
+                console.warn('[SolutionMatch] API返回的answer为空', result);
+                resultContent.innerHTML = '<div class="result-empty"><p style="color: var(--text-secondary); text-align: center; padding: 40px 20px;">⚠️ 匹配服务返回了空结果，请稍后重试。</p></div>';
+                resultContainer.style.display = 'block';
+                return;
+            }
+            
+            // 安全渲染 Markdown
+            try {
+                resultContent.innerHTML = UI.renderMarkdown(result.answer);
+            } catch (renderErr) {
+                console.error('[SolutionMatch] Markdown渲染失败:', renderErr);
+                const escapedText = (result.answer || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                resultContent.innerHTML = '<div class="result-content"><p>方案已生成，但渲染失败。请尝试下载报告查看完整内容。</p><pre style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">' + escapedText.substring(0, 2000) + '</pre></div>';
+            }
             UI.renderSources(sourcesContainer, result.source_documents);
             resultContainer.style.display = 'block';
             resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3029,6 +3097,13 @@ function initEventListeners() {
             const result = await API.analyze(competitor, industry, controller.signal);
             
             // API返回，显示完成
+            console.log('[CompetitorAnalysis] API返回结果:', {
+                hasAnswer: !!result?.answer,
+                answerLength: result?.answer?.length || 0,
+                answerPreview: result?.answer?.substring(0, 100) || '(empty)',
+                sourceCount: result?.source_documents?.length || 0,
+                historyId: result?.history_id
+            });
             AnalyzeProgress.success('竞争分析完成！');
             
             const resultContainer = document.getElementById('competitor-result');
@@ -3036,11 +3111,32 @@ function initEventListeners() {
             const sourcesContainer = document.getElementById('competitor-sources');
             
             if (!resultContainer || !resultContent) {
-                console.warn('竞品分析结果容器未找到，可能页面已切换');
+                console.warn('[CompetitorAnalysis] 竞品分析结果容器未找到，可能页面已切换', {
+                    resultContainer: !!resultContainer,
+                    resultContent: !!resultContent,
+                    sourcesContainer: !!sourcesContainer
+                });
+                // 用 toast 通知用户，避免静默失败
+                UI.showToast('分析完成，但页面元素丢失，请刷新后重试', 'warning');
                 return;
             }
             
-            resultContent.innerHTML = UI.renderMarkdown(result.answer);
+            // 检查 answer 是否有效
+            if (!result || !result.answer || (typeof result.answer === 'string' && result.answer.trim() === '')) {
+                console.warn('[CompetitorAnalysis] API返回的answer为空', result);
+                resultContent.innerHTML = '<div class="result-empty"><p style="color: var(--text-secondary); text-align: center; padding: 40px 20px;">⚠️ 分析服务返回了空结果，请稍后重试。</p></div>';
+                resultContainer.style.display = 'block';
+                return;
+            }
+            
+            // 安全渲染 Markdown，防止 marked.parse() 异常导致空白
+            try {
+                resultContent.innerHTML = UI.renderMarkdown(result.answer);
+            } catch (renderErr) {
+                console.error('[CompetitorAnalysis] Markdown渲染失败:', renderErr);
+                const escapedText = (result.answer || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                resultContent.innerHTML = '<div class="result-content"><p>分析结果已生成，但渲染失败。请尝试下载报告查看完整内容。</p><pre style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">' + escapedText.substring(0, 2000) + '</pre></div>';
+            }
             UI.renderSources(sourcesContainer, result.source_documents);
             resultContainer.style.display = 'block';
             resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });

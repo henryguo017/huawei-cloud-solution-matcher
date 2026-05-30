@@ -23,8 +23,8 @@ def init_database():
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user')),
             status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive', 'locked')),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+            updated_at DATETIME DEFAULT (datetime('now', 'localtime')),
             last_login TIMESTAMP,
             failed_login_count INTEGER DEFAULT 0,
             locked_until TIMESTAMP,
@@ -49,7 +49,7 @@ def init_database():
             query_type TEXT NOT NULL CHECK(query_type IN ('match', 'analyze')),
             query_content TEXT NOT NULL,
             result_content TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     """)
@@ -65,7 +65,7 @@ def init_database():
             solution_name TEXT NOT NULL,
             solution_content TEXT NOT NULL,
             industry TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             UNIQUE(user_id, solution_name)
         )
@@ -81,8 +81,8 @@ def init_database():
             preferred_industries TEXT,
             theme TEXT DEFAULT 'light',
             language TEXT DEFAULT 'zh-CN',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+            updated_at DATETIME DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     """)
@@ -94,7 +94,7 @@ def init_database():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             captcha_key TEXT UNIQUE NOT NULL,
             captcha_value TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT (datetime('now', 'localtime')),
             expires_at TIMESTAMP NOT NULL
         )
     """)
@@ -111,7 +111,7 @@ def init_database():
             user_agent TEXT,
             login_status TEXT NOT NULL CHECK(login_status IN ('success', 'failed')),
             failure_reason TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
         )
     """)

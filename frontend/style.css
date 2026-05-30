@@ -4108,15 +4108,28 @@ body::after {
 }
 
 /* Email Edit */
+.profile-email-edit-row {
+    flex-wrap: nowrap;
+}
+
 .profile-email-edit {
     display: flex;
-    gap: 6px;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
     align-items: center;
     flex: 1;
+    min-width: 0;
+}
+
+.profile-email-edit .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .profile-input {
     flex: 1;
+    min-width: 80px;
     padding: 8px 12px;
     border: 1px solid var(--border-color, rgba(255,255,255,0.15));
     border-radius: 6px;
