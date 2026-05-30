@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
-    <link rel="stylesheet" href="style.css?v=20260530aj">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260530zu">
+    <link rel="stylesheet" href="style.css?v=20260531k">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260531k">
 </head>
 <body>
     <canvas id="particle-canvas"></canvas>
@@ -129,21 +129,25 @@
         <div class="navbar-container">
             <div class="navbar-brand">
                 <span class="brand-icon">☁️</span>
-                <span class="brand-text">华为云解决方案匹配系统</span>
+                <span class="brand-text">华为云方案匹配</span>
             </div>
-            
+
             <nav class="navbar-menu">
                 <button class="navbar-item active" data-page="solution">
                     <span class="nav-icon">🔍</span>
-                    <span class="nav-text">解决方案匹配</span>
+                    <span class="nav-text">方案匹配</span>
                 </button>
                 <button class="navbar-item" data-page="competitor">
                     <span class="nav-icon">⚔️</span>
-                    <span class="nav-text">竞争分析</span>
+                    <span class="nav-text">竞品分析</span>
+                </button>
+                <button class="navbar-item" data-page="products">
+                    <span class="nav-icon">🗺️</span>
+                    <span class="nav-text">产品图谱</span>
                 </button>
                 <button class="navbar-item" data-page="dashboard">
                     <span class="nav-icon">📊</span>
-                    <span class="nav-text">Dashboard</span>
+                    <span class="nav-text">仪表盘</span>
                 </button>
                 <button class="navbar-item" data-page="history">
                     <span class="nav-icon">📋</span>
@@ -155,14 +159,14 @@
                 </button>
                 <button class="navbar-item" data-page="settings">
                     <span class="nav-icon">⚙️</span>
-                    <span class="nav-text">系统设置</span>
+                    <span class="nav-text">设置</span>
                 </button>
             </nav>
             
             <div class="navbar-status">
                 <button id="quick-demo-btn" class="quick-demo-btn" title="快速体验 Demo">
                     <span class="demo-icon">🎯</span>
-                    <span class="demo-text">快速体验</span>
+                    <span class="demo-text">体验</span>
                 </button>
                 <div class="status-divider"></div>
                 <div class="status-item">
@@ -172,10 +176,6 @@
                 <div class="status-item">
                     <span class="status-label">行业</span>
                     <span class="status-value" id="nav-industry-count">--</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">准确率</span>
-                    <span class="status-value" id="nav-accuracy">--%</span>
                 </div>
                 <div class="status-divider"></div>
                 <button id="nav-login-btn" class="nav-login-btn" title="登录 / 注册">
@@ -203,15 +203,19 @@
     <nav class="mobile-menu" id="mobile-menu">
         <button class="mobile-item active" data-page="solution">
             <span class="nav-icon">🔍</span>
-            <span class="nav-text">解决方案匹配</span>
+            <span class="nav-text">方案匹配</span>
         </button>
         <button class="mobile-item" data-page="competitor">
             <span class="nav-icon">⚔️</span>
-            <span class="nav-text">竞争分析</span>
+            <span class="nav-text">竞品分析</span>
+        </button>
+        <button class="mobile-item" data-page="products">
+            <span class="nav-icon">🗺️</span>
+            <span class="nav-text">产品图谱</span>
         </button>
         <button class="mobile-item" data-page="dashboard">
             <span class="nav-icon">📊</span>
-            <span class="nav-text">Dashboard</span>
+            <span class="nav-text">仪表盘</span>
         </button>
         <button class="mobile-item" data-page="history">
             <span class="nav-icon">📋</span>
@@ -223,7 +227,7 @@
         </button>
         <button class="mobile-item" data-page="settings">
             <span class="nav-icon">⚙️</span>
-            <span class="nav-text">系统设置</span>
+            <span class="nav-text">设置</span>
         </button>
     </nav>
     
@@ -485,7 +489,132 @@
                     </details>
                 </div>
             </div>
-            
+
+            <!-- 华为云产品图谱页面 -->
+            <div id="page-products" class="page">
+                <!-- 页面标题 + 统计 -->
+                <header class="products-header">
+                    <div class="products-header-left">
+                        <h2>🗺️ 华为云产品图谱</h2>
+                        <p>覆盖 9 大类、35 款核心云产品 · 点击任意节点查看详情</p>
+                    </div>
+                    <div class="products-header-center">
+                        <button id="arch-tree-btn" class="arch-tree-btn" title="查看3D产品架构关系图">
+                            <span class="arch-icon">🌳</span>
+                            <span>产品架构</span>
+                        </button>
+                    </div>
+                    <div class="products-header-stats">
+                        <span class="ph-stat"><b>35</b> 产品</span>
+                        <span class="ph-stat"><b>9</b> 分类</span>
+                        <span class="ph-stat"><b>42</b> 关联</span>
+                    </div>
+                </header>
+
+                <!-- 分类筛选 + 搜索 -->
+                <div class="products-toolbar">
+                    <div class="products-filter-group">
+                        <button class="product-filter-btn active" data-category="all">🌐 全部</button>
+                        <button class="product-filter-btn" data-category="compute">☁️ 计算</button>
+                        <button class="product-filter-btn" data-category="network">🌐 网络</button>
+                        <button class="product-filter-btn" data-category="storage">💾 存储</button>
+                        <button class="product-filter-btn" data-category="database">🗄️ 数据库</button>
+                        <button class="product-filter-btn" data-category="ai">🤖 AI</button>
+                        <button class="product-filter-btn" data-category="iot">📡 IoT</button>
+                        <button class="product-filter-btn" data-category="security">🛡️ 安全</button>
+                        <button class="product-filter-btn" data-category="media">🎬 音视频</button>
+                        <button class="product-filter-btn" data-category="enterprise">💼 企业应用</button>
+                    </div>
+                    <input type="text" id="product-search-input" class="product-search-input" placeholder="🔍 搜索产品名称或能力...">
+                </div>
+
+                <!-- 产品图谱主体：左侧图谱 + 右侧详情 -->
+                <div class="products-graph-wrapper">
+                    <!-- 左侧：可滚动图谱画布 -->
+                    <div class="products-canvas-area">
+                        <div id="products-graph" class="products-grid-layout">
+                            <!-- 由 JS 渲染：按分类分组的产品卡片网格 -->
+                        </div>
+                    </div>
+
+                    <!-- 右侧：产品详情面板 -->
+                    <div id="product-detail-panel" class="product-detail-panel">
+                        <!-- 空状态引导 -->
+                        <div class="product-detail-empty" id="detail-empty-state">
+                            <div class="empty-illustration">
+                                <div class="empty-hand-icon">👆</div>
+                            </div>
+                            <h3>点击左侧产品节点</h3>
+                            <p>查看华为云各产品的详细能力与典型应用场景</p>
+                            <div class="empty-tips">
+                                <div class="empty-tip">
+                                    <span class="tip-num">1</span>
+                                    <span>点击任意产品节点</span>
+                                </div>
+                                <div class="empty-tip">
+                                    <span class="tip-num">2</span>
+                                    <span>右侧展示产品详细信息</span>
+                                </div>
+                                <div class="empty-tip">
+                                    <span class="tip-num">3</span>
+                                    <span>按分类筛选或搜索快速定位产品</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 详情内容区（动态填充）-->
+                        <div class="product-detail-content" id="detail-content-area" style="display:none;"></div>
+                    </div>
+                </div>
+
+                <!-- 底部提示栏 -->
+                <div id="products-highlight-bar" class="products-highlight-bar">
+                    <div class="info-pill">
+                        <span class="info-icon">💡</span>
+                        <span>点击左侧任意产品，查看详细介绍、核心能力与典型应用场景</span>
+                    </div>
+                </div>
+
+                <!-- 3D产品架构树形图弹窗 -->
+                <div id="arch-modal" class="arch-modal">
+                    <div class="arch-modal-content">
+                        <div class="arch-modal-header">
+                            <div class="arch-modal-title">
+                                <span class="arch-title-icon">🌳</span>
+                                <div>
+                                    <h3>华为云产品架构全景图</h3>
+                                    <p>拖拽旋转 · 滚轮缩放 · 点击节点高亮路径</p>
+                                </div>
+                            </div>
+                            <button id="arch-close-btn" class="arch-close-btn" title="关闭">✕</button>
+                        </div>
+                        <div class="arch-canvas-wrapper">
+                            <canvas id="arch-canvas"></canvas>
+                            <div class="arch-controls">
+                                <div class="arch-legend">
+                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#3B82F6"></span>计算</span>
+                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#F59E0B"></span>网络</span>
+                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#22C55E"></span>存储</span>
+                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#A855F7"></span>数据库</span>
+                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#EC4899"></span>AI</span>
+                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#06B6D4"></span>IoT</span>
+                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#EF4444"></span>安全</span>
+                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#8B5CF6"></span>音视频</span>
+                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#14B8A6"></span>企业应用</span>
+                                </div>
+                                <div class="arch-hint">
+                                    <span>🖱️ 拖拽旋转</span>
+                                    <span>🔍 滚轮缩放</span>
+                                    <span>👆 点击高亮</span>
+                                    <button id="arch-auto-rotate-btn" class="arch-toggle-btn active">🔄 自转</button>
+                                    <button id="arch-reset-btn" class="arch-toggle-btn">↺ 复位</button>
+                                </div>
+                            </div>
+                            <div id="arch-tooltip" class="arch-tooltip"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Dashboard 数据仪表盘页面 -->
             <div id="page-dashboard" class="page">
                 <header class="page-header">
@@ -1141,9 +1270,8 @@
 
     <div id="toast-container"></div>
     
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" onerror="window.__markedFailed=true"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" onerror="window.__chartFailed=true"></script>
-    <script src="script.js?v=20260530ak"></script>
-    <script src="welcome-script.js?v=20260530zu"></script>
+    <script src="script.js?v=20260531k"></script>
+    <script src="welcome-script.js?v=20260531k"></script>
 </body>
 </html>

@@ -293,7 +293,14 @@ const DemoManager = {
             return;
         }
 
-        UI.switchPage('solution');
+        if (typeof UI !== 'undefined') {
+            UI.switchPage('solution');
+        } else {
+            // UI 未就绪时手动切换页面
+            document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+            var solPage = document.getElementById('page-solution');
+            if (solPage) solPage.classList.add('active');
+        }
 
         // 标记为快速体验，绕过登录检查和历史记录
         if (typeof State !== 'undefined') State.isQuickDemo = true;

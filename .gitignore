@@ -236,3 +236,12 @@ api/data/
 
 # Streamlit secrets (may contain API keys)
 .streamlit/secrets.toml
+
+# Windows reserved device names (accidental file creation)
+nul
+nul/
+prn/
+aux/
+con/
+com1/
+lpt1/
