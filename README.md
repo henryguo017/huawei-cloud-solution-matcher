@@ -12,7 +12,6 @@
 - ✅ **报告导出** — 支持 Word (docx) 和 PDF 格式导出方案报告和竞品分析报告
 - ✅ **数据仪表盘** — 行业覆盖统计、7日匹配趋势、竞品分析频次、系统运行时间等真实运营数据
 - ✅ **知识库管理** — 支持向量知识库构建、统计、重建和清空，覆盖10大行业
-- ✅ **用户认证系统** — JWT 认证、注册/登录、验证码、账号锁定保护、收藏夹
 
 ### 交互体验
 - 🎯 **Demo 案例** — 制造业预测性维护、智慧农业、智慧园区等一键体验案例
@@ -29,34 +28,25 @@ huawei-cloud-solution-matcher/
 │   ├── routes.py                 # 核心路由（匹配/分析/知识库/历史/追问）
 │   ├── models.py                 # Pydantic 请求/响应模型
 │   ├── export_routes.py          # 报告导出路由
-│   ├── auth_routes.py            # 用户认证路由
 │   ├── dependencies.py           # 依赖注入
-│   └── auth_dependencies.py      # JWT认证依赖
 ├── app/                          # 核心业务模块
 │   ├── config.py                 # 全局配置（LLM/向量库/行业/竞品）
 │   ├── models/                   # 模型层
 │   │   ├── llm.py                # 多模型适配（DeepSeek/OpenAI/阿里/百度）
 │   │   ├── vector_db.py          # ChromaDB 向量库
-│   │   ├── user_models.py        # 用户数据模型
 │   │   └── export_models.py      # 导出数据模型
 │   ├── services/                 # 业务服务
 │   │   ├── solution_matcher.py   # 方案匹配服务
 │   │   ├── competitor_analyzer.py # 竞品分析服务
 │   │   ├── knowledge_base.py     # 知识库管理服务
 │   │   ├── usage_logger.py       # 使用日志 & 历史记录
-│   │   ├── report_generator.py   # Word/PDF 报告生成
-│   │   └── auth_service.py       # 用户认证服务
+│   │   └── report_generator.py   # Word/PDF 报告生成
 │   └── utils/                    # 工具模块
-│       ├── db_init.py            # 数据库初始化 & 管理员
 │       ├── document_loader.py    # 文档加载解析
 │       ├── word_generator.py     # Word文档生成
-│       ├── network_checker.py    # 网络检测
-│       ├── captcha_utils.py      # 验证码生成
-│       └── auth_utils.py         # 认证工具
+│       └── network_checker.py    # 网络检测
 ├── frontend/                     # 前端界面
 │   ├── index.html                # 主页面
-│   ├── login.html                # 登录页
-│   ├── register.html             # 注册页
 │   ├── style.css                 # 主样式
 │   ├── script.js                 # 主逻辑
 │   ├── welcome-styles.css        # 欢迎页样式
@@ -67,8 +57,7 @@ huawei-cloud-solution-matcher/
 │   ├── vector_db/                # ChromaDB 持久化向量库
 │   ├── embedding_model/          # 本地嵌入模型缓存
 │   ├── exports/                  # 导出文件目录
-│   ├── usage_logs.db             # 使用日志 SQLite 数据库
-│   └── users.db                  # 用户认证 SQLite 数据库
+│   └── usage_logs.db             # 使用日志 SQLite 数据库
 ├── deploy/                       # 部署配置
 │   ├── nginx.conf                # Nginx 反向代理配置
 │   ├── supervisor.conf           # Supervisor 进程守护
@@ -140,8 +129,6 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 - 🌐 **应用首页**: http://localhost:8000
 - 📖 **Swagger 文档**: http://localhost:8000/docs
 - 📚 **ReDoc 文档**: http://localhost:8000/redoc
-- 🔐 **用户登录**: http://localhost:8000/login.html
-- 📝 **用户注册**: http://localhost:8000/register.html
 
 ## 📡 API 接口概览
 
@@ -188,16 +175,6 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 |------|------|------|
 | GET | `/api/dashboard/stats` | 获取仪表盘统计数据 |
 
-### 用户认证
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/auth/register` | 用户注册 |
-| POST | `/api/auth/login` | 用户登录 |
-| GET | `/api/auth/captcha` | 获取验证码 |
-| GET | `/api/auth/me` | 获取当前用户信息 |
-| GET/POST | `/api/history/` | 用户个人历史记录 |
-| GET/POST | `/api/favorites/` | 用户收藏夹 |
-
 ### 系统
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -238,8 +215,7 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 | **文档处理** | PyPDF + Sentence-Transformers | PDF解析 + 文本分块 |
 | **报告导出** | python-docx + ReportLab | Word (docx) / PDF 生成 |
 | **可视化** | Chart.js + Plotly | 仪表盘图表 |
-| **认证** | JWT + bcrypt + 验证码 | 用户认证与安全 |
-| **数据库** | SQLite | 用户数据 & 使用日志持久化 |
+| **数据库** | SQLite | 使用日志持久化 |
 | **前端** | HTML5 + CSS3 + Vanilla JS | 零框架依赖，极致轻量 |
 | **部署** | Docker + Nginx + Supervisor | 容器化 + 反向代理 + 进程守护 |
 

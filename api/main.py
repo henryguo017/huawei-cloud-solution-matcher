@@ -8,8 +8,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from api.routes import router
 from api.export_routes import router as export_router
-from api.auth_routes import router as auth_router
-from api.auth_routes import router_history, router_favorites
 from app.config import APP_NAME, APP_VERSION
 import logging
 import time
@@ -89,9 +87,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(router, prefix="/api")
 app.include_router(export_router, prefix="/api")
-app.include_router(auth_router, prefix="/api")
-app.include_router(router_history, prefix="/api")
-app.include_router(router_favorites, prefix="/api")
 
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
@@ -149,26 +144,6 @@ async def welcome_script():
         return FileResponse(js_path, media_type="application/javascript")
     return {"error": "Welcome script file not found"}
 
-@app.get("/login.html", tags=["前端"])
-async def login_page():
-    """
-    返回登录页面
-    """
-    login_path = os.path.join(frontend_path, "login.html")
-    if os.path.exists(login_path):
-        return FileResponse(login_path)
-    return {"error": "Login page not found"}
-
-@app.get("/register.html", tags=["前端"])
-async def register_page():
-    """
-    返回注册页面
-    """
-    register_path = os.path.join(frontend_path, "register.html")
-    if os.path.exists(register_path):
-        return FileResponse(register_path)
-    return {"error": "Register page not found"}
-
 @app.on_event("startup")
 async def startup_event():
     logger.info("=" * 50)
@@ -176,9 +151,8 @@ async def startup_event():
     logger.info("=" * 50)
     
     try:
-        from app.utils.db_init import init_database, init_admin_user
+        from app.utils.db_init import init_database
         init_database()
-        init_admin_user()
     except Exception as e:
         logger.warning(f"数据库初始化警告: {e}")
     
