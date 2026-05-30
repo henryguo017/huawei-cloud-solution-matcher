@@ -769,6 +769,7 @@ body::after {
 }
 
 .result-actions {
+    margin-top: var(--spacing-md);
     margin-bottom: var(--spacing-lg);
 }
 
@@ -798,6 +799,7 @@ body::after {
 /* ========= 方案追问优化 ========= */
 .follow-up-section {
     margin-top: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
 }
 
 .follow-up-divider {
