@@ -1,49 +1,94 @@
 # 华为云解决方案智能匹配系统
 
-> 基于大模型和向量数据库的华为云行业解决方案智能匹配系统，让销售方案准备时间从2小时缩短至1分钟
+> 基于大模型 + 向量数据库的华为云行业解决方案智能匹配系统，让销售方案准备时间从 **2小时缩短至1分钟**。
 
-## 🌟 项目特点
+## 🌟 功能亮点
 
-- ✅ **智能匹配**: 基于大模型理解客户需求，智能匹配华为云解决方案
-- ✅ **竞争分析**: 分析竞争对手方案，生成差异化优势和销售话术
-- ✅ **知识库管理**: 支持知识库构建、统计、重建等管理功能
-- ✅ **科技感界面**: 现代化前端界面，包含粒子动画、玻璃态效果
-- ✅ **RESTful API**: 基于 FastAPI 的标准 API 接口
-- ✅ **生产就绪**: 完整的部署方案和配置文件
+### 核心能力
+- ✅ **智能方案匹配** — 输入客户需求，AI自动匹配华为云行业解决方案并生成定制化方案
+- ✅ **竞争对手分析** — 分析竞争对手方案，生成华为云差异化优势和实战销售话术
+- ✅ **追问迭代优化** — 对匹配方案和竞品分析结果进行多轮追问，逐步精化输出
+- ✅ **历史记录管理** — 方案匹配/竞品分析两套独立历史记录，支持查看详情、双方案对比、AI智能对比总结
+- ✅ **报告导出** — 支持 Word (docx) 和 PDF 格式导出方案报告和竞品分析报告
+- ✅ **数据仪表盘** — 行业覆盖统计、7日匹配趋势、竞品分析频次、系统运行时间等真实运营数据
+- ✅ **知识库管理** — 支持向量知识库构建、统计、重建和清空，覆盖10大行业
+- ✅ **用户认证系统** — JWT 认证、注册/登录、验证码、账号锁定保护、收藏夹
+
+### 交互体验
+- 🎯 **Demo 案例** — 制造业预测性维护、智慧农业、智慧园区等一键体验案例
+- ✨ **欢迎引导页** — 粒子动画背景、数字滚动统计、可选择跳过并记住偏好
+- 🎨 **科技感 UI** — 玻璃态卡片、流式渐变按钮、粒子网络动画、深色主题
+- 📱 **响应式设计** — 支持桌面端和移动端自适应布局
 
 ## 📦 项目结构
 
 ```
 huawei-cloud-solution-matcher/
-├── api/                    # FastAPI 后端 API
-│   ├── main.py            # API 应用入口
-│   ├── routes.py          # API 路由定义
-│   ├── models.py          # 请求/响应模型
-│   └── dependencies.py    # 依赖注入
-├── app/                    # 核心应用模块
-│   ├── main.py            # Streamlit 应用（旧版）
-│   ├── config.py          # 配置文件
-│   ├── models/            # LLM 和向量数据库模型
-│   ├── services/          # 业务服务层
-│   └── utils/             # 工具函数
-├── frontend/              # 前端界面
-│   ├── index.html         # HTML 主文件
-│   ├── style.css          # 样式文件
-│   └── script.js          # JavaScript 逻辑
-├── data/                  # 数据目录
-│   ├── sample_solutions/  # 解决方案文档
-│   └── vector_db/         # 向量数据库
-├── deploy/                # 部署配置
-│   ├── nginx.conf         # Nginx 配置
-│   ├── supervisor.conf    # Supervisor 配置
-│   └── *.service          # Systemd 服务文件
-├── requirements.txt       # Python 依赖
-├── .env.example          # 环境变量模板
-├── DEPLOY.md             # 部署指南
-└── README.md             # 项目说明
+├── api/                          # FastAPI 后端
+│   ├── main.py                   # 应用入口 & 中间件
+│   ├── routes.py                 # 核心路由（匹配/分析/知识库/历史/追问）
+│   ├── models.py                 # Pydantic 请求/响应模型
+│   ├── export_routes.py          # 报告导出路由
+│   ├── auth_routes.py            # 用户认证路由
+│   ├── dependencies.py           # 依赖注入
+│   └── auth_dependencies.py      # JWT认证依赖
+├── app/                          # 核心业务模块
+│   ├── config.py                 # 全局配置（LLM/向量库/行业/竞品）
+│   ├── models/                   # 模型层
+│   │   ├── llm.py                # 多模型适配（DeepSeek/OpenAI/阿里/百度）
+│   │   ├── vector_db.py          # ChromaDB 向量库
+│   │   ├── user_models.py        # 用户数据模型
+│   │   └── export_models.py      # 导出数据模型
+│   ├── services/                 # 业务服务
+│   │   ├── solution_matcher.py   # 方案匹配服务
+│   │   ├── competitor_analyzer.py # 竞品分析服务
+│   │   ├── knowledge_base.py     # 知识库管理服务
+│   │   ├── usage_logger.py       # 使用日志 & 历史记录
+│   │   ├── report_generator.py   # Word/PDF 报告生成
+│   │   └── auth_service.py       # 用户认证服务
+│   └── utils/                    # 工具模块
+│       ├── db_init.py            # 数据库初始化 & 管理员
+│       ├── document_loader.py    # 文档加载解析
+│       ├── word_generator.py     # Word文档生成
+│       ├── network_checker.py    # 网络检测
+│       ├── captcha_utils.py      # 验证码生成
+│       └── auth_utils.py         # 认证工具
+├── frontend/                     # 前端界面
+│   ├── index.html                # 主页面
+│   ├── login.html                # 登录页
+│   ├── register.html             # 注册页
+│   ├── style.css                 # 主样式
+│   ├── script.js                 # 主逻辑
+│   ├── welcome-styles.css        # 欢迎页样式
+│   └── welcome-script.js         # 欢迎页逻辑
+├── data/                         # 数据目录
+│   ├── sample_solutions/         # 10大行业解决方案文档
+│   ├── competitors/              # 12家竞品分析文档
+│   ├── vector_db/                # ChromaDB 持久化向量库
+│   ├── embedding_model/          # 本地嵌入模型缓存
+│   ├── exports/                  # 导出文件目录
+│   ├── usage_logs.db             # 使用日志 SQLite 数据库
+│   └── users.db                  # 用户认证 SQLite 数据库
+├── deploy/                       # 部署配置
+│   ├── nginx.conf                # Nginx 反向代理配置
+│   ├── supervisor.conf           # Supervisor 进程守护
+│   └── huawei-matcher.service    # Systemd 服务文件
+├── backup/                       # 历史版本备份
+├── requirements.txt              # Python 依赖
+├── install.bat                   # Windows 一键安装脚本
+├── start_api.bat                 # Windows 启动脚本
+├── Dockerfile                    # Docker 镜像
+├── docker-compose.yml            # Docker Compose 编排
+├── DEPLOY.md                     # 部署指南
+├── QUICKSTART.md                 # 快速上手指南
+└── README.md                     # 本文件
 ```
 
 ## 🚀 快速开始
+
+### 环境要求
+- Python 3.8+
+- 至少一个 LLM API Key（DeepSeek / OpenAI / 阿里云百炼 / 百度文心）
 
 ### 1. 安装依赖
 
@@ -59,11 +104,22 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. 配置环境变量
+### 2. 配置 API Key
 
 ```bash
 cp .env.example .env
-# 编辑 .env 文件，填写 OpenAI 或 DeepSeek API 密钥
+```
+
+编辑 `.env`，至少配置一个 LLM 密钥：
+
+```env
+# DeepSeek（推荐，国内最优性价比）
+DEEPSEEK_API_KEY=sk-xxxxxxxx
+LLM_PROVIDER=deepseek
+
+# 或 OpenAI
+OPENAI_API_KEY=sk-xxxxxxxx
+LLM_PROVIDER=openai
 ```
 
 ### 3. 启动服务
@@ -81,103 +137,168 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### 4. 访问应用
 
-- 🌐 前端界面: http://localhost:8000
-- 📖 API 文档: http://localhost:8000/docs
-- 📚 API 文档 (ReDoc): http://localhost:8000/redoc
+- 🌐 **应用首页**: http://localhost:8000
+- 📖 **Swagger 文档**: http://localhost:8000/docs
+- 📚 **ReDoc 文档**: http://localhost:8000/redoc
+- 🔐 **用户登录**: http://localhost:8000/login.html
+- 📝 **用户注册**: http://localhost:8000/register.html
 
-## 📡 API 接口
+## 📡 API 接口概览
 
-### 解决方案匹配
-```bash
-POST /api/match
-Content-Type: application/json
+### 方案匹配
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/match` | 智能匹配华为云解决方案 |
+| POST | `/api/solution/refine` | 方案追问优化（多轮迭代） |
 
-{
-  "demand": "客户需求描述"
-}
-```
+### 竞品分析
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/analyze` | 竞争对手方案分析 |
+| POST | `/api/competitor/refine` | 竞品分析追问优化（多轮迭代） |
 
-### 竞争对手分析
-```bash
-POST /api/analyze
-Content-Type: application/json
-
-{
-  "competitor": "阿里云",
-  "industry": "智慧农业"
-}
-```
+### 历史记录
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/history/list` | 方案匹配历史列表 |
+| GET | `/api/history/{id}` | 方案匹配历史详情 |
+| PATCH | `/api/history/{id}/solution` | 更新历史方案内容 |
+| POST | `/api/history/compare` | 双方案对比 |
+| POST | `/api/history/ai-summary` | AI 智能对比总结 |
+| GET | `/api/competitor/history/list` | 竞品分析历史列表 |
+| GET | `/api/competitor/history/{id}` | 竞品分析历史详情 |
+| PATCH | `/api/competitor/history/{id}/solution` | 更新竞品分析历史 |
 
 ### 知识库管理
-```bash
-GET  /api/knowledge/stats    # 获取统计信息
-POST /api/knowledge/rebuild  # 重建知识库
-POST /api/knowledge/clear    # 清空知识库
-```
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/knowledge/stats` | 知识库统计 |
+| POST | `/api/knowledge/rebuild` | 重建知识库 |
+| POST | `/api/knowledge/clear` | 清空知识库 |
 
-### 健康检查
-```bash
-GET /api/health
-```
+### 报告导出
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/export/report` | 导出 Word/PDF 报告 |
+| GET | `/api/export/task/{id}` | 查询导出任务状态 |
+| GET | `/api/export/download/{id}` | 下载报告文件 |
 
-## 🎯 核心功能
+### 数据仪表盘
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/dashboard/stats` | 获取仪表盘统计数据 |
 
-### 1. 解决方案智能匹配
-- 输入客户需求描述
-- 基于向量检索匹配相关解决方案
-- 大模型生成定制化方案建议
-- 支持方案文档下载
+### 用户认证
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/auth/register` | 用户注册 |
+| POST | `/api/auth/login` | 用户登录 |
+| GET | `/api/auth/captcha` | 获取验证码 |
+| GET | `/api/auth/me` | 获取当前用户信息 |
+| GET/POST | `/api/history/` | 用户个人历史记录 |
+| GET/POST | `/api/favorites/` | 用户收藏夹 |
 
-### 2. 竞争对手分析
-- 选择竞争对手和行业
-- 分析竞品优劣势
-- 生成华为云差异化优势
-- 提供销售应对话术
+### 系统
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/health` | 健康检查 |
 
-### 3. 知识库管理
-- 查看知识库统计信息
-- 行业分布可视化图表
-- 一键重建知识库
-- 清空知识库（需确认）
+## 🎯 使用场景
+
+### 场景一：快速匹配方案
+1. 在输入框粘贴客户需求（如"制造业企业想做设备预测性维护"）
+2. 点击「智能匹配」，AI 自动检索知识库并生成方案
+3. 方案不满意？点击「追问优化」继续迭代
+4. 满意后点击「导出 Word」或「导出 PDF」保存
+
+### 场景二：竞品攻坚
+1. 切换到「竞品分析」标签
+2. 选择竞品（如"阿里云"）和行业（如"智慧农业"）
+3. 获取竞品 vs 华为云的优劣势对比和销售话术
+4. 通过追问功能深入对比技术架构、价格、生态等维度
+
+### 场景三：方案回顾与对比
+1. 点击「历史记录」，查看过往方案
+2. 选择两条历史记录进行并排对比
+3. 使用「AI智能总结」自动生成对比报告
+
+### 场景四：运营数据分析
+1. 点击「仪表盘」，查看系统使用数据
+2. 行业覆盖统计、7日匹配趋势、竞品分析频次一目了然
 
 ## 🛠️ 技术栈
 
-### 后端
-- **FastAPI**: 高性能 Web 框架
-- **LangChain**: LLM 应用框架
-- **ChromaDB**: 向量数据库
-- **OpenAI/DeepSeek**: 大语言模型
+| 层次 | 技术 | 用途 |
+|------|------|------|
+| **Web框架** | FastAPI + Uvicorn | 高性能异步 RESTful API |
+| **AI框架** | LangChain | LLM 应用编排 |
+| **大模型** | DeepSeek / OpenAI / 阿里百炼 / 百度文心 | 自然语言理解与生成 |
+| **向量数据库** | ChromaDB | 文档向量化存储与语义检索 |
+| **嵌入模型** | BGE-small-zh-v1.5 (BAAI) | 中文文本向量化 |
+| **文档处理** | PyPDF + Sentence-Transformers | PDF解析 + 文本分块 |
+| **报告导出** | python-docx + ReportLab | Word (docx) / PDF 生成 |
+| **可视化** | Chart.js + Plotly | 仪表盘图表 |
+| **认证** | JWT + bcrypt + 验证码 | 用户认证与安全 |
+| **数据库** | SQLite | 用户数据 & 使用日志持久化 |
+| **前端** | HTML5 + CSS3 + Vanilla JS | 零框架依赖，极致轻量 |
+| **部署** | Docker + Nginx + Supervisor | 容器化 + 反向代理 + 进程守护 |
 
-### 前端
-- **HTML5 + CSS3 + JavaScript**: 纯原生技术栈
-- **Chart.js**: 图表库
-- **Marked.js**: Markdown 渲染
+## 🐳 Docker 部署
 
-## 📚 部署文档
+```bash
+# 构建镜像
+docker build -t huawei-cloud-matcher .
 
-详细的部署指南请查看: [DEPLOY.md](DEPLOY.md)
+# 启动服务
+docker-compose up -d
 
-### 快速部署到华为云
-1. 购买华为云 ECS 实例（4核8GB）
-2. 按照部署文档配置环境
-3. 配置域名和 HTTPS 证书
-4. 启动服务并验证
-
-## 📝 开发说明
-
-### 添加新的解决方案文档
-将 PDF 或 TXT 文档放入对应行业目录：
+# 查看日志
+docker-compose logs -f
 ```
-data/sample_solutions/智慧农业/xxx.txt
+
+## 📚 相关文档
+
+- [快速上手指南](QUICKSTART.md)
+- [部署指南](DEPLOY.md)
+- [网络配置指南](NETWORK_GUIDE.md)
+
+## 🌍 支持行业（10个）
+
+智慧农业 · 工业互联网 · 智慧园区 · 智慧城市 · 智慧医疗 · 智慧金融 · 智慧能源 · 智慧交通 · 智慧教育 · 智慧文旅
+
+## ⚔️ 支持竞品分析（12家）
+
+**国内**: 阿里云 · 腾讯云 · 字节跳动火山引擎 · 天翼云 · 移动云 · 联通云
+**国际**: AWS · 微软Azure · Google Cloud · Oracle Cloud
+**行业**: 西门子 · 施耐德电气
+
+## 📝 知识库扩展
+
+将方案文档按行业分类放入对应目录，然后重建知识库：
+
+```
+data/sample_solutions/
+├── 智慧农业/
+│   └── 华为云智慧农业解决方案.pdf
+├── 工业互联网/
+│   └── 工业互联网白皮书.txt
+└── ...
 ```
 
-然后在知识库管理页面点击"重建知识库"。
+```
+data/competitors/
+├── 阿里云/
+│   └── 阿里云行业方案对比.txt
+├── AWS/
+│   └── AWS对标分析.pdf
+└── ...
+```
 
-### 修改前端样式
-编辑 `frontend/style.css` 文件，支持热重载。
+在前端「知识库管理」页面点击「重建知识库」，或调用 API：
 
-### 扩展 API 接口
-在 `api/routes.py` 中添加新的路由，遵循 RESTful 规范。
+```bash
+curl -X POST http://localhost:8000/api/knowledge/rebuild
+```
 
 ## 🤝 贡献指南
 
