@@ -35,6 +35,7 @@ class MatchResponse(BaseModel):
 class AnalyzeResponse(BaseModel):
     answer: str = Field(..., description="分析结果（Markdown格式）")
     source_documents: List[SourceDocument] = Field(default_factory=list, description="参考文档列表")
+    history_id: Optional[int] = Field(default=None, description="本次分析的历史记录ID")
 
 class KnowledgeStatsResponse(BaseModel):
     total_documents: int = Field(..., description="总文档片段数")
@@ -63,6 +64,17 @@ class RefineSolutionRequest(BaseModel):
 
 class RefineSolutionResponse(BaseModel):
     refined_solution: str = Field(..., description="优化后的方案（Markdown格式）")
+    follow_up: str = Field(..., description="本次追问内容")
+
+class RefineCompetitorRequest(BaseModel):
+    original_competitor: str = Field(..., description="原始竞品名称")
+    original_industry: str = Field(..., description="原始行业名称")
+    current_analysis: str = Field(..., description="当前分析报告内容（Markdown）")
+    follow_up: str = Field(..., description="用户的追问/优化要求", min_length=1)
+    conversation_history: Optional[List[Dict[str, str]]] = Field(default_factory=list, description="历史追问对话记录")
+
+class RefineCompetitorResponse(BaseModel):
+    refined_analysis: str = Field(..., description="优化后的分析报告（Markdown格式）")
     follow_up: str = Field(..., description="本次追问内容")
 
 class UpdateSolutionRequest(BaseModel):
@@ -139,3 +151,23 @@ class CompareSummaryRequest(BaseModel):
 
 class CompareSummaryResponse(BaseModel):
     summary: str = Field(..., description="AI智能对比总结")
+
+# ========== 竞品分析历史记录 ==========
+
+class CompetitorHistoryItem(BaseModel):
+    id: int = Field(..., description="记录ID")
+    competitor: str = Field(..., description="竞品名称")
+    industry: str = Field(default="", description="行业名称")
+    created_at: str = Field(..., description="创建时间")
+
+class CompetitorHistoryDetail(BaseModel):
+    id: int = Field(..., description="记录ID")
+    competitor: str = Field(..., description="竞品名称")
+    industry: str = Field(default="", description="行业名称")
+    analysis: str = Field(..., description="完整分析报告（Markdown）")
+    sources: List[Dict[str, Any]] = Field(default_factory=list, description="参考文档列表")
+    created_at: str = Field(..., description="创建时间")
+
+class CompetitorHistoryListResponse(BaseModel):
+    items: List[CompetitorHistoryItem] = Field(default_factory=list, description="历史记录列表")
+    total: int = Field(default=0, description="总记录数")

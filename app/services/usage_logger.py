@@ -62,14 +62,29 @@ class UsageLoggerService:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS match_history (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    demand_text TEXT    NOT NULL,              -- 原始需求描述
-                    solution    TEXT    NOT NULL,              -- 完整方案内容（Markdown）
+                    demand_text TEXT    NOT NULL,              -- 原始需求描述 / 竞品名
+                    solution    TEXT    NOT NULL,              -- 完整方案内容 / 分析报告（Markdown）
                     industry    TEXT,                          -- 识别出的行业
                     sources     TEXT,                          -- JSON 参考文档列表
+                    type        TEXT    NOT NULL DEFAULT 'match',  -- match=方案匹配 / analyze=竞品分析
+                    competitor  TEXT    DEFAULT '',                 -- 竞品名称（仅 type='analyze' 时有值）
                     created_at  DATETIME DEFAULT (datetime('now', 'localtime'))
                 )
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_history_date ON match_history(created_at)")
+            
+            # 兼容旧表：如果 type/competitor 列不存在则添加（必须在创建 type 索引之前）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN type TEXT NOT NULL DEFAULT 'match'")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN competitor TEXT DEFAULT ''")
+            except:
+                pass  # 列已存在
+            
+            # type 列索引必须在 ALTER TABLE 之后创建
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_history_type ON match_history(type)")
             conn.commit()
             logger.info(f"使用日志数据库已初始化: {self.db_path}")
 
@@ -324,7 +339,7 @@ class UsageLoggerService:
                     )
                 )
                 conn.commit()
-                self._trim_match_history(conn)
+                self._trim_match_history(conn, record_type='match')
                 return cursor.lastrowid
         except Exception as e:
             logger.error(f"保存匹配历史记录失败: {e}")
@@ -346,6 +361,24 @@ class UsageLoggerService:
                 return True
         except Exception as e:
             logger.error(f"更新匹配历史方案失败(id={record_id}): {e}")
+            return False
+
+    def update_competitor_history_solution(self, record_id: int, analysis: str) -> bool:
+        """
+        更新指定竞品分析历史记录的分析内容（用于追问优化后保存最终版）
+        Returns:
+            更新成功返回 True，失败返回 False
+        """
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE match_history SET solution = ? WHERE id = ? AND type = 'analyze'",
+                    (analysis, record_id)
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"更新竞品分析历史失败(id={record_id}): {e}")
             return False
 
     def _trim_match_history(self, conn):
@@ -381,6 +414,7 @@ class UsageLoggerService:
                     """
                     SELECT id, demand_text, industry, created_at
                     FROM match_history
+                    WHERE type = 'match'
                     ORDER BY created_at DESC
                     LIMIT ?
                     """,
@@ -405,7 +439,7 @@ class UsageLoggerService:
         try:
             with self._get_connection() as conn:
                 cursor = conn.execute(
-                    "SELECT * FROM match_history WHERE id = ?",
+                    "SELECT * FROM match_history WHERE id = ? AND type = 'match'",
                     (history_id,)
                 )
                 row = cursor.fetchone()
@@ -417,11 +451,120 @@ class UsageLoggerService:
                     "solution": row["solution"],
                     "industry": row["industry"] or "",
                     "sources": json.loads(row["sources"]) if row["sources"] else [],
+                    "type": row["type"] if "type" in row.keys() else "match",
+                    "competitor": row["competitor"] if "competitor" in row.keys() else "",
                     "created_at": row["created_at"]
                 }
         except Exception as e:
             logger.error(f"获取匹配历史记录失败: {e}")
             return None
+
+    # ========== 竞品分析历史记录 ==========
+
+    def save_competitor_history(self, competitor: str, industry: str, analysis: str, sources: List[Dict[str, Any]] = None) -> Optional[int]:
+        """
+        保存一次竞品分析结果到历史记录
+
+        Returns:
+            新记录 id，保存失败返回 None
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, type, competitor) VALUES (?, ?, ?, ?, 'analyze', ?)",
+                    (
+                        competitor,  # demand_text 存竞品名
+                        analysis,    # solution 存分析报告
+                        industry,
+                        json.dumps(sources or [], ensure_ascii=False),
+                        competitor
+                    )
+                )
+                conn.commit()
+                self._trim_match_history(conn, record_type='analyze')
+                return cursor.lastrowid
+        except Exception as e:
+            logger.error(f"保存竞品分析历史记录失败: {e}")
+            return None
+
+    def get_competitor_history_list(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """获取竞品分析历史记录列表（按时间倒序）"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    SELECT id, demand_text, industry, competitor, created_at
+                    FROM match_history
+                    WHERE type = 'analyze'
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (limit,)
+                )
+                rows = cursor.fetchall()
+                results = []
+                for row in rows:
+                    results.append({
+                        "id": row["id"],
+                        "competitor": row["competitor"] or row["demand_text"] or "",
+                        "industry": row["industry"] or "",
+                        "created_at": row["created_at"]
+                    })
+                return results
+        except Exception as e:
+            logger.error(f"获取竞品分析历史列表失败: {e}")
+            return []
+
+    def get_competitor_history_by_id(self, history_id: int) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单条竞品分析历史记录（含完整分析报告）"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT * FROM match_history WHERE id = ? AND type = 'analyze'",
+                    (history_id,)
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    return None
+                return {
+                    "id": row["id"],
+                    "competitor": row["competitor"] or row["demand_text"] or "",
+                    "industry": row["industry"] or "",
+                    "analysis": row["solution"],
+                    "sources": json.loads(row["sources"]) if row["sources"] else [],
+                    "created_at": row["created_at"]
+                }
+        except Exception as e:
+            logger.error(f"获取竞品分析历史记录失败: {e}")
+            return None
+
+    def _trim_match_history(self, conn, record_type: str = 'match'):
+        """
+        清理超限的历史记录（按类型分别保留最新的 MAX_MATCH_HISTORY 条）
+        """
+        try:
+            cursor = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM match_history WHERE type = ?",
+                (record_type,)
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return
+            count = row["cnt"]
+            if count > MAX_MATCH_HISTORY:
+                conn.execute("""
+                    DELETE FROM match_history
+                    WHERE type = ?
+                      AND id NOT IN (
+                        SELECT id FROM match_history
+                        WHERE type = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                      )
+                """, (record_type, record_type, MAX_MATCH_HISTORY))
+                logger.info(f"历史记录自动清理(type={record_type})：{count} → {MAX_MATCH_HISTORY} 条")
+        except Exception as e:
+            logger.warning(f"历史记录清理失败（不影响保存）: {e}")
 
 
 def get_usage_logger() -> UsageLoggerService:

@@ -8,7 +8,9 @@ from api.models import (
     MatchHistoryListResponse, MatchHistoryItem, MatchHistoryDetail, CompareRequest, CompareResponse,
     CompareSummaryRequest, CompareSummaryResponse,
     RefineSolutionRequest, RefineSolutionResponse,
-    UpdateSolutionRequest, UpdateSolutionResponse
+    UpdateSolutionRequest, UpdateSolutionResponse,
+    RefineCompetitorRequest, RefineCompetitorResponse,
+    CompetitorHistoryListResponse, CompetitorHistoryItem, CompetitorHistoryDetail
 )
 from api.dependencies import (
     get_solution_matcher,
@@ -156,15 +158,23 @@ async def analyze_competitor(
         logger.info("竞争对手分析成功")
         
         # 记录使用日志
+        history_id = None
         try:
             usage_logger = get_usage_logger()
             usage_logger.log_analyze(request.competitor, request.industry)
+            history_id = usage_logger.save_competitor_history(
+                competitor=request.competitor,
+                industry=request.industry,
+                analysis=result["answer"],
+                sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", []) if hasattr(d, "metadata")]
+            )
         except Exception as log_err:
-            logger.warning(f"记录使用日志失败: {log_err}")
+            logger.warning(f"记录使用日志或保存历史失败: {log_err}")
         
         return AnalyzeResponse(
             answer=result["answer"],
-            source_documents=source_docs
+            source_documents=source_docs,
+            history_id=history_id
         )
     except Exception as e:
         logger.error(f"竞争对手分析失败: {e}")
@@ -522,6 +532,95 @@ async def update_history_solution(
             detail=f"更新失败: {str(e)}"
         )
 
+
+@router.patch("/competitor/history/{history_id}/solution", response_model=UpdateSolutionResponse, tags=["历史记录"])
+async def update_competitor_history_solution(
+    history_id: int,
+    request: UpdateSolutionRequest,
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """更新竞品分析历史记录中的分析内容（用于追问优化后保存最终版）"""
+    try:
+        success = usage_logger.update_competitor_history_solution(history_id, request.solution)
+        if not success:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"竞品分析历史记录 {history_id} 不存在或更新失败")
+        return UpdateSolutionResponse(success=True, message="分析报告已更新")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新竞品分析历史失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新失败: {str(e)}"
+        )
+
+# ========== 竞品分析历史记录 ==========
+
+@router.get("/competitor/history/list", response_model=CompetitorHistoryListResponse, tags=["历史记录"])
+async def get_competitor_history_list(
+    limit: int = 50,
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """
+    获取竞品分析历史记录列表
+
+    按时间倒序返回最近的竞品分析记录
+    """
+    try:
+        items = usage_logger.get_competitor_history_list(limit=limit)
+        return CompetitorHistoryListResponse(
+            items=[
+                CompetitorHistoryItem(
+                    id=item["id"],
+                    competitor=item["competitor"],
+                    industry=item["industry"],
+                    created_at=item["created_at"]
+                )
+                for item in items
+            ],
+            total=len(items)
+        )
+    except Exception as e:
+        logger.error(f"获取竞品分析历史列表失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取历史记录失败: {str(e)}"
+        )
+
+@router.get("/competitor/history/{history_id}", response_model=CompetitorHistoryDetail, tags=["历史记录"])
+async def get_competitor_history_detail(
+    history_id: int,
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """
+    获取单条竞品分析历史记录详情
+
+    包含完整的分析报告和参考文档
+    """
+    try:
+        item = usage_logger.get_competitor_history_by_id(history_id)
+        if item is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="历史记录不存在"
+            )
+        return CompetitorHistoryDetail(
+            id=item["id"],
+            competitor=item["competitor"],
+            industry=item["industry"],
+            analysis=item["analysis"],
+            sources=item.get("sources", []),
+            created_at=item["created_at"]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取竞品分析历史详情失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取历史记录详情失败: {str(e)}"
+        )
+
 @router.post("/solution/refine", response_model=RefineSolutionResponse, tags=["解决方案优化"])
 async def refine_solution(request: RefineSolutionRequest):
     """方案追问优化接口 - 基于原始需求+当前方案+用户追问，生成优化方案"""
@@ -569,4 +668,56 @@ async def refine_solution(request: RefineSolutionRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"方案优化失败: {str(e)}"
+        )
+
+@router.post("/competitor/refine", response_model=RefineCompetitorResponse, tags=["竞品分析优化"])
+async def refine_competitor_analysis(request: RefineCompetitorRequest):
+    """竞品分析追问优化接口 - 基于竞品+行业+当前分析+用户追问，生成优化分析报告"""
+    try:
+        # 构造对话历史上下文
+        history_text = ""
+        if request.conversation_history:
+            for h in request.conversation_history:
+                role = h.get('role', 'user')
+                content = h.get('content', '')
+                history_text += f"{role}: {content}\n"
+
+        refine_prompt = f"""你是华为云竞争分析资深专家。请根据用户的追问，对已有的竞品分析报告进行优化改写。
+
+## 竞品名称
+{request.original_competitor}
+
+## 行业场景
+{request.original_industry}
+
+## 当前分析报告（Markdown格式）
+{request.current_analysis}
+
+## 历史追问记录
+{history_text if history_text else '（无）'}
+
+## 本次用户追问
+{request.follow_up}
+
+---
+**任务要求**：
+1. 基于当前分析报告，根据用户的追问要求进行针对性优化
+2. 保持报告的专业性和实战性，聚焦华为云 vs {request.original_competitor} 的差异化竞争
+3. 如果追问涉及技术架构/价格/生态/服务对比，给出具体的对比细节
+4. 如果追问涉及销售话术，给出可直接用于客户沟通的实战话术
+5. 输出完整优化后的分析报告（Markdown格式，结构清晰）
+6. 不要输出解释性文字，直接输出优化后的完整报告
+
+请用中文输出，格式规范、专业简练。"""
+
+        refined = get_llm_response(refine_prompt)
+        return RefineCompetitorResponse(
+            refined_analysis=refined,
+            follow_up=request.follow_up
+        )
+    except Exception as e:
+        logger.error(f"竞品分析优化失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"竞品分析优化失败: {str(e)}"
         )

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
-    <link rel="stylesheet" href="style.css?v=20260530x">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260530w">
+    <link rel="stylesheet" href="style.css?v=20260530zc">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260530zc">
 </head>
 <body>
     <canvas id="particle-canvas"></canvas>
@@ -424,6 +424,26 @@
                         <span class="result-badge success">✅ 分析完成</span>
                     </div>
                     <div class="result-content content-card" id="competitor-content"></div>
+                    <div class="follow-up-section competitor-follow-up" id="competitor-follow-up-section" style="display: none;">
+                        <div class="follow-up-divider">
+                            <span class="follow-up-divider-text">💬 分析追问优化</span>
+                            <button class="btn-link" id="clear-competitor-follow-up-btn">清空历史</button>
+                        </div>
+                        <div class="follow-up-history" id="competitor-follow-up-history"></div>
+                        <div class="follow-up-loading" id="competitor-follow-up-loading" style="display: none;">
+                            <div class="follow-up-loading-dot"></div>
+                            <div class="follow-up-loading-dot"></div>
+                            <div class="follow-up-loading-dot"></div>
+                            <span>正在优化分析报告...</span>
+                        </div>
+                        <div class="follow-up-input-area">
+                            <textarea id="competitor-follow-up-input" placeholder="输入追问内容，例如：把价格对比部分再详细一点"></textarea>
+                            <button class="btn btn-primary btn-sm" id="send-competitor-follow-up-btn">发送</button>
+                        </div>
+                        <div class="follow-up-actions" id="competitor-follow-up-actions" style="display: none;">
+                            <button class="btn btn-success btn-sm" id="apply-competitor-refined-btn">✅ 使用此优化结果</button>
+                        </div>
+                    </div>
                     <div class="result-actions">
                         <button class="btn btn-primary" id="download-competitor-btn">
                             📥 下载竞争分析报告
@@ -608,8 +628,16 @@
             <!-- 历史记录页面 -->
             <div id="page-history" class="page">
                 <header class="page-header">
-                    <h2 class="page-title">📋 方案匹配历史记录</h2>
-                    <p class="page-subtitle">随时调阅过往方案，支持两两对比差异，体现"以客户为中心"的沉淀思维</p>
+                    <h2 class="page-title">📋 历史记录</h2>
+                    <p class="page-subtitle">随时调阅过往方案与分析报告，沉淀经验</p>
+                    <div class="history-tabs">
+                        <button class="history-tab active" data-tab="match" id="history-tab-match">
+                            🔍 方案匹配
+                        </button>
+                        <button class="history-tab" data-tab="analyze" id="history-tab-analyze">
+                            ⚔️ 竞品分析
+                        </button>
+                    </div>
                 </header>
 
                 <!-- 对比模式遮罩层 -->
@@ -656,7 +684,8 @@
                     </div>
                 </div>
 
-                <!-- 操作栏 -->
+                <!-- 操作栏 & 对比工具（仅方案匹配支持对比） -->
+                <div id="history-compare-section">
                 <div class="history-toolbar">
                     <div class="history-toolbar-left">
                         <span id="history-count">共 0 条记录</span>
@@ -666,6 +695,7 @@
                         <button class="btn btn-primary" id="btn-do-compare" disabled>开始对比</button>
                         <button class="btn btn-secondary" id="btn-clear-compare" style="display: none;">取消对比</button>
                     </div>
+                </div>
                 </div>
 
                 <!-- 历史记录列表 -->
@@ -685,7 +715,7 @@
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" onerror="window.__markedFailed=true"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" onerror="window.__chartFailed=true"></script>
-    <script src="script.js?v=20260530x"></script>
-    <script src="welcome-script.js?v=20260530x"></script>
+    <script src="script.js?v=20260530zc"></script>
+    <script src="welcome-script.js?v=20260530zc"></script>
 </body>
 </html>

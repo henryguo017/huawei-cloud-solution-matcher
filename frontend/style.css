@@ -415,6 +415,41 @@ body::after {
     line-height: 1.6;
 }
 
+.history-tabs {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
+    padding: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-md);
+    width: fit-content;
+}
+
+.history-tab {
+    padding: 10px 24px;
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.55);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.history-tab:hover {
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.history-tab.active {
+    color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.15);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
 .card-title {
     font-size: var(--font-size-lg);
     font-weight: 600;
@@ -1874,6 +1909,11 @@ body::after {
     background: rgba(74, 144, 226, 0.15);
     color: #4A90E2;
     font-weight: 600;
+}
+
+.history-item-industry.competitor-badge {
+    background: rgba(245, 34, 45, 0.15);
+    color: #F5222D;
 }
 
 .history-item-demand {

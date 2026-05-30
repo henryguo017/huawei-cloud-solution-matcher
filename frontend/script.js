@@ -233,6 +233,18 @@ const API = {
         return await response.json();
     },
 
+    async getCompetitorHistoryList() {
+        const response = await fetch(`${Config.API_BASE_URL}/competitor/history/list`);
+        if (!response.ok) throw new Error(`获取竞品分析历史失败: ${response.statusText}`);
+        return await response.json();
+    },
+
+    async getCompetitorHistoryDetail(id) {
+        const response = await fetch(`${Config.API_BASE_URL}/competitor/history/${id}`);
+        if (!response.ok) throw new Error(`获取详情失败: ${response.statusText}`);
+        return await response.json();
+    },
+
     async refineSolution(originalDemand, currentSolution, followUp, conversationHistory) {
         const response = await fetch(`${Config.API_BASE_URL}/solution/refine`, {
             method: 'POST',
@@ -248,6 +260,22 @@ const API = {
         return await response.json();
     },
 
+    async refineCompetitorAnalysis(originalCompetitor, originalIndustry, currentAnalysis, followUp, conversationHistory) {
+        const response = await fetch(`${Config.API_BASE_URL}/competitor/refine`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                original_competitor: originalCompetitor,
+                original_industry: originalIndustry,
+                current_analysis: currentAnalysis,
+                follow_up: followUp,
+                conversation_history: conversationHistory || []
+            })
+        });
+        if (!response.ok) throw new Error(`分析优化失败: ${response.statusText}`);
+        return await response.json();
+    },
+
     async updateHistorySolution(historyId, solution) {
         const response = await fetch(`${Config.API_BASE_URL}/history/${historyId}/solution`, {
             method: 'PATCH',
@@ -255,6 +283,16 @@ const API = {
             body: JSON.stringify({ solution })
         });
         if (!response.ok) throw new Error(`更新历史方案失败: ${response.statusText}`);
+        return await response.json();
+    },
+
+    async updateCompetitorHistorySolution(historyId, analysis) {
+        const response = await fetch(`${Config.API_BASE_URL}/competitor/history/${historyId}/solution`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ solution: analysis })
+        });
+        if (!response.ok) throw new Error(`更新竞品分析历史失败: ${response.statusText}`);
         return await response.json();
     }
 };
@@ -904,11 +942,34 @@ const HistoryUI = {
     selectedIds: new Set(),
     isCompareMode: false,
     currentCompareIds: [],
+    currentType: 'match',  // 'match' | 'analyze'
+
+    switchTab(type) {
+        this.currentType = type;
+        this.selectedIds.clear();
+        if (this.isCompareMode) this.exitCompareMode();
+        
+        // 更新 tab 样式
+        document.querySelectorAll('.history-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.tab === type);
+        });
+        
+        // 隐藏对比工具（仅方案匹配支持对比）
+        const compareSection = document.getElementById('history-compare-section');
+        if (compareSection) compareSection.style.display = type === 'match' ? '' : 'none';
+        
+        this.loadHistory();
+    },
 
     async loadHistory() {
         try {
-            const data = await API.getHistoryList();
-            this.items = data.items || [];
+            if (this.currentType === 'match') {
+                const data = await API.getHistoryList();
+                this.items = data.items || [];
+            } else {
+                const data = await API.getCompetitorHistoryList();
+                this.items = data.items || [];
+            }
             this.renderList();
             this.updateCount();
         } catch (error) {
@@ -919,7 +980,8 @@ const HistoryUI = {
 
     updateCount() {
         const el = document.getElementById('history-count');
-        if (el) el.textContent = `共 ${this.items.length} 条记录`;
+        const label = this.currentType === 'match' ? '方案匹配' : '竞品分析';
+        if (el) el.textContent = `共 ${this.items.length} 条${label}记录`;
     },
 
     renderList() {
@@ -927,16 +989,28 @@ const HistoryUI = {
         if (!container) return;
 
         if (this.items.length === 0) {
+            const typeLabel = this.currentType === 'match' ? '方案匹配' : '竞品分析';
+            const hintText = this.currentType === 'match'
+                ? '在「解决方案匹配」页面输入需求并匹配后，方案会自动保存到这里'
+                : '在「竞品分析」页面选择竞品和行业并分析后，报告会自动保存到这里';
             container.innerHTML = `
                 <div class="history-empty">
                     <div class="empty-icon">📋</div>
-                    <p>暂无历史记录</p>
-                    <p class="empty-sub">在「解决方案匹配」页面输入需求并匹配后，方案会自动保存到这里</p>
+                    <p>暂无${typeLabel}历史记录</p>
+                    <p class="empty-sub">${hintText}</p>
                 </div>
             `;
             return;
         }
 
+        if (this.currentType === 'match') {
+            this._renderMatchList(container);
+        } else {
+            this._renderCompetitorList(container);
+        }
+    },
+
+    _renderMatchList(container) {
         container.innerHTML = this.items.map(item => {
             const isSelected = this.selectedIds.has(item.id);
             const dateStr = item.created_at ? item.created_at.replace('T', ' ').substring(0, 16) : '--';
@@ -953,6 +1027,27 @@ const HistoryUI = {
                     </div>
                     <div class="history-item-actions">
                         <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); HistoryUI.showDetail(${item.id})">查看</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    },
+
+    _renderCompetitorList(container) {
+        container.innerHTML = this.items.map(item => {
+            const dateStr = item.created_at ? item.created_at.replace('T', ' ').substring(0, 16) : '--';
+            return `
+                <div class="history-item" data-id="${item.id}" onclick="HistoryUI.showCompetitorDetail(${item.id})">
+                    <div class="history-item-content">
+                        <div class="history-item-header">
+                            <span class="history-item-date">${dateStr}</span>
+                            <span class="history-item-industry competitor-badge">${this.escapeHtml(item.competitor || '未知竞品')}</span>
+                            ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
+                        </div>
+                        <div class="history-item-demand" style="color: rgba(255,255,255,0.6);">分析报告已生成 · 点击查看详情</div>
+                    </div>
+                    <div class="history-item-actions">
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); HistoryUI.showCompetitorDetail(${item.id})">查看</button>
                     </div>
                 </div>
             `;
@@ -1122,6 +1217,9 @@ const HistoryUI = {
 
     async showDetail(id) {
         try {
+            if (this.currentType === 'analyze') {
+                return this.showCompetitorDetail(id);
+            }
             const item = await API.getHistoryDetail(id);
             const modal = document.getElementById('history-detail-modal');
             const body = document.getElementById('detail-body');
@@ -1146,6 +1244,40 @@ const HistoryUI = {
             document.body.style.overflow = 'hidden';
         } catch (error) {
             console.error('加载详情失败:', error);
+            UI.showToast('加载详情失败', 'warning');
+        }
+    },
+
+    async showCompetitorDetail(id) {
+        try {
+            const item = await API.getCompetitorHistoryDetail(id);
+            const modal = document.getElementById('history-detail-modal');
+            const body = document.getElementById('detail-body');
+            if (!modal || !body) return;
+
+            const dateStr = item.created_at ? item.created_at.replace('T', ' ').substring(0, 16) : '--';
+            body.innerHTML = `
+                <div class="detail-section">
+                    <div class="detail-section-label">创建时间</div>
+                    <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">${dateStr}</div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">竞品名称</div>
+                    <div class="detail-demand">${this.escapeHtml(item.competitor || '')}</div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">所属行业</div>
+                    <div class="detail-demand">${this.escapeHtml(item.industry || '')}</div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-section-label">分析报告</div>
+                    <div class="detail-solution result-content">${item.analysis ? UI.renderMarkdown(item.analysis) : '<p style="color: var(--text-muted)">无分析内容</p>'}</div>
+                </div>
+            `;
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        } catch (error) {
+            console.error('加载竞品详情失败:', error);
             UI.showToast('加载详情失败', 'warning');
         }
     },
@@ -1178,6 +1310,11 @@ const HistoryUI = {
         // AI 总结按钮
         const btnAISummary = document.getElementById('btn-ai-summary');
         if (btnAISummary) btnAISummary.addEventListener('click', () => this.doAISummary());
+
+        // Tab 切换
+        document.querySelectorAll('.history-tab').forEach(tab => {
+            tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
+        });
 
         // 点击遮罩关闭
         document.getElementById('history-detail-modal')?.addEventListener('click', (e) => {
@@ -1411,6 +1548,7 @@ function initEventListeners() {
             State.resultCache.competitor = { ...result, competitor, industry };
             
             UI.showToast('分析完成！', 'success');
+            CompetitorFollowUpUI.show(competitor, industry, result.answer, result.history_id);
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.log('分析已取消');
@@ -1435,6 +1573,7 @@ function initEventListeners() {
         document.getElementById('competitor-result').style.display = 'none';
         AnalyzeProgress.hide();
         State.resultCache.competitor = null;
+        CompetitorFollowUpUI.hide();
     });
     
     document.getElementById('download-competitor-btn')?.addEventListener('click', () => {
@@ -1671,6 +1810,131 @@ const FollowUpUI = {
     }
 };
 
+const CompetitorFollowUpUI = {
+    history: [],
+    originalCompetitor: '',
+    originalIndustry: '',
+    currentAnalysis: '',
+    currentHistoryId: null,
+
+    init() {
+        const input = document.getElementById('competitor-follow-up-input');
+        const sendBtn = document.getElementById('send-competitor-follow-up-btn');
+        const clearBtn = document.getElementById('clear-competitor-follow-up-btn');
+        const applyBtn = document.getElementById('apply-competitor-refined-btn');
+        if (sendBtn) sendBtn.addEventListener('click', () => this.sendFollowUp());
+        if (input) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendFollowUp();
+                }
+            });
+        }
+        if (clearBtn) clearBtn.addEventListener('click', () => this.clearHistory());
+        if (applyBtn) applyBtn.addEventListener('click', () => this.applyRefined());
+    },
+
+    show(competitor, industry, currentAnalysis, historyId) {
+        this.originalCompetitor = competitor;
+        this.originalIndustry = industry;
+        this.currentAnalysis = currentAnalysis;
+        this.currentHistoryId = historyId || null;
+        this.history = [];
+        const section = document.getElementById('competitor-follow-up-section');
+        if (section) section.style.display = 'block';
+        this.renderHistory();
+    },
+
+    hide() {
+        const section = document.getElementById('competitor-follow-up-section');
+        if (section) section.style.display = 'none';
+        this.history = [];
+        this.currentHistoryId = null;
+    },
+
+    async sendFollowUp() {
+        const input = document.getElementById('competitor-follow-up-input');
+        const text = input?.value?.trim();
+        if (!text) return;
+        this.history.push({ role: 'user', content: text });
+        this.renderHistory();
+        if (input) input.value = '';
+        this.showLoading(true);
+        try {
+            const data = await API.refineCompetitorAnalysis(
+                this.originalCompetitor,
+                this.originalIndustry,
+                this.currentAnalysis,
+                text,
+                this.history.slice(0, -1)
+            );
+            this.history.push({ role: 'ai', content: data.refined_analysis });
+            this.currentAnalysis = data.refined_analysis;
+            this.renderHistory();
+        } catch (error) {
+            console.error('分析优化失败:', error);
+            UI.showToast('分析优化失败: ' + error.message, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    },
+
+    renderHistory() {
+        const container = document.getElementById('competitor-follow-up-history');
+        if (!container) return;
+        container.innerHTML = this.history.map(msg => {
+            if (msg.role === 'user') {
+                return '<div class="follow-up-msg follow-up-user-msg">' + this.escapeHtml(msg.content) + '</div>';
+            } else {
+                return '<div class="follow-up-msg follow-up-ai-msg"><div class="result-content">' + UI.renderMarkdown(msg.content) + '</div></div>';
+            }
+        }).join('');
+        container.scrollTop = container.scrollHeight;
+
+        // 显示/隐藏"使用此优化结果"按钮
+        const actions = document.getElementById('competitor-follow-up-actions');
+        if (actions) {
+            const hasAiMsg = this.history.some(m => m.role === 'ai');
+            actions.style.display = hasAiMsg && this.currentHistoryId ? 'flex' : 'none';
+        }
+    },
+
+    showLoading(show) {
+        const loadingEl = document.getElementById('competitor-follow-up-loading');
+        const sendBtn = document.getElementById('send-competitor-follow-up-btn');
+        if (loadingEl) loadingEl.style.display = show ? 'flex' : 'none';
+        if (sendBtn) sendBtn.disabled = show;
+    },
+
+    clearHistory() {
+        this.history = [];
+        this.renderHistory();
+    },
+
+    async applyRefined() {
+        if (!this.currentHistoryId || !this.currentAnalysis) return;
+        const btn = document.getElementById('apply-competitor-refined-btn');
+        if (btn) btn.disabled = true;
+        try {
+            await API.updateCompetitorHistorySolution(this.currentHistoryId, this.currentAnalysis);
+            UI.showToast('分析报告已更新到历史记录', 'success');
+            // 不隐藏对话，用户可以继续追问
+        } catch (error) {
+            console.error('更新竞品分析历史失败:', error);
+            UI.showToast('更新失败: ' + error.message, 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    },
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+};
+
 function init() {
     const canvas = document.getElementById('particle-canvas');
     if (canvas) {
@@ -1680,6 +1944,7 @@ function init() {
     initEventListeners();
     HistoryUI.init();
     FollowUpUI.init();
+    CompetitorFollowUpUI.init();
     
     KnowledgeUI.loadStats();
 }
