@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.user_models import (
     UserCreate, UserLogin, UserResponse, Token,
     HistoryCreate, HistoryResponse,
-    FavoriteCreate, FavoriteResponse
+    FavoriteCreate, FavoriteResponse,
+    ProfileUpdate, PasswordChange
 )
 from app.services.auth_service import AuthService
 from app.utils.captcha_utils import generate_captcha
@@ -60,6 +61,50 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
         "created_at": current_user["created_at"],
         "last_login": current_user["last_login"]
     }
+
+@router.post("/logout")
+async def logout(current_user: dict = Depends(get_current_user)):
+    return {"message": "已退出登录"}
+
+@router.patch("/profile")
+async def update_profile(
+    profile_data: ProfileUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    if profile_data.email is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未提供需要更新的字段"
+        )
+    result = AuthService.update_profile(current_user["id"], profile_data.email)
+    if not result["success"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result["message"]
+        )
+    return {"message": result["message"]}
+
+@router.post("/change-password")
+async def change_password(
+    password_data: PasswordChange,
+    current_user: dict = Depends(get_current_user)
+):
+    result = AuthService.change_password(
+        current_user["id"],
+        password_data.old_password,
+        password_data.new_password
+    )
+    if not result["success"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result["message"]
+        )
+    return {"message": result["message"]}
+
+@router.get("/stats")
+async def get_user_stats(current_user: dict = Depends(get_current_user)):
+    stats = AuthService.get_user_stats(current_user["id"])
+    return stats
 
 router_history = APIRouter(prefix="/history", tags=["历史记录"])
 

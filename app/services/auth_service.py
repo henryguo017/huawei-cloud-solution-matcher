@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 import sqlite3
+import os
 from app.utils.db_init import get_db_connection
 from app.utils.auth_utils import hash_password, verify_password, create_access_token
 from app.utils.captcha_utils import verify_captcha
@@ -229,7 +230,7 @@ class AuthService:
         offset = (page - 1) * page_size
         
         cursor.execute("""
-            SELECT * FROM favorites 
+            SELECT * FROM favorites
             WHERE user_id = ?
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
@@ -239,3 +240,88 @@ class AuthService:
         conn.close()
         
         return favorites
+
+    @staticmethod
+    def update_profile(user_id: int, email: str) -> dict:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT id FROM users WHERE email = ? AND id != ?", (email, user_id))
+            if cursor.fetchone():
+                return {"success": False, "message": "邮箱已被其他用户注册"}
+            
+            cursor.execute("UPDATE users SET email = ? WHERE id = ?", (email, user_id))
+            conn.commit()
+            
+            return {"success": True, "message": "资料更新成功"}
+        except Exception as e:
+            conn.rollback()
+            return {"success": False, "message": f"更新失败: {str(e)}"}
+        finally:
+            conn.close()
+
+    @staticmethod
+    def change_password(user_id: int, old_password: str, new_password: str) -> dict:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            if not row:
+                return {"success": False, "message": "用户不存在"}
+            
+            password_hash = row['password_hash']
+            
+            if not verify_password(old_password, password_hash):
+                return {"success": False, "message": "原密码错误"}
+            
+            new_hash = hash_password(new_password)
+            cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+            conn.commit()
+            
+            return {"success": True, "message": "密码修改成功"}
+        except Exception as e:
+            conn.rollback()
+            return {"success": False, "message": f"修改失败: {str(e)}"}
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_user_stats(user_id: int) -> dict:
+        stats = {"match_count": 0, "analyze_count": 0, "history_count": 0, "favorites_count": 0}
+        
+        usage_db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "usage_logs.db")
+        
+        if os.path.exists(usage_db_path):
+            try:
+                usage_conn = sqlite3.connect(usage_db_path)
+                usage_conn.row_factory = sqlite3.Row
+                cursor = usage_conn.cursor()
+                
+                cursor.execute("SELECT COUNT(*) as cnt FROM usage_logs WHERE action='match' AND user_id=?", (user_id,))
+                stats["match_count"] = cursor.fetchone()["cnt"]
+                
+                cursor.execute("SELECT COUNT(*) as cnt FROM usage_logs WHERE action='analyze' AND user_id=?", (user_id,))
+                stats["analyze_count"] = cursor.fetchone()["cnt"]
+                
+                usage_conn.close()
+            except Exception:
+                pass
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("SELECT COUNT(*) as cnt FROM history WHERE user_id=?", (user_id,))
+            stats["history_count"] = cursor.fetchone()["cnt"]
+            
+            cursor.execute("SELECT COUNT(*) as cnt FROM favorites WHERE user_id=?", (user_id,))
+            stats["favorites_count"] = cursor.fetchone()["cnt"]
+        except Exception:
+            pass
+        finally:
+            conn.close()
+        
+        return stats

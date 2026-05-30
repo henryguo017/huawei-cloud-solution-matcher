@@ -64,3 +64,10 @@ class FavoriteResponse(BaseModel):
     solution_content: str
     industry: Optional[str]
     created_at: str
+
+class ProfileUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str = Field(..., min_length=6, max_length=50)
