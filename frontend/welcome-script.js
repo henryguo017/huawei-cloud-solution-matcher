@@ -284,42 +284,42 @@ const DemoManager = {
     runDemo(caseType) {
         const caseData = DemoCases[caseType];
         if (!caseData) return;
-        
+
         const demandInput = document.getElementById('demand-input');
         const matchBtn = document.getElementById('match-btn');
-        
+
         if (!demandInput || !matchBtn) {
             UI.showToast('请先切换到解决方案匹配页面', 'warning');
             return;
         }
-        
+
         UI.switchPage('solution');
-        
+
         setTimeout(() => {
-            this.fillDemand(demandInput, caseData.demand);
-            
-            setTimeout(() => {
+            this.fillDemand(demandInput, caseData.demand, () => {
                 matchBtn.click();
                 this.showNotice();
-            }, 800);
+            });
         }, 300);
     },
-    
-    fillDemand(input, text) {
+
+    fillDemand(input, text, onComplete) {
         input.value = '';
         let index = 0;
         const speed = 15;
-        
+
         const typeChar = () => {
             if (index < text.length) {
                 input.value += text[index];
                 index++;
                 setTimeout(typeChar, speed);
+            } else {
+                if (onComplete) onComplete();
             }
         };
-        
+
         typeChar();
-        
+
         const charCount = document.getElementById('demand-char-count');
         if (charCount) {
             const updateCount = () => {
