@@ -1878,10 +1878,6 @@ body::after {
     font-size: var(--font-size-sm);
     color: var(--text-primary);
     line-height: 1.6;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
     word-break: break-word;
 }
 
