@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
-    <link rel="stylesheet" href="style.css?v=20260531k">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260531k">
+    <link rel="stylesheet" href="style.css?v=20260531w">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260531w">
 </head>
 <body>
     <canvas id="particle-canvas"></canvas>
@@ -499,10 +499,7 @@
                         <p>覆盖 9 大类、35 款核心云产品 · 点击任意节点查看详情</p>
                     </div>
                     <div class="products-header-center">
-                        <button id="arch-tree-btn" class="arch-tree-btn" title="查看3D产品架构关系图">
-                            <span class="arch-icon">🌳</span>
-                            <span>产品架构</span>
-                        </button>
+                        <!-- 3D产品架构弹窗已移除 -->
                     </div>
                     <div class="products-header-stats">
                         <span class="ph-stat"><b>35</b> 产品</span>
@@ -574,45 +571,6 @@
                     </div>
                 </div>
 
-                <!-- 3D产品架构树形图弹窗 -->
-                <div id="arch-modal" class="arch-modal">
-                    <div class="arch-modal-content">
-                        <div class="arch-modal-header">
-                            <div class="arch-modal-title">
-                                <span class="arch-title-icon">🌳</span>
-                                <div>
-                                    <h3>华为云产品架构全景图</h3>
-                                    <p>拖拽旋转 · 滚轮缩放 · 点击节点高亮路径</p>
-                                </div>
-                            </div>
-                            <button id="arch-close-btn" class="arch-close-btn" title="关闭">✕</button>
-                        </div>
-                        <div class="arch-canvas-wrapper">
-                            <canvas id="arch-canvas"></canvas>
-                            <div class="arch-controls">
-                                <div class="arch-legend">
-                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#3B82F6"></span>计算</span>
-                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#F59E0B"></span>网络</span>
-                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#22C55E"></span>存储</span>
-                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#A855F7"></span>数据库</span>
-                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#EC4899"></span>AI</span>
-                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#06B6D4"></span>IoT</span>
-                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#EF4444"></span>安全</span>
-                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#8B5CF6"></span>音视频</span>
-                                    <span class="arch-legend-item"><span class="arch-legend-dot" style="background:#14B8A6"></span>企业应用</span>
-                                </div>
-                                <div class="arch-hint">
-                                    <span>🖱️ 拖拽旋转</span>
-                                    <span>🔍 滚轮缩放</span>
-                                    <span>👆 点击高亮</span>
-                                    <button id="arch-auto-rotate-btn" class="arch-toggle-btn active">🔄 自转</button>
-                                    <button id="arch-reset-btn" class="arch-toggle-btn">↺ 复位</button>
-                                </div>
-                            </div>
-                            <div id="arch-tooltip" class="arch-tooltip"></div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <!-- Dashboard 数据仪表盘页面 -->
@@ -1271,7 +1229,7 @@
     <div id="toast-container"></div>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" onerror="window.__chartFailed=true"></script>
-    <script src="script.js?v=20260531k"></script>
-    <script src="welcome-script.js?v=20260531k"></script>
+    <script src="script.js?v=20260531w"></script>
+    <script src="welcome-script.js?v=20260531w"></script>
 </body>
 </html>
