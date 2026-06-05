@@ -290,6 +290,36 @@ body::after {
     transition: all var(--transition);
 }
 
+/* 移动端登录按钮 */
+.mobile-login-btn {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #C7000B 0%, #E03030 100%);
+    border: none;
+    border-radius: 20px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.mobile-login-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(199, 0, 11, 0.3);
+}
+
+.mobile-login-btn .login-icon {
+    font-size: 14px;
+}
+
+.mobile-login-btn .login-text {
+    font-size: 13px;
+}
+
 .mobile-menu {
     display: none;
     position: fixed;
@@ -1213,6 +1243,12 @@ body::after {
     }
     
     .navbar-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .mobile-login-btn {
         display: flex;
         align-items: center;
         justify-content: center;

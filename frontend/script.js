@@ -193,14 +193,17 @@ const AuthManager = {
 
     _updateUI() {
         const loginBtn = document.getElementById('nav-login-btn');
+        const mobileLoginBtn = document.getElementById('mobile-login-btn');
         const userMenu = document.getElementById('nav-user-menu');
         const userName = document.getElementById('nav-user-name');
         if (State.user) {
             if (loginBtn) loginBtn.style.display = 'none';
+            if (mobileLoginBtn) mobileLoginBtn.style.display = 'none';
             if (userMenu) userMenu.style.display = '';
             if (userName) userName.textContent = State.user.username;
         } else {
             if (loginBtn) loginBtn.style.display = '';
+            if (mobileLoginBtn) mobileLoginBtn.style.display = '';
             if (userMenu) userMenu.style.display = 'none';
         }
     },
@@ -2640,11 +2643,17 @@ function initEventListeners() {
     });
     
     const navbarToggle = document.getElementById('navbar-toggle');
+    const mobileLoginBtn = document.getElementById('mobile-login-btn');
     
-    // 汉堡菜单改为登录/用户菜单
+    // 移动端登录按钮
+    mobileLoginBtn?.addEventListener('click', () => {
+        AuthManager._openModal();
+    });
+    
+    // 汉堡菜单改为用户菜单（已登录时显示下拉菜单）
     navbarToggle?.addEventListener('click', () => {
         if (AuthManager.isLoggedIn()) {
-            // 已登录：跳转到个人信息页或显示下拉菜单
+            // 已登录：显示下拉菜单
             const dropdown = document.getElementById('user-dropdown');
             if (dropdown) {
                 dropdown.style.display = dropdown.style.display === 'none' ? '' : 'none';
