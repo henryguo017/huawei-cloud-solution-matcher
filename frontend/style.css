@@ -1751,19 +1751,95 @@ body::after {
     }
 
     /* 追问区域 */
+    .follow-up-section {
+        margin-top: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+    }
+    
+    .follow-up-divider {
+        padding: var(--spacing-sm) 0;
+        margin-bottom: var(--spacing-sm);
+    }
+    
+    .follow-up-divider-text {
+        font-size: var(--font-size-sm);
+    }
+    
+    .follow-up-history {
+        max-height: 300px;
+    }
+    
     .follow-up-input-area {
-        flex-direction: column;
-        gap: var(--spacing-sm);
+        flex-direction: row;
+        gap: 8px;
+        padding: var(--spacing-sm) 0 0 0;
+        margin-top: var(--spacing-sm);
+        align-items: stretch;
     }
-
+    
+    .follow-up-input-area textarea {
+        flex: 1;
+        min-height: 36px;
+        max-height: 80px;
+        padding: 8px 12px;
+        font-size: 14px;
+        border-radius: var(--radius-md);
+    }
+    
+    .follow-up-input-area textarea::placeholder {
+        font-size: 13px;
+    }
+    
     .follow-up-input-area .btn-sm {
-        width: 100%;
+        width: auto;
+        flex-shrink: 0;
+        padding: 8px 16px;
+        font-size: 14px;
+        border-radius: var(--radius-md);
+        align-self: stretch;
     }
-
+    
     .follow-up-msg {
         max-width: 95%;
         padding: var(--spacing-sm) var(--spacing-md);
         font-size: var(--font-size-sm);
+    }
+    
+    .follow-up-actions {
+        padding: var(--spacing-sm) 0 0 0;
+    }
+    
+    .follow-up-actions .btn-sm {
+        width: 100%;
+        padding: 10px 16px;
+        font-size: 14px;
+    }
+    
+    /* 结果操作按钮 */
+    .result-actions {
+        margin-top: var(--spacing-sm);
+        margin-bottom: var(--spacing-md);
+    }
+    
+    .result-actions .btn {
+        width: 100%;
+        padding: 10px 16px;
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+    
+    .result-actions .btn:last-child {
+        margin-bottom: 0;
+    }
+    
+    /* source documents 移动端 */
+    .source-documents {
+        margin-top: var(--spacing-md);
+    }
+    
+    .source-summary {
+        font-size: var(--font-size-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
     }
 
     /* Toast */
