@@ -2650,16 +2650,17 @@ function initEventListeners() {
         AuthManager._openModal();
     });
     
-    // 汉堡菜单改为用户菜单（已登录时显示下拉菜单）
-    navbarToggle?.addEventListener('click', () => {
+    // 汉堡菜单：已登录显示用户菜单，未登录弹出登录框
+    navbarToggle?.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (AuthManager.isLoggedIn()) {
-            // 已登录：显示下拉菜单
             const dropdown = document.getElementById('user-dropdown');
             if (dropdown) {
-                dropdown.style.display = dropdown.style.display === 'none' ? '' : 'none';
+                const show = dropdown.style.display === 'none';
+                dropdown.style.display = show ? '' : 'none';
+                document.getElementById('nav-user-menu')?.classList.toggle('open', show);
             }
         } else {
-            // 未登录：弹出登录框
             AuthManager._openModal();
         }
     });

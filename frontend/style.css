@@ -1221,6 +1221,13 @@ body::after {
 
 @media (max-width: 1023px) {
     .navbar-status {
+        display: flex;
+    }
+    
+    /* 隐藏状态统计项，保留登录按钮和用户菜单 */
+    .quick-demo-btn,
+    .status-divider,
+    .status-item {
         display: none;
     }
     
@@ -6056,6 +6063,37 @@ body::after {
     .products-canvas-area {
         height: auto;
         min-height: 400px;
+    }
+    
+    /* 用户菜单移动端适配 */
+    .navbar-status {
+        display: flex !important;
+    }
+    
+    .nav-user-menu {
+        display: flex !important;
+    }
+    
+    .nav-user-avatar-btn {
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+    
+    .user-name {
+        max-width: 60px;
+    }
+    
+    .user-dropdown {
+        position: fixed;
+        top: var(--navbar-height);
+        right: 8px;
+        min-width: 160px;
+        z-index: 10010;
+    }
+    
+    .dropdown-item {
+        padding: 14px 16px;
+        font-size: 14px;
     }
 }
 
