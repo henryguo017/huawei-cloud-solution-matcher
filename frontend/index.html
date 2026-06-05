@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
-    <link rel="stylesheet" href="style.css?v=20260606a">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260606a">
+    <link rel="stylesheet" href="style.css?v=20260606b">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260606b">
 </head>
 <body>
     <canvas id="particle-canvas"></canvas>
@@ -199,37 +199,37 @@
         </div>
     </header>
     
-    <!-- 移动端导航菜单 -->
-    <nav class="mobile-menu" id="mobile-menu">
-        <button class="mobile-item active" data-page="solution">
-            <span class="nav-icon">🔍</span>
-            <span class="nav-text">方案匹配</span>
+    <!-- 移动端底部导航栏 -->
+    <nav class="mobile-bottom-nav" id="mobile-menu">
+        <button class="mobile-nav-item active" data-page="solution">
+            <span class="mobile-nav-icon">🔍</span>
+            <span class="mobile-nav-label">匹配</span>
         </button>
-        <button class="mobile-item" data-page="competitor">
-            <span class="nav-icon">⚔️</span>
-            <span class="nav-text">竞品分析</span>
+        <button class="mobile-nav-item" data-page="competitor">
+            <span class="mobile-nav-icon">⚔️</span>
+            <span class="mobile-nav-label">竞品</span>
         </button>
-        <button class="mobile-item" data-page="products">
-            <span class="nav-icon">🗺️</span>
-            <span class="nav-text">产品图谱</span>
+        <button class="mobile-nav-item" data-page="products">
+            <span class="mobile-nav-icon">🗺️</span>
+            <span class="mobile-nav-label">产品</span>
         </button>
-        <button class="mobile-item" data-page="dashboard">
-            <span class="nav-icon">📊</span>
-            <span class="nav-text">仪表盘</span>
+        <button class="mobile-nav-item" data-page="dashboard">
+            <span class="mobile-nav-icon">📊</span>
+            <span class="mobile-nav-label">仪表盘</span>
         </button>
-        <button class="mobile-item" data-page="history">
-            <span class="nav-icon">📋</span>
-            <span class="nav-text">历史记录</span>
-        </button>
-        <button class="mobile-item" data-page="knowledge">
-            <span class="nav-icon">📚</span>
-            <span class="nav-text">知识库</span>
-        </button>
-        <button class="mobile-item" data-page="settings">
-            <span class="nav-icon">⚙️</span>
-            <span class="nav-text">设置</span>
+        <button class="mobile-nav-item" data-page="history">
+            <span class="mobile-nav-icon">📋</span>
+            <span class="mobile-nav-label">历史</span>
         </button>
     </nav>
+    
+    <!-- 产品详情弹窗 -->
+    <div id="product-modal-overlay" class="product-modal-overlay" style="display:none;">
+        <div class="product-modal">
+            <button class="product-modal-close" id="product-modal-close">×</button>
+            <div class="product-modal-content" id="product-modal-body"></div>
+        </div>
+    </div>
     
     <!-- 主内容区域 -->
     <main class="main-content">
@@ -1229,7 +1229,7 @@
     <div id="toast-container"></div>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" onerror="window.__chartFailed=true"></script>
-    <script src="script.js?v=20260606a"></script>
-    <script src="welcome-script.js?v=20260606a"></script>
+    <script src="script.js?v=20260606b"></script>
+    <script src="welcome-script.js?v=20260606b"></script>
 </body>
 </html>

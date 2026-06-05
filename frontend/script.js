@@ -1300,10 +1300,10 @@ const UI = {
         const navbarItem = document.querySelector(`.navbar-item[data-page="${pageName}"]`);
         if (navbarItem) navbarItem.classList.add('active');
         
-        document.querySelectorAll('.mobile-item').forEach(item => {
+        document.querySelectorAll('.mobile-nav-item').forEach(item => {
             item.classList.remove('active');
         });
-        const mobileItem = document.querySelector(`.mobile-item[data-page="${pageName}"]`);
+        const mobileItem = document.querySelector(`.mobile-nav-item[data-page="${pageName}"]`);
         if (mobileItem) mobileItem.classList.add('active');
         
         State.currentPage = pageName;
@@ -1905,7 +1905,7 @@ const PageTransition = {
         document.querySelectorAll('.navbar-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === pageName);
         });
-        document.querySelectorAll('.mobile-item').forEach(item => {
+        document.querySelectorAll('.mobile-nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === pageName);
         });
     }
@@ -2621,11 +2621,9 @@ function initEventListeners() {
         });
     });
 
-    document.querySelectorAll('.mobile-item').forEach(item => {
+    document.querySelectorAll('.mobile-nav-item').forEach(item => {
         item.addEventListener('click', () => {
             const page = item.dataset.page;
-            const mobileMenu = document.getElementById('mobile-menu');
-            mobileMenu?.classList.remove('open');
             // 登录检查：Dashboard 和历史记录需要登录
             if ((page === 'dashboard' || page === 'history') && !AuthManager.isLoggedIn()) {
                 AuthManager._openModal();
@@ -2642,10 +2640,34 @@ function initEventListeners() {
     });
     
     const navbarToggle = document.getElementById('navbar-toggle');
-    const mobileMenu = document.getElementById('mobile-menu');
     
+    // 汉堡菜单改为登录/用户菜单
     navbarToggle?.addEventListener('click', () => {
-        mobileMenu.classList.toggle('open');
+        if (AuthManager.isLoggedIn()) {
+            // 已登录：跳转到个人信息页或显示下拉菜单
+            const dropdown = document.getElementById('user-dropdown');
+            if (dropdown) {
+                dropdown.style.display = dropdown.style.display === 'none' ? '' : 'none';
+            }
+        } else {
+            // 未登录：弹出登录框
+            AuthManager._openModal();
+        }
+    });
+
+    // 产品详情弹窗关闭
+    document.getElementById('product-modal-close')?.addEventListener('click', () => {
+        var overlay = document.getElementById('product-modal-overlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    });
+    document.getElementById('product-modal-overlay')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            e.target.style.display = 'none';
+            document.body.style.overflow = '';
+        }
     });
 
     // 登录按钮
@@ -3899,12 +3921,6 @@ const ProductGraph = {
 
     _showDetail(product) {
         if (!product || !this.state) return;
-        var self = this; // 修复：确保 self 指向 ProductGraph，而非 window
-        var empty = document.getElementById('detail-empty-state');
-        var content = document.getElementById('detail-content-area');
-        if (empty) empty.style.display = 'none';
-        if (!content) return;
-        content.style.display = '';
         var cat = this.categories[product.category] || {};
         var caps = product.capabilities || [];
         var sces = product.scenarios || [];
@@ -3914,28 +3930,37 @@ const ProductGraph = {
         var sceHtml = sces.map(function(s){return '<li>'+s+'</li>';}).join('');
         var advHtml = advs.map(function(a){return '<li>'+a+'</li>';}).join('');
         var hltHtml = hlts.map(function(h){return '<li>'+h+'</li>';}).join('');
+        var self = this;
         var relIds = this._getRelatedProducts(product.id);
         var relHtml = relIds.map(function(rId){var rn=self.state.nodes[rId];return '<li onclick="ProductGraph._jumpToNode(\''+rId+'\')">'+(rn?rn.name:rId)+'</li>';}).join('');
-        content.innerHTML =
-            '<div class="product-detail-content"><div class="product-detail-header">'+
+        
+        var html =
+            '<div class="product-detail-header">'+
                 '<span class="detail-category-badge" style="background:'+cat.color+'"></span>'+
                 '<div><h3>'+product.name+'</h3><div class="detail-name-en">'+product.nameEn+'</div></div>'+
-                '</div><div class="product-detail-body">'+
-                '<div class="detail-section"><div class="detail-section-title">简介</div>'+
-                '<div class="detail-section-content">'+product.desc+'</div></div>'+
-                '<div class="detail-section"><div class="detail-section-title">核心能力</div>'+
-                '<ul class="detail-scenario-list">'+capHtml+'</ul></div>'+
-                '<div class="detail-section"><div class="detail-section-title">典型场景</div>'+
-                '<ul class="detail-scenario-list">'+sceHtml+'</ul></div>'+
-                (advHtml?'<div class="detail-section"><div class="detail-section-title">产品优势</div>'+
-                '<ul class="detail-advantage-list">'+advHtml+'</ul></div>':'')+
-                (hltHtml?'<div class="detail-section"><div class="detail-section-title">技术亮点</div>'+
-                '<ul class="detail-highlight-list">'+hltHtml+'</ul></div>':'')+
-                '<div class="detail-section"><div class="detail-section-title">关联产品</div>'+
-                '<ul class="detail-related-list" id="detail-related-products">'+relHtml+'</ul></div>'+
-                '</div></div>';
-        var panel = document.getElementById('product-detail-panel');
-        if (panel) panel.scrollTop = 0;
+            '</div><div class="product-detail-body">'+
+            '<div class="detail-section"><div class="detail-section-title">简介</div>'+
+            '<div class="detail-section-content">'+product.desc+'</div></div>'+
+            '<div class="detail-section"><div class="detail-section-title">核心能力</div>'+
+            '<ul class="detail-scenario-list">'+capHtml+'</ul></div>'+
+            '<div class="detail-section"><div class="detail-section-title">典型场景</div>'+
+            '<ul class="detail-scenario-list">'+sceHtml+'</ul></div>'+
+            (advHtml?'<div class="detail-section"><div class="detail-section-title">产品优势</div>'+
+            '<ul class="detail-advantage-list">'+advHtml+'</ul></div>':'')+
+            (hltHtml?'<div class="detail-section"><div class="detail-section-title">技术亮点</div>'+
+            '<ul class="detail-highlight-list">'+hltHtml+'</ul></div>':'')+
+            '<div class="detail-section"><div class="detail-section-title">关联产品</div>'+
+            '<ul class="detail-related-list" id="detail-related-products">'+relHtml+'</ul></div>'+
+            '</div>';
+        
+        // 弹窗展示
+        var modalBody = document.getElementById('product-modal-body');
+        var overlay = document.getElementById('product-modal-overlay');
+        if (modalBody && overlay) {
+            modalBody.innerHTML = html;
+            overlay.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
     },
 
     _getRelatedProducts(productId) {
