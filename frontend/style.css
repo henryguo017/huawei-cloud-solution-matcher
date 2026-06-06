@@ -66,6 +66,24 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+*:focus {
+    outline: none;
+}
+
+*:focus-visible {
+    outline: none;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
 }
 
 body {
@@ -511,7 +529,6 @@ body::after {
 .textarea-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.3);
 }
 
 .textarea-input::placeholder {
@@ -545,7 +562,11 @@ body::after {
 .select-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.3);
+}
+
+.select-input:active {
+    border-color: var(--primary-color);
+    background: rgba(199, 0, 11, 0.05);
 }
 
 .select-input option {
@@ -576,6 +597,16 @@ body::after {
     cursor: pointer;
     transition: all var(--transition);
     overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.btn:active {
+    transform: scale(0.97);
 }
 
 .btn-primary {
@@ -3066,7 +3097,6 @@ body::after {
 .setting-select:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(199, 0, 11, 0.2);
 }
 
 .settings-info-grid {
@@ -3671,7 +3701,6 @@ body::after {
 .setting-select:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(199, 0, 11, 0.2);
 }
 
 .settings-info-grid {
@@ -5127,7 +5156,6 @@ body::after {
     border-color: var(--primary-color);
     background-color: rgba(255, 255, 255, 0.08);
     width: 260px;
-    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.1);
 }
 
 .product-search-input::placeholder {
