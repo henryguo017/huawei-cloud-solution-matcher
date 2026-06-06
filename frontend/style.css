@@ -2488,6 +2488,7 @@ body::after {
     .dashboard-chart-card .chart-header h3 {
         font-size: var(--font-size-sm);
     }
+}
 
 /* ========== 历史记录页面 ========== */
 
