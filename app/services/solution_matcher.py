@@ -1,4 +1,6 @@
+import asyncio
 from app.models.llm import get_llm_response
+
 
 class SolutionMatcherService:
     """DeepSeek版本 解决方案匹配服务"""
@@ -45,7 +47,7 @@ class SolutionMatcherService:
 内容要具体量化，避免泛泛而谈。
         """
 
-    def match(self, customer_demand):
+    async def match(self, customer_demand):
         # 1. 知识库检索相关内容（知识库为空则跳过向量搜索，避免 chromadb segfault）
         try:
             stats = self.kb_service.get_stats()
@@ -58,7 +60,7 @@ class SolutionMatcherService:
             context_content = ""
         else:
             try:
-                docs = self.kb_service.search(customer_demand)
+                docs = await asyncio.to_thread(self.kb_service.search, customer_demand)
             except Exception as e:
                 import logging
                 logging.getLogger(__name__).warning(f"向量检索异常，回退到 LLM 模式: {e}")
@@ -116,7 +118,7 @@ class SolutionMatcherService:
 3. 建议客户联系华为云销售获取针对其行业的详细解决方案
 4. 可通过上传更多行业解决方案文档来获得更精准的匹配
 """
-            answer_result = get_llm_response(fallback_prompt)
+            answer_result = await get_llm_response(fallback_prompt)
             return {
                 "answer": answer_result,
                 "source_documents": []
@@ -129,7 +131,7 @@ class SolutionMatcherService:
         )
 
         # 3. 调用DeepSeek接口获取结果
-        answer_result = get_llm_response(final_prompt)
+        answer_result = await get_llm_response(final_prompt)
 
         return {
             "answer": answer_result,

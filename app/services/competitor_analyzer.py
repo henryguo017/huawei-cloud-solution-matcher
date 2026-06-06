@@ -1,4 +1,6 @@
+import asyncio
 from app.models.llm import get_llm_response
+
 
 class CompetitorAnalyzerService:
     """DeepSeek版本 竞品分析服务——支持竞品知识库检索"""
@@ -39,7 +41,7 @@ class CompetitorAnalyzerService:
 要求：客观、具体、有数据支撑。如果某方面信息不足，如实指出。
         """
 
-    def analyze(self, competitor, industry):
+    async def analyze(self, competitor, industry):
         """竞品分析：同时检索华为方案和竞品资料"""
         import logging
         log = logging.getLogger(__name__)
@@ -58,7 +60,7 @@ class CompetitorAnalyzerService:
             # 检索华为云方案
             hw_query = f"华为云在{industry}行业的解决方案 竞争优势 成功案例"
             try:
-                hw_docs = self.kb_service.search(hw_query)
+                hw_docs = await asyncio.to_thread(self.kb_service.search, hw_query)
             except Exception as e:
                 log.warning(f"华为云方案检索异常，跳过: {e}")
                 hw_docs = []
@@ -66,7 +68,7 @@ class CompetitorAnalyzerService:
             # 检索竞品方案
             competitor_query = f"{competitor}在{industry}行业的解决方案 产品 优势 案例"
             try:
-                competitor_docs = self.kb_service.search(competitor_query)
+                competitor_docs = await asyncio.to_thread(self.kb_service.search, competitor_query)
             except Exception as e:
                 log.warning(f"竞品方案检索异常，跳过: {e}")
                 competitor_docs = []
@@ -78,7 +80,7 @@ class CompetitorAnalyzerService:
         if not competitor_context.strip() and not kb_empty:
             competitor_query2 = f"{competitor} 行业解决方案 {industry}"
             try:
-                competitor_docs2 = self.kb_service.search(competitor_query2)
+                competitor_docs2 = await asyncio.to_thread(self.kb_service.search, competitor_query2)
             except Exception as e:
                 log.warning(f"宽泛竞品检索异常，跳过: {e}")
                 competitor_docs2 = []
@@ -116,7 +118,7 @@ class CompetitorAnalyzerService:
 1. 明确说明当前是基于通用知识给出的分析
 2. 建议补充更多行业竞争分析文档以获得更精准的分析
 """
-            answer_result = get_llm_response(fallback_prompt)
+            answer_result = await get_llm_response(fallback_prompt)
             return {
                 "answer": answer_result,
                 "source_documents": []
@@ -131,7 +133,7 @@ class CompetitorAnalyzerService:
         )
 
         # 调用模型
-        answer_result = get_llm_response(final_prompt)
+        answer_result = await get_llm_response(final_prompt)
 
         # 合并源文档
         all_docs = hw_docs + competitor_docs

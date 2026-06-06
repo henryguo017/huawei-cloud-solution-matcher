@@ -81,7 +81,7 @@ async def match_solution(
     try:
         logger.info(f"开始匹配解决方案，需求长度: {len(request.demand)}")
         
-        result = matcher.match(request.demand)
+        result = await matcher.match(request.demand)
         
         source_docs = [
             SourceDocument(
@@ -152,7 +152,7 @@ async def analyze_competitor(
     try:
         logger.info(f"开始分析竞争对手: {request.competitor}, 行业: {request.industry}")
         
-        result = analyzer.analyze(request.competitor, request.industry)
+        result = await analyzer.analyze(request.competitor, request.industry)
         
         source_docs = [
             SourceDocument(
@@ -552,7 +552,7 @@ async def compare_ai_summary(
 4. **演进建议**：如果是同一客户的迭代需求，给出从方案A到方案B的演进思路
 
 请用中文输出，结构清晰、专业简练。"""
-        summary = get_llm_response(compare_prompt)
+        summary = await get_llm_response(compare_prompt)
         return CompareSummaryResponse(summary=summary)
 
     except HTTPException:
@@ -741,7 +741,7 @@ async def refine_solution(request: RefineSolutionRequest):
 
 请用中文输出，格式规范、专业简练。"""
         
-        refined = get_llm_response(refine_prompt)
+        refined = await get_llm_response(refine_prompt)
         return RefineSolutionResponse(
             refined_solution=refined,
             follow_up=request.follow_up
@@ -793,7 +793,7 @@ async def refine_competitor_analysis(request: RefineCompetitorRequest):
 
 请用中文输出，格式规范、专业简练。"""
 
-        refined = get_llm_response(refine_prompt)
+        refined = await get_llm_response(refine_prompt)
         return RefineCompetitorResponse(
             refined_analysis=refined,
             follow_up=request.follow_up
