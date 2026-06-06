@@ -6205,11 +6205,15 @@ body::after {
     
     /* 用户菜单移动端适配 */
     .navbar-status {
-        display: flex !important;
+        display: flex;
+    }
+    
+    .nav-login-btn {
+        display: none;
     }
     
     .nav-user-menu {
-        display: flex !important;
+        display: flex;
     }
     
     .nav-user-avatar-btn {
