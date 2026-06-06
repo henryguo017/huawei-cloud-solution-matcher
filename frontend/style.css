@@ -1281,7 +1281,7 @@ body::after {
     }
     
     .navbar-toggle {
-        display: flex;
+        display: none;
         align-items: center;
         justify-content: center;
     }
@@ -1637,7 +1637,7 @@ body::after {
     }
 
     .navbar-toggle {
-        display: flex;
+        display: none;
         align-items: center;
         justify-content: center;
         color: var(--neutral-700) !important;
