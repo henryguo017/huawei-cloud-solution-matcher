@@ -237,13 +237,9 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8800 --reload
 
 ### 6. 默认管理员账号
 
-| 字段 | 值 |
-|------|-----|
-| 用户名 | `admin` |
-| 密码 | `admin123` |
-| 邮箱 | `admin@huawei.com` |
+> ⚠️ 首次启动后自动创建管理员账号，**生产环境部署后请立即修改密码和邮箱**。
 
-> 首次登录后请立即修改密码。
+> 账号信息见 `app/utils/db_init.py` 中的初始化逻辑（或查看 `.env.example` 配置说明）。
 
 ---
 
@@ -386,37 +382,43 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8800 --reload
 
 ## 生产环境部署
 
-### 生产环境信息
+> ⚠️ 生产环境部署信息（IP、端口、路径、架构等）已从公开文档中移除，详见私有部署文档。
+>
+> 如需部署参考，请查看 [DEPLOY.md](DEPLOY.md) 或 [快速上手指南](QUICKSTART.md)。
 
-| 项目 | 信息 |
-|------|------|
-| **域名** | cloudsol.cn / www.cloudsol.cn |
-| **服务器** | 阿里云轻量应用服务器（Ubuntu 22.04） |
-| **IP** | 47.96.109.234 |
-| **部署路径** | `/var/www/huawei-cloud-solution-matcher` |
-| **后端端口** | 8800（uvicorn） |
-| **HTTPS** | Let's Encrypt（自动续期） |
-| **ICP 备案** | 进行中 |
+**在线演示：** [https://www.cloudsol.cn](https://www.cloudsol.cn)
 
-### 部署架构
+### 通用部署架构
 
 ```
 用户浏览器
     └──> Nginx (HTTPS, 443)
-            └──> FastAPI (uvicorn, 127.0.0.1:8800)
-                        ├──> SQLite (users.db / usage_logs.db)
-                        └──> ChromaDB (vector_db/)
+            └──> FastAPI (uvicorn, localhost:8xxx)
+                        ├──> SQLite (用户认证 / 使用日志)
+                        └──> ChromaDB (向量知识库)
 ```
 
-### 一键部署
+### 基本部署步骤
 
 ```bash
-# 服务器上执行
-cd /var/www/huawei-cloud-solution-matcher
-git pull origin main
-pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
-sudo systemctl restart huawei-cloud-api
+# 1. 克隆代码
+git clone https://github.com/henryguo017/huawei-cloud-solution-matcher.git
+cd huawei-cloud-solution-matcher
+
+# 2. 配置环境变量
+cp .env.example .env
+# 编辑 .env，填入你的 API Key 和密钥
+
+# 3. 安装依赖
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 4. 启动服务
+python -m uvicorn api.main:app --host 127.0.0.1 --port 8800 --reload
 ```
+
+详细配置（Nginx 反向代理、HTTPS、Systemd 服务管理、防火墙规则等）请参考 [DEPLOY.md](DEPLOY.md)。
 
 ---
 
