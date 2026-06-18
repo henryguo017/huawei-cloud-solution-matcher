@@ -58,6 +58,11 @@ class UsageLoggerService:
                 conn.execute("ALTER TABLE usage_logs ADD COLUMN user_id INTEGER")
             except:
                 pass  # 列已存在
+            # mode 列（v=20260618 — 记录匹配模式 standard/agent/wizard）
+            try:
+                conn.execute("ALTER TABLE usage_logs ADD COLUMN mode TEXT")
+            except:
+                pass  # 列已存在
             conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_user ON usage_logs(user_id)")
 
             # 为查询性能创建索引
@@ -102,20 +107,21 @@ class UsageLoggerService:
             conn.commit()
             logger.info(f"使用日志数据库已初始化: {self.db_path}")
 
-    def log_match(self, demand_text: str = "", user_id: Optional[int] = None):
+    def log_match(self, demand_text: str = "", user_id: Optional[int] = None, mode: str = "standard"):
         """
         记录一次解决方案匹配操作
 
         Args:
             demand_text: 用户需求文本（可选，用于审计）
             user_id: 用户ID（可选，用于数据隔离）
+            mode: 匹配模式（standard/agent/wizard）
         """
         try:
             detail = {"demand_length": len(demand_text)} if demand_text else {}
             with self._get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO usage_logs (action_type, detail, user_id) VALUES (?, ?, ?)",
-                    ("match", json.dumps(detail, ensure_ascii=False), user_id)
+                    "INSERT INTO usage_logs (action_type, detail, user_id, mode) VALUES (?, ?, ?, ?)",
+                    ("match", json.dumps(detail, ensure_ascii=False), user_id, mode)
                 )
                 conn.commit()
         except Exception as e:

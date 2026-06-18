@@ -555,6 +555,13 @@ if (typeof Chart !== 'undefined') {
 
 const State = {
     currentPage: 'solution',
+    matchMode: 'normal',  // 'normal' | 'agent' | 'wizard'
+    wizardData: {          // 向导模式收集的数据
+        industry: null,
+        scale: null,
+        pains: [],
+        extra: ''
+    },
     loadingStates: {
         match: false,
         analyze: false,
@@ -885,7 +892,7 @@ const PaginationUI = {
 };
 
 const API = {
-    async match(demand, signal) {
+    async match(demand, signal, mode = "standard") {
         const headers = { 'Content-Type': 'application/json' };
         // 仅登录用户且非快速体验时发送鉴权
         if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
@@ -894,7 +901,7 @@ const API = {
         const response = await fetch(`${Config.API_BASE_URL}/match`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ demand }),
+            body: JSON.stringify({ demand, mode, is_quick_demo: State.isQuickDemo }),
             signal
         });
 
@@ -905,6 +912,61 @@ const API = {
         return await response.json();
     },
 
+    async agentMatchStream(demand, signal, onEvent) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
+            headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        }
+        const response = await fetch(`${Config.API_BASE_URL}/agent/match/stream`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ demand, is_quick_demo: State.isQuickDemo }),
+            signal
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `流式匹配失败: ${response.statusText}`);
+        }
+
+        // 用 ReadableStream 读取 SSE
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            // 按 \n\n 分割 SSE 事件块
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
+
+            for (const part of parts) {
+                if (!part.trim()) continue;
+                const lines = part.split('\n');
+                let eventType = '';
+                let dataStr = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) {
+                        eventType = line.slice(7).trim();
+                    } else if (line.startsWith('data: ')) {
+                        dataStr = line.slice(6);
+                    }
+                }
+                if (dataStr) {
+                    try {
+                        const data = JSON.parse(dataStr);
+                        onEvent(data);
+                    } catch (e) {
+                        console.warn('[SSE] JSON 解析失败:', dataStr);
+                    }
+                }
+            }
+        }
+    },
+
     async analyze(competitor, industry, signal) {
         const headers = { 'Content-Type': 'application/json' };
         if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
@@ -913,7 +975,7 @@ const API = {
         const response = await fetch(`${Config.API_BASE_URL}/analyze`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ competitor, industry }),
+            body: JSON.stringify({ competitor, industry, is_quick_demo: State.isQuickDemo }),
             signal
         });
 
@@ -932,6 +994,36 @@ const API = {
         }
         
         return await response.json();
+    },
+
+    async getAchievements() {
+        const response = await fetch(`${Config.API_BASE_URL}/achievements`, {
+            headers: AuthManager.isLoggedIn() ? { 'Authorization': `Bearer ${AuthManager.getToken()}` } : {}
+        });
+        if (!response.ok) throw new Error(`获取成就失败: ${response.statusText}`);
+        return await response.json();
+    },
+
+    async checkPageView(page) {
+        try {
+            const response = await fetch(`${Config.API_BASE_URL}/achievements/page-view`, {
+                method: 'POST',
+                headers: AuthManager.isLoggedIn() ? {
+                    'Authorization': `Bearer ${AuthManager.getToken()}`,
+                    'Content-Type': 'application/json',
+                } : { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ page }),
+            });
+            if (!response.ok) return null;
+            const data = await response.json();
+            if (data.newly_unlocked && data.newly_unlocked.length > 0 && window.AchievementUI && AchievementUI.showUnlockToast) {
+                setTimeout(() => AchievementUI.showUnlockToast(data.newly_unlocked), 500);
+            }
+            return data;
+        } catch (err) {
+            console.warn('[Achievement] page-view check failed:', err.message);
+            return null;
+        }
     },
 
     async getDashboardStats() {
@@ -968,6 +1060,45 @@ const API = {
         }
 
         return await response.json();
+    },
+
+    // 通用 HTTP 方法
+    async get(url) {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || resp.statusText);
+        return resp.json();
+    },
+    async post(url, body) {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `操作失败: ${resp.statusText}`);
+        }
+        return resp.json();
+    },
+    async put(url, body) {
+        const resp = await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `更新失败: ${resp.statusText}`);
+        }
+        return resp.json();
+    },
+    async delete(url) {
+        const resp = await fetch(url, { method: 'DELETE' });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.detail || `删除失败: ${resp.statusText}`);
+        }
+        return resp.json();
     },
 
     // ========== 历史记录 API ==========
@@ -1131,6 +1262,21 @@ class ProgressManager {
         return this;
     }
 
+    setSteps(steps) {
+        if (!this.stepsContainer) return;
+        const stepEls = this.stepsContainer.querySelectorAll('.progress-step');
+        steps.forEach((step, i) => {
+            const el = stepEls[i];
+            if (!el) return;
+            const iconEl = el.querySelector('.step-icon');
+            const labelEl = el.querySelector('.step-label');
+            const descEl = el.querySelector('.step-desc');
+            if (iconEl) iconEl.textContent = step.icon;
+            if (labelEl) labelEl.textContent = step.label;
+            if (descEl) descEl.textContent = step.desc;
+        });
+    }
+
     setStep(index) {
         if (!this.stepsContainer) return;
         // 标记之前的步骤为完成
@@ -1263,6 +1409,254 @@ class ProgressManager {
     }
 }
 
+// 对话式需求引导向导
+const DemandWizard = {
+    currentStep: 0,
+    totalSteps: 4,
+    _transitioning: false,   // 防止自动跳转期间的重复触发
+
+    // 行业列表
+    industries: [
+        { name: '智慧农业', icon: '🌾' },
+        { name: '工业互联网', icon: '⚙️' },
+        { name: '智慧园区', icon: '🏗️' },
+        { name: '智慧城市', icon: '🏙️' },
+        { name: '智慧医疗', icon: '🏥' },
+        { name: '智慧金融', icon: '💰' },
+        { name: '智慧能源', icon: '⚡' },
+        { name: '智慧交通', icon: '🚗' },
+        { name: '智慧教育', icon: '📚' },
+        { name: '智慧文旅', icon: '🎭' },
+    ],
+
+    // 痛点标签
+    painTags: [
+        '降本增效', '数字化转型', '设备预测性维护',
+        '数据孤岛打通', '智能化升级', '安全合规',
+        '客户体验提升', '供应链优化', '远程协作',
+        '节能减排', '自动化运维', '精准营销',
+    ],
+
+    init() {
+        this.renderIndustries();
+        this.renderPainTags();
+        this._bindEvents();
+        // 初始隐藏（默认标准模式）
+        this.container.style.display = 'none';
+    },
+
+    get container() {
+        return document.getElementById('demand-wizard');
+    },
+
+    show() {
+        this.container.style.display = 'block';
+        this.goToStep(0);
+        // 隐藏 textarea 和原来的按钮组
+        const demandInput = document.getElementById('demand-input');
+        if (demandInput) demandInput.parentElement.style.display = 'none';
+        const btnGroup = document.querySelector('#page-match .button-group');
+        if (btnGroup) btnGroup.style.display = 'none';
+    },
+
+    hide() {
+        this.container.style.display = 'none';
+        const demandInput = document.getElementById('demand-input');
+        if (demandInput) demandInput.parentElement.style.display = '';
+        const btnGroup = document.querySelector('#page-match .button-group');
+        if (btnGroup) btnGroup.style.display = '';
+    },
+
+    goToStep(step) {
+        // 防重入：动画期间禁止重复跳转
+        if (this._transitioning && step !== this.currentStep) return;
+        this._transitioning = true;
+        this.currentStep = step;
+        // 面板切换 — 用 data-wp 属性精确匹配，不依赖 querySelectorAll 的 DOM 索引
+        this.container.querySelectorAll('.wizard-panel').forEach(p => {
+            const wp = parseInt(p.getAttribute('data-wp'));
+            p.classList.toggle('active', wp === step);
+        });
+        // 步骤指示器 — 用 data-ws 属性精确匹配
+        this.container.querySelectorAll('.wizard-step-dot').forEach(dot => {
+            const ws = parseInt(dot.getAttribute('data-ws'));
+            dot.classList.remove('active', 'done');
+            if (ws === step) dot.classList.add('active');
+            else if (ws < step) dot.classList.add('done');
+        });
+        // 步骤连线 — 用 data-wl 属性精确匹配
+        this.container.querySelectorAll('.wizard-step-line').forEach(line => {
+            const wl = parseInt(line.getAttribute('data-wl'));
+            line.classList.toggle('done', wl < step);
+        });
+        // 按钮状态
+        const prevBtn = document.getElementById('wizard-prev-btn');
+        const nextBtn = document.getElementById('wizard-next-btn');
+        const submitBtn = document.getElementById('wizard-submit-btn');
+        if (prevBtn) prevBtn.disabled = (step === 0);
+        if (nextBtn) nextBtn.style.display = (step < this.totalSteps - 1) ? '' : 'none';
+        if (submitBtn) submitBtn.style.display = (step === this.totalSteps - 1) ? '' : 'none';
+        // Step 3 时更新摘要
+        if (step === this.totalSteps - 1) {
+            this.renderSummary();
+        }
+        // 动画完成后解锁（匹配 CSS 0.3s + 余量）
+        setTimeout(() => { this._transitioning = false; }, 350);
+    },
+
+    next() {
+        if (this.currentStep < this.totalSteps - 1) {
+            this.goToStep(this.currentStep + 1);
+        }
+    },
+
+    prev() {
+        if (this.currentStep > 0) {
+            this.goToStep(this.currentStep - 1);
+        }
+    },
+
+    // ===== Step 0: 渲染行业卡片 =====
+    renderIndustries() {
+        const grid = document.getElementById('wizard-industry-grid');
+        if (!grid) return;
+        grid.innerHTML = this.industries.map(ind => 
+            `<div class="wizard-industry-card" data-industry="${ind.name}">
+                <span class="wic-icon">${ind.icon}</span>
+                <span class="wic-name">${ind.name}</span>
+            </div>`
+        ).join('');
+    },
+
+    // ===== Step 2: 渲染痛点标签 =====
+    renderPainTags() {
+        const container = document.getElementById('wizard-pain-tags');
+        if (!container) return;
+        container.innerHTML = this.painTags.map(tag =>
+            `<span class="wizard-pain-tag" data-pain="${tag}">${tag}</span>`
+        ).join('');
+    },
+
+    // ===== Step 3: 渲染确认摘要 =====
+    renderSummary() {
+        const container = document.getElementById('wizard-summary');
+        if (!container) return;
+        const d = State.wizardData;
+        const scaleLabels = { startup: '初创团队', sme: '中小企业', large: '大型企业', group: '集团/跨国' };
+        container.innerHTML = `
+            <div class="wizard-summary-item">
+                <span class="wsi-label">📌 行业</span>
+                <span class="wsi-value">${d.industry || '未选择'}</span>
+            </div>
+            <div class="wizard-summary-item">
+                <span class="wsi-label">🏢 规模</span>
+                <span class="wsi-value">${scaleLabels[d.scale] || '未选择'}</span>
+            </div>
+            <div class="wizard-summary-item">
+                <span class="wsi-label">🎯 关注点</span>
+                <span class="wsi-tags">${d.pains.length > 0 
+                    ? d.pains.map(p => `<span class="wsi-tag">${p}</span>`).join('') 
+                    : '<span style="color:rgba(255,255,255,0.3)">未选择</span>'}</span>
+            </div>
+        `;
+    },
+
+    // ===== 合成需求描述 =====
+    synthesizeDemand() {
+        const d = State.wizardData;
+        const scaleLabels = { startup: '初创团队（1-50人）', sme: '中小企业（50-500人）', large: '大型企业（500-5000人）', group: '集团企业（5000人以上）' };
+        let demand = '';
+        if (d.industry) demand += `我们是一家${d.industry}领域的${scaleLabels[d.scale] || '企业'}。`;
+        if (d.pains.length > 0) {
+            demand += `目前面临的主要痛点和需求是：${d.pains.join('、')}。`;
+        }
+        if (d.extra) demand += ` 补充信息：${d.extra}`;
+        demand += ` 请推荐最适合的华为云行业解决方案。`;
+        return demand;
+    },
+
+    _bindEvents() {
+        // 行业选择
+        document.getElementById('wizard-industry-grid')?.addEventListener('click', (e) => {
+            const card = e.target.closest('.wizard-industry-card');
+            if (!card) return;
+            document.querySelectorAll('.wizard-industry-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            State.wizardData.industry = card.dataset.industry;
+            setTimeout(() => this.next(), 200);
+        });
+
+        // 规模选择
+        document.getElementById('wizard-scale-options')?.addEventListener('click', (e) => {
+            const card = e.target.closest('.wizard-radio-card');
+            if (!card) return;
+            document.querySelectorAll('.wizard-radio-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            State.wizardData.scale = card.dataset.value;
+            setTimeout(() => this.next(), 200);
+        });
+
+        // 痛点选择
+        document.getElementById('wizard-pain-tags')?.addEventListener('click', (e) => {
+            const tag = e.target.closest('.wizard-pain-tag');
+            if (!tag) return;
+            tag.classList.toggle('selected');
+            const pain = tag.dataset.pain;
+            if (tag.classList.contains('selected')) {
+                if (!State.wizardData.pains.includes(pain)) State.wizardData.pains.push(pain);
+            } else {
+                State.wizardData.pains = State.wizardData.pains.filter(p => p !== pain);
+            }
+        });
+
+        // 自定义痛点输入
+        const customInput = document.getElementById('wizard-custom-pain');
+        customInput?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && customInput.value.trim()) {
+                const val = customInput.value.trim();
+                if (!State.wizardData.pains.includes(val)) {
+                    State.wizardData.pains.push(val);
+                    // 动态添加标签
+                    const tagsContainer = document.getElementById('wizard-pain-tags');
+                    const span = document.createElement('span');
+                    span.className = 'wizard-pain-tag selected';
+                    span.dataset.pain = val;
+                    span.textContent = val;
+                    span.addEventListener('click', function() {
+                        this.classList.remove('selected');
+                        State.wizardData.pains = State.wizardData.pains.filter(p => p !== val);
+                    });
+                    tagsContainer?.appendChild(span);
+                }
+                customInput.value = '';
+            }
+        });
+
+        // 补充信息
+        document.getElementById('wizard-extra')?.addEventListener('input', (e) => {
+            State.wizardData.extra = e.target.value;
+        });
+
+        // 导航按钮
+        document.getElementById('wizard-prev-btn')?.addEventListener('click', () => this.prev());
+        document.getElementById('wizard-next-btn')?.addEventListener('click', () => this.next());
+        document.getElementById('wizard-submit-btn')?.addEventListener('click', () => {
+            // 点击匹配按钮
+            document.getElementById('match-btn')?.click();
+        });
+        document.getElementById('wizard-skip-btn')?.addEventListener('click', () => {
+            // 切换到标准模式
+            State.matchMode = 'normal';
+            const modeToggle = document.getElementById('mode-toggle');
+            modeToggle?.querySelectorAll('.mode-option').forEach(el => el.classList.remove('active'));
+            modeToggle?.querySelector('[data-mode="normal"]')?.classList.add('active');
+            const hint = document.getElementById('mode-hint');
+            if (hint) hint.textContent = '精准搜索 + LLM 生成';
+            this.hide();
+        });
+    },
+};
+
 // 初始化进度管理器实例
 const MatchProgress = new ProgressManager('match-progress-panel', 'match-progress-bar', 'match-progress-steps', 'match-time-elapsed');
 const AnalyzeProgress = new ProgressManager('analyze-progress-panel', 'analyze-progress-bar', 'analyze-progress-steps', 'analyze-time-elapsed');
@@ -1340,6 +1734,54 @@ const UI = {
         html = html.replace(/(<li>.*<\/li>)/s, '<ul style="padding-left:20px;margin:8px 0;">$1</ul>');
         // 有序列表
         html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+        // 表格（在横线之前处理）
+        html = (function () {
+            const lines = html.split('\n');
+            let i = 0;
+            while (i < lines.length) {
+                if (/^\|.+\|$/.test(lines[i])) {
+                    // 找到表头行
+                    const headerLine = lines[i].trim();
+                    if (i + 1 < lines.length && /^\|[\s\-:|]+\|$/.test(lines[i + 1].trim())) {
+                        // 分隔行，跳过
+                        let j = i + 2;
+                        // 收集数据行
+                        while (j < lines.length && /^\|.+\|$/.test(lines[j])) {
+                            j++;
+                        }
+                        // 提取并构建表格
+                        const rows = lines.slice(i, j);
+                        const parseCells = (line) => {
+                            return line.split('|').slice(1, -1).map(function (c) {
+                                return c.trim();
+                            });
+                        };
+                        const headers = parseCells(headerLine);
+                        let tbl = '<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;">';
+                        tbl += '<thead><tr>';
+                        headers.forEach(function (h) {
+                            tbl += '<th style="border:1px solid rgba(255,255,255,0.15);padding:8px 12px;text-align:left;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.95);font-weight:600;">' + h + '</th>';
+                        });
+                        tbl += '</tr></thead><tbody>';
+                        for (let r = 2; r < rows.length; r++) {
+                            const cells = parseCells(rows[r]);
+                            tbl += '<tr>';
+                            cells.forEach(function (c) {
+                                tbl += '<td style="border:1px solid rgba(255,255,255,0.1);padding:8px 12px;color:rgba(255,255,255,0.85);">' + c + '</td>';
+                            });
+                            tbl += '</tr>';
+                        }
+                        tbl += '</tbody></table>';
+                        lines.splice(i, j - i, tbl);
+                    } else {
+                        i++;
+                    }
+                } else {
+                    i++;
+                }
+            }
+            return lines.join('\n');
+        })();
         // 横线
         html = html.replace(/^---$/gm, '<hr style="border-color:rgba(255,255,255,0.15);margin:16px 0;">');
         // 段落
@@ -1506,6 +1948,246 @@ const KnowledgeUI = {
     }
 };
 
+// ===== 知识库文档管理（扩展 KnowledgeUI） =====
+Object.assign(KnowledgeUI, {
+    docList: [],
+    docFilter: 'all',
+    editingDocId: null,
+
+    async loadDocList() {
+        try {
+            const listEl = document.getElementById('kb-doc-list');
+            if (listEl) listEl.innerHTML = '<div class="kb-doc-skeleton">加载中...</div>';
+            const resp = await fetch('/api/knowledge/documents');
+            const data = await resp.json();
+            this.docList = data.documents || [];
+            this.renderDocList();
+        } catch (e) {
+            console.error('[KnowledgeUI] 加载文档列表失败:', e);
+            UI.showToast('加载文档列表失败', 'warning');
+        }
+    },
+
+    renderDocList() {
+        const listEl = document.getElementById('kb-doc-list');
+        const countEl = document.getElementById('kb-doc-count');
+        if (!listEl) return;
+
+        let docs = this.docList;
+        // 搜索过滤
+        const searchTerm = (document.getElementById('kb-doc-search')?.value || '').toLowerCase();
+        if (searchTerm) {
+            docs = docs.filter(d => d.title.toLowerCase().includes(searchTerm) || d.industry.toLowerCase().includes(searchTerm));
+        }
+        // 分类过滤
+        if (this.docFilter !== 'all') {
+            docs = docs.filter(d => d.category === this.docFilter);
+        }
+
+        if (countEl) countEl.textContent = `共 ${docs.length} 个文档`;
+
+        if (docs.length === 0) {
+            listEl.innerHTML = '<div class="kb-doc-skeleton">暂无文档，点击"+ 新增文档"开始添加</div>';
+            return;
+        }
+
+        const catIcons = { huawei: '🔴', competitor: '🔵' };
+        listEl.innerHTML = docs.map(d => `
+            <div class="kb-doc-item" data-id="${d.id}">
+                <span class="kb-doc-item-icon">${catIcons[d.category] || '📄'}</span>
+                <div class="kb-doc-item-info">
+                    <div class="kb-doc-item-title">${d.title}</div>
+                    <div class="kb-doc-item-meta">
+                        <span>${d.industry}</span>
+                        <span>${d.category === 'huawei' ? '华为方案' : '竞品'}</span>
+                        <span>${d.size_kb}KB</span>
+                    </div>
+                </div>
+                <div class="kb-doc-item-actions">
+                    <button class="kb-doc-action-btn" data-action="edit" data-id="${d.id}">✏️ 编辑</button>
+                    <button class="kb-doc-action-btn" data-action="reindex" data-id="${d.id}">🔄 重索引</button>
+                    <button class="kb-doc-action-btn danger" data-action="delete" data-id="${d.id}">🗑️</button>
+                </div>
+            </div>
+        `).join('');
+
+        // 绑定操作按钮事件
+        listEl.querySelectorAll('.kb-doc-action-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const action = btn.dataset.action;
+                const docId = btn.dataset.id;
+                if (action === 'edit') this._openEditorForEdit(docId);
+                else if (action === 'reindex') this._reindexDoc(docId);
+                else if (action === 'delete') this._deleteDoc(docId);
+            });
+        });
+    },
+
+    async _openEditorForEdit(docId) {
+        try {
+            const resp = await fetch(`/api/knowledge/documents/${encodeURIComponent(docId)}`);
+            if (!resp.ok) throw new Error('文档不存在');
+            const doc = await resp.json();
+            this.editingDocId = docId;
+            // 打开编辑弹窗
+            document.getElementById('kb-editor-title-text').textContent = '编辑文档';
+            document.getElementById('kb-editor-category').value = doc.category;
+            document.getElementById('kb-editor-category').disabled = true;
+            document.getElementById('kb-editor-industry').value = doc.industry;
+            document.getElementById('kb-editor-industry').disabled = true;
+            document.getElementById('kb-editor-doc-title').value = doc.filename.replace('.txt', '');
+            document.getElementById('kb-editor-doc-title').disabled = true;
+            document.getElementById('kb-editor-content').value = doc.content;
+            document.getElementById('kb-editor-save-btn').querySelector('.btn-text').textContent = '更新';
+            this._showEditor();
+        } catch (e) {
+            UI.showToast('加载文档失败: ' + e.message, 'error');
+        }
+    },
+
+    async _reindexDoc(docId) {
+        try {
+            UI.showToast('正在重新索引...', 'info');
+            await API.post(`/api/knowledge/documents/${encodeURIComponent(docId)}/reindex`);
+            UI.showToast('重新索引完成', 'success');
+        } catch (e) {
+            UI.showToast('重新索引失败: ' + e.message, 'error');
+        }
+    },
+
+    async _deleteDoc(docId) {
+        const doc = this.docList.find(d => d.id === docId);
+        if (!confirm(`确定要删除「${doc?.title || docId}」吗？此操作不可撤销。`)) return;
+        try {
+            await API.delete(`/api/knowledge/documents/${encodeURIComponent(docId)}`);
+            UI.showToast('文档已删除', 'success');
+            await this.loadDocList();
+            await this.loadStats();
+        } catch (e) {
+            UI.showToast('删除失败: ' + e.message, 'error');
+        }
+    },
+
+    _showEditor() {
+        document.getElementById('kb-editor-overlay').style.display = '';
+    },
+
+    _hideEditor() {
+        document.getElementById('kb-editor-overlay').style.display = 'none';
+        this.editingDocId = null;
+    },
+
+    _resetEditor() {
+        document.getElementById('kb-editor-title-text').textContent = '新增文档';
+        document.getElementById('kb-editor-category').disabled = false;
+        document.getElementById('kb-editor-category').value = 'huawei';
+        document.getElementById('kb-editor-industry').disabled = false;
+        document.getElementById('kb-editor-industry').value = '智慧农业';
+        document.getElementById('kb-editor-doc-title').disabled = false;
+        document.getElementById('kb-editor-doc-title').value = '';
+        document.getElementById('kb-editor-content').value = '';
+        document.getElementById('kb-editor-save-btn').querySelector('.btn-text').textContent = '保存';
+        document.getElementById('kb-editor-status').textContent = '';
+    },
+
+    async _saveDocument() {
+        const statusEl = document.getElementById('kb-editor-status');
+        const category = document.getElementById('kb-editor-category').value;
+        const industry = document.getElementById('kb-editor-industry').value;
+        const title = document.getElementById('kb-editor-doc-title').value.trim();
+        const content = document.getElementById('kb-editor-content').value.trim();
+
+        if (!title) { statusEl.textContent = '请输入文档标题'; return; }
+        if (!content) { statusEl.textContent = '请输入文档内容'; return; }
+
+        try {
+            statusEl.textContent = '保存中...';
+            if (this.editingDocId) {
+                // 更新
+                await API.put(`/api/knowledge/documents/${encodeURIComponent(this.editingDocId)}`, { content });
+                UI.showToast('文档已更新', 'success');
+            } else {
+                // 新建
+                await API.post('/api/knowledge/documents', { category, industry, title, content });
+                UI.showToast('文档已创建', 'success');
+            }
+            this._hideEditor();
+            await this.loadDocList();
+            await this.loadStats();
+        } catch (e) {
+            statusEl.textContent = '保存失败: ' + e.message;
+        }
+    },
+
+    _bindDocEvents() {
+        // 新增按钮
+        document.getElementById('kb-doc-add-btn')?.addEventListener('click', () => {
+            this._resetEditor();
+            this._showEditor();
+        });
+        // 关闭弹窗
+        document.getElementById('kb-editor-close')?.addEventListener('click', () => this._hideEditor());
+        document.getElementById('kb-editor-cancel-btn')?.addEventListener('click', () => this._hideEditor());
+        // 保存按钮
+        document.getElementById('kb-editor-save-btn')?.addEventListener('click', () => this._saveDocument());
+        // 分类切换时更新行业列表
+        document.getElementById('kb-editor-category')?.addEventListener('change', (e) => {
+            const sel = document.getElementById('kb-editor-industry');
+            if (e.target.value === 'competitor') {
+                sel.innerHTML = `
+                    <option value="AWS">AWS</option>
+                    <option value="Google Cloud">Google Cloud</option>
+                    <option value="Oracle Cloud">Oracle Cloud</option>
+                    <option value="天翼云">天翼云</option>
+                    <option value="火山引擎">火山引擎</option>
+                    <option value="微软Azure">微软Azure</option>
+                    <option value="施耐德电气">施耐德电气</option>
+                    <option value="移动云">移动云</option>
+                    <option value="联通云">联通云</option>
+                    <option value="腾讯云">腾讯云</option>
+                    <option value="西门子">西门子</option>
+                    <option value="阿里云">阿里云</option>
+                `;
+            } else {
+                sel.innerHTML = `
+                    <option value="智慧农业">智慧农业</option>
+                    <option value="工业互联网">工业互联网</option>
+                    <option value="智慧园区">智慧园区</option>
+                    <option value="智慧城市">智慧城市</option>
+                    <option value="智慧医疗">智慧医疗</option>
+                    <option value="智慧金融">智慧金融</option>
+                    <option value="智慧能源">智慧能源</option>
+                    <option value="智慧交通">智慧交通</option>
+                    <option value="智慧教育">智慧教育</option>
+                    <option value="智慧文旅">智慧文旅</option>
+                `;
+            }
+        });
+        // 搜索
+        document.getElementById('kb-doc-search')?.addEventListener('input', () => this.renderDocList());
+        // 分类过滤
+        document.querySelectorAll('.kb-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.kb-filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.docFilter = btn.dataset.filter;
+                this.renderDocList();
+            });
+        });
+        // 点击弹窗遮罩关闭
+        document.getElementById('kb-editor-overlay')?.addEventListener('click', (e) => {
+            if (e.target === document.getElementById('kb-editor-overlay')) this._hideEditor();
+        });
+        // ESC关闭
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && document.getElementById('kb-editor-overlay')?.style.display !== 'none') {
+                this._hideEditor();
+            }
+        });
+    },
+});
+
 /* ==================== Dashboard 仪表盘 ==================== */
 
 const DashboardUI = {
@@ -1568,7 +2250,14 @@ const DashboardUI = {
 
     renderIndustryHeatmap(coverage) {
         const canvas = document.getElementById('industry-heatmap-chart');
-        if (!canvas || typeof Chart === 'undefined') return;
+        if (!canvas || typeof Chart === 'undefined') {
+            console.warn('[Dashboard] 图表渲染跳过:', {
+                canvasFound: !!canvas,
+                chartGlobal: typeof Chart !== 'undefined',
+                chartFailed: window.__chartFailed || false
+            });
+            return;
+        }
         if (this.charts.heatmap) this.charts.heatmap.destroy();
 
         const labels = Object.keys(coverage);
@@ -1622,7 +2311,14 @@ const DashboardUI = {
 
     renderMatchTrend(trends) {
         const canvas = document.getElementById('match-trend-chart');
-        if (!canvas || typeof Chart === 'undefined') return;
+        if (!canvas || typeof Chart === 'undefined') {
+            console.warn('[Dashboard] 图表渲染跳过:', {
+                canvasFound: !!canvas,
+                chartGlobal: typeof Chart !== 'undefined',
+                chartFailed: window.__chartFailed || false
+            });
+            return;
+        }
         if (this.charts.trend) this.charts.trend.destroy();
 
         const labels = trends.map(t => t.date);
@@ -1690,7 +2386,14 @@ const DashboardUI = {
 
     renderCompetitorFreq(freq) {
         const canvas = document.getElementById('competitor-freq-chart');
-        if (!canvas || typeof Chart === 'undefined') return;
+        if (!canvas || typeof Chart === 'undefined') {
+            console.warn('[Dashboard] 图表渲染跳过:', {
+                canvasFound: !!canvas,
+                chartGlobal: typeof Chart !== 'undefined',
+                chartFailed: window.__chartFailed || false
+            });
+            return;
+        }
         if (this.charts.freq) this.charts.freq.destroy();
 
         // 数据已是百分比，排序取Top12
@@ -2615,7 +3318,7 @@ function initEventListeners() {
                 return;
             }
             PageTransition.switchTo(page).then(() => {
-                if (page === 'knowledge') KnowledgeUI.loadStats();
+                if (page === 'knowledge') { KnowledgeUI.loadStats(); KnowledgeUI.loadDocList(); }
                 if (page === 'dashboard') DashboardUI.loadStats();
                 if (page === 'history') HistoryUI.loadHistory();
                 if (page === 'settings') SettingsManager.updateSystemInfo();
@@ -2633,7 +3336,7 @@ function initEventListeners() {
                 return;
             }
             PageTransition.switchTo(page).then(() => {
-                if (page === 'knowledge') KnowledgeUI.loadStats();
+                if (page === 'knowledge') { KnowledgeUI.loadStats(); KnowledgeUI.loadDocList(); }
                 if (page === 'dashboard') DashboardUI.loadStats();
                 if (page === 'history') HistoryUI.loadHistory();
                 if (page === 'settings') SettingsManager.updateSystemInfo();
@@ -3008,6 +3711,37 @@ function initEventListeners() {
     const matchBtn = document.getElementById('match-btn');
     const matchBtnText = matchBtn?.querySelector('.btn-text');
 
+    // ===== 匹配模式切换 =====
+    const modeToggle = document.getElementById('mode-toggle');
+    const modeHint = document.getElementById('mode-hint');
+    modeToggle?.addEventListener('click', (e) => {
+        const option = e.target.closest('.mode-option');
+        if (!option) return;
+        const newMode = option.dataset.mode;
+        if (State.matchMode === newMode) return;
+        State.matchMode = newMode;
+        // 更新 UI
+        modeToggle.querySelectorAll('.mode-option').forEach(el => el.classList.remove('active'));
+        option.classList.add('active');
+        // 更新提示文字
+        if (modeHint) {
+            const hints = {
+                normal: '精准搜索 + LLM 生成',
+                agent: 'AI 理解需求 → 自动搜索 → 生成方案',
+                wizard: '像 BD 顾问一样，一步步挖掘客户需求'
+            };
+            modeHint.textContent = hints[newMode] || '';
+        }
+        // 向导模式的显示/隐藏
+        const demandInput = document.getElementById('demand-input');
+        if (newMode === 'wizard') {
+            DemandWizard.show();
+        } else {
+            DemandWizard.hide();
+            if (demandInput) demandInput.parentElement.style.display = '';
+        }
+    });
+
     matchBtn?.addEventListener('click', async () => {
         // --- 取消模式 ---
         if (State.loadingStates.match) {
@@ -3030,10 +3764,22 @@ function initEventListeners() {
             return;
         }
 
-        const demand = demandInput.value.trim();
+        // 向导模式：用收集的数据合成需求
+        const isWizardMode = State.matchMode === 'wizard';
+        const demand = isWizardMode 
+            ? DemandWizard.synthesizeDemand()
+            : demandInput.value.trim();
         
-        if (!demand) {
-            UI.showToast('请输入客户需求描述', 'warning');
+        // 空输入：允许提交，后端会检测 easter_empty_search 成就
+        if (!demand && !isWizardMode) {
+            // 非向导模式且输入为空，提示用户确认（对应"无声胜有声"隐藏成就）
+            if (!confirm('输入为空，确定要直接匹配吗？')) return;
+        }
+        
+        // 向导模式：至少需要选择行业
+        if (isWizardMode && !State.wizardData.industry) {
+            UI.showToast('请至少选择客户所在的行业', 'warning');
+            DemandWizard.goToStep(0);
             return;
         }
         
@@ -3055,12 +3801,80 @@ function initEventListeners() {
         matchBtn.classList.add('btn-cancel');
         
         // 启动进度面板
+        const isAgentMode = State.matchMode === 'agent';
         MatchProgress.start();
-        MatchProgress.simulateProgress(3, 6000);
+        if (!isAgentMode) {
+            MatchProgress.simulateProgress(3, 6000);
+        }
         
         try {
             SkeletonUI.showMatchFormSkeleton();
-            const result = await API.match(demand, controller.signal);
+            if (isAgentMode) MatchProgress.setSteps([
+                { icon: '🧠', label: '分析需求意图', desc: 'AI 理解模糊需求，提取关键信息' },
+                { icon: '🔍', label: '智能搜索知识库', desc: '用结构化关键词精准检索' },
+                { icon: '✨', label: '综合生成方案', desc: '基于知识库 + AI 生成完整方案' }
+            ]);
+
+            let result;
+            if (isAgentMode) {
+                // SSE 流式模式：监听事件更新进度面板 + 实时思考流
+                const toolStepMap = { analyze_demand: 0, search_kb: 1, search_competitor: 1, generate_report: 2 };
+                const tsContainer = document.getElementById('thinking-stream');
+                const tsEntries = document.getElementById('thinking-entries');
+                const tsBadge = document.getElementById('thinking-step-badge');
+
+                // 显示思考流面板
+                if (tsContainer) {
+                    tsEntries.innerHTML = '';
+                    tsContainer.style.display = 'block';
+                    tsContainer.classList.remove('done');
+                }
+
+                // 思考流渲染辅助函数
+                const addThinkEntry = (type, labelClass, icon, labelText, text) => {
+                    if (!tsEntries) return;
+                    const div = document.createElement('div');
+                    div.className = 'think-entry';
+                    div.innerHTML = `<div class="think-icon ${type}">${icon}</div><div class="think-body"><div class="think-label ${labelClass}-label">${labelText}</div><div class="think-text">${text}</div></div>`;
+                    tsEntries.appendChild(div);
+                    tsEntries.scrollTop = tsEntries.scrollHeight;
+                };
+
+                const resultContainer = document.getElementById('solution-result');
+                const resultContent = document.getElementById('solution-content');
+
+                await API.agentMatchStream(demand, controller.signal, (event) => {
+                    if (event.type === 'step') {
+                        if (tsBadge) tsBadge.textContent = `Step ${event.step}`;
+                    } else if (event.type === 'thought') {
+                        addThinkEntry('thought', 'thought', '💭', '思考', event.text);
+                        MatchProgress.setStep(0);
+                    } else if (event.type === 'tool_start') {
+                        const stepIdx = toolStepMap[event.tool] ?? 1;
+                        MatchProgress.setStep(stepIdx);
+                        const inputJson = JSON.stringify(event.input || {}, null, 0);
+                        addThinkEntry('action', 'action', '🔧', `调用工具: ${event.tool}`, `<code>${inputJson}</code>`);
+                    } else if (event.type === 'tool_end') {
+                        if (tsEntries) {
+                            const lastEntry = tsEntries.lastElementChild;
+                            if (lastEntry) {
+                                const iconEl = lastEntry.querySelector('.think-icon');
+                                if (iconEl) iconEl.textContent = '✅';
+                            }
+                        }
+                    } else if (event.type === 'final') {
+                        MatchProgress.stopSimulation();
+                        MatchProgress.setProgress(95);
+                        if (tsContainer) tsContainer.classList.add('done');
+                    } else if (event.type === 'result') {
+                        result = event.data;
+                    } else if (event.type === 'error') {
+                        throw new Error(event.message);
+                    }
+                });
+            } else {
+                result = await API.match(demand, controller.signal, State.matchMode);
+            }
             
             // API返回，显示完成
             console.log('[SolutionMatch] API返回结果:', {
@@ -3144,11 +3958,20 @@ function initEventListeners() {
             FavoriteManager._updateResultBtn('fav-solution-btn', demand);
             FollowUpUI.show(demand, result.answer, result.history_id);
 
+            // 成就通知
+            console.log('[Achievement] newly_unlocked:', result.newly_unlocked, 'type:', typeof result.newly_unlocked, 'length:', result.newly_unlocked?.length);
+            if (result.newly_unlocked && result.newly_unlocked.length > 0 && window.AchievementUI && AchievementUI.showUnlockToast) {
+                console.log('[Achievement] Showing toast for', result.newly_unlocked.length, 'achievements');
+                setTimeout(() => AchievementUI.showUnlockToast(result.newly_unlocked), 500);
+            }
+            
             // 高亮功能已按需求移除 —— 用户只需要点击查看产品详情
         } catch (error) {
             if (error.name === 'AbortError') {
                 // 用户主动取消，不报错
                 console.log('匹配已取消');
+                const ts = document.getElementById('thinking-stream');
+                if (ts) ts.style.display = 'none';
                 return;
             }
             console.error('匹配失败:', error);
@@ -3320,6 +4143,12 @@ function initEventListeners() {
             
             UI.showToast('分析完成！', 'success');
             CompetitorFollowUpUI.show(competitor, industry, result.answer, result.history_id);
+
+            // 成就通知（竞品分析）
+            console.log('[Achievement] analyze newly_unlocked:', result.newly_unlocked);
+            if (result.newly_unlocked && result.newly_unlocked.length > 0 && window.AchievementUI && AchievementUI.showUnlockToast) {
+                setTimeout(() => AchievementUI.showUnlockToast(result.newly_unlocked), 500);
+            }
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.log('分析已取消');
@@ -3412,8 +4241,7 @@ function initEventListeners() {
             
             UI.showToast(`知识库重建完成！共添加 ${result.count || 0} 个文档片段`, 'success');
             await KnowledgeUI.loadStats();
-            
-            // 3秒后淡出
+            await KnowledgeUI.loadDocList();
             setTimeout(() => {
                 if (rebuildProgressPanel) {
                     rebuildProgressPanel.classList.add('fade-out');
@@ -3441,26 +4269,25 @@ function initEventListeners() {
     });
     
     const clearKbBtn = document.getElementById('clear-kb-btn');
-    const confirmDialog = document.getElementById('confirm-clear');
-    const confirmCheckbox = document.getElementById('confirm-checkbox');
+    const confirmOverlay = document.getElementById('confirm-clear-overlay');
     const confirmClearBtn = document.getElementById('confirm-clear-btn');
-    
-    clearKbBtn?.addEventListener('click', () => {
-        confirmDialog.style.display = 'flex';
-    });
-    
+    const cancelCloseBtn = document.getElementById('cancel-clear-btn');
+    const cancelCancelBtn = document.getElementById('confirm-cancel-btn');
+
+    const closeConfirm = () => { confirmOverlay.style.display = 'none'; };
+
+    clearKbBtn?.addEventListener('click', () => { confirmOverlay.style.display = 'flex'; });
+    confirmOverlay?.addEventListener('click', (e) => { if (e.target === confirmOverlay) closeConfirm(); });
+    cancelCancelBtn?.addEventListener('click', closeConfirm);
+    cancelCloseBtn?.addEventListener('click', closeConfirm);
+
     confirmClearBtn?.addEventListener('click', async () => {
-        if (!confirmCheckbox.checked) {
-            UI.showToast('请先确认清空知识库', 'warning');
-            return;
-        }
-        
         try {
             await API.clearKnowledge();
             UI.showToast('知识库已清空', 'success');
-            confirmDialog.style.display = 'none';
-            confirmCheckbox.checked = false;
+            closeConfirm();
             await KnowledgeUI.loadStats();
+            await KnowledgeUI.loadDocList();
         } catch (error) {
             console.error('清空失败:', error);
             UI.showToast(error.message || '清空失败，请重试', 'error');
@@ -3723,6 +4550,7 @@ function init() {
         }
 
         initEventListeners();
+        DemandWizard.init();
         HistoryUI.init();
         FollowUpUI.init();
         CompetitorFollowUpUI.init();
@@ -3730,6 +4558,7 @@ function init() {
         SettingsManager.init();
         ErrorHandler.init();
         FavoriteManager.init();
+        AchievementUI.init();
 
         // 初始化产品图谱模块（容错：DOM未就绪时不崩溃）
         try { ProductGraph.init(); } catch (e) {
@@ -3742,6 +4571,8 @@ function init() {
         if (pagContainer) pagContainer.style.display = 'none';
 
         KnowledgeUI.loadStats();
+        KnowledgeUI._bindDocEvents();
+        KnowledgeUI.loadDocList();
     } catch (e) {
         console.error('[Init] 初始化失败:', e);
     }

@@ -1,10 +1,11 @@
+import json
 import httpx
 import asyncio
 import time
 import os
 import warnings
 from abc import ABC, abstractmethod
-from typing import Optional, Callable
+from typing import Optional, Callable, AsyncGenerator
 warnings.filterwarnings('ignore')
 
 from app.config import *
@@ -21,6 +22,11 @@ class LLMProvider(ABC):
     async def chat(self, prompt: str, temperature: Optional[float] = None) -> str:
         """发送对话请求"""
         pass
+
+    async def chat_stream(self, prompt: str, temperature: Optional[float] = None):
+        """流式对话请求，yield 每个 token 字符串（默认实现：非流式降级）"""
+        result = await self.chat(prompt, temperature)
+        yield result
 
     @abstractmethod
     async def test_connection(self) -> bool:
@@ -71,6 +77,38 @@ class DeepSeekProvider(LLMProvider):
                 return response.json()["choices"][0]["message"]["content"]
 
         return await self._retry_request(_request)
+
+    async def chat_stream(self, prompt: str, temperature: Optional[float] = None):
+        """DeepSeek 流式调用，yield 每个 delta content 字符串"""
+        temp = temperature if temperature is not None else DEEPSEEK_TEMPERATURE
+        url = f"{DEEPSEEK_BASE_URL}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": DEEPSEEK_MODEL_NAME,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temp,
+            "stream": True
+        }
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=float(REQUEST_TIMEOUT), write=10.0, pool=10.0)) as client:
+            async with client.stream("POST", url, headers=headers, json=data) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                        delta = chunk["choices"][0].get("delta", {})
+                        content = delta.get("content", "")
+                        if content:
+                            yield content
+                    except Exception:
+                        continue
 
     async def test_connection(self) -> bool:
         try:
@@ -238,6 +276,13 @@ async def get_llm_response(prompt: str = "你好", provider: str = None) -> str:
     """获取LLM响应 (兼容原有接口，异步版)"""
     provider_instance = LLMFactory.create(provider)
     return await provider_instance.chat(prompt)
+
+
+async def get_llm_response_stream(prompt: str = "你好", provider: str = None):
+    """获取LLM流式响应，yield 每个 token"""
+    provider_instance = LLMFactory.create(provider)
+    async for token in provider_instance.chat_stream(prompt):
+        yield token
 
 
 async def test_llm_connection(provider: str = None) -> bool:

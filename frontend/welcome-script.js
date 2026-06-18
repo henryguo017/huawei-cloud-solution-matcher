@@ -293,6 +293,18 @@ const DemoManager = {
             return;
         }
 
+        // 如果当前是向导模式，切换到标准模式
+        if (typeof State !== 'undefined' && State.matchMode === 'wizard') {
+            State.matchMode = 'normal';
+            const modeToggle = document.getElementById('mode-toggle');
+            if (modeToggle) {
+                modeToggle.querySelectorAll('.mode-option').forEach(el => el.classList.remove('active'));
+                modeToggle.querySelector('[data-mode="normal"]')?.classList.add('active');
+            }
+            if (typeof DemandWizard !== 'undefined') DemandWizard.hide();
+            demandInput.parentElement.style.display = '';
+        }
+
         if (typeof UI !== 'undefined') {
             UI.switchPage('solution');
         } else {

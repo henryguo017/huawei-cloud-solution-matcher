@@ -19,3 +19,11 @@ def get_knowledge_base() -> KnowledgeBaseService:
 
 def get_usage_logger() -> UsageLoggerService:
     return _get_usage_logger()
+
+
+def get_achievement_service_dep():
+    from app.services.achievement_service import get_achievement_service
+    return get_achievement_service()
+
+
+from api.auth_dependencies import get_current_user, get_current_user_optional

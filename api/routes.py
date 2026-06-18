@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from api.models import (
     MatchRequest, MatchResponse,
     AnalyzeRequest, AnalyzeResponse,
@@ -10,13 +11,18 @@ from api.models import (
     RefineSolutionRequest, RefineSolutionResponse,
     UpdateSolutionRequest, UpdateSolutionResponse,
     RefineCompetitorRequest, RefineCompetitorResponse,
-    CompetitorHistoryListResponse, CompetitorHistoryItem, CompetitorHistoryDetail
+    CompetitorHistoryListResponse, CompetitorHistoryItem, CompetitorHistoryDetail,
+    KBDocumentListResponse, KBDocumentContentResponse,
+    KBDocumentCreateRequest, KBDocumentCreateResponse,
+    KBDocumentUpdateRequest, KBDocumentUpdateResponse,
+    KBDocumentDeleteResponse, KBDocumentReindexResponse,
 )
 from api.dependencies import (
     get_solution_matcher,
     get_competitor_analyzer,
     get_knowledge_base,
-    get_usage_logger
+    get_usage_logger,
+    get_achievement_service_dep,
 )
 from app.models.llm import get_llm_response
 from app.services.solution_matcher import SolutionMatcherService
@@ -25,9 +31,14 @@ from app.services.knowledge_base import KnowledgeBaseService
 from app.services.usage_logger import UsageLoggerService
 from app.config import APP_NAME, APP_VERSION
 from typing import Optional
+import json
+import asyncio
 import logging
 
 from api.auth_dependencies import get_current_user, get_current_user_optional
+
+# Agent 模块导入
+from app.agent import SolutionAgent, get_agent
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +90,14 @@ async def match_solution(
     即使知识库为空，AI也会基于华为云产品体系给出建议
     """
     try:
-        logger.info(f"开始匹配解决方案，需求长度: {len(request.demand)}")
-        
+        # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
+        original_demand = request.demand
+
+        # 空输入处理：用于"无声胜有声"隐藏成就，给 LLM 一个默认 prompt
+        if not request.demand or not request.demand.strip():
+            request.demand = "（用户未输入需求，请介绍华为云的核心解决方案和产品体系）"
+            logger.info("检测到空输入，使用默认 prompt")
+
         result = await matcher.match(request.demand)
         
         source_docs = [
@@ -98,7 +115,7 @@ async def match_solution(
         if user and user.get('id'):
             try:
                 usage_logger = get_usage_logger()
-                usage_logger.log_match(request.demand, user_id=user['id'])
+                usage_logger.log_match(request.demand, user_id=user['id'], mode=request.mode)
             except Exception as log_err:
                 logger.warning(f"记录使用日志失败: {log_err}")
 
@@ -125,10 +142,35 @@ async def match_solution(
             except Exception as hist_err:
                 logger.warning(f"保存匹配历史记录失败: {hist_err}")
 
+        # 成就检测
+        achievement_result = []
+        if user and user.get('id') and not request.is_quick_demo:
+            try:
+                achievement_svc = get_achievement_service_dep()
+                industry_hint = ""
+                try:
+                    for doc in result.get("source_documents", []):
+                        if hasattr(doc, "metadata") and doc.metadata:
+                            ind = doc.metadata.get("industry", "")
+                            if ind:
+                                industry_hint = ind
+                                break
+                except:
+                    pass
+                achievement_result = achievement_svc.check_after_match(
+                    user_id=user['id'],
+                    demand_text=original_demand,
+                    mode=request.mode if hasattr(request, 'mode') else "standard",
+                    industry=industry_hint,
+                )
+            except Exception as ach_err:
+                logger.warning(f"成就检测失败: {ach_err}")
+
         return MatchResponse(
             answer=result["answer"],
             source_documents=source_docs,
-            history_id=history_id
+            history_id=history_id,
+            newly_unlocked=achievement_result if user and user.get('id') else None
         )
     except Exception as e:
         logger.error(f"解决方案匹配失败: {e}")
@@ -136,6 +178,252 @@ async def match_solution(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"匹配失败: {str(e)}"
         )
+    
+# ========== Agent 智能匹配（单 Agent + Tool Calling） ==========
+
+@router.post("/agent/match", response_model=MatchResponse, tags=["解决方案匹配"])
+async def agent_match_solution(
+    request: MatchRequest,
+    user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    Agent 智能匹配接口（ReAct + Tool Calling）
+
+    先分析意图，再检索知识库，最后生成方案——适合模糊输入场景。
+    """
+    try:
+        # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
+        original_demand = request.demand
+
+        # 空输入处理
+        if not request.demand or not request.demand.strip():
+            request.demand = "（用户未输入需求，请介绍华为云的核心解决方案和产品体系）"
+            logger.info("[Agent] 检测到空输入，使用默认 prompt")
+
+        agent = get_agent()
+        session_id = user.get('id', 'anonymous') if user else 'anonymous'
+
+        result = await agent.run(
+            user_input=request.demand,
+            session_id=str(session_id),
+        )
+
+        answer = result.get("answer", "Agent 未能生成有效方案")
+        tool_calls = result.get("tool_calls", [])
+        steps = result.get("steps", 0)
+
+        # 从工具调用中提取 source_documents
+        source_docs = []
+        for tc in tool_calls:
+            if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
+                try:
+                    result_data = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
+                    for doc in result_data.get("results", []):
+                        source_docs.append(SourceDocument(
+                            page_content=doc.get("content", ""),
+                            metadata={
+                                "source": doc.get("source", ""),
+                                "industry": doc.get("industry", ""),
+                            }
+                        ))
+                except (json.JSONDecodeError, TypeError):
+                    pass  # 无法解析的跳过
+
+        logger.info(f"[Agent] 匹配完成: {steps} 步, {len(tool_calls)} 次工具调用")
+
+        # 记录使用日志
+        history_id = None
+        if user and user.get('id'):
+            try:
+                usage_logger = get_usage_logger()
+                usage_logger.log_match(request.demand, user_id=user['id'], mode="agent")
+                industry_hint = ""
+                for doc in source_docs:
+                    ind = doc.metadata.get("industry", "")
+                    if ind:
+                        industry_hint = ind
+                        break
+                history_id = usage_logger.save_match_history(
+                    demand_text=request.demand,
+                    solution=answer,
+                    industry=industry_hint,
+                    sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in source_docs],
+                    user_id=user['id']
+                )
+            except Exception as log_err:
+                logger.warning(f"[Agent] 保存历史失败: {log_err}")
+
+        # 成就检测（Agent 模式）
+        achievement_result = []
+        if user and user.get('id') and not request.is_quick_demo:
+            try:
+                achievement_svc = get_achievement_service_dep()
+                industry_hint = ""
+                for doc in source_docs:
+                    ind = doc.metadata.get("industry", "")
+                    if ind:
+                        industry_hint = ind
+                        break
+                achievement_result = achievement_svc.check_after_match(
+                    user_id=user['id'],
+                    demand_text=original_demand,
+                    mode="agent",
+                    industry=industry_hint,
+                )
+            except Exception as ach_err:
+                logger.warning(f"[Agent] 成就检测失败: {ach_err}")
+
+        return MatchResponse(
+            answer=answer,
+            source_documents=source_docs,
+            history_id=history_id,
+            newly_unlocked=achievement_result if user and user.get('id') else None
+        )
+    except Exception as e:
+        logger.error(f"[Agent] 智能匹配失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Agent 匹配失败: {str(e)}"
+        )
+
+
+# ========== Agent SSE 流式匹配（实时进度推送） ==========
+
+@router.post("/agent/match/stream", tags=["解决方案匹配"])
+async def agent_match_stream(
+    request: MatchRequest,
+    user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    Agent 智能匹配 SSE 流式接口
+
+    通过 Server-Sent Events 实时推送 ReAct 循环的每一步进度：
+    - event: step     → 新步骤开始
+    - event: tool_start → 开始执行工具
+    - event: tool_end   → 工具执行完成
+    - event: final      → Agent 完成
+    - event: result     → 最终结果（answer, steps, elapsed, tool_calls）
+    """
+    session_id = str(user.get('id', 'anonymous')) if user else 'anonymous'
+
+    async def generate():
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def event_callback(event):
+            await queue.put(event)
+
+        async def run_agent():
+            try:
+                # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
+                original_demand = request.demand
+
+                # 空输入处理
+                if not request.demand or not request.demand.strip():
+                    request.demand = "（用户未输入需求，请介绍华为云的核心解决方案和产品体系）"
+
+                agent = get_agent()
+                result = await agent.run(
+                    user_input=request.demand,
+                    session_id=session_id,
+                    event_callback=event_callback,
+                )
+
+                # ── 记录使用日志 + 保存历史 ──
+                history_id = None
+                if user and user.get('id'):
+                    try:
+                        usage_logger = get_usage_logger()
+                        usage_logger.log_match(request.demand, user_id=user['id'], mode="agent")
+                        # 提取行业信息
+                        industry_hint = ""
+                        for tc in result.get("tool_calls", []):
+                            if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
+                                try:
+                                    rd = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
+                                    for doc in rd.get("results", []):
+                                        ind = doc.get("industry", "")
+                                        if ind:
+                                            industry_hint = ind
+                                            break
+                                except:
+                                    pass
+                            if industry_hint:
+                                break
+                        history_id = usage_logger.save_match_history(
+                            demand_text=request.demand,
+                            solution=result.get("answer", ""),
+                            industry=industry_hint,
+                            sources=[],
+                            user_id=user['id']
+                        )
+                    except Exception as log_err:
+                        logger.warning(f"[Agent SSE] 保存历史失败: {log_err}")
+
+                # ── 成就检测 ──
+                newly_unlocked = []
+                if user and user.get('id') and not request.is_quick_demo:
+                    try:
+                        achievement_svc = get_achievement_service_dep()
+                        # 提取行业信息
+                        industry_hint = ""
+                        for tc in result.get("tool_calls", []):
+                            if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
+                                try:
+                                    rd = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
+                                    for doc in rd.get("results", []):
+                                        ind = doc.get("industry", "")
+                                        if ind:
+                                            industry_hint = ind
+                                            break
+                                except:
+                                    pass
+                            if industry_hint:
+                                break
+                        newly_unlocked = achievement_svc.check_after_match(
+                            user_id=user['id'],
+                            demand_text=original_demand,
+                            mode="agent",
+                            industry=industry_hint,
+                        )
+                    except Exception as ach_err:
+                        logger.warning(f"[Agent SSE] 成就检测失败: {ach_err}")
+
+                # 把 newly_unlocked 和 history_id 注入 result
+                result["newly_unlocked"] = newly_unlocked
+                result["history_id"] = history_id
+
+                await queue.put({"type": "result", "data": result})
+            except Exception as e:
+                logger.error(f"[Agent SSE] 执行失败: {e}")
+                await queue.put({"type": "error", "message": str(e)})
+            finally:
+                await queue.put(None)  # 结束信号
+
+        task = asyncio.ensure_future(run_agent())
+
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                event_type = event.get("type", "message")
+                yield f"event: {event_type}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except asyncio.CancelledError:
+            logger.info("[Agent SSE] 客户端断开连接")
+            task.cancel()
+        finally:
+            await task
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 禁用 Nginx 缓冲
+        },
+    )
+
 
 @router.post("/analyze", response_model=AnalyzeResponse, tags=["竞争对手分析"])
 async def analyze_competitor(
@@ -180,10 +468,23 @@ async def analyze_competitor(
             except Exception as log_err:
                 logger.warning(f"记录使用日志或保存历史失败: {log_err}")
         
+        # 成就检测
+        achievement_result = []
+        if user and user.get('id') and not request.is_quick_demo:
+            try:
+                achievement_svc = get_achievement_service_dep()
+                achievement_result = achievement_svc.check_after_analyze(
+                    user_id=user['id'],
+                    competitor=request.competitor,
+                )
+            except Exception as ach_err:
+                logger.warning(f"成就检测失败: {ach_err}")
+
         return AnalyzeResponse(
             answer=result["answer"],
             source_documents=source_docs,
-            history_id=history_id
+            history_id=history_id,
+            newly_unlocked=achievement_result if user and user.get('id') else None
         )
     except Exception as e:
         logger.error(f"竞争对手分析失败: {e}")
@@ -268,6 +569,100 @@ async def clear_knowledge(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"清空失败: {str(e)}"
         )
+
+# ===== 知识库文档管理 CRUD =====
+
+@router.get("/knowledge/documents", response_model=KBDocumentListResponse, tags=["知识库管理"])
+async def list_knowledge_documents(
+    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+):
+    """列出知识库所有文档"""
+    try:
+        docs = kb_service.list_documents()
+        return KBDocumentListResponse(total=len(docs), documents=docs)
+    except Exception as e:
+        logger.error(f"列出文档失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/knowledge/documents/{doc_id}", tags=["知识库管理"])
+async def get_knowledge_document(
+    doc_id: str,
+    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+):
+    """获取文档内容"""
+    try:
+        return kb_service.get_document(doc_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    except Exception as e:
+        logger.error(f"获取文档失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/knowledge/documents", response_model=KBDocumentCreateResponse, tags=["知识库管理"])
+async def create_knowledge_document(
+    req: KBDocumentCreateRequest,
+    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+):
+    """创建新文档"""
+    try:
+        result = kb_service.create_document(req.category, req.industry, req.title, req.content)
+        return KBDocumentCreateResponse(**result)
+    except FileExistsError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        logger.error(f"创建文档失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.put("/knowledge/documents/{doc_id}", response_model=KBDocumentUpdateResponse, tags=["知识库管理"])
+async def update_knowledge_document(
+    doc_id: str,
+    req: KBDocumentUpdateRequest,
+    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+):
+    """更新文档内容"""
+    try:
+        result = kb_service.update_document(doc_id, req.content)
+        return KBDocumentUpdateResponse(**result)
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    except Exception as e:
+        logger.error(f"更新文档失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.delete("/knowledge/documents/{doc_id}", response_model=KBDocumentDeleteResponse, tags=["知识库管理"])
+async def delete_knowledge_document(
+    doc_id: str,
+    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+):
+    """删除文档"""
+    try:
+        result = kb_service.delete_document(doc_id, delete_file=True)
+        return KBDocumentDeleteResponse(success=True, **result)
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    except Exception as e:
+        logger.error(f"删除文档失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/knowledge/documents/{doc_id}/reindex", response_model=KBDocumentReindexResponse, tags=["知识库管理"])
+async def reindex_knowledge_document(
+    doc_id: str,
+    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+):
+    """重新索引单个文档"""
+    try:
+        result = kb_service.reindex_document(doc_id)
+        return KBDocumentReindexResponse(**result)
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    except Exception as e:
+        logger.error(f"重新索引失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.get("/dashboard/stats", response_model=DashboardStatsResponse, tags=["数据仪表盘"])
 async def get_dashboard_stats(

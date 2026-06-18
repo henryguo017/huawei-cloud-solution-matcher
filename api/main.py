@@ -2,13 +2,14 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from api.routes import router
 from api.export_routes import router as export_router
 from api.auth_routes import router as auth_router
+from api.achievement_routes import router as achievement_router
 from app.config import APP_NAME, APP_VERSION
 import logging
 import time
@@ -96,11 +97,20 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(router, prefix="/api")
 app.include_router(export_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(achievement_router, prefix="/api")
 
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
     logger.info(f"静态文件目录: {frontend_path}")
+
+@app.get("/favicon.ico", tags=["前端"])
+async def favicon():
+    """返回网站图标"""
+    favicon_svg = os.path.join(frontend_path, "favicon.svg")
+    if os.path.exists(favicon_svg):
+        return FileResponse(favicon_svg, media_type="image/svg+xml")
+    raise HTTPException(status_code=404)
 
 @app.get("/", tags=["前端"])
 @app.get("/index.html", tags=["前端"])
@@ -153,6 +163,20 @@ async def welcome_script():
         return FileResponse(js_path, media_type="application/javascript")
     return {"error": "Welcome script file not found"}
 
+@app.get("/js/{filename:path}", tags=["前端"])
+async def serve_js(filename: str):
+    """
+    返回 js/ 目录下的脚本文件
+    """
+    js_path = os.path.join(frontend_path, "js", filename)
+    if os.path.exists(js_path):
+        media_type = "application/javascript"
+        if filename.endswith(".css"): media_type = "text/css"
+        elif filename.endswith(".png"): media_type = "image/png"
+        elif filename.endswith(".svg"): media_type = "image/svg+xml"
+        return FileResponse(js_path, media_type=media_type)
+    raise HTTPException(status_code=404)
+
 @app.on_event("startup")
 async def startup_event():
     logger.info("=" * 50)
@@ -173,6 +197,11 @@ async def startup_event():
         stats = kb_service.get_stats()
         logger.info(f"知识库文档数: {stats['total_documents']}")
         logger.info(f"支持行业数: {len(stats['supported_industries'])}")
+
+        # 预热：提前加载向量模型，避免第一次搜索时耗时
+        from app.models.llm import get_embedding_vector
+        _ = get_embedding_vector("预热测试")
+        logger.info("向量模型预热完成")
     except Exception as e:
         logger.warning(f"知识库初始化警告: {e}")
     

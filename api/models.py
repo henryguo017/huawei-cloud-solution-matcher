@@ -2,18 +2,22 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
 
 class MatchRequest(BaseModel):
-    demand: str = Field(..., description="客户需求描述", min_length=1, max_length=5000)
+    demand: str = Field(..., description="客户需求描述（可为空，对应'无声胜有声'隐藏成就）", min_length=0, max_length=5000)
+    mode: Optional[str] = Field(default="standard", description="匹配模式: standard/agent/wizard")
+    is_quick_demo: bool = Field(default=False, description="是否来自快速体验/Demo，为true时不触发成就")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "demand": "我们是一家中型制造企业，有50台生产设备，经常因为设备突发故障导致生产线停工，每次停工损失约5万元。"
+                "demand": "我们是一家中型制造企业，有50台生产设备，经常因为设备突发故障导致生产线停工，每次停工损失约5万元。",
+                "mode": "standard"
             }
         }
 
 class AnalyzeRequest(BaseModel):
     competitor: str = Field(..., description="竞争对手名称")
     industry: str = Field(..., description="行业名称")
+    is_quick_demo: bool = Field(default=False, description="是否来自快速体验/Demo，为true时不触发成就")
     
     class Config:
         json_schema_extra = {
@@ -31,11 +35,13 @@ class MatchResponse(BaseModel):
     answer: str = Field(..., description="匹配结果（Markdown格式）")
     source_documents: List[SourceDocument] = Field(default_factory=list, description="参考文档列表")
     history_id: Optional[int] = Field(default=None, description="本次匹配的历史记录ID，用于后续更新优化方案")
+    newly_unlocked: Optional[List[dict]] = Field(default=None, description="新解锁的成就列表（前端用于弹窗提示）")
 
 class AnalyzeResponse(BaseModel):
     answer: str = Field(..., description="分析结果（Markdown格式）")
     source_documents: List[SourceDocument] = Field(default_factory=list, description="参考文档列表")
     history_id: Optional[int] = Field(default=None, description="本次分析的历史记录ID")
+    newly_unlocked: Optional[List[dict]] = Field(default=None, description="新解锁的成就列表（前端用于弹窗提示）")
 
 class KnowledgeStatsResponse(BaseModel):
     total_documents: int = Field(..., description="总文档片段数")
@@ -50,6 +56,54 @@ class RebuildResponse(BaseModel):
 class ClearResponse(BaseModel):
     success: bool = Field(..., description="操作是否成功")
     message: str = Field(default="知识库已清空", description="操作消息")
+
+# ===== 知识库文档管理模型 =====
+class KBDocumentItem(BaseModel):
+    id: str = Field(..., description="文档唯一ID")
+    category: str = Field(..., description="分类: huawei / competitor")
+    title: str = Field(..., description="文档标题（文件名）")
+    filename: str = Field(..., description="文件名")
+    path: str = Field(..., description="相对路径")
+    industry: str = Field(default="", description="所属行业")
+    competitor: Optional[str] = Field(default=None, description="竞品名称")
+    size: int = Field(default=0, description="文件大小（字节）")
+    size_kb: float = Field(default=0, description="文件大小（KB）")
+
+class KBDocumentListResponse(BaseModel):
+    total: int = Field(..., description="文档总数")
+    documents: List[KBDocumentItem] = Field(default_factory=list, description="文档列表")
+
+class KBDocumentContentResponse(BaseModel):
+    id: str = Field(..., description="文档ID")
+    category: str = Field(..., description="分类")
+    filename: str = Field(..., description="文件名")
+    content: str = Field(..., description="文档内容")
+    size: int = Field(default=0, description="文件大小")
+
+class KBDocumentCreateRequest(BaseModel):
+    category: str = Field(..., description="分类: huawei / competitor")
+    industry: str = Field(..., description="行业名称或竞品名称")
+    title: str = Field(..., description="文档标题", min_length=1, max_length=200)
+    content: str = Field(..., description="文档内容", min_length=1)
+
+class KBDocumentCreateResponse(BaseModel):
+    id: str = Field(..., description="新文档ID")
+    path: str = Field(..., description="文件路径")
+    chunks: int = Field(default=0, description="索引片段数")
+
+class KBDocumentUpdateRequest(BaseModel):
+    content: str = Field(..., description="新文档内容", min_length=1)
+
+class KBDocumentUpdateResponse(BaseModel):
+    id: str = Field(..., description="文档ID")
+    chunks: int = Field(default=0, description="更新后的索引片段数")
+
+class KBDocumentDeleteResponse(BaseModel):
+    success: bool = Field(..., description="操作是否成功")
+    removed_vectors: int = Field(default=0, description="移除的向量数")
+
+class KBDocumentReindexResponse(BaseModel):
+    chunks: int = Field(default=0, description="重新索引的片段数")
 
 class HealthResponse(BaseModel):
     status: str = Field(..., description="服务状态")
@@ -179,3 +233,33 @@ class CompetitorHistoryListResponse(BaseModel):
     page: int = Field(default=1, description="当前页码")
     page_size: int = Field(default=20, description="每页条数")
     total_pages: int = Field(default=0, description="总页数")
+
+# ========== 成就勋章 ==========
+
+class AchievementItem(BaseModel):
+    id: str = Field(..., description="成就ID")
+    name: str = Field(..., description="成就名称（未解锁隐藏成就显示 ???）")
+    description: str = Field(..., description="成就描述（未解锁隐藏成就显示占位文本）")
+    rarity: str = Field(..., description="稀有度: copper/silver/gold/diamond/hidden")
+    rarity_name: str = Field(..., description="稀有度中文名")
+    icon: str = Field(..., description="成就图标")
+    unlocked: bool = Field(..., description="是否已解锁")
+    unlocked_at: Optional[str] = Field(default=None, description="解锁时间")
+    is_hidden: Optional[bool] = Field(default=False, description="是否为隐藏成就")
+
+class AchievementListResponse(BaseModel):
+    items: List[AchievementItem] = Field(default_factory=list, description="成就列表")
+    total: int = Field(..., description="成就总数")
+    unlocked: int = Field(default=0, description="已解锁数量")
+    hidden_total: int = Field(default=0, description="隐藏成就总数")
+    hidden_unlocked: int = Field(default=0, description="已解锁隐藏成就数")
+    percent: float = Field(default=0, description="完成百分比")
+
+class AchievementUnlockNotification(BaseModel):
+    id: str = Field(..., description="成就ID")
+    name: str = Field(..., description="成就名称")
+    description: str = Field(..., description="成就描述")
+    rarity: str = Field(..., description="稀有度")
+    rarity_name: str = Field(..., description="稀有度中文名")
+    icon: str = Field(..., description="成就图标")
+    is_hidden: bool = Field(default=False, description="是否为隐藏成就")
