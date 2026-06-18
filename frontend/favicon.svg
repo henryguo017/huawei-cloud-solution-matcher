@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <!-- 奶白色背景 -->
+    <linearGradient id="creamBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFAF0"/>
+      <stop offset="100%" stop-color="#FFF8E7"/>
+    </linearGradient>
+    <!-- 柔和发光 -->
+    <filter id="softGlow">
+      <feGaussianBlur stdDeviation="1" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 奶白色圆角背景 -->
+  <rect width="64" height="64" rx="14" fill="url(#creamBg)"/>
+
+  <!-- 眼睛轮廓（非对称杏仁形） -->
+  <path d="
+    M 12,32
+    C 12,18 22,12 32,14
+    C 42,16 52,22 52,32
+    C 52,42 42,50 32,48
+    C 22,46 12,44 12,32
+    Z
+  " fill="none" stroke="#A8E6CF" stroke-width="2.5" opacity="0.8" filter="url(#softGlow)"/>
+
+  <!-- 上眼睑（薄荷绿，加粗） -->
+  <path d="M 14,26 Q 32,14 50,24" stroke="#A8E6CF" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.95" filter="url(#softGlow)"/>
+
+  <!-- 下眼睑（蜜桃粉） -->
+  <path d="M 16,38 Q 32,48 48,40" stroke="#FFDAB9" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- 瞳孔位置：超粗∞形状（莫比乌斯环） -->
+  <g transform="translate(32,32)" filter="url(#softGlow)">
+    <!-- 用最粗的线条画∞ -->
+    <path d="
+      M -14,0
+      C -14,-10 -7,-14 0,-14
+      C 7,-14 14,-10 14,0
+      C 14,10 7,14 0,14
+      C -7,14 -14,10 -14,0
+    " fill="none" stroke="#A8E6CF" stroke-width="8" opacity="0.9" stroke-linecap="round"/>
+    
+    <!-- 中心：奶白色高光点 -->
+    <circle cx="0" cy="0" r="5" fill="#FFFAF0" opacity="0.95" filter="url(#softGlow)"/>
+    <circle cx="0" cy="0" r="2.5" fill="#FFFFFF" opacity="0.9"/>
+  </g>
+
+  <!-- 装饰：马卡龙色小粒子 -->
+  <circle cx="18" cy="18" r="1.5" fill="#A8E6CF" opacity="0.7" filter="url(#softGlow)"/>
+  <circle cx="46" cy="20" r="1.8" fill="#FFDAB9" opacity="0.7" filter="url(#softGlow)"/>
+  <circle cx="22" cy="46" r="1.2" fill="#FFB6C1" opacity="0.6"/>
+  <circle cx="44" cy="44" r="1.2" fill="#98D8C8" opacity="0.6"/>
+</svg>
