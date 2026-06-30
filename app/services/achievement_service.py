@@ -52,7 +52,7 @@ ACHIEVEMENTS = [
     {"id": "easter_april_fool",    "name": "愚人快乐",   "desc": "4 月 1 日当天使用系统",     "rarity": "hidden", "icon": "🤡", "is_hidden": True},
     {"id": "easter_new_year",       "name": "跨年达人",   "desc": "除夕或元旦当天使用系统",     "rarity": "hidden", "icon": "🎆", "is_hidden": True},
     {"id": "easter_520",            "name": "520告白",    "desc": "5 月 20 日当天使用系统",      "rarity": "hidden", "icon": "💕", "is_hidden": True},
-    {"id": "easter_late_night",     "name": "深夜修仙",   "desc": "凌晨 3:00–5:00 使用系统",   "rarity": "hidden", "icon": "🌙", "is_hidden": True},
+    {"id": "easter_late_night",     "name": "深夜修仙",   "desc": "凌晨 3:00–4:59 使用系统",   "rarity": "hidden", "icon": "🌙", "is_hidden": True},
     {"id": "easter_birthday",       "name": "生日快乐",   "desc": "生日当天使用系统",          "rarity": "hidden", "icon": "🎂", "is_hidden": True},
     {"id": "easter_friday_eve",     "name": "周五狂欢",   "desc": "周五 17:00 后使用系统",     "rarity": "hidden", "icon": "🍻", "is_hidden": True},
     {"id": "easter_mid_autumn",     "name": "月圆之夜",   "desc": "中秋节当天使用系统",         "rarity": "hidden", "icon": "🥮", "is_hidden": True},
@@ -301,8 +301,8 @@ class AchievementService:
                         # 520
                         if month == 5 and day == 20:
                             _unlock("easter_520")
-                        # 深夜修仙
-                        if 3 <= hour <= 5:
+                        # 深夜修仙（3点~4点，不含5点避免与早起鸟重叠）
+                        if 3 <= hour < 5:
                             _unlock("easter_late_night")
                         # 夜猫子（22~02）
                         if hour >= 22 or hour <= 2:

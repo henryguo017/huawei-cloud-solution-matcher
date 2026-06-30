@@ -115,11 +115,11 @@ async def match_solution(
         if user and user.get('id'):
             try:
                 usage_logger = get_usage_logger()
-                usage_logger.log_match(request.demand, user_id=user['id'], mode=request.mode)
+                # 使用原始 demand 记录（空输入不会被默认 prompt 覆盖）
+                usage_logger.log_match(original_demand or "", user_id=user['id'], mode=request.mode)
             except Exception as log_err:
                 logger.warning(f"记录使用日志失败: {log_err}")
 
-        if user and user.get('id'):
             try:
                 usage_logger = get_usage_logger()
                 industry_hint = ""
@@ -133,7 +133,7 @@ async def match_solution(
                 except:
                     pass
                 history_id = usage_logger.save_match_history(
-                    demand_text=request.demand,
+                    demand_text=original_demand or "",
                     solution=result["answer"],
                     industry=industry_hint,
                     sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", [])],
@@ -236,7 +236,7 @@ async def agent_match_solution(
         if user and user.get('id'):
             try:
                 usage_logger = get_usage_logger()
-                usage_logger.log_match(request.demand, user_id=user['id'], mode="agent")
+                usage_logger.log_match(original_demand or "", user_id=user['id'], mode="agent")
                 industry_hint = ""
                 for doc in source_docs:
                     ind = doc.metadata.get("industry", "")
@@ -244,7 +244,7 @@ async def agent_match_solution(
                         industry_hint = ind
                         break
                 history_id = usage_logger.save_match_history(
-                    demand_text=request.demand,
+                    demand_text=original_demand or "",
                     solution=answer,
                     industry=industry_hint,
                     sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in source_docs],
@@ -333,7 +333,7 @@ async def agent_match_stream(
                 if user and user.get('id'):
                     try:
                         usage_logger = get_usage_logger()
-                        usage_logger.log_match(request.demand, user_id=user['id'], mode="agent")
+                        usage_logger.log_match(original_demand or "", user_id=user['id'], mode="agent")
                         # 提取行业信息
                         industry_hint = ""
                         for tc in result.get("tool_calls", []):
@@ -350,7 +350,7 @@ async def agent_match_stream(
                             if industry_hint:
                                 break
                         history_id = usage_logger.save_match_history(
-                            demand_text=request.demand,
+                            demand_text=original_demand or "",
                             solution=result.get("answer", ""),
                             industry=industry_hint,
                             sources=[],
