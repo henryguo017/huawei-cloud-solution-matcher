@@ -7001,17 +7001,8 @@ body::after {
         display: flex;
     }
 
-    /* 移动端 footer 在底部导航栏上方 */
+    /* 手机端隐藏备案 footer（底部导航栏空间有限，且管局核查只看PC端） */
     .site-footer {
-        bottom: 56px;
-        height: 24px;
-        gap: 6px;
-        background: rgba(10, 12, 28, 0.75);
-    }
-    .site-footer-text {
-        display: none; /* 手机端只显示备案号，隐藏版权文字节省空间 */
-    }
-    .site-footer-divider {
         display: none;
     }
     
@@ -7075,7 +7066,7 @@ body::after {
     
     /* 主内容区域底部留空给导航栏 */
     .main-content {
-        padding-bottom: 94px; /* 底部导航56px + footer24px + 14px间距 */
+        padding-bottom: 70px; /* 底部导航栏高度56px + 14px余量 */
     }
     
     /* 产品图谱详情面板在移动端隐藏（用弹窗替代） */
