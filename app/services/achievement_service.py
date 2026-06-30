@@ -50,10 +50,10 @@ ACHIEVEMENTS = [
 
     # ===== 谜 · 隐藏 (18) =====
     {"id": "easter_april_fool",    "name": "愚人快乐",   "desc": "4 月 1 日当天使用系统",     "rarity": "hidden", "icon": "🤡", "is_hidden": True},
-    {"id": "easter_new_year",       "name": "跨年达人",   "desc": "除夕或元旦当天使用系统",     "rarity": "hidden", "icon": "🎆", "is_hidden": True},
+    {"id": "easter_new_year",       "name": "跨年达人",   "desc": "除夕（12/31）或元旦（1/1）当天使用系统", "rarity": "hidden", "icon": "🎆", "is_hidden": True},
     {"id": "easter_520",            "name": "520告白",    "desc": "5 月 20 日当天使用系统",      "rarity": "hidden", "icon": "💕", "is_hidden": True},
     {"id": "easter_late_night",     "name": "深夜修仙",   "desc": "凌晨 3:00–4:59 使用系统",   "rarity": "hidden", "icon": "🌙", "is_hidden": True},
-    {"id": "easter_birthday",       "name": "生日快乐",   "desc": "生日当天使用系统",          "rarity": "hidden", "icon": "🎂", "is_hidden": True},
+    {"id": "easter_birthday",       "name": "生日快乐",   "desc": "系统周年日（6月6日）当天使用系统", "rarity": "hidden", "icon": "🎂", "is_hidden": True},
     {"id": "easter_friday_eve",     "name": "周五狂欢",   "desc": "周五 17:00 后使用系统",     "rarity": "hidden", "icon": "🍻", "is_hidden": True},
     {"id": "easter_mid_autumn",     "name": "月圆之夜",   "desc": "中秋节当天使用系统",         "rarity": "hidden", "icon": "🥮", "is_hidden": True},
     {"id": "easter_search_harmony", "name": "鸿蒙探索者", "desc": "搜索内容包含「鸿蒙」",       "rarity": "hidden", "icon": "🔷", "is_hidden": True},
@@ -64,8 +64,8 @@ ACHIEVEMENTS = [
     {"id": "easter_retry_3",        "name": "锲而不舍",   "desc": "同一需求匹配 3 次",         "rarity": "hidden", "icon": "🔁", "is_hidden": True},
     {"id": "easter_first_agent",     "name": "Agent 觉醒", "desc": "首次使用 Agent 模式",       "rarity": "hidden", "icon": "✨", "is_hidden": True},
     {"id": "easter_mode_master",     "name": "模式大师",   "desc": "同一天用完所有 3 种匹配模式","rarity": "hidden", "icon": "🎮", "is_hidden": True},
-    {"id": "easter_konami",         "name": "秘技大师",   "desc": "触发 Konami Code 秘技",     "rarity": "hidden", "icon": "🕹️", "is_hidden": True},
-    {"id": "easter_404_wait",        "name": "40.4 秒",    "desc": "在 404 页面停留 40.4 秒",   "rarity": "hidden", "icon": "🌀", "is_hidden": True},
+    {"id": "easter_konami",         "name": "秘技大师",   "desc": "匹配时输入「上上下下左右左右BA」", "rarity": "hidden", "icon": "🕹️", "is_hidden": True},
+    {"id": "easter_404_wait",        "name": "40.4 秒",    "desc": "匹配时输入「404」",          "rarity": "hidden", "icon": "🌀", "is_hidden": True},
     {"id": "easter_egg_hunter",      "name": "彩蛋收藏家", "desc": "累计解锁 10 个隐藏成就",    "rarity": "hidden", "icon": "🥚", "is_hidden": True},
 ]
 
@@ -295,12 +295,15 @@ class AchievementService:
                         # 愚人节
                         if month == 4 and day == 1:
                             _unlock("easter_april_fool")
-                        # 跨年
+                        # 跨年（元旦或除夕）
                         if (month == 12 and day == 31) or (month == 1 and day == 1):
                             _unlock("easter_new_year")
                         # 520
                         if month == 5 and day == 20:
                             _unlock("easter_520")
+                        # 系统生日 6/6
+                        if month == 6 and day == 6:
+                            _unlock("easter_birthday")
                         # 深夜修仙（3点~4点，不含5点避免与早起鸟重叠）
                         if 3 <= hour < 5:
                             _unlock("easter_late_night")
@@ -469,6 +472,8 @@ class AchievementService:
         if "hello world" in text_lower: _unlock("easter_hello_world")
         if "郭鸿宇" in text_lower:     _unlock("easter_dev_name")
         if "隐藏成就" in text_lower:    _unlock("easter_hidden_word")
+        if "上上下下左右左右ba" in text_lower: _unlock("easter_konami")
+        if "404" in text_lower:         _unlock("easter_404_wait")
 
         # 隐藏：同一天用完 3 种模式
         self._check_mode_master(user_id, _unlock)
@@ -541,14 +546,14 @@ class AchievementService:
         self._check_time_easter(user_id, _unlock)
         return newly
 
-    def check_after_kb_add(self, user_id: int) -> List[Dict]:
+    def check_after_kb_add(self, user_id: int, total_docs: int) -> List[Dict]:
         """知识库新增文档后调用"""
         self._ensure_backfill(user_id)
         newly = []
         _unlock = lambda aid: self._do_unlock(user_id, aid, newly)
         _unlock("add_kb_doc")
-        # 动态检查：知识库文档总数
-        # （此处在服务层无法感知总文档数，由调用方传入或在 routes 层检查）
+        if total_docs >= 10:
+            _unlock("kb_docs_10")
         return newly
 
     def check_kb_doc_count(self, user_id: int, total_docs: int) -> List[Dict]:
@@ -559,13 +564,31 @@ class AchievementService:
         if total_docs >= 10: _unlock("kb_docs_10")
         return newly
 
-    def check_after_reindex(self, user_id: int, count: int) -> List[Dict]:
-        """重建索引后调用（count 为累计次数）"""
+    def check_after_reindex(self, user_id: int) -> List[Dict]:
+        """重建索引后调用（内部自动累计次数）"""
         self._ensure_backfill(user_id)
         newly = []
         _unlock = lambda aid: self._do_unlock(user_id, aid, newly)
-        if count >= 20: _unlock("reindex_20")
+        # 累计重索引次数
+        count = self._inc_meta_counter(user_id, "reindex_count")
+        if count >= 20:
+            _unlock("reindex_20")
         return newly
+
+    def _inc_meta_counter(self, user_id: int, key: str) -> int:
+        """自增 meta 计数器并返回新值"""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT value FROM achievement_meta WHERE user_id = ? AND key = ?",
+                (user_id, key)
+            ).fetchone()
+            new_val = (int(row["value"]) + 1) if row else 1
+            conn.execute("""
+                INSERT OR REPLACE INTO achievement_meta (user_id, key, value, updated_at)
+                VALUES (?, ?, ?, datetime('now', 'localtime'))
+            """, (user_id, key, str(new_val)))
+            conn.commit()
+            return new_val
 
     def check_konami(self, user_id: int) -> List[Dict]:
         """前端触发 Konami Code 时调用"""
@@ -806,13 +829,17 @@ class AchievementService:
         if month == 4 and day == 1:
             _unlock("easter_april_fool")
 
-        # 元旦 1/1 或除夕（简化：只看元旦）
-        if month == 1 and day == 1:
+        # 元旦 1/1 或除夕 12/31
+        if (month == 1 and day == 1) or (month == 12 and day == 31):
             _unlock("easter_new_year")
 
         # 520
         if month == 5 and day == 20:
             _unlock("easter_520")
+
+        # 系统生日 6/6
+        if month == 6 and day == 6:
+            _unlock("easter_birthday")
 
         # 凌晨 3-5 点（不含5点，与早起鸟区分）
         if 3 <= hour < 5:

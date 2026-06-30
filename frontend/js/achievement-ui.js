@@ -20,7 +20,7 @@ const AchievementUI = {
 
     _bindPageViewAchievements() {
         // 使用 MutationObserver 监听页面切换
-        const pages = ['knowledge', 'dashboard'];
+        const pages = ['knowledge', 'dashboard', 'share'];
         pages.forEach(pageName => {
             const pageEl = document.getElementById(`page-${pageName}`);
             if (!pageEl) return;

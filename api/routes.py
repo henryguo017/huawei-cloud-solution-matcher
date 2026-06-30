@@ -603,11 +603,29 @@ async def get_knowledge_document(
 @router.post("/knowledge/documents", response_model=KBDocumentCreateResponse, tags=["知识库管理"])
 async def create_knowledge_document(
     req: KBDocumentCreateRequest,
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+    kb_service: KnowledgeBaseService = Depends(get_knowledge_base),
+    user: Optional[dict] = Depends(get_current_user_optional),
 ):
     """创建新文档"""
     try:
         result = kb_service.create_document(req.category, req.industry, req.title, req.content)
+        # 成就检测
+        if user and user.get('id'):
+            try:
+                achievement_svc = get_achievement_service_dep()
+                # 获取知识库总文档数
+                total_docs = 0
+                try:
+                    stats = kb_service.get_stats()
+                    industry_counts = stats.get("industry_counts", {}) if isinstance(stats, dict) else {}
+                    total_docs = sum(industry_counts.values()) if industry_counts else 0
+                except:
+                    pass
+                newly = achievement_svc.check_after_kb_add(user['id'], total_docs)
+                if newly:
+                    logger.info(f"[Achievement] 知识库新增文档成就解锁: {[a['name'] for a in newly]}")
+            except Exception as ach_err:
+                logger.warning(f"成就检测失败: {ach_err}")
         return KBDocumentCreateResponse(**result)
     except FileExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
@@ -652,11 +670,21 @@ async def delete_knowledge_document(
 @router.post("/knowledge/documents/{doc_id}/reindex", response_model=KBDocumentReindexResponse, tags=["知识库管理"])
 async def reindex_knowledge_document(
     doc_id: str,
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+    kb_service: KnowledgeBaseService = Depends(get_knowledge_base),
+    user: Optional[dict] = Depends(get_current_user_optional),
 ):
     """重新索引单个文档"""
     try:
         result = kb_service.reindex_document(doc_id)
+        # 成就检测
+        if user and user.get('id'):
+            try:
+                achievement_svc = get_achievement_service_dep()
+                newly = achievement_svc.check_after_reindex(user['id'])
+                if newly:
+                    logger.info(f"[Achievement] 重索引成就解锁: {[a['name'] for a in newly]}")
+            except Exception as ach_err:
+                logger.warning(f"成就检测失败: {ach_err}")
         return KBDocumentReindexResponse(**result)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
