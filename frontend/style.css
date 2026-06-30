@@ -6957,10 +6957,62 @@ body::after {
     flex-shrink: 0;
 }
 
+/* ===== ICP 备案 Footer ===== */
+.site-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(10, 12, 28, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    z-index: 999;
+}
+.site-footer-text {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
+    letter-spacing: 0.2px;
+}
+.site-footer-divider {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.2);
+}
+.site-footer-icp {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    text-decoration: none;
+    letter-spacing: 0.3px;
+    transition: color 0.2s ease;
+}
+.site-footer-icp:hover {
+    color: rgba(255, 255, 255, 0.75);
+    text-decoration: underline;
+}
+
 /* 移动端适配 */
 @media (max-width: 767px) {
     .mobile-bottom-nav {
         display: flex;
+    }
+
+    /* 移动端 footer 在底部导航栏上方 */
+    .site-footer {
+        bottom: 56px;
+        height: 24px;
+        gap: 6px;
+        background: rgba(10, 12, 28, 0.75);
+    }
+    .site-footer-text {
+        display: none; /* 手机端只显示备案号，隐藏版权文字节省空间 */
+    }
+    .site-footer-divider {
+        display: none;
     }
     
     /* 知识库统计卡片改为横向 */
@@ -7023,7 +7075,7 @@ body::after {
     
     /* 主内容区域底部留空给导航栏 */
     .main-content {
-        padding-bottom: 70px;
+        padding-bottom: 94px; /* 底部导航56px + footer24px + 14px间距 */
     }
     
     /* 产品图谱详情面板在移动端隐藏（用弹窗替代） */
