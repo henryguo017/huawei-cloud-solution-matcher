@@ -404,7 +404,7 @@ class UsageLoggerService:
             logger.error(f"保存匹配历史记录失败: {e}")
             return None
 
-    def update_match_history_solution(self, record_id: int, solution: str) -> bool:
+    def update_match_history_solution(self, record_id: int, solution: str, user_id: Optional[int] = None) -> bool:
         """
         更新指定历史记录的方案内容（用于追问优化后保存最终版）
         Returns:
@@ -412,17 +412,23 @@ class UsageLoggerService:
         """
         try:
             with self._get_connection() as conn:
-                conn.execute(
-                    "UPDATE match_history SET solution = ? WHERE id = ?",
-                    (solution, record_id)
-                )
+                if user_id is not None:
+                    conn.execute(
+                        "UPDATE match_history SET solution = ? WHERE id = ? AND user_id = ?",
+                        (solution, record_id, user_id)
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE match_history SET solution = ? WHERE id = ?",
+                        (solution, record_id)
+                    )
                 conn.commit()
                 return True
         except Exception as e:
             logger.error(f"更新匹配历史方案失败(id={record_id}): {e}")
             return False
 
-    def update_competitor_history_solution(self, record_id: int, analysis: str) -> bool:
+    def update_competitor_history_solution(self, record_id: int, analysis: str, user_id: Optional[int] = None) -> bool:
         """
         更新指定竞品分析历史记录的分析内容（用于追问优化后保存最终版）
         Returns:
@@ -430,10 +436,16 @@ class UsageLoggerService:
         """
         try:
             with self._get_connection() as conn:
-                conn.execute(
-                    "UPDATE match_history SET solution = ? WHERE id = ? AND type = 'analyze'",
-                    (analysis, record_id)
-                )
+                if user_id is not None:
+                    conn.execute(
+                        "UPDATE match_history SET solution = ? WHERE id = ? AND type = 'analyze' AND user_id = ?",
+                        (analysis, record_id, user_id)
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE match_history SET solution = ? WHERE id = ? AND type = 'analyze'",
+                        (analysis, record_id)
+                    )
                 conn.commit()
                 return True
         except Exception as e:
@@ -534,14 +546,20 @@ class UsageLoggerService:
             logger.error(f"获取匹配历史列表失败: {e}")
             return []
 
-    def get_match_history_by_id(self, history_id: int) -> Optional[Dict[str, Any]]:
+    def get_match_history_by_id(self, history_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """根据 ID 获取单条匹配历史记录（含完整方案内容）"""
         try:
             with self._get_connection() as conn:
-                cursor = conn.execute(
-                    "SELECT * FROM match_history WHERE id = ? AND type = 'match'",
-                    (history_id,)
-                )
+                if user_id is not None:
+                    cursor = conn.execute(
+                        "SELECT * FROM match_history WHERE id = ? AND type = 'match' AND user_id = ?",
+                        (history_id, user_id)
+                    )
+                else:
+                    cursor = conn.execute(
+                        "SELECT * FROM match_history WHERE id = ? AND type = 'match'",
+                        (history_id,)
+                    )
                 row = cursor.fetchone()
                 if row is None:
                     return None
@@ -631,14 +649,20 @@ class UsageLoggerService:
             logger.error(f"获取竞品分析历史列表失败: {e}")
             return []
 
-    def get_competitor_history_by_id(self, history_id: int) -> Optional[Dict[str, Any]]:
+    def get_competitor_history_by_id(self, history_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """根据 ID 获取单条竞品分析历史记录（含完整分析报告）"""
         try:
             with self._get_connection() as conn:
-                cursor = conn.execute(
-                    "SELECT * FROM match_history WHERE id = ? AND type = 'analyze'",
-                    (history_id,)
-                )
+                if user_id is not None:
+                    cursor = conn.execute(
+                        "SELECT * FROM match_history WHERE id = ? AND type = 'analyze' AND user_id = ?",
+                        (history_id, user_id)
+                    )
+                else:
+                    cursor = conn.execute(
+                        "SELECT * FROM match_history WHERE id = ? AND type = 'analyze'",
+                        (history_id,)
+                    )
                 row = cursor.fetchone()
                 if row is None:
                     return None

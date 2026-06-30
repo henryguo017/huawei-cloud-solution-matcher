@@ -283,11 +283,11 @@ class AchievementService:
             with sqlite3.connect(usage_db) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
-                    "SELECT timestamp FROM usage_logs WHERE user_id = ?",
+                    "SELECT created_at FROM usage_logs WHERE user_id = ?",
                     (user_id,)
                 ).fetchall()
                 for row in rows:
-                    ts = row["timestamp"]
+                    ts = row["created_at"]
                     try:
                         dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S") if isinstance(ts, str) else datetime.fromtimestamp(ts)
                         month, day = dt.month, dt.day
@@ -301,6 +301,9 @@ class AchievementService:
                         # 520
                         if month == 5 and day == 20:
                             _unlock("easter_520")
+                        # 中秋（9/29）
+                        if month == 9 and day == 29:
+                            _unlock("easter_mid_autumn")
                         # 系统生日 6/6
                         if month == 6 and day == 6:
                             _unlock("easter_birthday")
@@ -557,7 +560,7 @@ class AchievementService:
         return newly
 
     def check_kb_doc_count(self, user_id: int, total_docs: int) -> List[Dict]:
-        """外部传入知识库文档总数，检查相关成就"""
+        """[已废弃] kb_docs_10 已合并到 check_after_kb_add 中统一检测"""
         self._ensure_backfill(user_id)
         newly = []
         _unlock = lambda aid: self._do_unlock(user_id, aid, newly)
@@ -591,7 +594,7 @@ class AchievementService:
             return new_val
 
     def check_konami(self, user_id: int) -> List[Dict]:
-        """前端触发 Konami Code 时调用"""
+        """[已废弃] easter_konami 已改为匹配时输入「上上下下左右左右BA」触发（见 check_after_match）"""
         self._ensure_backfill(user_id)
         newly = []
         _unlock = lambda aid: self._do_unlock(user_id, aid, newly)
@@ -599,7 +602,7 @@ class AchievementService:
         return newly
 
     def check_404_wait(self, user_id: int) -> List[Dict]:
-        """前端在 404 页面停留 40.4 秒后调用"""
+        """[已废弃] easter_404_wait 已改为匹配时输入「404」触发（见 check_after_match）"""
         self._ensure_backfill(user_id)
         newly = []
         _unlock = lambda aid: self._do_unlock(user_id, aid, newly)
@@ -680,7 +683,7 @@ class AchievementService:
             with sqlite3.connect(usage_db) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
-                    "SELECT DISTINCT industry FROM usage_logs WHERE user_id = ? AND industry IS NOT NULL AND industry != ''",
+                    "SELECT DISTINCT industry FROM match_history WHERE user_id = ? AND industry IS NOT NULL AND industry != ''",
                     (user_id,)
                 ).fetchall()
                 return {row["industry"] for row in rows if row["industry"]}
@@ -695,24 +698,28 @@ class AchievementService:
             with sqlite3.connect(usage_db) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
-                    "SELECT DISTINCT detail FROM usage_logs WHERE user_id = ? AND action_type = 'analyze' AND detail IS NOT NULL",
+                    "SELECT DISTINCT competitor FROM match_history WHERE user_id = ? AND type = 'analyze' AND competitor IS NOT NULL AND competitor != ''",
                     (user_id,)
                 ).fetchall()
-                return {row["detail"] for row in rows if row["detail"]}
+                return {row["competitor"] for row in rows if row["competitor"]}
         except Exception:
             return set()
 
     def _count_similar_demand(self, user_id: int, demand_text: str) -> int:
-        """统计相似需求匹配次数（简化：同一用户相同需求文本）"""
+        """统计相似需求匹配次数（同一用户需求文本相似）"""
         usage_db = os.path.join(os.path.dirname(self.db_path), "usage_logs.db")
         if not os.path.exists(usage_db):
             return 0
         try:
             with sqlite3.connect(usage_db) as conn:
                 conn.row_factory = sqlite3.Row
+                # match_history 表存储完整 demand_text，取前50字符做模糊匹配
+                keyword = demand_text[:50].strip()
+                if not keyword:
+                    return 0
                 row = conn.execute(
-                    "SELECT COUNT(*) as cnt FROM usage_logs WHERE user_id = ? AND action_type = 'match' AND detail = ?",
-                    (user_id, demand_text[:200])
+                    "SELECT COUNT(*) as cnt FROM match_history WHERE user_id = ? AND type = 'match' AND demand_text LIKE ?",
+                    (user_id, f"%{keyword}%")
                 ).fetchone()
                 return row["cnt"] if row else 0
         except Exception:
@@ -725,6 +732,7 @@ class AchievementService:
             return
         try:
             with sqlite3.connect(usage_db) as conn:
+                conn.row_factory = sqlite3.Row
                 # 检查 usage_logs 是否有 mode 字段
                 cursor = conn.execute("PRAGMA table_info(usage_logs)")
                 columns = {row[1] for row in cursor.fetchall()}
@@ -748,6 +756,7 @@ class AchievementService:
             return
         try:
             with sqlite3.connect(usage_db) as conn:
+                conn.row_factory = sqlite3.Row
                 cursor = conn.execute("PRAGMA table_info(usage_logs)")
                 columns = {row[1] for row in cursor.fetchall()}
                 if "mode" not in columns:
@@ -769,6 +778,7 @@ class AchievementService:
             return
         try:
             with sqlite3.connect(usage_db) as conn:
+                conn.row_factory = sqlite3.Row
                 rows = conn.execute(
                     "SELECT DISTINCT DATE(created_at) as d FROM usage_logs WHERE user_id = ? ORDER BY d DESC",
                     (user_id,)

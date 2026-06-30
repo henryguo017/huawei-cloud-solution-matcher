@@ -397,7 +397,10 @@ async def agent_match_stream(
                 logger.error(f"[Agent SSE] 执行失败: {e}")
                 await queue.put({"type": "error", "message": str(e)})
             finally:
-                await queue.put(None)  # 结束信号
+                try:
+                    await queue.put(None)  # 结束信号
+                except Exception:
+                    pass
 
         task = asyncio.ensure_future(run_agent())
 
@@ -864,7 +867,7 @@ async def get_match_history_detail(
     包含完整的需求描述、方案内容和参考文档
     """
     try:
-        item = usage_logger.get_match_history_by_id(history_id)
+        item = usage_logger.get_match_history_by_id(history_id, user_id=current_user.get("id"))
         if item is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -899,8 +902,8 @@ async def compare_match_history(
     同时返回方案A和方案B的完整内容，前端做差异化展示
     """
     try:
-        item_a = usage_logger.get_match_history_by_id(request.id_a)
-        item_b = usage_logger.get_match_history_by_id(request.id_b)
+        item_a = usage_logger.get_match_history_by_id(request.id_a, user_id=current_user.get("id"))
+        item_b = usage_logger.get_match_history_by_id(request.id_b, user_id=current_user.get("id"))
 
         if item_a is None:
             raise HTTPException(
@@ -948,8 +951,8 @@ async def compare_ai_summary(
 ):
     """为两条历史记录生成AI智能对比总结"""
     try:
-        item_a = usage_logger.get_match_history_by_id(request.id_a)
-        item_b = usage_logger.get_match_history_by_id(request.id_b)
+        item_a = usage_logger.get_match_history_by_id(request.id_a, user_id=current_user.get("id"))
+        item_b = usage_logger.get_match_history_by_id(request.id_b, user_id=current_user.get("id"))
 
         if item_a is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"历史记录 {request.id_a} 不存在")
@@ -998,7 +1001,7 @@ async def update_history_solution(
 ):
     """更新历史记录中的方案内容（用于追问优化后保存最终版）"""
     try:
-        success = usage_logger.update_match_history_solution(history_id, request.solution)
+        success = usage_logger.update_match_history_solution(history_id, request.solution, user_id=current_user.get("id"))
         if not success:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"历史记录 {history_id} 不存在或更新失败")
         return UpdateSolutionResponse(success=True, message="方案已更新")
@@ -1021,7 +1024,7 @@ async def update_competitor_history_solution(
 ):
     """更新竞品分析历史记录中的分析内容（用于追问优化后保存最终版）"""
     try:
-        success = usage_logger.update_competitor_history_solution(history_id, request.solution)
+        success = usage_logger.update_competitor_history_solution(history_id, request.solution, user_id=current_user.get("id"))
         if not success:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"竞品分析历史记录 {history_id} 不存在或更新失败")
         return UpdateSolutionResponse(success=True, message="分析报告已更新")
@@ -1104,7 +1107,7 @@ async def get_competitor_history_detail(
     包含完整的分析报告和参考文档
     """
     try:
-        item = usage_logger.get_competitor_history_by_id(history_id)
+        item = usage_logger.get_competitor_history_by_id(history_id, user_id=current_user.get("id"))
         if item is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
