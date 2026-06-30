@@ -4,7 +4,9 @@ from datetime import datetime
 from app.utils.auth_utils import hash_password
 
 def get_db_connection():
-    db_path = "./data/users.db"
+    # 使用绝对路径，防止工作目录切换导致加载错误的数据库
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    db_path = os.path.join(base_dir, "data", "users.db")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     
     conn = sqlite3.connect(db_path)

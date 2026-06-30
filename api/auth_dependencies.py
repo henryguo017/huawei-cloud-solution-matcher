@@ -20,7 +20,7 @@ async def get_current_user(
         )
     
     user_id = payload.get("user_id")
-    token_version = payload.get("token_version", 0)
+    token_version = payload.get("token_version", 1)
     user = AuthService.get_user_by_id(user_id)
     
     if not user:
@@ -61,7 +61,7 @@ async def get_current_user_optional(
             return None
         
         user_id = payload.get("user_id")
-        token_version = payload.get("token_version", 0)
+        token_version = payload.get("token_version", 1)
         user = AuthService.get_user_by_id(user_id)
         
         if not user or user['status'] != 'active':
