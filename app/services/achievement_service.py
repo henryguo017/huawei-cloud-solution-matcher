@@ -65,7 +65,7 @@ ACHIEVEMENTS = [
     {"id": "easter_first_agent",     "name": "Agent 觉醒", "desc": "首次使用 Agent 模式",       "rarity": "hidden", "icon": "✨", "is_hidden": True},
     {"id": "easter_mode_master",     "name": "模式大师",   "desc": "同一天用完所有 3 种匹配模式","rarity": "hidden", "icon": "🎮", "is_hidden": True},
     {"id": "easter_konami",         "name": "秘技大师",   "desc": "匹配时输入「上上下下左右左右BA」", "rarity": "hidden", "icon": "🕹️", "is_hidden": True},
-    {"id": "easter_404_wait",        "name": "40.4 秒",    "desc": "匹配时输入「404」",          "rarity": "hidden", "icon": "🌀", "is_hidden": True},
+    {"id": "easter_404_wait",        "name": "页面消失了", "desc": "匹配时输入「404」",          "rarity": "hidden", "icon": "🌀", "is_hidden": True},
     {"id": "easter_egg_hunter",      "name": "彩蛋收藏家", "desc": "累计解锁 10 个隐藏成就",    "rarity": "hidden", "icon": "🥚", "is_hidden": True},
 ]
 
