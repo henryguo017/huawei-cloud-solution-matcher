@@ -89,6 +89,10 @@ const AuthManager = {
             this._updateUI();
             // 清空上一账号残留的页面数据
             this._resetView();
+            // 处理登录触发的成就
+            if (data.newly_unlocked && data.newly_unlocked.length > 0 && window.AchievementUI && AchievementUI.showUnlockToast) {
+                setTimeout(() => AchievementUI.showUnlockToast(data.newly_unlocked), 800);
+            }
             return true;
         } catch (e) {
             this._showError('login', '网络错误，请稍后重试');

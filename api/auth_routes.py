@@ -8,6 +8,7 @@ from app.models.user_models import (
 from app.services.auth_service import AuthService
 from app.utils.captcha_utils import generate_captcha
 from api.auth_dependencies import get_current_user, get_current_user_optional
+from api.dependencies import get_achievement_service_dep
 from typing import Optional
 
 router = APIRouter(prefix="/auth", tags=["认证"])
@@ -34,11 +35,20 @@ async def login(login_data: UserLogin):
             detail=result["message"]
         )
     
+    # 登录成功，触发成就检查
+    newly_unlocked = []
+    try:
+        achievement_svc = get_achievement_service_dep()
+        newly_unlocked = achievement_svc.check_after_login(result["user"]["id"])
+    except Exception:
+        pass  # 成就检查失败不影响登录
+    
     return {
         "access_token": result["access_token"],
         "token_type": result["token_type"],
         "expires_in": result["expires_in"],
-        "user": result["user"]
+        "user": result["user"],
+        "newly_unlocked": newly_unlocked
     }
 
 @router.get("/captcha")
