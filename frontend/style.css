@@ -824,6 +824,24 @@ body::after {
     padding: 8px 0;
 }
 
+@media (max-width: 767px) {
+    .mode-toggle-bar {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    .mode-label {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 4px;
+    }
+    .mode-hint {
+        width: 100%;
+        text-align: center;
+        white-space: normal !important;
+        font-size: 11px;
+    }
+}
+
 .mode-label {
     font-size: var(--font-size-sm);
     color: rgba(255, 255, 255, 0.6);
