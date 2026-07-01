@@ -41,7 +41,7 @@
 | **用户系统** | 注册/登录/个人中心，JWT 认证 + 图形验证码 + bcrypt 加密 |
 | **报告导出** | 支持 Word (docx) 和 PDF 格式导出方案报告和竞品分析报告 |
 | **数据仪表盘** | 行业覆盖统计、7日匹配趋势、竞品分析频次、系统运行时间 |
-| **知识库管理** | 在线新增/编辑/删除文档，自动向量化建索引，覆盖 17 行业 |
+| **知识库管理** | 在线新增/编辑/删除文档，自动向量化建索引，覆盖 17 行业，每个用户独立知识库 |
 
 ### 🎨 交互体验
 
@@ -325,15 +325,15 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8800 --reload
 
 ### 知识库管理 `/api`
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/knowledge/documents` | 知识库文档列表 |
-| POST | `/api/knowledge/documents` | 新增文档 |
-| PUT | `/api/knowledge/documents/{id}` | 编辑文档 |
-| DELETE | `/api/knowledge/documents/{id}` | 删除文档 |
-| GET | `/api/knowledge/stats` | 知识库统计信息 |
-| POST | `/api/knowledge/rebuild` | 重建知识库（重新向量化） |
-| POST | `/api/knowledge/clear` | 清空知识库 |
+| 方法 | 路径 | 认证 | 说明 |
+|------|------|------|------|
+| GET | `/api/knowledge/documents` | Optional | 知识库文档列表（未登录显示全局KB） |
+| POST | `/api/knowledge/documents` | Required | 新增文档 |
+| PUT | `/api/knowledge/documents/{id}` | Required | 编辑文档 |
+| DELETE | `/api/knowledge/documents/{id}` | Required | 删除文档 |
+| GET | `/api/knowledge/stats` | Optional | 知识库统计信息 |
+| POST | `/api/knowledge/rebuild` | Required | 重建知识库（重新向量化） |
+| POST | `/api/knowledge/clear` | Required | 清空知识库 |
 
 ---
 
@@ -368,7 +368,14 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8800 --reload
 
 - **华为云方案**：50 份（基于华为云官网真实页面内容）
 - **竞品方案**：120 份（12 家竞品 × 10 行业）
-- **总计**：170 份文档，向量库 276 个文档片段
+- **总计**：170 份文档，向量库 277 个文档片段
+
+### 用户独立知识库（v1.3.0 新增）
+
+- 注册时自动从默认模板库复制完整知识库到用户专属目录 `data/user_docs/{user_id}/`
+- 所有 CRUD 操作（增/删/改/重索引）完全隔离，用户之间互不影响
+- 方案匹配、竞品分析、Agent 模式均使用用户自己的知识库
+- 未登录用户可浏览全局模板知识库（只读），登录后拥有独立可编辑知识库
 
 ### 支持竞品（12 家）
 
@@ -444,6 +451,24 @@ python -m uvicorn api.main:app --host 127.0.0.1 --port 8800 --reload
 ---
 
 ## 更新日志
+
+### v1.3.0 (2026-07-01)
+
+**新增：**
+- 👤 用户独立知识库系统（注册时自动复制默认模板，各自独立增删改）
+- 🔒 知识库权限前端 UI 控制（未登录隐藏编辑/删除/新增/重建/清空按钮）
+- 📊 知识库隔离审计测试脚本（52 项端到端测试）
+
+**修复：**
+- 修复登录 Bug（3 个问题：数据库路径/token_version/timezone）
+- 修复未登录用户可见知识库写操作 UI 按钮
+- 修复登录后页面需手动刷新才显示操作按钮
+- 修复 ChromaDB 遥测日志噪音（设置日志级别 CRITICAL 静默）
+- 修复 `GET /documents` 未登录返回 403（改为 Optional Auth）
+
+**优化：**
+- 登录成功改为 `location.reload()` 整页刷新，彻底解决 UI 状态不一致
+- 文档数从 276 增至 277 个向量片段
 
 ### v1.2.0 (2026-06-30)
 

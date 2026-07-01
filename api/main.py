@@ -2,6 +2,9 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# 关闭 ChromaDB 遥测（国内网络无法上报，避免日志噪音）
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +25,8 @@ logging.basicConfig(
         logging.FileHandler('api.log', encoding='utf-8')
     ]
 )
+# 静默 ChromaDB 遥测日志（国内网络无法上报）
+logging.getLogger('chromadb.telemetry').setLevel(logging.CRITICAL)
 
 logger = logging.getLogger(__name__)
 
