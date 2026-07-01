@@ -29,9 +29,9 @@ def get_user_knowledge_base(user_id: int) -> KnowledgeBaseService:
     if user_id <= 0:
         return get_knowledge_base()
     if user_id not in _user_kb_cache:
-        # 检查用户 KB 是否存在（通过向量库目录判断）
-        user_vdb = _os.path.join(USER_DOCS_BASE_DIR, str(user_id), 'vector_db')
-        if not _os.path.exists(user_vdb) or not _os.listdir(user_vdb):
+        # 检查用户 KB 是否已初始化（整个用户目录只在 copy_from_default 时创建）
+        user_data_dir = _os.path.join(USER_DOCS_BASE_DIR, str(user_id))
+        if not _os.path.exists(user_data_dir):
             import logging
             logger = logging.getLogger(__name__)
             logger.info(f"[KB] 用户 {user_id} 知识库不存在，从默认KB复制...")
