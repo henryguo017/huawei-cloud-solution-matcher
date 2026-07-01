@@ -6,8 +6,8 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260701f">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260701f">
+    <link rel="stylesheet" href="style.css?v=20260702a">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260702a">
 </head>
 <body>
     <canvas id="particle-canvas"></canvas>
@@ -1434,6 +1434,9 @@
                     <span class="btn-text">登录</span>
                     <span class="btn-spinner" style="display: none;">⏳</span>
                 </button>
+                <div class="forgot-password-link" style="text-align: center; margin-top: 12px;">
+                    <a href="javascript:void(0);" id="forgot-password-link" style="color: #667eea; text-decoration: none; font-size: 14px;">忘记密码？</a>
+                </div>
             </form>
 
             <!-- 注册表单 -->
@@ -1443,8 +1446,8 @@
                     <input type="text" class="form-input" id="register-username" placeholder="3-50位字符" required minlength="3" maxlength="50" autocomplete="username">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">邮箱 <span class="form-label-hint">(选填)</span></label>
-                    <input type="email" class="form-input" id="register-email" placeholder="请输入邮箱" autocomplete="email">
+                    <label class="form-label">邮箱 <span class="form-label-hint">(必填)</span></label>
+                    <input type="email" class="form-input" id="register-email" placeholder="请输入邮箱（必填）" required autocomplete="email">
                 </div>
                 <div class="form-group">
                     <label class="form-label">密码</label>
@@ -1475,6 +1478,54 @@
         </div>
     </div>
 
+    <!-- 忘记密码弹窗 -->
+    <div id="forgot-password-modal-overlay" class="auth-modal-overlay" style="display: none;">
+        <div class="auth-modal">
+            <button class="auth-modal-close" id="forgot-password-modal-close">✕</button>
+            <h2 style="text-align:center; margin-bottom:20px; color:#333;">忘记密码</h2>
+            <p style="text-align:center; color:#666; margin-bottom:25px; font-size:14px;">请输入注册邮箱，我们将发送重置链接</p>
+            <form id="forgot-password-form" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">注册邮箱</label>
+                    <input type="email" class="form-input" id="forgot-password-email" placeholder="请输入邮箱" required autocomplete="email">
+                </div>
+                <div id="forgot-password-error" class="auth-error" style="display:none;"></div>
+                <div id="forgot-password-success" style="display:none; color:green; text-align:center; padding:10px;"></div>
+                <button type="submit" class="auth-submit-btn" id="forgot-password-submit-btn">
+                    <span class="btn-text">发送重置链接</span>
+                    <span class="btn-spinner" style="display:none;">⏳</span>
+                </button>
+            </form>
+            <div class="auth-footer">
+                <button type="button" id="back-to-login-btn" class="auth-switch-link">返回登录</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重置密码弹窗 -->
+    <div id="reset-password-modal-overlay" class="auth-modal-overlay" style="display: none;">
+        <div class="auth-modal">
+            <button class="auth-modal-close" id="reset-password-modal-close">✕</button>
+            <h2 style="text-align:center; margin-bottom:20px; color:#333;">重置密码</h2>
+            <form id="reset-password-form" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">新密码</label>
+                    <input type="password" class="form-input" id="reset-password-new" placeholder="至少6位" required minlength="6" maxlength="50" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">确认新密码</label>
+                    <input type="password" class="form-input" id="reset-password-confirm" placeholder="再次输入密码" required autocomplete="new-password">
+                </div>
+                <div id="reset-password-error" class="auth-error" style="display:none;"></div>
+                <div id="reset-password-success" style="display:none; color:green; text-align:center; padding:10px;"></div>
+                <button type="submit" class="auth-submit-btn" id="reset-password-submit-btn">
+                    <span class="btn-text">重置密码</span>
+                    <span class="btn-spinner" style="display:none;">⏳</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <!-- ICP 备案号 Footer -->
@@ -1486,9 +1537,9 @@
         </a>
     </footer>
     
-    <script src="js/chart.umd.min.js?v=20260701f" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260701k"></script>
-    <script src="js/achievement-ui.js?v=20260701f"></script>
-    <script src="welcome-script.js?v=20260701f"></script>
+    <script src="js/chart.umd.min.js?v=20260702a" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
+    <script src="script.js?v=20260702a"></script>
+    <script src="js/achievement-ui.js?v=20260702a"></script>
+    <script src="welcome-script.js?v=20260702a"></script>
 </body>
 </html>

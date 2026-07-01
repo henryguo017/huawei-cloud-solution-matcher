@@ -123,3 +123,11 @@ MAX_FAVORITES_PER_USER = int(os.getenv("MAX_FAVORITES_PER_USER", "100"))
 
 # ==================== 数据库配置 ====================
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/users.db")
+
+# ==================== 邮件配置（密码重置）====================
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.163.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+SMTP_USER = os.getenv("SMTP_USER", "henryguo0523@163.com")  # 163邮箱（发件人）
+SMTP_PASS = os.getenv("SMTP_PASS", "SMyjF34BjgCFMGud")  # 163授权码
+RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("RESET_TOKEN_EXPIRE_MINUTES", "30"))
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://cloudsol.cn")

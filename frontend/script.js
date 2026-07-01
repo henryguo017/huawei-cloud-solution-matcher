@@ -91,6 +91,14 @@ const AuthManager = {
             if (data.newly_unlocked && data.newly_unlocked.length > 0) {
                 try { sessionStorage.setItem('pending_achievements', JSON.stringify(data.newly_unlocked)); } catch(_) {}
             }
+            // 登录成功后，检查是否需要提示绑定邮箱
+            if (data.user && !data.user.email) {
+                const hideUntil = localStorage.getItem('hide_email_prompt_until');
+                if (!hideUntil || Date.now() > parseInt(hideUntil)) {
+                    AuthManager._showEmailBindingPrompt();
+                    return true;
+                }
+            }
             location.reload();
             return true;
         } catch (e) {
@@ -186,6 +194,74 @@ const AuthManager = {
             console.error('AuthManager: localStorage 写入验证失败，重试一次');
             localStorage.setItem(this.STORAGE_KEY, payload);
         }
+    },
+
+    _showEmailBindingPrompt() {
+        const overlay = document.createElement('div');
+        overlay.id = 'email-binding-overlay';
+        overlay.className = 'auth-modal-overlay';
+        overlay.innerHTML = `
+            <div class="auth-modal">
+                <button class="auth-modal-close" id="email-binding-close">✕</button>
+                <h2 style="text-align:center; margin-bottom:20px; color:#333;">建议绑定邮箱 📧</h2>
+                <p style="text-align:center; color:#666; margin-bottom:25px; font-size:14px;">绑定邮箱后可通过邮件找回密码，提升账户安全</p>
+                <form id="email-binding-form" class="auth-form">
+                    <div class="form-group">
+                        <label class="form-label">邮箱</label>
+                        <input type="email" class="form-input" id="email-binding-input" placeholder="请输入邮箱" required autocomplete="email">
+                    </div>
+                    <div id="email-binding-error" class="auth-error" style="display:none;"></div>
+                    <button type="submit" class="auth-submit-btn">
+                        <span class="btn-text">绑定并保存</span>
+                    </button>
+                </form>
+                <div class="auth-footer">
+                    <button type="button" id="email-binding-skip" class="auth-switch-link">暂不绑定</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        overlay.style.display = '';
+        const input = document.getElementById('email-binding-input');
+        if (input) input.focus();
+
+        const closePrompt = () => {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            location.reload();
+        };
+
+        document.getElementById('email-binding-close')?.addEventListener('click', closePrompt);
+        document.getElementById('email-binding-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email-binding-input').value.trim();
+            if (!email) {
+                document.getElementById('email-binding-error').textContent = '请输入邮箱';
+                document.getElementById('email-binding-error').style.display = '';
+                return;
+            }
+            const token = AuthManager.getToken();
+            try {
+                const resp = await fetch(`${Config.API_BASE_URL}/auth/profile`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+                });
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    throw new Error(data.detail || '绑定失败');
+                }
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                user.email = email;
+                localStorage.setItem('user', JSON.stringify(user));
+                closePrompt();
+            } catch (err) {
+                document.getElementById('email-binding-error').textContent = err.message || '绑定失败，请重试';
+                document.getElementById('email-binding-error').style.display = '';
+            }
+        });
+        document.getElementById('email-binding-skip')?.addEventListener('click', () => {
+            localStorage.setItem('hide_email_prompt_until', Date.now() + 7 * 24 * 60 * 60 * 1000);
+            closePrompt();
+        });
     },
 
     _clearAuth() {
@@ -3529,6 +3605,115 @@ function initEventListeners() {
         document.getElementById('user-dropdown').style.display = 'none';
         document.getElementById('nav-user-menu')?.classList.remove('open');
     });
+
+    // ===== 忘记密码弹窗 =====
+    document.getElementById('forgot-password-link')?.addEventListener('click', () => {
+        document.getElementById('auth-modal-overlay').style.display = 'none';
+        document.getElementById('forgot-password-modal-overlay').style.display = '';
+        document.getElementById('forgot-password-email').value = '';
+        document.getElementById('forgot-password-error').style.display = 'none';
+        document.getElementById('forgot-password-success').style.display = 'none';
+    });
+
+    document.getElementById('forgot-password-modal-close')?.addEventListener('click', () => {
+        document.getElementById('forgot-password-modal-overlay').style.display = 'none';
+    });
+
+    document.getElementById('back-to-login-btn')?.addEventListener('click', () => {
+        document.getElementById('forgot-password-modal-overlay').style.display = 'none';
+        document.getElementById('auth-modal-overlay').style.display = '';
+        AuthManager._switchTab('login');
+    });
+
+    document.getElementById('forgot-password-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('forgot-password-email').value.trim();
+        if (!email) {
+            document.getElementById('forgot-password-error').textContent = '请输入邮箱';
+            document.getElementById('forgot-password-error').style.display = '';
+            return;
+        }
+        const btn = document.getElementById('forgot-password-submit-btn');
+        btn.querySelector('.btn-text').style.display = 'none';
+        btn.querySelector('.btn-spinner').style.display = '';
+        try {
+            const resp = await fetch(`${Config.API_BASE_URL}/auth/forgot-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await resp.json();
+            btn.querySelector('.btn-text').style.display = '';
+            btn.querySelector('.btn-spinner').style.display = 'none';
+            document.getElementById('forgot-password-error').style.display = 'none';
+            document.getElementById('forgot-password-success').textContent = '重置链接已发送到邮箱，请查收（有效期30分钟）';
+            document.getElementById('forgot-password-success').style.display = '';
+        } catch (err) {
+            btn.querySelector('.btn-text').style.display = '';
+            btn.querySelector('.btn-spinner').style.display = 'none';
+            document.getElementById('forgot-password-error').textContent = '发送失败，请稍后重试';
+            document.getElementById('forgot-password-error').style.display = '';
+        }
+    });
+
+    // ===== 重置密码弹窗 =====
+    document.getElementById('reset-password-modal-close')?.addEventListener('click', () => {
+        document.getElementById('reset-password-modal-overlay').style.display = 'none';
+    });
+
+    document.getElementById('reset-password-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        const newPwd = document.getElementById('reset-password-new').value;
+        const confirmPwd = document.getElementById('reset-password-confirm').value;
+        if (newPwd.length < 6) {
+            document.getElementById('reset-password-error').textContent = '密码至少6位';
+            document.getElementById('reset-password-error').style.display = '';
+            return;
+        }
+        if (newPwd !== confirmPwd) {
+            document.getElementById('reset-password-error').textContent = '两次密码不一致';
+            document.getElementById('reset-password-error').style.display = '';
+            return;
+        }
+        const btn = document.getElementById('reset-password-submit-btn');
+        btn.querySelector('.btn-text').style.display = 'none';
+        btn.querySelector('.btn-spinner').style.display = '';
+        try {
+            const resp = await fetch(`${Config.API_BASE_URL}/auth/reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, new_password: newPwd })
+            });
+            const data = await resp.json();
+            btn.querySelector('.btn-text').style.display = '';
+            btn.querySelector('.btn-spinner').style.display = 'none';
+            if (!resp.ok) {
+                document.getElementById('reset-password-error').textContent = data.detail || '重置失败';
+                document.getElementById('reset-password-error').style.display = '';
+                return;
+            }
+            document.getElementById('reset-password-error').style.display = 'none';
+            document.getElementById('reset-password-success').textContent = '密码已重置！正在跳转到登录...';
+            document.getElementById('reset-password-success').style.display = '';
+            setTimeout(() => { window.location.href = '/'; }, 2000);
+        } catch (err) {
+            btn.querySelector('.btn-text').style.display = '';
+            btn.querySelector('.btn-spinner').style.display = 'none';
+            document.getElementById('reset-password-error').textContent = '重置失败，请稍后重试';
+            document.getElementById('reset-password-error').style.display = '';
+        }
+    });
+
+    // 页面加载时检查 URL 是否有重置 token
+    (() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const resetToken = urlParams.get('token');
+        if (resetToken) {
+            document.getElementById('reset-password-modal-overlay').style.display = '';
+        }
+    })();
 
     // 退出登录
     document.getElementById('dropdown-logout')?.addEventListener('click', () => {

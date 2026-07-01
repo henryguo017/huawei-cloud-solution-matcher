@@ -5,7 +5,14 @@ from datetime import datetime
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50, description="用户名")
     password: str = Field(..., min_length=6, max_length=50, description="密码")
-    email: Optional[EmailStr] = Field(None, description="邮箱")
+    email: EmailStr = Field(..., description="邮箱（必填）")
+
+class ForgotPassword(BaseModel):
+    email: EmailStr = Field(..., description="注册邮箱")
+
+class ResetPassword(BaseModel):
+    token: str = Field(..., description="重置token")
+    new_password: str = Field(..., min_length=6, max_length=50, description="新密码")
 
 class UserLogin(BaseModel):
     username: str = Field(..., description="用户名")

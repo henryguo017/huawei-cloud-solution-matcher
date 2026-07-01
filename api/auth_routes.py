@@ -3,7 +3,8 @@ from app.models.user_models import (
     UserCreate, UserLogin, UserResponse, Token,
     HistoryCreate, HistoryResponse,
     FavoriteCreate, FavoriteResponse,
-    ProfileUpdate, PasswordChange
+    ProfileUpdate, PasswordChange,
+    ForgotPassword, ResetPassword
 )
 from app.services.auth_service import AuthService
 from app.utils.captcha_utils import generate_captcha
@@ -123,6 +124,28 @@ async def change_password(
         password_data.old_password,
         password_data.new_password
     )
+    if not result["success"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result["message"]
+        )
+    return {"message": result["message"]}
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotPassword):
+    """
+    忘记密码：输入邮箱，发送重置邮件
+    不管邮箱是否存在都返回成功（防邮箱探测）
+    """
+    result = AuthService.forgot_password(data.email)
+    return {"message": result["message"]}
+
+@router.post("/reset-password")
+async def reset_password(data: ResetPassword):
+    """
+    重置密码：输入 token + 新密码
+    """
+    result = AuthService.reset_password(data.token, data.new_password)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

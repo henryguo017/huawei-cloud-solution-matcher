@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 import sqlite3
 import os
+import secrets
 from app.utils.db_init import get_db_connection
 from app.utils.auth_utils import hash_password, verify_password, create_access_token
 from app.utils.captcha_utils import verify_captcha
@@ -13,8 +14,12 @@ from app.models.user_models import (
 from app.config import (
     MAX_LOGIN_ATTEMPTS, 
     LOCK_DURATION_MINUTES,
-    MAX_FAVORITES_PER_USER
+    MAX_FAVORITES_PER_USER,
+    RESET_TOKEN_EXPIRE_MINUTES
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AuthService:
     
@@ -360,3 +365,94 @@ class AuthService:
             conn.close()
         
         return stats
+
+    @staticmethod
+    def forgot_password(email: str) -> dict:
+        """
+        忘记密码：根据邮箱生成重置 token
+        不管邮箱是否存在都返回成功（防邮箱探测）
+        """
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 查找用户
+            cursor.execute("SELECT id, username, email FROM users WHERE email = ?", (email,))
+            user = cursor.fetchone()
+            
+            if not user:
+                # 邮箱不存在，返回成功（静默）
+                return {"success": True, "message": "如果该邮箱已注册，重置链接已发送"}
+            
+            # 生成重置 token
+            token = secrets.token_urlsafe(32)
+            expiry = datetime.now() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+            
+            # 保存 token 到数据库
+            cursor.execute("""
+                UPDATE users SET reset_token = ?, reset_token_expiry = ?
+                WHERE id = ?
+            """, (token, expiry, user['id']))
+            conn.commit()
+            
+            # 发送重置邮件
+            from app.utils.email_utils import send_reset_email
+            email_sent = send_reset_email(email, token)
+            
+            if email_sent:
+                logger.info(f"✅ 密码重置邮件已发送到 {email}")
+            else:
+                logger.error(f"❌ 密码重置邮件发送失败: {email}")
+                # 不返回错误，避免暴露邮箱是否存在
+            
+            return {"success": True, "message": "如果该邮箱已注册，重置链接已发送"}
+            
+        except Exception as e:
+            logger.error(f"❌ 忘记密码处理失败: {e}")
+            return {"success": True, "message": "如果该邮箱已注册，重置链接已发送"}
+        finally:
+            conn.close()
+
+    @staticmethod
+    def reset_password(token: str, new_password: str) -> dict:
+        """
+        重置密码：验证 token 并设置新密码
+        """
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # 查找 token
+            cursor.execute("""
+                SELECT id, username, reset_token_expiry
+                FROM users
+                WHERE reset_token = ?
+            """, (token,))
+            user = cursor.fetchone()
+            
+            if not user:
+                return {"success": False, "message": "无效的重置链接"}
+            
+            # 检查是否过期
+            expiry = user['reset_token_expiry']
+            if not expiry or datetime.fromisoformat(expiry) < datetime.now():
+                return {"success": False, "message": "重置链接已过期，请重新申请"}
+            
+            # 重置密码
+            new_hash = hash_password(new_password)
+            cursor.execute("""
+                UPDATE users
+                SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL
+                WHERE id = ?
+            """, (new_hash, user['id']))
+            conn.commit()
+            
+            logger.info(f"✅ 用户 {user['username']} 密码已重置")
+            return {"success": True, "message": "密码已重置，请登录"}
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"❌ 重置密码失败: {e}")
+            return {"success": False, "message": f"重置失败: {str(e)}"}
+        finally:
+            conn.close()
