@@ -1,15 +1,23 @@
 import asyncio
 from app.models.llm import get_llm_response
+from typing import Optional
 
 
 class SolutionMatcherService:
     """DeepSeek版本 解决方案匹配服务"""
-    
-    def __init__(self):
-        from api.dependencies import get_knowledge_base
-        self.kb_service = get_knowledge_base()
 
-        # 固定提示词模板，输出格式不变
+    def __init__(self, kb_service=None):
+        """
+        Args:
+            kb_service: 外部传入的知识库服务实例。如果不传，使用全局默认KB。
+        """
+        if kb_service is not None:
+            self.kb_service = kb_service
+        else:
+            from api.dependencies import get_knowledge_base
+            self.kb_service = get_knowledge_base()
+
+        # 固定提示词模板
         self.prompt_template = """
 你是华为云解决方案专家。基于以下资料，为客户提供解决方案建议。
 
@@ -48,13 +56,13 @@ class SolutionMatcherService:
         """
 
     async def match(self, customer_demand):
-        # 1. 知识库检索相关内容（知识库为空则跳过向量搜索，避免 chromadb segfault）
+        # 1. 知识库检索相关内容
         try:
             stats = self.kb_service.get_stats()
             kb_empty = (stats.get("total_documents", 0) == 0)
         except Exception:
             kb_empty = True
-        
+
         if kb_empty:
             docs = []
             context_content = ""
@@ -66,7 +74,7 @@ class SolutionMatcherService:
                 logging.getLogger(__name__).warning(f"向量检索异常，回退到 LLM 模式: {e}")
                 docs = []
             context_content = "\n".join([doc.page_content for doc in docs])
-        
+
         # 如果知识库为空，使用通用提示词
         if not docs or not context_content.strip():
             fallback_prompt = f"""
@@ -137,36 +145,3 @@ class SolutionMatcherService:
             "answer": answer_result,
             "source_documents": docs
         }
-
-# 服务测试
-if __name__ == "__main__":
-    try:
-        matcher = SolutionMatcherService()
-
-        test_text = """
-华为云智慧植物方舱解决方案
-核心价值：
-1. 环境精准控制：通过传感器实时监测温湿度、光照、CO2等参数，自动调节环境
-2. 生长模型数字化：基于AI大模型构建植物生长模型，预测产量和品质
-3. 全流程自动化：实现从播种到收获的全流程自动化管理
-4. 数据驱动决策：通过数据分析优化种植策略，提高产量和效益
-
-成功案例：
-- 某农业科技公司智慧植物方舱项目，产量提升30%，人工成本降低50%
-- 某科研院所植物生长实验室项目，实验周期缩短40%，数据准确性提高60%
-        """
-        
-        from langchain_core.documents import Document
-        matcher.kb_service.add_documents([Document(page_content=test_text, metadata={"industry": "智慧农业"})])
-
-        # 发起匹配测试
-        res = matcher.match("我们是一家农业科技公司，想建设智慧植物方舱，提高产量和降低人工成本")
-        print("✅ 解决方案匹配服务测试成功")
-        print("输出结果：\n", res["answer"])
-
-        # 清理测试数据
-        matcher.kb_service.vector_db.delete_collection()
-
-    except Exception as e:
-        print("❌ 匹配服务测试失败")
-        print("错误：", str(e))

@@ -220,6 +220,9 @@ __marimo__/
 # Vector database (generated binary files)
 data/vector_db/
 
+# User-specific knowledge bases (each user gets data/user_docs/{id}/)
+data/user_docs/
+
 # Editor / assistant internals
 .codebuddy/
 .workbuddy/

@@ -23,6 +23,19 @@ async def register(user_data: UserCreate):
             detail=result["message"]
         )
     
+    # 注册成功后，在后台为新用户复制默认知识库
+    user_id = result["user_id"]
+    try:
+        from app.services.knowledge_base import KnowledgeBaseService
+        import asyncio
+        loop = asyncio.get_event_loop()
+        # 在 executor 中执行，避免阻塞主线程
+        await loop.run_in_executor(None, KnowledgeBaseService.copy_from_default, user_id)
+    except Exception as e:
+        # 复制失败不阻塞注册，用户可以后续手动重建
+        import logging
+        logging.getLogger(__name__).warning(f"[注册] 用户{user_id}知识库复制失败（不阻塞注册）: {e}")
+    
     return {"message": result["message"], "user_id": result["user_id"]}
 
 @router.post("/login")

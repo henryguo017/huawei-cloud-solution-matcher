@@ -23,11 +23,14 @@ from api.dependencies import (
     get_knowledge_base,
     get_usage_logger,
     get_achievement_service_dep,
+    get_user_knowledge_base,
+    get_solution_matcher_for_user,
+    get_competitor_analyzer_for_user,
 )
 from app.models.llm import get_llm_response
 from app.services.solution_matcher import SolutionMatcherService
 from app.services.competitor_analyzer import CompetitorAnalyzerService
-from app.services.knowledge_base import KnowledgeBaseService
+from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context
 from app.services.usage_logger import UsageLoggerService
 from app.config import APP_NAME, APP_VERSION
 from typing import Optional
@@ -79,7 +82,6 @@ async def health_check():
 @router.post("/match", response_model=MatchResponse, tags=["解决方案匹配"])
 async def match_solution(
     request: MatchRequest,
-    matcher: SolutionMatcherService = Depends(get_solution_matcher),
     user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
@@ -90,6 +92,10 @@ async def match_solution(
     即使知识库为空，AI也会基于华为云产品体系给出建议
     """
     try:
+        # 使用用户独立知识库（登录用户）；匿名用户使用全局知识库
+        user_id = user.get('id') if user else 0
+        matcher = get_solution_matcher_for_user(user_id) if user_id > 0 else get_solution_matcher()
+
         # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
         original_demand = request.demand
 
@@ -192,6 +198,11 @@ async def agent_match_solution(
     先分析意图，再检索知识库，最后生成方案——适合模糊输入场景。
     """
     try:
+        # 设置用户上下文，Agent 工具可使用用户独立知识库
+        user_id = user.get('id') if user else 0
+        if user_id > 0:
+            set_kb_user_context(user_id)
+
         # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
         original_demand = request.demand
 
@@ -314,6 +325,10 @@ async def agent_match_stream(
 
         async def run_agent():
             try:
+                # 设置用户上下文，Agent 工具可使用用户独立知识库
+                if user and user.get('id'):
+                    set_kb_user_context(user['id'])
+
                 # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
                 original_demand = request.demand
 
@@ -431,7 +446,6 @@ async def agent_match_stream(
 @router.post("/analyze", response_model=AnalyzeResponse, tags=["竞争对手分析"])
 async def analyze_competitor(
     request: AnalyzeRequest,
-    analyzer: CompetitorAnalyzerService = Depends(get_competitor_analyzer),
     user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
@@ -441,6 +455,9 @@ async def analyze_competitor(
     - **industry**: 行业名称
     """
     try:
+        # 使用用户独立知识库（登录用户）；匿名用户使用全局知识库
+        user_id = user.get('id') if user else 0
+        analyzer = get_competitor_analyzer_for_user(user_id) if user_id > 0 else get_competitor_analyzer()
         logger.info(f"开始分析竞争对手: {request.competitor}, 行业: {request.industry}")
         
         result = await analyzer.analyze(request.competitor, request.industry)
@@ -577,10 +594,11 @@ async def clear_knowledge(
 
 @router.get("/knowledge/documents", response_model=KBDocumentListResponse, tags=["知识库管理"])
 async def list_knowledge_documents(
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+    current_user: dict = Depends(get_current_user)
 ):
-    """列出知识库所有文档"""
+    """列出当前用户知识库的所有文档"""
     try:
+        kb_service = get_user_knowledge_base(current_user['id'])
         docs = kb_service.list_documents()
         return KBDocumentListResponse(total=len(docs), documents=docs)
     except Exception as e:
@@ -591,10 +609,11 @@ async def list_knowledge_documents(
 @router.get("/knowledge/documents/{doc_id}", tags=["知识库管理"])
 async def get_knowledge_document(
     doc_id: str,
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+    current_user: dict = Depends(get_current_user)
 ):
     """获取文档内容"""
     try:
+        kb_service = get_user_knowledge_base(current_user['id'])
         return kb_service.get_document(doc_id)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
@@ -606,14 +625,14 @@ async def get_knowledge_document(
 @router.post("/knowledge/documents", response_model=KBDocumentCreateResponse, tags=["知识库管理"])
 async def create_knowledge_document(
     req: KBDocumentCreateRequest,
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base),
-    user: Optional[dict] = Depends(get_current_user_optional),
+    current_user: dict = Depends(get_current_user),
 ):
-    """创建新文档"""
+    """创建新文档（写入当前用户的知识库）"""
     try:
+        kb_service = get_user_knowledge_base(current_user['id'])
         result = kb_service.create_document(req.category, req.industry, req.title, req.content)
         # 成就检测
-        if user and user.get('id'):
+        if current_user and current_user.get('id'):
             try:
                 achievement_svc = get_achievement_service_dep()
                 # 获取知识库总文档数
@@ -624,7 +643,7 @@ async def create_knowledge_document(
                     total_docs = sum(industry_counts.values()) if industry_counts else 0
                 except:
                     pass
-                newly = achievement_svc.check_after_kb_add(user['id'], total_docs)
+                newly = achievement_svc.check_after_kb_add(current_user['id'], total_docs)
                 if newly:
                     logger.info(f"[Achievement] 知识库新增文档成就解锁: {[a['name'] for a in newly]}")
             except Exception as ach_err:
@@ -641,10 +660,11 @@ async def create_knowledge_document(
 async def update_knowledge_document(
     doc_id: str,
     req: KBDocumentUpdateRequest,
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+    current_user: dict = Depends(get_current_user)
 ):
-    """更新文档内容"""
+    """更新文档内容（修改当前用户的知识库）"""
     try:
+        kb_service = get_user_knowledge_base(current_user['id'])
         result = kb_service.update_document(doc_id, req.content)
         return KBDocumentUpdateResponse(**result)
     except FileNotFoundError:
@@ -657,10 +677,11 @@ async def update_knowledge_document(
 @router.delete("/knowledge/documents/{doc_id}", response_model=KBDocumentDeleteResponse, tags=["知识库管理"])
 async def delete_knowledge_document(
     doc_id: str,
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+    current_user: dict = Depends(get_current_user)
 ):
-    """删除文档"""
+    """删除文档（从当前用户的知识库中删除）"""
     try:
+        kb_service = get_user_knowledge_base(current_user['id'])
         result = kb_service.delete_document(doc_id, delete_file=True)
         return KBDocumentDeleteResponse(success=True, **result)
     except FileNotFoundError:
@@ -673,17 +694,17 @@ async def delete_knowledge_document(
 @router.post("/knowledge/documents/{doc_id}/reindex", response_model=KBDocumentReindexResponse, tags=["知识库管理"])
 async def reindex_knowledge_document(
     doc_id: str,
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base),
-    user: Optional[dict] = Depends(get_current_user_optional),
+    current_user: dict = Depends(get_current_user),
 ):
-    """重新索引单个文档"""
+    """重新索引单个文档（当前用户的知识库）"""
     try:
+        kb_service = get_user_knowledge_base(current_user['id'])
         result = kb_service.reindex_document(doc_id)
         # 成就检测
-        if user and user.get('id'):
+        if current_user and current_user.get('id'):
             try:
                 achievement_svc = get_achievement_service_dep()
-                newly = achievement_svc.check_after_reindex(user['id'])
+                newly = achievement_svc.check_after_reindex(current_user['id'])
                 if newly:
                     logger.info(f"[Achievement] 重索引成就解锁: {[a['name'] for a in newly]}")
             except Exception as ach_err:
@@ -698,7 +719,6 @@ async def reindex_knowledge_document(
 @router.get("/dashboard/stats", response_model=DashboardStatsResponse, tags=["数据仪表盘"])
 async def get_dashboard_stats(
     current_user: dict = Depends(get_current_user),
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base),
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """
@@ -711,8 +731,9 @@ async def get_dashboard_stats(
         import os
         from datetime import datetime, timedelta
         from app.config import APP_VERSION
-        
-        # 获取知识库统计
+
+        # 获取用户独立知识库统计
+        kb_service = get_user_knowledge_base(current_user['id'])
         kb_stats = kb_service.get_stats()
         
         # 行业覆盖数据（来自知识库，真实）

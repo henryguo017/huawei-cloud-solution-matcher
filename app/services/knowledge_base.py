@@ -4,48 +4,94 @@ from app.config import *
 import os
 import hashlib
 import shutil
+import contextvars
 from urllib.parse import quote, unquote
 
+# ===== 用户上下文：在线程中传递当前 user_id，供 Agent 工具等无参接口使用 =====
+_kb_current_user_id: contextvars.ContextVar[int] = contextvars.ContextVar('kb_user_id', default=0)
+
+def set_kb_user_context(user_id: int):
+    """设置当前请求的用户上下文（对 Agent 工具透明传递 user_id）"""
+    _kb_current_user_id.set(user_id)
+
+def get_kb_user_context() -> int:
+    """获取当前请求的用户 ID，0 表示全局默认"""
+    try:
+        return _kb_current_user_id.get()
+    except LookupError:
+        return 0
+
 class KnowledgeBaseService:
-    def __init__(self):
+    """
+    华为云解决方案知识库服务
+
+    支持两种模式：
+    - user_id=0（默认）：全局/系统知识库，路径即 config 中配置的默认目录
+    - user_id>0：用户独立知识库，路径为 data/user_docs/{user_id}/...
+    """
+
+    def __init__(self, user_id: int = 0):
+        self.user_id = user_id
+
+        # 根据 user_id 确定物理目录
+        if user_id > 0:
+            user_base = os.path.join(USER_DOCS_BASE_DIR, str(user_id))
+            self._huawei_dir = os.path.abspath(os.path.join(user_base, 'sample_solutions'))
+            self._competitor_dir = os.path.abspath(os.path.join(user_base, 'competitors'))
+            self._vector_db_dir = os.path.abspath(os.path.join(user_base, 'vector_db'))
+        else:
+            self._huawei_dir = os.path.abspath(KNOWLEDGE_BASE_DIRECTORY)
+            self._competitor_dir = os.path.abspath(COMPETITOR_DIRECTORY)
+            self._vector_db_dir = os.path.abspath(VECTOR_DB_PERSIST_DIRECTORY)
+
+        # 确保用户目录存在
+        for d in [self._huawei_dir, self._competitor_dir, self._vector_db_dir]:
+            os.makedirs(d, exist_ok=True)
+
         self.embeddings = get_embeddings()
-        self.vector_db = get_vector_db(self.embeddings)
+        self.vector_db = get_vector_db(self.embeddings, persist_directory=self._vector_db_dir)
         self.retriever = self.vector_db.as_retriever(search_kwargs={"k": VECTOR_SEARCH_TOP_K})
 
     def _load_docs_from_dir(self, directory, dir_label=""):
         """从指定目录加载文档"""
         from app.utils.document_loader import load_documents_from_directory
-        
+
         abs_dir = os.path.abspath(directory)
         if not os.path.exists(abs_dir):
             print(f"[重建] [WARN] 目录不存在: {abs_dir}")
             return []
-        
+
         label = f"[{dir_label}]" if dir_label else ""
         print(f"[重建] {label} 加载文档目录: {abs_dir}")
-        
+
         docs = load_documents_from_directory(
             directory=abs_dir,
             chunk_size=CHUNK_SIZE,
             chunk_overlap=CHUNK_OVERLAP
         )
-        
+
         if docs:
             print(f"[重建] {label} 加载到 {len(docs)} 个文档片段")
-            # 列出子目录统计
             subdirs = [d for d in os.listdir(abs_dir) if os.path.isdir(os.path.join(abs_dir, d))]
             if subdirs:
                 print(f"[重建] {label} 包含 {len(subdirs)} 个子目录: {', '.join(subdirs[:5])}{'...' if len(subdirs) > 5 else ''}")
         else:
             print(f"[重建] {label} [WARN] 未加载到任何文档片段")
-        
+
         return docs
 
-    def build_from_directory(self):
-        """从目录重建知识库（含华为方案和竞品方案）"""
+    def build_from_directory(self, use_default_dirs: bool = False):
+        """
+        从目录重建知识库（含华为方案和竞品方案）
+
+        Args:
+            use_default_dirs: 如果为 True，强制使用全局默认目录（管理员重建全局KB时）
+        """
         try:
-            # 不使用 delete_collection()（会破坏 Chroma 内部状态导致 add 失败）
-            # 改为按 ID 清除现有文档
+            huawei_dir = os.path.abspath(KNOWLEDGE_BASE_DIRECTORY) if use_default_dirs else self._huawei_dir
+            competitor_dir = os.path.abspath(COMPETITOR_DIRECTORY) if use_default_dirs else self._competitor_dir
+
+            # 清除现有数据
             try:
                 all_data = self.vector_db.get()
                 existing_ids = all_data.get("ids", [])
@@ -58,18 +104,17 @@ class KnowledgeBaseService:
                 print(f"[重建] [WARN] 清除旧数据时出现异常（可忽略）: {clear_err}")
 
             # 1. 加载华为云方案文档
-            huawei_docs = self._load_docs_from_dir(KNOWLEDGE_BASE_DIRECTORY, "华为方案")
-            
+            huawei_docs = self._load_docs_from_dir(huawei_dir, "华为方案")
+
             # 2. 加载竞品方案文档
             competitor_docs = []
-            competitor_dir = getattr(__import__('app.config', fromlist=['COMPETITOR_DIRECTORY']), 'COMPETITOR_DIRECTORY', './data/competitors')
             if os.path.exists(competitor_dir):
                 competitor_docs = self._load_docs_from_dir(competitor_dir, "竞品方案")
             else:
                 print(f"[重建] [WARN] 竞品目录不存在，跳过: {competitor_dir}")
 
             all_documents = huawei_docs + competitor_docs
-            
+
             if not all_documents:
                 print(f"[重建] [ERR] 未加载到任何文档！请检查目录结构")
                 return 0
@@ -79,7 +124,7 @@ class KnowledgeBaseService:
             self.vector_db.add_documents(all_documents)
             print(f"[重建] [OK] 知识库重建完成！共 {len(all_documents)} 个文档片段")
 
-            # 重建 retriever（确保使用新数据）
+            # 重建 retriever
             self.retriever = self.vector_db.as_retriever(
                 search_kwargs={"k": VECTOR_SEARCH_TOP_K}
             )
@@ -95,23 +140,85 @@ class KnowledgeBaseService:
             import traceback; traceback.print_exc()
             return 0
 
+    # ===== 用户知识库复制（注册时调用） =====
+
+    @staticmethod
+    def copy_from_default(user_id: int) -> bool:
+        """
+        为新用户复制默认知识库（文件 + 向量库）。
+
+        复制内容：
+        1. data/sample_solutions/ → data/user_docs/{user_id}/sample_solutions/
+        2. data/competitors/      → data/user_docs/{user_id}/competitors/
+        3. data/vector_db/        → data/user_docs/{user_id}/vector_db/
+        """
+        user_base = os.path.abspath(os.path.join(USER_DOCS_BASE_DIR, str(user_id)))
+
+        # 源目录
+        src_huawei = os.path.abspath(KNOWLEDGE_BASE_DIRECTORY)
+        src_competitor = os.path.abspath(COMPETITOR_DIRECTORY)
+        src_vectordb = os.path.abspath(VECTOR_DB_PERSIST_DIRECTORY)
+
+        # 目标目录
+        dst_huawei = os.path.join(user_base, 'sample_solutions')
+        dst_competitor = os.path.join(user_base, 'competitors')
+        dst_vectordb = os.path.join(user_base, 'vector_db')
+
+        try:
+            # 1. 复制华为方案文档
+            if os.path.exists(src_huawei):
+                print(f"[用户{user_id}] 复制华为方案: {src_huawei} → {dst_huawei}")
+                shutil.copytree(src_huawei, dst_huawei, dirs_exist_ok=True)
+
+            # 2. 复制竞品文档
+            if os.path.exists(src_competitor):
+                print(f"[用户{user_id}] 复制竞品方案: {src_competitor} → {dst_competitor}")
+                shutil.copytree(src_competitor, dst_competitor, dirs_exist_ok=True)
+
+            # 3. 复制向量数据库
+            if os.path.exists(src_vectordb):
+                print(f"[用户{user_id}] 复制向量库: {src_vectordb} → {dst_vectordb}")
+                shutil.copytree(src_vectordb, dst_vectordb, dirs_exist_ok=True)
+                # 注意：ChromaDB 的 SQLite 文件中有绝对路径引用，但使用 persist_directory 参数可以正常加载
+
+            # 4. 验证：创建 KnowledgeBaseService 实例，检查数据完整性
+            try:
+                kb = KnowledgeBaseService(user_id=user_id)
+                stats = kb.get_stats()
+                print(f"[用户{user_id}] 复制完成，共 {stats.get('total_documents', 0)} 个向量片段")
+            except Exception as verify_err:
+                print(f"[用户{user_id}] [WARN] 验证知识库失败（可忽略，后续使用时自动修正）: {verify_err}")
+
+            return True
+
+        except Exception as e:
+            print(f"[用户{user_id}] [ERR] 复制知识库失败: {e}")
+            import traceback; traceback.print_exc()
+            # 失败时清理部分复制的目录
+            if os.path.exists(user_base):
+                try:
+                    shutil.rmtree(user_base)
+                except:
+                    pass
+            return False
+
     def search(self, query):
         """检索相关文档"""
         return self.retriever.get_relevant_documents(query)
 
     def get_stats(self):
-        """终极修复：统计知识库数据 + 行业分布"""
+        """统计知识库数据 + 行业分布"""
         try:
             # 统计总文档数
             all_data = self.vector_db.get()
             total_documents = len(all_data.get("documents", []))
-            
-            # 统计文件夹下的行业文档数（最稳定方案）
+
+            # 统计文件夹下的行业文档数
             industry_counts = {}
             total_files = 0
-            
+
             for industry in SUPPORTED_INDUSTRIES:
-                industry_path = os.path.join(KNOWLEDGE_BASE_DIRECTORY, industry)
+                industry_path = os.path.join(self._huawei_dir, industry)
                 if os.path.exists(industry_path):
                     try:
                         files = [f for f in os.listdir(industry_path) if f.endswith(('.txt', '.pdf', '.md', '.doc', '.docx'))]
@@ -125,16 +232,15 @@ class KnowledgeBaseService:
                         industry_counts[industry] = 0
                 else:
                     industry_counts[industry] = 0
-            
+
             # 统计竞品文档
-            competitor_dir = getattr(__import__('app.config', fromlist=['COMPETITOR_DIRECTORY']), 'COMPETITOR_DIRECTORY', './data/competitors')
             competitor_stats = {}
             total_competitor_files = 0
             competitor_companies = []
-            
-            if os.path.exists(competitor_dir):
-                for company in os.listdir(competitor_dir):
-                    company_path = os.path.join(competitor_dir, company)
+
+            if os.path.exists(self._competitor_dir):
+                for company in os.listdir(self._competitor_dir):
+                    company_path = os.path.join(self._competitor_dir, company)
                     if os.path.isdir(company_path):
                         try:
                             files = [f for f in os.listdir(company_path) if f.endswith(('.txt', '.pdf', '.md', '.doc', '.docx'))]
@@ -145,30 +251,26 @@ class KnowledgeBaseService:
                                 total_competitor_files += count
                         except:
                             pass
-            
+
             # 有文档的行业
             supported_industries = [k for k, v in industry_counts.items() if v > 0]
-            
-            # 计算匹配准确率（基于知识库丰富度）
-            # 基础准确率：50%
-            # 华为行业覆盖率贡献：每覆盖一个行业 +3%（最多 +30%）
-            # 文档数量贡献：每10个文档 +1%（最多 +10%）
-            # 竞品覆盖贡献：每2个竞品 +1%（最多 +5%）
+
+            # 计算匹配准确率
             base_accuracy = 50
             industry_bonus = min(len(supported_industries) * 3, 30)
             doc_bonus = min(total_files // 10 * 1, 10)
             competitor_bonus = min(len(competitor_companies) // 2 * 1, 5)
             accuracy = base_accuracy + industry_bonus + doc_bonus + competitor_bonus
-            accuracy = min(accuracy, 95)  # 最高不超过95%
-            
-            print(f"\n[STATS] 知识库统计:")
+            accuracy = min(accuracy, 95)
+
+            print(f"\n[STATS] 知识库统计 (user_id={self.user_id}):")
             print(f"  - 总文档片段数: {total_documents}")
             print(f"  - 华为方案文件数: {total_files}")
             print(f"  - 竞品文件数: {total_competitor_files} (覆盖{len(competitor_companies)}家竞品)")
             print(f"  - 覆盖行业数: {len(supported_industries)}")
             print(f"  - 覆盖行业: {', '.join(supported_industries) if supported_industries else '无'}")
             print(f"  - 匹配准确率: {accuracy}%\n")
-            
+
             return {
                 "total_documents": total_documents,
                 "supported_industries": supported_industries,
@@ -193,7 +295,7 @@ class KnowledgeBaseService:
 
     def _get_doc_base_dir(self, category):
         """根据分类返回物理目录"""
-        base = os.path.abspath(KNOWLEDGE_BASE_DIRECTORY if category == 'huawei' else COMPETITOR_DIRECTORY)
+        base = os.path.abspath(self._huawei_dir if category == 'huawei' else self._competitor_dir)
         return base
 
     def _encode_doc_id(self, category, rel_path):
@@ -207,12 +309,12 @@ class KnowledgeBaseService:
         parts = decoded.split('/', 1)
         if len(parts) != 2:
             raise ValueError(f"无效的文档ID: {doc_id}")
-        return parts[0], parts[1]  # category, rel_path
+        return parts[0], parts[1]
 
     def list_documents(self):
         """列出所有文档的元数据"""
         docs = []
-        for category, base_dir in [('huawei', KNOWLEDGE_BASE_DIRECTORY), ('competitor', COMPETITOR_DIRECTORY)]:
+        for category, base_dir in [('huawei', self._huawei_dir), ('competitor', self._competitor_dir)]:
             abs_base = os.path.abspath(base_dir)
             if not os.path.exists(abs_base):
                 continue
@@ -222,7 +324,6 @@ class KnowledgeBaseService:
                         continue
                     file_path = os.path.join(root, f)
                     rel_path = os.path.relpath(file_path, abs_base)
-                    # 提取行业/分类名：相对于 base_dir 的父目录
                     parent = os.path.basename(os.path.dirname(file_path))
                     file_size = os.path.getsize(file_path)
                     doc_id = self._encode_doc_id(category, rel_path)
@@ -237,7 +338,6 @@ class KnowledgeBaseService:
                         'size': file_size,
                         'size_kb': round(file_size / 1024, 1),
                     })
-        # 按分类+路径排序
         docs.sort(key=lambda d: (d['category'], d['path']))
         return docs
 
@@ -261,17 +361,14 @@ class KnowledgeBaseService:
     def create_document(self, category, industry, title, content):
         """创建新文档并索引"""
         base_dir = self._get_doc_base_dir(category)
-        # 确定目标目录
         target_dir = os.path.join(base_dir, industry)
         os.makedirs(target_dir, exist_ok=True)
-        # 写入文件
         filename = f"{title}.txt"
         file_path = os.path.join(target_dir, filename)
         if os.path.exists(file_path):
             raise FileExistsError(f"文档已存在: {filename}")
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        # 索引到向量库
         count = self._index_single_file(file_path, category, industry)
         rel_path = os.path.relpath(file_path, base_dir)
         doc_id = self._encode_doc_id(category, rel_path)
@@ -284,14 +381,11 @@ class KnowledgeBaseService:
         file_path = os.path.join(base_dir, rel_path)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
-        # 更新文件
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
-        # 重新索引：先清旧向量，再加新向量
         industry = os.path.basename(os.path.dirname(file_path))
         self._remove_doc_vectors(file_path)
         count = self._index_single_file(file_path, category, industry)
-        # 重建 retriever
         self.retriever = self.vector_db.as_retriever(search_kwargs={"k": VECTOR_SEARCH_TOP_K})
         return {'id': doc_id, 'chunks': count}
 
@@ -302,16 +396,12 @@ class KnowledgeBaseService:
         file_path = os.path.join(base_dir, rel_path)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
-        # 从向量库移除
         removed = self._remove_doc_vectors(file_path)
-        # 删除物理文件
         if delete_file:
             os.remove(file_path)
-            # 清理空目录
             parent_dir = os.path.dirname(file_path)
             if os.path.exists(parent_dir) and not os.listdir(parent_dir):
                 os.rmdir(parent_dir)
-        # 重建 retriever
         self.retriever = self.vector_db.as_retriever(search_kwargs={"k": VECTOR_SEARCH_TOP_K})
         return {'removed_vectors': removed}
 
@@ -331,12 +421,10 @@ class KnowledgeBaseService:
     def _index_single_file(self, file_path, category, industry):
         """将单个文件加载并索引到向量库"""
         from app.utils.document_loader import load_documents_from_directory
-        # 用临时目录技巧：创建临时目录，只放这一个文件
         tmp_dir = os.path.join(os.path.dirname(file_path), '.tmp_index')
         os.makedirs(tmp_dir, exist_ok=True)
         tmp_file = os.path.join(tmp_dir, os.path.basename(file_path))
         try:
-            # 复制文件到临时目录
             shutil.copy2(file_path, tmp_file)
             chunks = load_documents_from_directory(tmp_dir, CHUNK_SIZE, CHUNK_OVERLAP)
             if chunks:

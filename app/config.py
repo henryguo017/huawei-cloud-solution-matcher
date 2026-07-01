@@ -63,6 +63,9 @@ DETECTION_TIMEOUT = int(os.getenv("DETECTION_TIMEOUT", "5"))
 KNOWLEDGE_BASE_DIRECTORY = os.getenv("KNOWLEDGE_BASE_DIRECTORY", "./data/sample_solutions")
 COMPETITOR_DIRECTORY = os.getenv("COMPETITOR_DIRECTORY", "./data/competitors")
 
+# 用户独立知识库根目录（注册时自动创建 data/user_docs/{user_id}/ 子目录）
+USER_DOCS_BASE_DIR = os.getenv("USER_DOCS_BASE_DIR", "./data/user_docs")
+
 # ==================== 支持的行业列表 ====================
 SUPPORTED_INDUSTRIES = [
     "智慧农业",

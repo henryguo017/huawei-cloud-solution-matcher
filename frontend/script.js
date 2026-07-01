@@ -1068,14 +1068,18 @@ const API = {
 
     // 通用 HTTP 方法
     async get(url) {
-        const resp = await fetch(url);
+        const headers = {};
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const resp = await fetch(url, { headers });
         if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || resp.statusText);
         return resp.json();
     },
     async post(url, body) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
         const resp = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify(body)
         });
         if (!resp.ok) {
@@ -1085,9 +1089,11 @@ const API = {
         return resp.json();
     },
     async put(url, body) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
         const resp = await fetch(url, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify(body)
         });
         if (!resp.ok) {
@@ -1097,7 +1103,9 @@ const API = {
         return resp.json();
     },
     async delete(url) {
-        const resp = await fetch(url, { method: 'DELETE' });
+        const headers = {};
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const resp = await fetch(url, { method: 'DELETE', headers });
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             throw new Error(err.detail || `删除失败: ${resp.statusText}`);
@@ -1962,8 +1970,7 @@ Object.assign(KnowledgeUI, {
         try {
             const listEl = document.getElementById('kb-doc-list');
             if (listEl) listEl.innerHTML = '<div class="kb-doc-skeleton">加载中...</div>';
-            const resp = await fetch('/api/knowledge/documents');
-            const data = await resp.json();
+            const data = await API.get('/api/knowledge/documents');
             this.docList = data.documents || [];
             this.renderDocList();
         } catch (e) {
@@ -2030,9 +2037,7 @@ Object.assign(KnowledgeUI, {
 
     async _openEditorForEdit(docId) {
         try {
-            const resp = await fetch(`/api/knowledge/documents/${encodeURIComponent(docId)}`);
-            if (!resp.ok) throw new Error('文档不存在');
-            const doc = await resp.json();
+            const doc = await API.get(`/api/knowledge/documents/${encodeURIComponent(docId)}`);
             this.editingDocId = docId;
             // 打开编辑弹窗
             document.getElementById('kb-editor-title-text').textContent = '编辑文档';

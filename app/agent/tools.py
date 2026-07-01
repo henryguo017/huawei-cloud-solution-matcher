@@ -13,7 +13,19 @@ import asyncio
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
+from app.services.knowledge_base import get_kb_user_context
+
 logger = logging.getLogger(__name__)
+
+
+def _get_kb():
+    """根据当前上下文获取知识库实例（用户上下文或全局）"""
+    user_id = get_kb_user_context()
+    if user_id > 0:
+        from api.dependencies import get_user_knowledge_base as _get_user_kb
+        return _get_user_kb(user_id)
+    from api.dependencies import get_knowledge_base as _get_global_kb
+    return _get_global_kb()
 
 
 class Tool:
@@ -134,9 +146,7 @@ async def _tool_search_kb(query: str) -> str:
     作用: 用结构化关键词搜索华为云知识库
     实现: 对接 KnowledgeBaseService.search()
     """
-    from api.dependencies import get_knowledge_base
-
-    kb = get_knowledge_base()
+    kb = _get_kb()
     try:
         docs = await asyncio.to_thread(kb.search, query)
         if not docs:
@@ -179,9 +189,7 @@ async def _tool_search_competitor(competitor: str, industry: str = "") -> str:
     作用: 搜索竞品在特定行业的方案信息
     实现: 对接 CompetitorAnalyzerService 的检索逻辑
     """
-    from api.dependencies import get_knowledge_base
-
-    kb = get_knowledge_base()
+    kb = _get_kb()
     try:
         stats = kb.get_stats()
         if stats.get("total_documents", 0) == 0:

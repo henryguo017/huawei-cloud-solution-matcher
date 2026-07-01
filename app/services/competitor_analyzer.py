@@ -1,13 +1,21 @@
 import asyncio
 from app.models.llm import get_llm_response
+from typing import Optional
 
 
 class CompetitorAnalyzerService:
     """DeepSeek版本 竞品分析服务——支持竞品知识库检索"""
-    
-    def __init__(self):
-        from api.dependencies import get_knowledge_base
-        self.kb_service = get_knowledge_base()
+
+    def __init__(self, kb_service=None):
+        """
+        Args:
+            kb_service: 外部传入的知识库服务实例。如果不传，使用全局默认KB。
+        """
+        if kb_service is not None:
+            self.kb_service = kb_service
+        else:
+            from api.dependencies import get_knowledge_base
+            self.kb_service = get_knowledge_base()
 
         self.prompt_template = """
 你是华为云竞争分析专家。请基于提供的华为云资料和{competitor}资料，分析{competitor}在{industry}行业的解决方案，生成华为云差异化优势和销售话术。
@@ -45,14 +53,14 @@ class CompetitorAnalyzerService:
         """竞品分析：同时检索华为方案和竞品资料"""
         import logging
         log = logging.getLogger(__name__)
-        
-        # 检查知识库是否为空（避免 chromadb segfault）
+
+        # 检查知识库是否为空
         try:
             stats = self.kb_service.get_stats()
             kb_empty = (stats.get("total_documents", 0) == 0)
         except Exception:
             kb_empty = True
-        
+
         if kb_empty:
             hw_docs = []
             competitor_docs = []
@@ -64,7 +72,7 @@ class CompetitorAnalyzerService:
             except Exception as e:
                 log.warning(f"华为云方案检索异常，跳过: {e}")
                 hw_docs = []
-            
+
             # 检索竞品方案
             competitor_query = f"{competitor}在{industry}行业的解决方案 产品 优势 案例"
             try:
@@ -72,10 +80,10 @@ class CompetitorAnalyzerService:
             except Exception as e:
                 log.warning(f"竞品方案检索异常，跳过: {e}")
                 competitor_docs = []
-        
+
         hw_context = "\n---\n".join([doc.page_content for doc in hw_docs]) if hw_docs else "（知识库中暂无华为云该行业方案资料）"
         competitor_context = "\n---\n".join([doc.page_content for doc in competitor_docs]) if competitor_docs else ""
-        
+
         # 如果竞品资料为空，尝试更宽泛的搜索
         if not competitor_context.strip() and not kb_empty:
             competitor_query2 = f"{competitor} 行业解决方案 {industry}"
@@ -85,7 +93,7 @@ class CompetitorAnalyzerService:
                 log.warning(f"宽泛竞品检索异常，跳过: {e}")
                 competitor_docs2 = []
             competitor_context = "\n---\n".join([doc.page_content for doc in competitor_docs2]) if competitor_docs2 else "（知识库中暂无{competitor}在{industry}行业的详细资料，请基于公开信息和华为云优势进行分析）".format(competitor=competitor, industry=industry)
-        
+
         # 如果华为方案也为空，使用 fallback
         if (not hw_docs or not hw_context.strip() or hw_context.startswith("（知识库中暂无")) and \
            (not competitor_docs or not competitor_context.strip() or competitor_context.startswith("（知识库中暂无")):
@@ -142,14 +150,3 @@ class CompetitorAnalyzerService:
             "answer": answer_result,
             "source_documents": all_docs
         }
-
-# 测试运行
-if __name__ == "__main__":
-    try:
-        analyzer = CompetitorAnalyzerService()
-        res = analyzer.analyze("阿里云", "智慧农业")
-        print("[OK] 竞品分析服务测试成功")
-        print("分析结果：\n", res["answer"][:500])
-    except Exception as e:
-        print("[ERR] 竞品分析测试失败")
-        print("错误：", str(e))
