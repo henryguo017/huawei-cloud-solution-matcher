@@ -538,15 +538,16 @@ async def get_knowledge_stats(
 
 @router.post("/knowledge/rebuild", response_model=RebuildResponse, tags=["知识库管理"])
 async def rebuild_knowledge(
+    current_user: dict = Depends(get_current_user),
     kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
 ):
     """
-    重建知识库
+    重建全局知识库（需登录）
     
     从 data/sample_solutions/ 目录重新加载所有文档
     """
     try:
-        logger.info("开始重建知识库")
+        logger.info(f"用户 {current_user['id']} 开始重建全局知识库")
         
         count = kb_service.build_from_directory()
         
@@ -565,15 +566,16 @@ async def rebuild_knowledge(
 
 @router.post("/knowledge/clear", response_model=ClearResponse, tags=["知识库管理"])
 async def clear_knowledge(
+    current_user: dict = Depends(get_current_user),
     kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
 ):
     """
-    清空知识库
+    清空全局知识库（需登录）
     
-    删除向量数据库中的所有文档
+    删除全局向量数据库中的所有文档
     """
     try:
-        logger.info("开始清空知识库")
+        logger.info(f"用户 {current_user['id']} 开始清空全局知识库")
         
         kb_service.vector_db.delete_collection()
         
