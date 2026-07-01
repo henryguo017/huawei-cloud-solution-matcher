@@ -86,13 +86,12 @@ const AuthManager = {
             this._clearAuth();
             this._saveAuth(data.access_token, data.user, data.expires_in);
             this._closeModal();
-            this._updateUI();
-            // 清空上一账号残留的页面数据
-            this._resetView();
-            // 处理登录触发的成就
-            if (data.newly_unlocked && data.newly_unlocked.length > 0 && window.AchievementUI && AchievementUI.showUnlockToast) {
-                setTimeout(() => AchievementUI.showUnlockToast(data.newly_unlocked), 800);
+            // 登录成功后刷新当前页面，让 auth 状态自然初始化所有 UI 组件
+            // 成就通知暂存到 sessionStorage，刷新后由 _checkPendingAchievements() 显示
+            if (data.newly_unlocked && data.newly_unlocked.length > 0) {
+                try { sessionStorage.setItem('pending_achievements', JSON.stringify(data.newly_unlocked)); } catch(_) {}
             }
+            location.reload();
             return true;
         } catch (e) {
             this._showError('login', '网络错误，请稍后重试');
@@ -1984,6 +1983,10 @@ Object.assign(KnowledgeUI, {
         const countEl = document.getElementById('kb-doc-count');
         if (!listEl) return;
 
+        // 根据登录状态控制「新增文档」按钮显示
+        const addBtn = document.getElementById('kb-doc-add-btn');
+        if (addBtn) addBtn.style.display = AuthManager.isLoggedIn() ? '' : 'none';
+
         let docs = this.docList;
         // 搜索过滤
         const searchTerm = (document.getElementById('kb-doc-search')?.value || '').toLowerCase();
@@ -2003,6 +2006,7 @@ Object.assign(KnowledgeUI, {
         }
 
         const catIcons = { huawei: '🔴', competitor: '🔵' };
+        const isLoggedIn = AuthManager.isLoggedIn();
         listEl.innerHTML = docs.map(d => `
             <div class="kb-doc-item" data-id="${d.id}">
                 <span class="kb-doc-item-icon">${catIcons[d.category] || '📄'}</span>
@@ -2014,11 +2018,13 @@ Object.assign(KnowledgeUI, {
                         <span>${d.size_kb}KB</span>
                     </div>
                 </div>
+                ${isLoggedIn ? `
                 <div class="kb-doc-item-actions">
                     <button class="kb-doc-action-btn" data-action="edit" data-id="${d.id}">✏️ 编辑</button>
                     <button class="kb-doc-action-btn" data-action="reindex" data-id="${d.id}">🔄 重索引</button>
                     <button class="kb-doc-action-btn danger" data-action="delete" data-id="${d.id}">🗑️</button>
                 </div>
+                ` : ''}
             </div>
         `).join('');
 
@@ -2036,6 +2042,11 @@ Object.assign(KnowledgeUI, {
     },
 
     async _openEditorForEdit(docId) {
+        if (!AuthManager.isLoggedIn()) {
+            UI.showToast('请先登录后再编辑文档', 'warning');
+            AuthManager._openModal();
+            return;
+        }
         try {
             const doc = await API.get(`/api/knowledge/documents/${encodeURIComponent(docId)}`);
             this.editingDocId = docId;
@@ -2056,6 +2067,11 @@ Object.assign(KnowledgeUI, {
     },
 
     async _reindexDoc(docId) {
+        if (!AuthManager.isLoggedIn()) {
+            UI.showToast('请先登录后再操作', 'warning');
+            AuthManager._openModal();
+            return;
+        }
         try {
             UI.showToast('正在重新索引...', 'info');
             await API.post(`/api/knowledge/documents/${encodeURIComponent(docId)}/reindex`);
@@ -2066,6 +2082,11 @@ Object.assign(KnowledgeUI, {
     },
 
     async _deleteDoc(docId) {
+        if (!AuthManager.isLoggedIn()) {
+            UI.showToast('请先登录后再删除文档', 'warning');
+            AuthManager._openModal();
+            return;
+        }
         const doc = this.docList.find(d => d.id === docId);
         if (!confirm(`确定要删除「${doc?.title || docId}」吗？此操作不可撤销。`)) return;
         try {
@@ -2101,6 +2122,11 @@ Object.assign(KnowledgeUI, {
     },
 
     async _saveDocument() {
+        if (!AuthManager.isLoggedIn()) {
+            UI.showToast('请先登录后再保存文档', 'warning');
+            AuthManager._openModal();
+            return;
+        }
         const statusEl = document.getElementById('kb-editor-status');
         const category = document.getElementById('kb-editor-category').value;
         const industry = document.getElementById('kb-editor-industry').value;
@@ -2130,8 +2156,13 @@ Object.assign(KnowledgeUI, {
     },
 
     _bindDocEvents() {
-        // 新增按钮
+        // 新增按钮（需要登录）
         document.getElementById('kb-doc-add-btn')?.addEventListener('click', () => {
+            if (!AuthManager.isLoggedIn()) {
+                UI.showToast('请先登录后再管理知识库', 'warning');
+                AuthManager._openModal();
+                return;
+            }
             this._resetEditor();
             this._showEditor();
         });
@@ -4208,6 +4239,11 @@ function initEventListeners() {
     const rebuildStatusText = document.getElementById('rebuild-status-text');
     
     rebuildBtn?.addEventListener('click', async () => {
+        if (!AuthManager.isLoggedIn()) {
+            UI.showToast('请先登录后再操作', 'warning');
+            AuthManager.showLoginModal();
+            return;
+        }
         UI.setButtonLoading(rebuildBtn, true);
         
         // 显示重建进度面板
@@ -4285,7 +4321,14 @@ function initEventListeners() {
 
     const closeConfirm = () => { confirmOverlay.style.display = 'none'; };
 
-    clearKbBtn?.addEventListener('click', () => { confirmOverlay.style.display = 'flex'; });
+    clearKbBtn?.addEventListener('click', () => {
+        if (!AuthManager.isLoggedIn()) {
+            UI.showToast('请先登录后再操作', 'warning');
+            AuthManager.showLoginModal();
+            return;
+        }
+        confirmOverlay.style.display = 'flex';
+    });
     confirmOverlay?.addEventListener('click', (e) => { if (e.target === confirmOverlay) closeConfirm(); });
     cancelCancelBtn?.addEventListener('click', closeConfirm);
     cancelCloseBtn?.addEventListener('click', closeConfirm);
@@ -4582,6 +4625,18 @@ function init() {
         KnowledgeUI.loadStats();
         KnowledgeUI._bindDocEvents();
         KnowledgeUI.loadDocList();
+
+        // 登录刷新后显示待处理的成就通知
+        try {
+            const pending = sessionStorage.getItem('pending_achievements');
+            if (pending && window.AchievementUI && AchievementUI.showUnlockToast) {
+                sessionStorage.removeItem('pending_achievements');
+                const achievements = JSON.parse(pending);
+                if (achievements.length > 0) {
+                    setTimeout(() => AchievementUI.showUnlockToast(achievements), 1000);
+                }
+            }
+        } catch (_) {}
     } catch (e) {
         console.error('[Init] 初始化失败:', e);
     }

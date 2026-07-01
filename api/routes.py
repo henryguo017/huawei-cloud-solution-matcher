@@ -596,11 +596,14 @@ async def clear_knowledge(
 
 @router.get("/knowledge/documents", response_model=KBDocumentListResponse, tags=["知识库管理"])
 async def list_knowledge_documents(
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_optional)
 ):
-    """列出当前用户知识库的所有文档"""
+    """列出知识库文档（未登录返回全局默认KB，登录返回用户独立KB）"""
     try:
-        kb_service = get_user_knowledge_base(current_user['id'])
+        if current_user:
+            kb_service = get_user_knowledge_base(current_user['id'])
+        else:
+            kb_service = get_knowledge_base()
         docs = kb_service.list_documents()
         return KBDocumentListResponse(total=len(docs), documents=docs)
     except Exception as e:
@@ -611,11 +614,14 @@ async def list_knowledge_documents(
 @router.get("/knowledge/documents/{doc_id}", tags=["知识库管理"])
 async def get_knowledge_document(
     doc_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_optional)
 ):
-    """获取文档内容"""
+    """获取文档内容（未登录读取全局默认KB，登录读取用户独立KB）"""
     try:
-        kb_service = get_user_knowledge_base(current_user['id'])
+        if current_user:
+            kb_service = get_user_knowledge_base(current_user['id'])
+        else:
+            kb_service = get_knowledge_base()
         return kb_service.get_document(doc_id)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
