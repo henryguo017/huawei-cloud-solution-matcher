@@ -17,27 +17,34 @@ const DemoCases = {
     }
 };
 
-// 欢迎页状态管理
+// 欢迎页状态管理 — 每天只显示一次
 const WelcomeState = {
-    hasSeenWelcome: false,
-    
+    STORAGE_KEY_DAILY: 'huawei-cloud-welcome-daily-date',  // 记录当天日期
+
     init() {
-        // 使用 sessionStorage 实现会话级别的记忆
-        // 每次新会话（打开新窗口/标签页）都会重新显示
-        const stored = sessionStorage.getItem('huawei-cloud-welcome-seen');
-        this.hasSeenWelcome = stored === 'true';
-        return this.hasSeenWelcome;
+        // 用 localStorage + 当天日期，实现"每天第一次"逻辑
+        const today = new Date().toDateString();  // 如 "Sun Jul 12 2026"
+        const storedDate = localStorage.getItem(this.STORAGE_KEY_DAILY);
+        
+        if (storedDate === today) {
+            // 今天已经看过欢迎页了
+            console.log('[WelcomeState] 今天已看过欢迎页，跳过');
+            return true;
+        }
+        // 今天还没看过，或者跨天了
+        console.log('[WelcomeState] 今天首次访问，显示欢迎页');
+        return false;
     },
-    
+
     setSeen() {
-        this.hasSeenWelcome = true;
-        // 只在当前会话有效，关闭浏览器后失效
-        sessionStorage.setItem('huawei-cloud-welcome-seen', 'true');
+        // 标记今天已看过，有效期到明天自动失效
+        const today = new Date().toDateString();
+        localStorage.setItem(this.STORAGE_KEY_DAILY, today);
+        console.log('[WelcomeState] 已标记今天看过:', today);
     },
-    
+
     reset() {
-        this.hasSeenWelcome = false;
-        sessionStorage.removeItem('huawei-cloud-welcome-seen');
+        localStorage.removeItem(this.STORAGE_KEY_DAILY);
     }
 };
 
@@ -66,6 +73,16 @@ const WelcomeManager = {
     },
 
     init() {
+        // 密码重置链接访问：跳过欢迎页，直接展示重置弹窗
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('token')) {
+                console.log('[WelcomeManager] 检测到重置链接，跳过欢迎页');
+                this.hide();
+                return;
+            }
+        } catch (_) {}
+        
         this.welcomePage = document.getElementById('welcome-page');
         
         if (!this.welcomePage) {
@@ -112,22 +129,17 @@ const WelcomeManager = {
     bindEvents() {
         const startBtn = document.getElementById('start-experience-btn');
         const skipBtn = document.getElementById('skip-welcome-btn');
-        const skipCheckbox = document.getElementById('skip-permanently-checkbox');
         
         startBtn?.addEventListener('click', () => {
-            // 点击"立即体验"时，检查复选框
-            if (skipCheckbox?.checked) {
-                WelcomeState.setSeen();
-            }
+            // 关闭欢迎页即标记今天已看（每天只显示一次）
+            WelcomeState.setSeen();
             this.hide();
             DemoManager.showSelector();
         });
         
         skipBtn?.addEventListener('click', () => {
-            // 点击"跳过引导"时，检查复选框
-            if (skipCheckbox?.checked) {
-                WelcomeState.setSeen();
-            }
+            // 关闭欢迎页即标记今天已看（每天只显示一次）
+            WelcomeState.setSeen();
             this.hide();
         });
     },

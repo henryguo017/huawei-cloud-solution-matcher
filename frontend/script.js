@@ -3663,8 +3663,8 @@ function initEventListeners() {
 
     document.getElementById('reset-password-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
+        // 优先从全局变量读取 token（URL 中的 token 会被清理）
+        const token = window._resetToken || new URLSearchParams(window.location.search).get('token');
         const newPwd = document.getElementById('reset-password-new').value;
         const confirmPwd = document.getElementById('reset-password-confirm').value;
         if (newPwd.length < 6) {
@@ -4820,6 +4820,31 @@ function init() {
                 if (achievements.length > 0) {
                     setTimeout(() => AchievementUI.showUnlockToast(achievements), 1000);
                 }
+            }
+        } catch (_) {}
+
+        // 检测 URL 中的 reset-password?token 参数（邮件重置链接）
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const resetToken = urlParams.get('token');
+            if (resetToken) {
+                console.log('[Init] 检测到密码重置链接，打开重置弹窗...');
+                // 保存 token 到全局变量（提交表单时使用）
+                window._resetToken = resetToken;
+                // 清理 URL（去掉 token 参数，避免刷新时重复触发）
+                window.history.replaceState({}, document.title, window.location.pathname);
+                // 延迟一点等 DOM 完全就绪
+                setTimeout(() => {
+                    const overlay = document.getElementById('reset-password-modal-overlay');
+                    if (overlay) {
+                        overlay.style.display = '';
+                        const errEl = document.getElementById('reset-password-error');
+                        const succEl = document.getElementById('reset-password-success');
+                        if (errEl) errEl.style.display = 'none';
+                        if (succEl) succEl.style.display = 'none';
+                        console.log('[Init] ✅ 重置密码弹窗已打开');
+                    }
+                }, 500);
             }
         } catch (_) {}
     } catch (e) {

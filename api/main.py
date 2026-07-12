@@ -182,6 +182,21 @@ async def serve_js(filename: str):
         return FileResponse(js_path, media_type=media_type)
     raise HTTPException(status_code=404)
 
+@app.get("/{full_path:path}", tags=["前端SPA"])
+async def spa_fallback(full_path: str):
+    """
+    SPA 路由回退：所有非 API、非静态文件的请求都返回 index.html
+    支持 /reset-password?token=xxx 等前端路由
+    """
+    # 排除 API 路径（不应走到这里，但做防御性检查）
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    
+    index_path = os.path.join(frontend_path, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="前端文件不存在")
+
 @app.on_event("startup")
 async def startup_event():
     logger.info("=" * 50)

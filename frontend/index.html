@@ -6,10 +6,70 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260702a">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260702a">
+    <link rel="stylesheet" href="style.css?v=20260702g">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260702g">
 </head>
 <body>
+    <!-- 密码重置链接检测（内联，不受外部JS缓存影响） -->
+    <script>
+    (function() {
+        var params = new URLSearchParams(window.location.search);
+        var token = params.get('token');
+        if (token) {
+            console.log('[ResetLink] 检测到重置token，长度:', token.length);
+            window._resetToken = token;
+            // 清理URL
+            history.replaceState({}, document.title, window.location.pathname);
+            // 标记今天已看过欢迎页（重置流程属于"已访问过"，跳转后不再弹）
+            try {
+                localStorage.setItem('huawei-cloud-welcome-daily-date', new Date().toDateString());
+                console.log('[ResetLink] ✅ 已标记今天看过欢迎页');
+            } catch (_) {}
+
+            // 立即隐藏欢迎页（不依赖 welcome-script.js 缓存）
+            function hideWelcome() {
+                var wp = document.getElementById('welcome-page');
+                if (wp) {
+                    wp.style.display = 'none';
+                    console.log('[ResetLink] ✅ 欢迎页已隐藏');
+                }
+            }
+            // 尽早隐藏：DOM 解析到 welcome-page 元素后立刻隐藏
+            if (document.getElementById('welcome-page')) {
+                hideWelcome();
+            } else {
+                // DOM 还没解析到，用 MutationObserver 监听
+                var observer = new MutationObserver(function() {
+                    if (document.getElementById('welcome-page')) {
+                        hideWelcome();
+                        observer.disconnect();
+                    }
+                });
+                observer.observe(document.documentElement, { childList: true, subtree: true });
+                // 兜底：500ms 后再试一次
+                setTimeout(hideWelcome, 500);
+            }
+
+            // 等DOM就绪后弹窗
+            function tryOpenModal() {
+                var el = document.getElementById('reset-password-modal-overlay');
+                if (el) {
+                    el.style.display = '';
+                    console.log('[ResetLink] ✅ 重置密码弹窗已打开');
+                    // 隐藏提示信息
+                    var errEl = document.getElementById('reset-password-error');
+                    var succEl = document.getElementById('reset-password-success');
+                    if (errEl) errEl.style.display = 'none';
+                    if (succEl) succEl.style.display = 'none';
+                } else {
+                    setTimeout(tryOpenModal, 200);
+                }
+            }
+            setTimeout(tryOpenModal, 800);
+        }
+    })();
+    </script>
+
     <canvas id="particle-canvas"></canvas>
     
     <!-- 欢迎引导页 -->
@@ -1537,9 +1597,9 @@
         </a>
     </footer>
     
-    <script src="js/chart.umd.min.js?v=20260702a" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260702a"></script>
-    <script src="js/achievement-ui.js?v=20260702a"></script>
-    <script src="welcome-script.js?v=20260702a"></script>
+    <script src="js/chart.umd.min.js?v=20260702g" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
+    <script src="script.js?v=20260702g"></script>
+    <script src="js/achievement-ui.js?v=20260702g"></script>
+    <script src="welcome-script.js?v=20260702g"></script>
 </body>
 </html>
