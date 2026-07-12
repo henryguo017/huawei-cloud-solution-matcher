@@ -1118,8 +1118,11 @@ const API = {
     },
 
     async rebuildKnowledge() {
+        const headers = {};
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
         const response = await fetch(`${Config.API_BASE_URL}/knowledge/rebuild`, {
-            method: 'POST'
+            method: 'POST',
+            headers
         });
         
         if (!response.ok) {
@@ -1130,8 +1133,11 @@ const API = {
     },
 
     async clearKnowledge() {
+        const headers = {};
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
         const response = await fetch(`${Config.API_BASE_URL}/knowledge/clear`, {
-            method: 'POST'
+            method: 'POST',
+            headers
         });
 
         if (!response.ok) {
