@@ -156,7 +156,7 @@ const WelcomeManager = {
             if (!numEl) return;
 
             let realTarget = parseInt(numEl.dataset.target); // 兜底保留原值
-            if (label.includes('准确率')) {
+            if (label.includes('覆盖度')) {
                 realTarget = stats.accuracy;
             } else if (label.includes('效率')) {
                 realTarget = stats.efficiency;
