@@ -30,13 +30,25 @@ def init_database():
             last_login TIMESTAMP,
             failed_login_count INTEGER DEFAULT 0,
             locked_until TIMESTAMP,
-            token_version INTEGER DEFAULT 1
+            token_version INTEGER DEFAULT 1,
+            reset_token TEXT,
+            reset_token_expiry TIMESTAMP
         )
     """)
     
     # 迁移：为已有数据库添加 token_version 列
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
+    
+    # 迁移：为已有数据库添加密码重置相关列
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
     except sqlite3.OperationalError:
         pass  # 列已存在
     
