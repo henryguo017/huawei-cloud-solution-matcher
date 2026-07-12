@@ -47,7 +47,7 @@ class KnowledgeStatsResponse(BaseModel):
     total_documents: int = Field(..., description="总文档片段数")
     supported_industries: List[str] = Field(default_factory=list, description="支持的行业列表")
     industry_counts: Dict[str, int] = Field(default_factory=dict, description="各行业文档数量")
-    accuracy: int = Field(default=50, description="匹配准确率（百分比）")
+    accuracy: int = Field(default=50, description="方案覆盖度（百分比）")
 
 class RebuildResponse(BaseModel):
     count: int = Field(..., description="重建的文档数量")
@@ -148,7 +148,7 @@ class DashboardStatsResponse(BaseModel):
     match_growth: Optional[float] = Field(default=None, description="方案匹配7日环比涨幅（百分比），None表示前一区间无数据（新增长）")
     analyze_growth: Optional[float] = Field(default=None, description="竞品分析7日环比涨幅（百分比），None表示前一区间无数据（新增长）")
     total_documents: int = Field(default=0, description="知识库文档总数")
-    accuracy: int = Field(default=87, description="匹配准确率（百分比）")
+    accuracy: int = Field(default=87, description="方案覆盖度（百分比）")
     system_uptime: str = Field(default="--", description="系统运行时间")
     last_update: str = Field(default="--", description="最后更新时间")
     version: str = Field(default="v1.0.0", description="系统版本号")

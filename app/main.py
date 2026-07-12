@@ -95,7 +95,7 @@ with st.sidebar:
     stats = kb_service.get_stats()
     st.metric("知识库文档数", stats["total_documents"])
     st.metric("覆盖行业数", len(SUPPORTED_INDUSTRIES))
-    st.metric("匹配准确率", "87%")
+    st.metric("方案覆盖度", f"{stats.get('accuracy', 87)}%")
     
     st.divider()
     
@@ -252,7 +252,7 @@ else:
     with col2:
         st.metric("覆盖行业数", len(stats["supported_industries"]))
     with col3:
-        st.metric("匹配准确率", "87%")
+        st.metric("方案覆盖度", f"{stats.get('accuracy', 87)}%")
     
     st.divider()
     

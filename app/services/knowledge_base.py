@@ -269,7 +269,7 @@ class KnowledgeBaseService:
             print(f"  - 竞品文件数: {total_competitor_files} (覆盖{len(competitor_companies)}家竞品)")
             print(f"  - 覆盖行业数: {len(supported_industries)}")
             print(f"  - 覆盖行业: {', '.join(supported_industries) if supported_industries else '无'}")
-            print(f"  - 匹配准确率: {accuracy}%\n")
+            print(f"  - 方案覆盖度: {accuracy}%\n")
 
             return {
                 "total_documents": total_documents,
