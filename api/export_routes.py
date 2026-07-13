@@ -19,12 +19,20 @@ async def export_report(request: ExportRequest):
     
     - **report_type**: 报告类型（solution/competitor）
     - **format**: 导出格式（word/pdf）
-    - **content**: 报告内容（Markdown格式）
+    - **solution_json**: 结构化方案（章节+要点），优先于 content 直接生成报告
+    - **content**: 报告内容（Markdown格式），solution_json 缺省时的兜底；二者至少提供一项
     - **metadata**: 元数据（标题、客户名称等）
     """
     try:
         logger.info(f"开始生成报告，类型: {request.report_type}, 格式: {request.format}")
-        
+
+        # 二者至少提供一项，否则明确报错（置于 try 外，避免被包裹成 500）
+        if not request.solution_json and not request.content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="content 与 solution_json 至少需提供一项"
+            )
+
         # 优先使用结构化 JSON（一键出方案书）；否则回退到 Markdown 解析
         if request.solution_json:
             task = report_generator.generate_report_from_json(
@@ -55,6 +63,8 @@ async def export_report(request: ExportRequest):
             file_size=task.file_size
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"报告导出失败: {e}")
         raise HTTPException(

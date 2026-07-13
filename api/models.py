@@ -159,7 +159,7 @@ class ExportRequest(BaseModel):
     report_type: str = Field(..., description="报告类型: solution/competitor")
     format: str = Field(default="word", description="导出格式: word/pdf")
     title: Optional[str] = Field(default=None, description="报告标题")
-    content: str = Field(..., description="报告内容（Markdown格式）")
+    content: Optional[str] = Field(default="", description="报告内容（Markdown格式），优先使用 solution_json，content 为兜底")
     solution_json: Optional[Any] = Field(default=None, description="结构化方案（章节+要点），优先于 content 直接生成报告")
     source_documents: Optional[List[Dict[str, Any]]] = Field(default=None, description="参考文档")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="元数据")
