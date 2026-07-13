@@ -8098,9 +8098,15 @@ select:focus {
 
 /* 收起态 */
 .app-shell.collapsed .sidebar { width: var(--sidebar-width-collapsed); }
-.app-shell.collapsed .sidebar-brand { padding: 0 18px; justify-content: center; }
+.app-shell.collapsed .sidebar-brand { padding: 0; justify-content: center; }
 .app-shell.collapsed .sidebar-brand .brand-text,
-.app-shell.collapsed .sidebar-collapse-btn { display: none; }
+.app-shell.collapsed .sidebar-brand .brand-icon { display: none; }
+.app-shell.collapsed .sidebar-collapse-btn {
+    display: flex;   /* 始终可见，允许再次点击展开 */
+    margin-left: 0;
+}
+/* 展开时箭头向左(←)，收起时箭头向右(→) */
+.app-shell.collapsed .sidebar-collapse-btn .icon { transform: rotate(180deg); }
 .app-shell.collapsed .sidebar-item { justify-content: center; padding-left: 0; padding-right: 0; }
 .app-shell.collapsed .sidebar-item .nav-text { display: none; }
 .app-shell.collapsed .sidebar-footer { display: none; }

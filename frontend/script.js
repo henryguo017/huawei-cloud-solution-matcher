@@ -3545,17 +3545,23 @@ function initEventListeners() {
 
     // 侧边栏收起 / 展开（默认展开，状态持久化）
     const sidebarToggle = document.getElementById('sidebar-toggle');
+    function _updateSidebarToggleUI(isCollapsed) {
+        if (!sidebarToggle) return;
+        sidebarToggle.title = isCollapsed ? '展开侧边栏' : '收起侧边栏';
+    }
     sidebarToggle?.addEventListener('click', () => {
         const shell = document.getElementById('app-shell');
         if (!shell) return;
-        shell.classList.toggle('collapsed');
+        const isCollapsed = shell.classList.toggle('collapsed');
         try {
-            localStorage.setItem('sidebar-collapsed', shell.classList.contains('collapsed') ? '1' : '0');
+            localStorage.setItem('sidebar-collapsed', isCollapsed ? '1' : '0');
         } catch (_) {}
+        _updateSidebarToggleUI(isCollapsed);
     });
     try {
         if (localStorage.getItem('sidebar-collapsed') === '1') {
             document.getElementById('app-shell')?.classList.add('collapsed');
+            _updateSidebarToggleUI(true);
         }
     } catch (_) {}
 
