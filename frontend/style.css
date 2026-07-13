@@ -7752,3 +7752,284 @@ input:checked + .toggle-slider:before { transform: translateX(22px); }
 
 /* 19. Footer微调 */
 .site-footer { border-top: 1px solid var(--border-color); background: var(--bg-card); }
+
+/* ================================================================
+   Phase 6 · 华为红品牌风格增强 — 大厂质感
+   参考：阿里云/腾讯云/华为云官网设计语言
+   核心原则：品牌色点缀 + 层次感 + 温度，不使用logo
+   ================================================================ */
+
+/* ---- 1. 页面背景增加暖色调层次（极淡的红色光晕）---- */
+body {
+    background: linear-gradient(180deg, #FAFBFD 0%, #F5F6F8 40%, #FBFAFC 100%);
+}
+
+/* ---- 2. 页面标题区域：左侧品牌色竖线装饰 ---- */
+.page-header {
+    position: relative;
+    padding-left: 16px;
+    margin-bottom: var(--spacing-xl);
+}
+.page-header::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    background: linear-gradient(180deg, var(--primary-color) 0%, #E02020 50%, var(--primary-hover) 100%);
+    border-radius: 2px;
+}
+.page-title {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+    letter-spacing: -0.02em;
+}
+.page-subtitle {
+    font-size: var(--font-size-base);
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+/* ---- 3. 内容卡片：始终显示顶部品牌色线（不再只hover才出现）---- */
+.content-card::before {
+    opacity: 1;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-color) 0%, rgba(199,0,11,0.3) 30%, transparent 100%);
+}
+.content-card:hover::before {
+    opacity: 1;
+    background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+}
+
+/* ---- 4. Navbar 品牌增强：logo区域红色脉冲微光 ---- */
+.navbar-brand .brand-icon {
+    filter: drop-shadow(0 0 6px rgba(199, 0, 11, 0.25));
+}
+.navbar-item.active {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #D00818 100%);
+    box-shadow: 0 2px 12px rgba(199, 0, 11, 0.35), 0 0 0 1px rgba(199, 0, 11, 0.1);
+}
+.navbar-item:not(.active):hover {
+    background: rgba(199, 0, 11, 0.06);
+    color: var(--primary-color);
+}
+
+/* ---- 5. Dashboard KPI 卡片增强 ---- */
+.dashboard-kpi-card {
+    border: none;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+.dashboard-kpi-card:nth-child(1) .kpi-icon { background: linear-gradient(135deg, rgba(199,0,11,0.12), rgba(199,0,11,0.06)); color: #C7000B; }
+.dashboard-kpi-card:nth-child(1)::before { background: linear-gradient(90deg, #C7000B, #E85D5D); }
+.dashboard-kpi-card:nth-child(2) .kpi-icon { background: linear-gradient(135deg, rgba(22,93,255,0.12), rgba(22,93,255,0.06)); color: #165DFF; }
+.dashboard-kpi-card:nth-child(2)::before { background: linear-gradient(90deg, #165DFF, #69A1FF); }
+.dashboard-kpi-card:nth-child(3) .kpi-icon { background: linear-gradient(135deg, rgba(82,196,26,0.12), rgba(82,196,26,0.06)); color: #52C41A; }
+.dashboard-kpi-card:nth-child(3)::before { background: linear-gradient(90deg, #52C41A, #95DE64); }
+.dashboard-kpi-card:nth-child(4) .kpi-icon { background: linear-gradient(135deg, rgba(250,173,13,0.15), rgba(250,173,13,0.07)); color: #D48806; }
+.dashboard-kpi-card:nth-child(4)::before { background: linear-gradient(90deg, #D48806, #FFD666); }
+.kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+}
+
+/* ---- 6. 图表卡片增强 ---- */
+.dashboard-chart-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+.dashboard-chart-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(199, 0, 11, 0.08);
+    transform: translateY(-2px);
+}
+.chart-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.chart-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    position: relative;
+    padding-left: 10px;
+}
+.chart-title::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 14px;
+    background: var(--primary-color);
+    border-radius: 2px;
+}
+.chart-body {
+    padding: 16px 20px;
+    min-height: 220px;
+}
+
+/* ---- 7. 主页匹配表单卡片：品牌色头部渐变条 ---- */
+#page-match > .content-wrapper > .content-card:first-child {
+    border-top: 4px solid var(--primary-color);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(199, 0, 11, 0.05);
+}
+#page-match > .content-wrapper > .content-card:first-child::before {
+    display: none; /* 避免双重顶线 */
+}
+
+/* ---- 8. 按钮系统统一增强 ---- */
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #E02020 60%, #D00818 100%);
+    border: none;
+    box-shadow: 0 2px 8px rgba(199, 0, 11, 0.25), inset 0 1px 0 rgba(255,255,255,0.15);
+    transition: all 0.25s ease;
+}
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(199, 0, 11, 0.35), inset 0 1px 0 rgba(255,255,255,0.2);
+    background: linear-gradient(135deg, #D00818 0%, var(--primary-color) 60%, #E02020 100%);
+}
+.btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px rgba(199, 0, 11, 0.3);
+}
+
+/* ---- 9. Footer 增强品牌底栏 ---- */
+.site-footer {
+    border-top: none;
+    background: linear-gradient(180deg, var(--bg-card) 0%, #F8F9FB 100%);
+    position: relative;
+}
+.site-footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+    opacity: 0.5;
+}
+
+/* ---- 10. 移动端底部导航激活态 ---- */
+.mobile-nav-item.active .mobile-nav-icon {
+    color: var(--primary-color);
+}
+.mobile-nav-item.active .mobile-nav-label {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+.mobile-nav-item.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 3px;
+    background: var(--primary-color);
+    border-radius: 0 0 3px 3px;
+}
+
+/* ---- 11. 表单输入框焦点增强 ---- */
+.form-input:focus,
+textarea:focus,
+select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* ---- 12. 统计卡片（stat-card）增强 ---- */
+.stat-card {
+    text-align: center;
+    padding: 20px 16px !important;
+    border-radius: var(--radius-lg) !important;
+    position: relative;
+    overflow: hidden;
+}
+.stat-card-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--primary-color);
+    letter-spacing: -0.03em;
+}
+.stat-card-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+.stat-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(199,0,11,0.2), transparent);
+}
+
+/* ---- 13. Tab / 切换按钮组品牌化 ---- */
+.history-tabs {
+    background: var(--neutral-100);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    gap: 4px;
+}
+.history-tab.active {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 2px 8px rgba(199, 0, 11, 0.25);
+}
+.mode-btn-group .mode-btn.active {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 2px 8px rgba(199, 0, 11, 0.25);
+}
+
+/* ---- 14. 进度步骤条增强 ---- */
+.step-indicator .step.active .step-num,
+.step-indicator .step.done .step-num {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 2px 6px rgba(199, 0, 11, 0.3);
+}
+
+/* ---- 15. 知识库文档列表行悬停 ---- */
+.kb-doc-item:hover {
+    border-left: 3px solid var(--primary-color);
+    background: rgba(199, 0, 11, 0.03);
+}
+
+/* ---- 16. 成就徽章/标签品牌化 ---- */
+.badge-primary, .badge-success, .badge-info, .badge-warning {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+.badge-primary { background: rgba(199,0,11,0.1); color: #C7000B; border: 1px solid rgba(199,0,11,0.2); }
+
+/* ---- 17. 分页组件 ---- */
+.pagination-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 6px rgba(199, 0, 11, 0.25);
+}
+
+/* ---- 18. 滚动条品牌色调 ---- */
+::-webkit-scrollbar-thumb {
+    background: rgba(199, 0, 11, 0.2);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(199, 0, 11, 0.35);
+}
