@@ -1065,6 +1065,23 @@ const API = {
         return await response.json();
     },
 
+    async exportReport(request) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
+            headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        }
+        const response = await fetch(`${Config.API_BASE_URL}/export/report`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(request)
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `导出失败: ${response.statusText}`);
+        }
+        return await response.json();
+    },
+
     async getKnowledgeStats() {
         const response = await fetch(`${Config.API_BASE_URL}/knowledge/stats`);
         
@@ -4134,6 +4151,7 @@ function initEventListeners() {
                         <div class="result-content content-card" id="solution-content"></div>
                         <div class="result-actions">
                             <button class="btn btn-primary" id="download-solution-btn">📥 下载方案报告</button>
+                            <button class="btn btn-secondary" id="export-docx-btn">📘 导出方案书</button>
                             <button class="btn btn-favorite-result" id="fav-solution-btn">☆ 收藏方案</button>
                         </div>
                         <details class="source-documents content-card">
@@ -4151,6 +4169,8 @@ function initEventListeners() {
                             UI.downloadFile(r.answer, '华为云_' + (r.industry || '解决方案') + '_方案匹配报告.md');
                         }
                     });
+                    var exBtn2 = document.getElementById('export-docx-btn');
+                    if (exBtn2) exBtn2.addEventListener('click', triggerExportSolutionBook);
                 }
             }
             
@@ -4229,6 +4249,60 @@ function initEventListeners() {
         State.resultCache.solution = null;
     });
     
+    // 导出方案书（Word）：优先用结构化 solution_json，后端自动回退 Markdown
+    async function triggerExportSolutionBook() {
+        const cached = State.resultCache.solution;
+        if (!cached || !cached.answer) {
+            UI.showToast('请先生成方案再导出', 'warning');
+            return;
+        }
+        const btn = document.getElementById('export-docx-btn');
+        const origHtml = btn ? btn.innerHTML : '📘 导出方案书';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '⏳ 生成中...';
+        }
+        UI.showToast('正在生成方案书...', 'info');
+        try {
+            const resp = await API.exportReport({
+                report_type: 'solution',
+                format: 'word',
+                title: '华为云解决方案建议书',
+                content: cached.answer,
+                solution_json: cached.solution_json || null,
+                source_documents: cached.source_documents || [],
+                metadata: { customer: '', title: '华为云解决方案建议书' }
+            });
+            const status = (resp.status || '').toUpperCase();
+            if (status !== 'COMPLETED') {
+                throw new Error(resp.error_message || '方案书生成失败');
+            }
+            // 下载生成的文件（download_url 已含 /api，需去掉避免与 API_BASE_URL 拼接成 /api/api/...）
+            const dlPath = (resp.download_url || '').replace(/^\/api/, '');
+            const dlUrl = `${Config.API_BASE_URL}${dlPath}`;
+            const fileResp = await fetch(dlUrl);
+            if (!fileResp.ok) throw new Error('文件下载失败');
+            const blob = await fileResp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = resp.file_name || 'solution_report.docx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            UI.showToast('方案书已生成并下载', 'success');
+        } catch (e) {
+            console.error('[导出方案书] 失败:', e);
+            UI.showToast(e.message || '导出失败，请重试', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        }
+    }
+
     document.getElementById('download-solution-btn')?.addEventListener('click', () => {
         if (State.resultCache.solution) {
             UI.downloadFile(
@@ -4237,6 +4311,8 @@ function initEventListeners() {
             );
         }
     });
+
+    document.getElementById('export-docx-btn')?.addEventListener('click', triggerExportSolutionBook);
 
     document.getElementById('fav-solution-btn')?.addEventListener('click', () => {
         const cached = State.resultCache.solution;

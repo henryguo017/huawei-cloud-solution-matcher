@@ -255,7 +255,7 @@ class KnowledgeBaseService:
             # 有文档的行业
             supported_industries = [k for k, v in industry_counts.items() if v > 0]
 
-            # 计算匹配准确率
+            # 计算方案覆盖度（基于行业/文档/竞品覆盖的估算值，非真实匹配准确率）
             base_accuracy = 50
             industry_bonus = min(len(supported_industries) * 3, 30)
             doc_bonus = min(total_files // 10 * 1, 10)
