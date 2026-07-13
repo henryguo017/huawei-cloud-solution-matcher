@@ -6108,37 +6108,46 @@ body::after {
 .category-group-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     margin-bottom: 12px;
-    padding-bottom: 8px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--border-light);
+    line-height: 1;
 }
 
 .category-group-icon {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     border-radius: 7px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.8125rem;
     flex-shrink: 0;
 }
 
+.category-group-icon .icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
 .category-group-title {
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: 0.3px;
+    line-height: 28px;
 }
 
 .category-group-count {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--text-tertiary);
     margin-left: auto;
     background: var(--neutral-100);
-    padding: 2px 8px;
+    padding: 3px 10px;
     border-radius: 10px;
+    line-height: 1;
+    align-self: center;
 }
 
 /* 分类颜色 */
