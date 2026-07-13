@@ -8198,28 +8198,41 @@ select:focus {
 .topbar-icon-btn {
     display: flex; align-items: center; gap: 6px;
     height: 36px; padding: 0 14px;
-    background: rgba(199,0,11,0.10);
-    border: 1px solid rgba(199,0,11,0.22);
+    background: linear-gradient(135deg, rgba(199,0,11,0.18) 0%, rgba(199,0,11,0.08) 100%);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(199,0,11,0.25);
+    box-shadow: 0 2px 8px rgba(199,0,11,0.12), inset 0 1px 0 rgba(255,255,255,0.06);
     border-radius: 10px;
-    color: var(--primary-color); font-size: 0.85rem; font-weight: 600;
+    color: rgba(255,255,255,0.92); font-size: 0.85rem; font-weight: 600;
     cursor: pointer; font-family: var(--font-family);
     transition: all var(--transition-fast);
 }
-.topbar-icon-btn:hover { background: var(--primary-color); }
+.topbar-icon-btn:hover {
+    background: linear-gradient(135deg, rgba(199,0,11,0.35) 0%, rgba(199,0,11,0.18) 100%);
+    border-color: rgba(199,0,11,0.45);
+    color: #fff;
+}
 .topbar-icon-btn .icon { width: 1.1rem; height: 1.1rem; }
 
 /* 顶栏内用户菜单 */
 .topbar .nav-user-menu { position: relative; }
 .topbar .nav-user-avatar-btn {
     display: flex; align-items: center; gap: 8px;
-    background: var(--frame-bg-2);
-    border: 1px solid var(--frame-border);
+    background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(199,0,11,0.20);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.05);
     border-radius: 10px;
     height: 36px; padding: 0 12px;
-    color: var(--primary-color); cursor: pointer; font-family: var(--font-family);
-    transition: background var(--transition-fast);
+    color: rgba(255,255,255,0.88); cursor: pointer; font-family: var(--font-family);
+    transition: all var(--transition-fast);
 }
-.topbar .nav-user-avatar-btn:hover { background: var(--frame-hover); }
+.topbar .nav-user-avatar-btn:hover {
+    background: linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%);
+    border-color: rgba(199,0,11,0.35);
+}
 .topbar .user-name { font-size: 0.85rem; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar .dropdown-arrow { color: var(--frame-text-dim); font-size: 0.7rem; }
 
