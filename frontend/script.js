@@ -1806,6 +1806,12 @@ const UI = {
         });
         const navbarItem = document.querySelector(`.navbar-item[data-page="${pageName}"]`);
         if (navbarItem) navbarItem.classList.add('active');
+
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        const sidebarItem = document.querySelector(`.sidebar-item[data-page="${pageName}"]`);
+        if (sidebarItem) sidebarItem.classList.add('active');
         
         document.querySelectorAll('.mobile-nav-item').forEach(item => {
             item.classList.remove('active');
@@ -2750,6 +2756,9 @@ const PageTransition = {
         document.querySelectorAll('.navbar-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === pageName);
         });
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.page === pageName);
+        });
         document.querySelectorAll('.mobile-nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === pageName);
         });
@@ -3484,6 +3493,23 @@ function initEventListeners() {
         });
     });
     
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const page = item.dataset.page;
+            if ((page === 'dashboard' || page === 'history') && !AuthManager.isLoggedIn()) {
+                AuthManager._openModal();
+                return;
+            }
+            PageTransition.switchTo(page).then(() => {
+                if (page === 'knowledge') { KnowledgeUI.loadStats(); KnowledgeUI.loadDocList(); }
+                if (page === 'dashboard') DashboardUI.loadStats();
+                if (page === 'history') HistoryUI.loadHistory();
+                if (page === 'settings') SettingsManager.updateSystemInfo();
+                if (page === 'products') { setTimeout(function() { try { ProductGraph._renderGrid(); } catch(e) { console.warn('[PageSwitch] 产品图谱渲染失败:', e); } }, 100); }
+            });
+        });
+    });
+
     const navbarToggle = document.getElementById('navbar-toggle');
     const mobileLoginBtn = document.getElementById('mobile-login-btn');
     
@@ -3506,6 +3532,22 @@ function initEventListeners() {
             AuthManager._openModal();
         }
     });
+
+    // 侧边栏收起 / 展开（默认展开，状态持久化）
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    sidebarToggle?.addEventListener('click', () => {
+        const shell = document.getElementById('app-shell');
+        if (!shell) return;
+        shell.classList.toggle('collapsed');
+        try {
+            localStorage.setItem('sidebar-collapsed', shell.classList.contains('collapsed') ? '1' : '0');
+        } catch (_) {}
+    });
+    try {
+        if (localStorage.getItem('sidebar-collapsed') === '1') {
+            document.getElementById('app-shell')?.classList.add('collapsed');
+        }
+    } catch (_) {}
 
     // 产品详情弹窗关闭
     document.getElementById('product-modal-close')?.addEventListener('click', () => {
