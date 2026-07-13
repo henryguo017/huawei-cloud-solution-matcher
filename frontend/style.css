@@ -6523,21 +6523,35 @@ body::after {
 }
 
 .detail-advantage-list li {
-    position: relative;
-    padding-left: 20px;
-    font-size: 12.5px;
-    color: var(--text-primary);
-    line-height: 1.6;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    position: static !important;
+    padding: 11px 14px !important;
+    font-size: 0.83rem;
+    color: #1A6E3A;
+    line-height: 1.55;
+    background: linear-gradient(135deg, #F0FAF4, #EBF7F0);
+    border: 1px solid #D4EDDA;
+    border-radius: 11px;
+    transition: box-shadow 0.15s ease;
 }
 
 .detail-advantage-list li::before {
-    content: '\2714';
-    position: absolute;
-    left: 0;
-    top: 1px;
-    color: #22C55E;
-    font-size: 0.6875rem;
-    font-weight: bold;
+    content: '' !important;
+    display: block !important;
+    position: static !important;
+    width: 8px !important;
+    height: 8px !important;
+    min-width: 8px !important;
+    border-radius: 50% !important;
+    background: #22A85A !important;
+    flex-shrink: 0 !important;
+    font-size: 0 !important;
+}
+
+.detail-advantage-list li:hover {
+    box-shadow: 0 3px 12px rgba(34,168,90,0.12);
 }
 
 /* 技术亮点列表 */
@@ -7104,7 +7118,6 @@ body::after {
     margin: 0;
 }
 .product-modal-content .detail-scenario-list li:not(.detail-chip-list li),
-.product-modal-content .detail-advantage-list li,
 .product-modal-content .detail-highlight-list li {
     padding: 6px 0 6px 20px;
     font-size: 0.8125rem;
