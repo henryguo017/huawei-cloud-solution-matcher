@@ -5479,7 +5479,7 @@ body::after {
     width: 400px;
     max-width: 90vw;
     height: 100%;
-    background: var(--bg-card, #1a1a2e);
+    background: var(--bg-card, #ffffff);
     border-left: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
@@ -6834,7 +6834,7 @@ body::after {
     width: 100%;
     max-width: 680px;
     max-height: 85vh;
-    background: linear-gradient(180deg, #1a1f3a 0%, #0f1328 100%);
+    background: var(--bg-card);
     border-radius: 20px 20px 0 0;
     border: 1px solid var(--border-color);
     border-bottom: none;
@@ -6842,6 +6842,7 @@ body::after {
     display: flex;
     flex-direction: column;
     animation: modalSlideUp 0.3s ease;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
 @keyframes modalSlideUp {
