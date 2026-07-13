@@ -233,16 +233,47 @@ class KnowledgeBaseService:
             return []
 
     def search_huawei(self, query, k=4):
-        """只召回华为云方案文档（主方案落地用），竞品不参与"""
-        pool = self._similarity_pool(query, pool_size=max(k * 3, 15))
-        huawei = [d for d in pool if (d.metadata or {}).get("industry", "") not in self._competitor_companies]
-        return huawei[:k]
+        """只召回华为云方案文档（主方案落地用）——直接在华为子集上检索，避免被竞品挤出前排"""
+        comp = self._competitor_companies
+        results = []
+        try:
+            results = self.vector_db.similarity_search(
+                query, k=k, filter={"industry": {"$nin": list(comp)}}
+            )
+        except Exception as e:
+            logger.warning(f"华为子集检索异常，回退混合池: {e}")
+        # 召回不足时在更大混合池中补充华为文档（竞品过多时仍保底）
+        if len(results) < k:
+            seen = {d.page_content for d in results}
+            pool = self._similarity_pool(query, pool_size=max(k * 4, 40))
+            for d in pool:
+                if (d.metadata or {}).get("industry", "") not in comp and d.page_content not in seen:
+                    results.append(d)
+                    seen.add(d.page_content)
+                    if len(results) >= k:
+                        break
+        return results[:k]
 
     def search_competitor(self, query, k=2):
-        """只召回竞品方案文档（竞品对比章节用）"""
-        pool = self._similarity_pool(query, pool_size=max(k * 3, 15))
-        comp = [d for d in pool if (d.metadata or {}).get("industry", "") in self._competitor_companies]
-        return comp[:k]
+        """只召回竞品方案文档（竞品对比章节用）——直接在竞品子集上检索"""
+        comp = self._competitor_companies
+        results = []
+        try:
+            results = self.vector_db.similarity_search(
+                query, k=k, filter={"industry": {"$in": list(comp)}}
+            )
+        except Exception as e:
+            logger.warning(f"竞品子集检索异常，回退混合池: {e}")
+        if len(results) < k:
+            seen = {d.page_content for d in results}
+            pool = self._similarity_pool(query, pool_size=max(k * 4, 40))
+            for d in pool:
+                if (d.metadata or {}).get("industry", "") in comp and d.page_content not in seen:
+                    results.append(d)
+                    seen.add(d.page_content)
+                    if len(results) >= k:
+                        break
+        return results[:k]
 
     def get_stats(self):
         """统计知识库数据 + 行业分布"""
