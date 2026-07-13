@@ -5931,6 +5931,14 @@ body::after {
 }
 
 /* ===== 页面标题栏（带统计数字） ===== */
+/* 产品页：占满视口高度，左栏独立滚动、右栏固定不跟随 */
+#page-products {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
 .products-header {
     display: flex;
     align-items: center;
@@ -6346,9 +6354,20 @@ body::after {
 .panel-default {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
     height: 100%;
     padding: 20px 18px;
+    overflow-y: auto;
     animation: fadeInUp 0.3s ease-out;
+}
+
+.panel-default::-webkit-scrollbar {
+    width: 5px;
+}
+.panel-default::-webkit-scrollbar-thumb {
+    background: var(--neutral-300);
+    border-radius: 3px;
 }
 
 .panel-header {
@@ -6740,6 +6759,17 @@ body::after {
 .product-detail-content {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.product-detail-content::-webkit-scrollbar {
+    width: 5px;
+}
+.product-detail-content::-webkit-scrollbar-thumb {
+    background: var(--neutral-300);
+    border-radius: 3px;
 }
 
 .product-detail-header {
@@ -7648,6 +7678,13 @@ body::after {
     }
     
     .products-graph-wrapper {
+        display: block;
+    }
+    
+    /* 移动端恢复整页滚动（不锁定视口高度） */
+    #page-products {
+        height: auto;
+        overflow: visible;
         display: block;
     }
     
