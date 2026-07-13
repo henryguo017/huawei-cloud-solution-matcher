@@ -25,12 +25,21 @@ async def export_report(request: ExportRequest):
     try:
         logger.info(f"开始生成报告，类型: {request.report_type}, 格式: {request.format}")
         
-        task = report_generator.generate_report(
-            report_type=request.report_type,
-            content=request.content,
-            format=request.format,
-            metadata=request.metadata or {}
-        )
+        # 优先使用结构化 JSON（一键出方案书）；否则回退到 Markdown 解析
+        if request.solution_json:
+            task = report_generator.generate_report_from_json(
+                report_type=request.report_type,
+                chapters=request.solution_json,
+                format=request.format,
+                metadata=request.metadata or {}
+            )
+        else:
+            task = report_generator.generate_report(
+                report_type=request.report_type,
+                content=request.content,
+                format=request.format,
+                metadata=request.metadata or {}
+            )
         
         if task.status == TaskStatus.FAILED:
             raise HTTPException(

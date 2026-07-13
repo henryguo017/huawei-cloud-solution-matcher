@@ -34,6 +34,7 @@ class SourceDocument(BaseModel):
 class MatchResponse(BaseModel):
     answer: str = Field(..., description="匹配结果（Markdown格式）")
     source_documents: List[SourceDocument] = Field(default_factory=list, description="参考文档列表")
+    solution_json: Optional[Any] = Field(default=None, description="结构化方案（章节+要点），供报告生成器直接消费")
     history_id: Optional[int] = Field(default=None, description="本次匹配的历史记录ID，用于后续更新优化方案")
     newly_unlocked: Optional[List[dict]] = Field(default=None, description="新解锁的成就列表（前端用于弹窗提示）")
 
@@ -159,6 +160,7 @@ class ExportRequest(BaseModel):
     format: str = Field(default="word", description="导出格式: word/pdf")
     title: Optional[str] = Field(default=None, description="报告标题")
     content: str = Field(..., description="报告内容（Markdown格式）")
+    solution_json: Optional[Any] = Field(default=None, description="结构化方案（章节+要点），优先于 content 直接生成报告")
     source_documents: Optional[List[Dict[str, Any]]] = Field(default=None, description="参考文档")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="元数据")
 

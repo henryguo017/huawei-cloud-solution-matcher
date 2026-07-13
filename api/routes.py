@@ -175,6 +175,7 @@ async def match_solution(
         return MatchResponse(
             answer=result["answer"],
             source_documents=source_docs,
+            solution_json=result.get("solution_json"),
             history_id=history_id,
             newly_unlocked=achievement_result if user and user.get('id') else None
         )

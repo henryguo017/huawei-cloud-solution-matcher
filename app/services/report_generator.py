@@ -63,46 +63,22 @@ class ReportGeneratorService:
         
         return chapters
     
-    def _generate_solution_report(self, content: str, 
-                                  metadata: Dict[str, Any] = None) -> Dict[str, Any]:
-        """生成解决方案报告数据结构"""
+    def _build_report_data(self, report_type: ReportType,
+                            chapters: List[Dict[str, Any]],
+                            metadata: Dict[str, Any] = None) -> Dict[str, Any]:
+        """由章节结构构建报告数据（solution / competitor 共用）"""
         metadata = metadata or {}
-        
-        chapters = self._parse_markdown_content(content)
-        
-        if not chapters:
-            chapters = [{
-                'title': '解决方案分析',
-                'content': content,
-                'sections': []
-            }]
-        
-        return {
-            'title': metadata.get('title', '华为云解决方案建议书'),
-            'subtitle': '智能匹配生成报告',
-            'create_date': datetime.now().strftime('%Y年%m月%d日'),
-            'customer_name': metadata.get('customer', ''),
-            'chapters': chapters,
-            'appendix': []
-        }
-    
-    def _generate_competitor_report(self, content: str,
-                                    metadata: Dict[str, Any] = None) -> Dict[str, Any]:
-        """生成竞争对手分析报告数据结构"""
-        metadata = metadata or {}
-        
-        chapters = self._parse_markdown_content(content)
-        
-        if not chapters:
-            chapters = [{
-                'title': '竞争分析',
-                'content': content,
-                'sections': []
-            }]
-        
+        if report_type == ReportType.SOLUTION:
+            return {
+                'title': metadata.get('title', '华为云解决方案建议书'),
+                'subtitle': '智能匹配生成报告',
+                'create_date': datetime.now().strftime('%Y年%m月%d日'),
+                'customer_name': metadata.get('customer', ''),
+                'chapters': chapters,
+                'appendix': []
+            }
         competitor = metadata.get('competitor', '竞争对手')
         industry = metadata.get('industry', '行业')
-        
         return {
             'title': f'华为云 vs {competitor} 竞争分析报告',
             'subtitle': f'{industry}行业',
@@ -111,37 +87,22 @@ class ReportGeneratorService:
             'chapters': chapters,
             'appendix': []
         }
-    
-    def generate_report(self, report_type: ReportType, 
-                        content: str, 
-                        format: ExportFormat = ExportFormat.WORD,
-                        metadata: Dict[str, Any] = None) -> ExportTask:
-        """生成报告"""
-        task = ExportTask(
-            format=format,
-            report_type=report_type
-        )
-        
+
+    def _render_and_save(self, report_data: Dict[str, Any],
+                         report_type: ReportType,
+                         format: ExportFormat,
+                         file_prefix: str) -> ExportTask:
+        """根据报告数据渲染并保存为 Word/PDF，返回完成任务"""
+        task = ExportTask(format=format, report_type=report_type)
         self.tasks[task.task_id] = task
-        
         try:
             task.status = TaskStatus.PROCESSING
-            
             start_time = time.time()
-            
-            if report_type == ReportType.SOLUTION:
-                report_data = self._generate_solution_report(content, metadata)
-                file_prefix = "solution_report"
-            else:
-                report_data = self._generate_competitor_report(content, metadata)
-                file_prefix = "competitor_report"
-            
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            
+
             if format == ExportFormat.WORD:
                 file_name = f"{file_prefix}_{timestamp}.docx"
                 file_path = self.export_dir / file_name
-                
                 generator = WordGenerator()
                 doc = generator.generate_report(report_data)
                 generator.save(str(file_path))
@@ -149,22 +110,56 @@ class ReportGeneratorService:
                 file_name = f"{file_prefix}_{timestamp}.pdf"
                 file_path = self.export_dir / file_name
                 self._generate_pdf(report_data, str(file_path))
-            
+
             file_size = file_path.stat().st_size
             generation_time = int((time.time() - start_time) * 1000)
-            
+
             task.status = TaskStatus.COMPLETED
             task.complete_time = datetime.now()
             task.file_path = str(file_path)
             task.file_name = file_name
             task.file_size = file_size
             task.download_url = f"/api/export/download/{task.task_id}"
-            
         except Exception as e:
             task.status = TaskStatus.FAILED
             task.error_message = str(e)
-        
         return task
+
+    def generate_report(self, report_type: ReportType, 
+                        content: str, 
+                        format: ExportFormat = ExportFormat.WORD,
+                        metadata: Dict[str, Any] = None) -> ExportTask:
+        """生成报告（输入为 Markdown 内容，内部解析为章节）"""
+        metadata = metadata or {}
+        if report_type == ReportType.SOLUTION:
+            chapters = self._parse_markdown_content(content)
+            if not chapters:
+                chapters = [{'title': '解决方案分析', 'content': content, 'sections': []}]
+            file_prefix = "solution_report"
+        else:
+            chapters = self._parse_markdown_content(content)
+            if not chapters:
+                chapters = [{'title': '竞争分析', 'content': content, 'sections': []}]
+            file_prefix = "competitor_report"
+
+        report_data = self._build_report_data(report_type, chapters, metadata)
+        return self._render_and_save(report_data, report_type, format, file_prefix)
+
+    def generate_report_from_json(self, report_type: ReportType,
+                                  chapters: List[Dict[str, Any]],
+                                  format: ExportFormat = ExportFormat.WORD,
+                                  metadata: Dict[str, Any] = None) -> ExportTask:
+        """
+        直接由结构化 JSON（章节+要点）生成报告。
+        用于『一键出可编辑售前方案书』：方案生成器已产出 solution_json，
+        此处直接消费，跳过 Markdown 重新解析，结构更精准。
+        """
+        metadata = metadata or {}
+        if not chapters:
+            chapters = [{'title': '解决方案分析', 'content': '', 'sections': []}]
+        file_prefix = "solution_report" if report_type == ReportType.SOLUTION else "competitor_report"
+        report_data = self._build_report_data(report_type, chapters, metadata)
+        return self._render_and_save(report_data, report_type, format, file_prefix)
     
     def _generate_pdf(self, report_data: Dict[str, Any], file_path: str):
         """生成PDF报告（使用reportlab）"""
