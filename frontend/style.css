@@ -68,16 +68,18 @@
     --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.06);
     --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.08);
 
-    /* 表面 / 文字 / 边框 token (阶段0新增) */
-    --bg-page: #F5F7FA;
-    --bg-card: #FFFFFF;
-    --bg-elevated: #FFFFFF;
-    --text-primary: #1D2129;
-    --text-secondary: #4E5969;
+    /* 表面 / 文字 / 边框 token (v2.0 深色控制台) */
+    --bg-page: #E8EAED;              /* L1: 冷灰内容底（原#F5F7FA太白） */
+    --bg-card: rgba(255, 255, 255, 0.72);   /* L2: 毛玻璃卡片（原纯白#FFF） */
+    --bg-card-solid: #F4F5F7;        /* 卡片回退色（不支持backdrop-filter时） */
+    --bg-elevated: #FFFFFF;           /* L3: 输入框/弹窗（唯一允许纯白的地方） */
+    --text-primary: #1A1C23;          /* 主文字 - 深墨色 */
+    --text-secondary: #4A5067;        /* 副文字 - 灰蓝 */
+    --text-muted: #8890A4;            /* 弱文字（新增） */
     --text-tertiary: #86909C;
-    --border-color: #E5E6EB;
-    --border-light: #F2F3F5;
-    --divider: #F2F3F5;
+    --border-color: rgba(0, 0, 0, 0.08);     /* 更淡的边框 */
+    --border-light: rgba(0, 0, 0, 0.04);
+    --divider: rgba(0, 0, 0, 0.06);
 
     /* 动效分级 */
     --navbar-height: 3.5rem;   /* 对齐新顶栏高度(56px) */
@@ -100,6 +102,21 @@
     --topbar-height: 56px;
     --sidebar-width: 220px;
     --sidebar-width-collapsed: 64px;
+
+    /* ===== v2.0 深色控制台 新增 Token ===== */
+    --glass-bg: rgba(255, 255, 255, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.45);
+    --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+    --glass-hover-shadow: 0 8px 32px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(199, 0, 11, 0.06);
+    --glass-blur: blur(12px);
+
+    --brand-glow: 0 0 20px rgba(199, 0, 11, 0.15);
+    --brand-glow-strong: 0 0 30px rgba(199, 0, 11, 0.25);
+
+    --input-focus-ring: 0 0 0 3px rgba(199, 0, 11, 0.12);
+    --card-accent-grad: linear-gradient(180deg, rgba(199,0,11,0.03) 0%, transparent 100%);
+
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -8244,6 +8261,150 @@ select:focus {
 ::-webkit-scrollbar-thumb { background: rgba(199,0,11,0.25); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(199,0,11,0.4); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ================================================================
+   v2.0 深色控制台 — 全局组件增强
+   ================================================================ */
+
+/* ---- 毛玻璃卡片（覆盖旧纯白卡片） ---- */
+.card,
+.match-form-card,
+.solution-card,
+.competitor-card,
+.kb-doc-card,
+.history-item,
+.settings-panel,
+.panel {
+    background: var(--glass-bg) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 14px !important;
+    box-shadow: var(--glass-shadow) !important;
+    transition: var(--transition-smooth);
+}
+.card:hover,
+.match-form-card:hover,
+.solution-card:hover,
+.competitor-card:hover {
+    box-shadow: var(--glass-hover-shadow) !important;
+    transform: translateY(-1px);
+}
+
+/* ---- 输入框聚焦红光晕 ---- */
+input:focus, textarea:focus, select:focus {
+    border-color: var(--primary-color) !important;
+    box-shadow: var(--input-focus-ring) !important;
+}
+input::placeholder, textarea::placeholder {
+    color: var(--text-muted) !important;
+}
+
+/* ---- 主按钮：红渐变 + 光晕 ---- */
+.btn-primary,
+#start-match-btn,
+.btn-submit {
+    background: linear-gradient(135deg, #C7000B 0%, #E02020 100%) !important;
+    border: none !important;
+    color: #fff !important;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(199, 0, 11, 0.3);
+    transition: all 0.3s ease;
+}
+.btn-primary:hover,
+#start-match-btn:hover,
+.btn-submit:hover {
+    transform: translateY(-1px) scale(1.02);
+    box-shadow: var(--brand-glow-strong), 0 4px 16px rgba(199, 0, 11, 0.4) !important;
+}
+
+/* ---- 次要按钮：毛玻璃白底 + 红字 ---- */
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.5) !important;
+    backdrop-filter: blur(8px);
+    color: var(--primary-color) !important;
+    border: 1px solid rgba(199, 0, 11, 0.25) !important;
+}
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* ---- 表格条纹 + 红色hover ---- */
+table tbody tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.02);
+}
+table tbody tr:hover {
+    background: rgba(199, 0, 11, 0.04) !important;
+}
+
+/* ---- 页面标题区：深灰横幅 ---- */
+.page-header:not(#page-dashboard .page-header) {
+    background: linear-gradient(135deg, #1a1d27 0%, #252a38 100%) !important;
+    border-radius: 14px !important;
+    padding: 24px 28px !important;
+    margin-bottom: 24px !important;
+    border-left: 4px solid var(--primary-color) !important;
+}
+.page-header h1,
+.page-header h2,
+.page-header .page-title {
+    color: #fff !important;
+    font-size: 1.6rem !important;
+    font-weight: 700 !important;
+}
+.page-header p,
+.page-header .page-subtitle,
+.page-header .page-desc {
+    color: rgba(255, 255, 255, 0.7) !important;
+    margin-top: 6px !important;
+}
+
+/* ---- 模式切换按钮组（毛玻璃未选中态） ---- */
+.mode-switch button:not(.active) {
+    background: rgba(255, 255, 255, 0.45) !important;
+    backdrop-filter: blur(6px);
+    color: var(--text-secondary) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+.mode-switch button.active {
+    background: var(--primary-color) !important;
+    color: #fff !important;
+    box-shadow: 0 2px 8px rgba(199, 0, 11, 0.3);
+}
+
+/* ================================================================
+   v2.0 动画 Keyframes
+   ================================================================ */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes scalePop {
+    0%   { transform: scale(0.96); }
+    50%  { transform: scale(1.03); }
+    100% { transform: scale(1); }
+}
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 2px 8px rgba(199, 0, 11, 0.3); }
+    50%      { box-shadow: 0 2px 24px rgba(199, 0, 11, 0.5), 0 0 40px rgba(199, 0, 11, 0.15); }
+}
+@keyframes slideRight {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+/* ---- 页面内容入场动画 ---- */
+.main-content > [id^="page-"] {
+    animation: fadeInUp 0.4s cubic-bezier(.16,1,.3,1) both;
+}
 
 /* ---------- 仪表盘红渐变 hero（开放问题4：需要） ---------- */
 #page-dashboard .page-header {
