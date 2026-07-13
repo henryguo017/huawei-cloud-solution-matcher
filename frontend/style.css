@@ -7237,38 +7237,39 @@ body::after {
    风格：与 v3 产品弹窗统一（暖白渐变 + 品牌红强调）
    ================================================================ */
 
-/* 顶栏 AI 按钮 */
-.topbar-ai-btn {
+/* 顶栏 AI 助手条（长条输入框样式） */
+.topbar-ai-bar {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    background: linear-gradient(135deg, rgba(199,0,11,0.08), rgba(199,0,11,0.15));
-    border: 1px solid rgba(199,0,11,0.20);
-    border-radius: 22px;
+    gap: 8px;
+    flex: 1;
+    max-width: 380px;
+    padding: 8px 16px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 24px;
     cursor: pointer;
     transition: all 0.25s ease;
 }
-.topbar-ai-btn:hover {
-    background: linear-gradient(135deg, rgba(199,0,11,0.14), rgba(199,0,11,0.24));
-    border-color: rgba(199,0,11,0.40);
-    box-shadow: 0 2px 12px rgba(199,0,11,0.18);
-    transform: translateY(-1px);
+.topbar-ai-bar:hover {
+    background: rgba(199,0,11,0.08);
+    border-color: rgba(199,0,11,0.30);
+    box-shadow: 0 2px 16px rgba(199,0,11,0.12);
 }
-.topbar-ai-btn .ai-icon {
+.topbar-ai-bar .ai-icon {
     color: #C7000B;
     width: 16px; height: 16px;
+    flex-shrink: 0;
     animation: aiPulse 2.5s ease-in-out infinite;
 }
 @keyframes aiPulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.65; transform: scale(1.08); }
 }
-.topbar-ai-btn .ai-text {
+.topbar-ai-bar .ai-placeholder {
     font-size: 0.8125rem;
-    font-weight: 600;
-    color: #C7000B;
-    letter-spacing: 0.3px;
+    color: var(--text-quaternary);
+    letter-spacing: 0.2px;
 }
 
 /* 遮罩 */
@@ -7555,8 +7556,8 @@ body::after {
 
 /* 移动端适配 */
 @media (max-width: 600px) {
-    .topbar-ai-btn .ai-text { display: none; }
-    .topbar-ai-btn { padding: 7px 9px; }
+    .topbar-ai-bar { max-width: 200px; padding: 7px 12px; }
+    .topbar-ai-bar .ai-placeholder { font-size: 0.75rem; }
     .ai-assistant-panel { width: 100vw; max-width: 100vw; }
     .ai-quick-grid { grid-template-columns: 1fr; }
 }

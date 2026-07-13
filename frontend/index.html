@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260714r">
+    <link rel="stylesheet" href="style.css?v=20260714s">
     <link rel="stylesheet" href="welcome-styles.css?v=20260714j">
 </head>
 <body>
@@ -247,9 +247,9 @@
                     <button class="topbar-menu-btn" id="navbar-toggle" title="菜单">
                         <svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>
                     </button>
-                    <div class="topbar-ai-btn" id="topbar-ai-btn" title="AI 智能助手">
+                    <div class="topbar-ai-bar" id="topbar-ai-btn" title="AI 智能助手 - 点击提问">
                         <svg class="icon ai-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg>
-                        <span class="ai-text">AI 助手</span>
+                        <span class="ai-placeholder">问 AI：华为云产品、方案匹配、使用帮助…</span>
                     </div>
                 </div>
                 <div class="topbar-right">
@@ -326,6 +326,7 @@
             <div class="ai-quick-actions" id="ai-quick-actions">
                 <div class="ai-quick-title">✦ 你可以问我</div>
                 <div class="ai-quick-grid">
+                    <!-- 业务类 -->
                     <button class="ai-quick-card" data-q="华为云有哪些核心产品？适合中小企业的入门方案是什么？">
                         <span class="aq-icon">🏢</span>中小企业入门方案
                     </button>
@@ -335,14 +336,15 @@
                     <button class="ai-quick-card" data-q="金融行业上华为云有什么合规要求？推荐什么架构方案？">
                         <span class="aq-icon">🏦</span>金融行业合规方案
                     </button>
-                    <button class="ai-quick-card" data-q="华为云和阿里云在云计算领域各有什么优势？如何选型？">
-                        <span class="aq-icon">⚖️</span>华为云 vs 阿里云
-                    </button>
                     <button class="ai-quick-card" data-q="智慧园区的典型架构是什么样的？涉及哪些华为云产品？">
                         <span class="aq-icon">🏘️</span>智慧园区架构
                     </button>
-                    <button class="ai-quick-card" data-q="华为云AI算力产品有哪些？ModelArts怎么用？">
-                        <span class="aq-icon">🤖</span>AI/ModelArts 介绍
+                    <!-- 使用帮助类 -->
+                    <button class="ai-quick-card" data-q="这个平台的方案匹配功能怎么用？三种模式有什么区别？">
+                        <span class="aq-icon">📋</span>方案匹配功能使用
+                    </button>
+                    <button class="ai-quick-card" data-q="知识库怎么管理？如何添加和索引文档？">
+                        <span class="aq-icon">📚</span>知识库文档管理
                     </button>
                 </div>
             </div>
