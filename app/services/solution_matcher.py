@@ -213,6 +213,11 @@ class SolutionMatcherService:
         if not docs or not context_content.strip():
             fallback_prompt = self._build_fallback_prompt(customer_demand, industry, playbook_text)
             answer_result = await get_llm_response(fallback_prompt)
+            # 追加参考资料节（兜底模式 context 可能为空，build_references_section 会安全返回空串）
+            if "参考资料" not in answer_result:
+                refs = build_references_section(context_content)
+                if refs:
+                    answer_result = answer_result.rstrip() + "\n" + refs
             return {
                 "answer": answer_result,
                 "source_documents": [],
@@ -228,6 +233,12 @@ class SolutionMatcherService:
             demand_analysis=demand_analysis,
         )
         answer_result = await get_llm_response(final_prompt)
+
+        # 追加『参考资料』节，让 [资料N] 标注可追溯
+        if "参考资料" not in answer_result:
+            refs = build_references_section(context_content)
+            if refs:
+                answer_result = answer_result.rstrip() + "\n" + refs
 
         return {
             "answer": answer_result,
