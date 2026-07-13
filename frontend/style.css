@@ -8428,6 +8428,176 @@ table tbody tr:hover {
 #page-dashboard .page-title { color: #fff; font-size: 1.75rem; }
 #page-dashboard .page-subtitle { color: rgba(255,255,255,0.85); }
 
+/* ================================================================
+   v2.0 仪表盘专属增强 — 深色卡片 + 白字
+   ================================================================ */
+
+/* Hero 增强纹理 + 光点动画 */
+#page-dashboard .page-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: 
+        radial-gradient(circle at 20% 50%, rgba(255,255,255,0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 30%, rgba(255,255,255,0.05) 0%, transparent 40%),
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    animation: shimmer 8s linear infinite;
+}
+#page-dashboard .page-header::after {
+    content: '';
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+/* 统计卡片：深色半透明 + 白字 */
+#page-dashboard .stat-card,
+#page-dashboard .dashboard-kpi-card,
+.dashboard-kpi-card {
+    background: rgba(20, 22, 39, 0.7) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+}
+#page-dashboard .stat-card-value,
+.stat-card-value,
+.kpi-value {
+    color: #fff !important;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    animation: countUp 1s ease-out both;
+}
+#page-dashboard .stat-card-label,
+.stat-card-label,
+.kpi-label {
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+#page-dashboard .stat-card:hover,
+.dashboard-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.2), 0 0 24px rgba(199, 0, 11, 0.1) !important;
+}
+
+/* 图表区域：深色画布 */
+#page-dashboard .dashboard-chart-card,
+.dashboard-chart-card {
+    background: rgba(20, 22, 39, 0.5) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+#page-dashboard .dashboard-chart-card h3,
+.dashboard-chart-card .chart-header h3 {
+    color: #fff !important;
+}
+.dashboard-chart-card .chart-body {
+    background: rgba(10, 12, 20, 0.4);
+    border-radius: 10px;
+}
+
+/* ================================================================
+   v2.0 其余页面逐页适配（P4）
+   ================================================================ */
+
+/* ---- 竞品页：卡片左侧品牌色竖线 ---- */
+.competitor-card,
+.compare-card {
+    border-left: 3px solid var(--primary-color) !important;
+}
+.competitor-card:hover,
+.compare-card:hover {
+    border-left-color: #E02020 !important;
+}
+
+/* ---- 产品图谱：节点毛玻璃 ---- */
+.product-node {
+    background: rgba(255, 255, 255, 0.65) !important;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(199, 0, 11, 0.15) !important;
+    transition: all 0.3s ease !important;
+}
+.product-node:hover {
+    background: rgba(255, 255, 255, 0.85) !important;
+    box-shadow: 0 0 16px rgba(199, 0, 11, 0.15) !important;
+    transform: scale(1.03);
+}
+
+/* ---- 历史记录：时间线风格 ---- */
+.history-item {
+    border-left: 2px solid rgba(199, 0, 11, 0.2) !important;
+    padding-left: 20px !important;
+    position: relative;
+}
+.history-item::before {
+    content: '';
+    position: absolute;
+    left: -6px; top: 18px;
+    width: 10px; height: 10px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(199, 0, 11, 0.3);
+}
+
+/* ---- 成就中心：渐变卡片 + 进度条 ---- */
+.ach-card,
+.achievement-card {
+    position: relative;
+    overflow: hidden;
+}
+.ach-card::before,
+.achievement-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #C7000B, #FF6A3D);
+}
+.ach-progress-bar,
+.progress-fill {
+    background: linear-gradient(90deg, #C7000B, #E02020) !important;
+    animation: progressFill 1s ease-out both;
+}
+.ach-locked {
+    opacity: 0.5;
+    filter: grayscale(0.8);
+}
+
+/* ---- 知识库：表格增强 ---- */
+.kb-doc-table tr:hover {
+    background: rgba(199, 0, 11, 0.04) !important;
+}
+.kb-doc-table th {
+    background: rgba(0, 0, 0, 0.04) !important;
+    color: var(--text-primary) !important;
+    font-weight: 600;
+}
+
+/* ---- 设置页：面板 + 自定义开关 ---- */
+.settings-panel,
+.setting-section {
+    border-left: 3px solid rgba(199, 0, 11, 0.3) !important;
+}
+.setting-item {
+    border-bottom: 1px solid var(--border-color) !important;
+    transition: background 0.2s ease;
+}
+.setting-item:hover {
+    background: rgba(199, 0, 11, 0.03) !important;
+}
+
+/* ---- Toast/通知增强 ---- */
+#toast-container .toast {
+    backdrop-filter: blur(12px);
+    border-radius: 12px !important;
+    animation: slideRight 0.3s ease both;
+}
+#toast-container .toast.toast-success { border-left: 4px solid #52C41A; }
+#toast-container .toast.toast-error { border-left: 4px solid #C7000B; }
+#toast-container .toast.toast-info { border-left: 4px solid #165DFF; }
+
 /* ---------- 响应式：移动端侧边栏→底部Tab ---------- */
 @media (max-width: 767px) {
     .sidebar { display: none; }
