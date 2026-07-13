@@ -5199,22 +5199,29 @@ const ProductGraph = {
         var relIds = this._getRelatedProducts(product.id);
         var relHtml = relIds.map(function(rId){var rn=self.state.nodes[rId];return '<li onclick="ProductGraph._jumpToNode(\''+rId+'\')">'+(rn?rn.name:rId)+'</li>';}).join('');
         
+        // v3 premium modal: section classes for chip/card styling
         var html =
             '<div class="product-detail-header">'+
-                '<span class="detail-category-badge" style="background:'+cat.color+'"></span>'+
+                '<span class="detail-category-badge">'+(cat.label||cat)+'</span>'+
                 '<div><h3>'+product.name+'</h3><div class="detail-name-en">'+product.nameEn+'</div></div>'+
             '</div><div class="product-detail-body">'+
-            '<div class="detail-section"><div class="detail-section-title">简介</div>'+
+            // 简介：暖灰卡片
+            '<div class="detail-section section-intro"><div class="detail-section-title title-intro">简介</div>'+
             '<div class="detail-section-content">'+product.desc+'</div></div>'+
-            '<div class="detail-section"><div class="detail-section-title">核心能力</div>'+
-            '<ul class="detail-scenario-list">'+capHtml+'</ul></div>'+
-            '<div class="detail-section"><div class="detail-section-title">典型场景</div>'+
-            '<ul class="detail-scenario-list">'+sceHtml+'</ul></div>'+
-            (advHtml?'<div class="detail-section"><div class="detail-section-title">产品优势</div>'+
+            // 核心能力：红色 chip
+            '<div class="detail-section detail-capability"><div class="detail-section-title title-capability">核心能力</div>'+
+            '<ul class="detail-chip-list">'+capHtml+'</ul></div>'+
+            // 典型场景：蓝色 chip
+            '<div class="detail-section detail-scenario"><div class="detail-section-title title-scenario">典型场景</div>'+
+            '<ul class="detail-chip-list">'+sceHtml+'</ul></div>'+
+            // 产品优势：绿色卡片行
+            (advHtml?'<div class="detail-section detail-advantage"><div class="detail-section-title title-advantage">产品优势</div>'+
             '<ul class="detail-advantage-list">'+advHtml+'</ul></div>':'')+
-            (hltHtml?'<div class="detail-section"><div class="detail-section-title">技术亮点</div>'+
-            '<ul class="detail-highlight-list">'+hltHtml+'</ul></div>':'')+
-            '<div class="detail-section"><div class="detail-section-title">关联产品</div>'+
+            // 技术亮点：紫色 chip
+            (hltHtml?'<div class="detail-section detail-highlight"><div class="detail-section-title title-highlight">技术亮点</div>'+
+            '<ul class="detail-chip-list">'+hltHtml+'</ul></div>':'')+
+            // 关联产品：品牌红 pill
+            '<div class="detail-section detail-related"><div class="detail-section-title">关联产品</div>'+
             '<ul class="detail-related-list" id="detail-related-products">'+relHtml+'</ul></div>'+
             '</div>';
         
