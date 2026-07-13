@@ -8337,9 +8337,9 @@ table tbody tr:hover {
     background: rgba(199, 0, 11, 0.04) !important;
 }
 
-/* ---- 页面标题区：深灰横幅 ---- */
+/* ---- 页面标题区：暖白渐变横幅（去黑色） ---- */
 .page-header:not(#page-dashboard .page-header) {
-    background: linear-gradient(135deg, #1a1d27 0%, #252a38 100%) !important;
+    background: linear-gradient(135deg, #f8f9fb 0%, #eef0f4 50%, #f5f0ee 100%) !important;
     border-radius: 14px !important;
     padding: 24px 28px !important;
     margin-bottom: 24px !important;
@@ -8348,14 +8348,14 @@ table tbody tr:hover {
 .page-header h1,
 .page-header h2,
 .page-header .page-title {
-    color: #fff !important;
+    color: #1D2129 !important;
     font-size: 1.6rem !important;
     font-weight: 700 !important;
 }
 .page-header p,
 .page-header .page-subtitle,
 .page-header .page-desc {
-    color: rgba(255, 255, 255, 0.7) !important;
+    color: #555D6A !important;
     margin-top: 6px !important;
 }
 
@@ -8453,20 +8453,20 @@ table tbody tr:hover {
     pointer-events: none;
 }
 
-/* 统计卡片：深色半透明 + 白字 */
+/* 统计卡片：毛玻璃白卡 + 深色字（去黑色） */
 #page-dashboard .stat-card,
 #page-dashboard .dashboard-kpi-card,
 .dashboard-kpi-card {
-    background: rgba(20, 22, 39, 0.7) !important;
+    background: rgba(255, 255, 255, 0.72) !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    color: #fff !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    color: #1D2129 !important;
 }
 #page-dashboard .stat-card-value,
 .stat-card-value,
 .kpi-value {
-    color: #fff !important;
+    color: #C7000B !important;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     animation: countUp 1s ease-out both;
@@ -8474,27 +8474,27 @@ table tbody tr:hover {
 #page-dashboard .stat-card-label,
 .stat-card-label,
 .kpi-label {
-    color: rgba(255, 255, 255, 0.6) !important;
+    color: #555D6A !important;
 }
 #page-dashboard .stat-card:hover,
 .dashboard-kpi-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.2), 0 0 24px rgba(199, 0, 11, 0.1) !important;
+    box-shadow: 0 8px 28px rgba(199, 0, 11, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06) !important;
 }
 
-/* 图表区域：深色画布 */
+/* 图表区域：浅灰毛玻璃（去黑色） */
 #page-dashboard .dashboard-chart-card,
 .dashboard-chart-card {
-    background: rgba(20, 22, 39, 0.5) !important;
+    background: rgba(255, 255, 255, 0.6) !important;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
 }
 #page-dashboard .dashboard-chart-card h3,
 .dashboard-chart-card .chart-header h3 {
-    color: #fff !important;
+    color: #1D2129 !important;
 }
 .dashboard-chart-card .chart-body {
-    background: rgba(10, 12, 20, 0.4);
+    background: rgba(248, 250, 252, 0.8);
     border-radius: 10px;
 }
 
