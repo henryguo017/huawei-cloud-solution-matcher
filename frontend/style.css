@@ -7113,7 +7113,6 @@ body::after {
     line-height: 1.5;
 }
 .product-modal-content .detail-scenario-list li::before,
-.product-modal-content .detail-advantage-list li::before,
 .product-modal-content .detail-highlight-list li::before {
     content: '•'; position: absolute; left: 4px; color: var(--primary-color);
 }
@@ -7146,6 +7145,7 @@ body::after {
     width: 8px; height: 8px; min-width: 8px;
     border-radius: 50%;
     background: #22A85A;
+    flex-shrink: 0;
 }
 .detail-advantage .detail-advantage-list li:hover {
     box-shadow: 0 3px 12px rgba(34,168,90,0.12);
