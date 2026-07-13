@@ -1565,7 +1565,7 @@ const DemandWizard = {
         // 隐藏 textarea 和原来的按钮组
         const demandInput = document.getElementById('demand-input');
         if (demandInput) demandInput.parentElement.style.display = 'none';
-        const btnGroup = document.querySelector('#page-match .button-group');
+        const btnGroup = document.querySelector('#page-solution .button-group');
         if (btnGroup) btnGroup.style.display = 'none';
     },
 
@@ -1573,7 +1573,7 @@ const DemandWizard = {
         this.container.style.display = 'none';
         const demandInput = document.getElementById('demand-input');
         if (demandInput) demandInput.parentElement.style.display = '';
-        const btnGroup = document.querySelector('#page-match .button-group');
+        const btnGroup = document.querySelector('#page-solution .button-group');
         if (btnGroup) btnGroup.style.display = '';
     },
 

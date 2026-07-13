@@ -7428,26 +7428,6 @@ body::after {
         font-size: 11px;
     }
 }
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px 20px;
-    min-width: 300px;
-    max-width: 400px;
-    background: var(--bg-card);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 215, 0, 0.2);
-    box-shadow:
-        0 8px 32px rgba(0, 0, 0, 0.5),
-        0 0 20px rgba(255, 215, 0, 0.08),
-        inset 0 1px 0 var(--text-secondary);
-    color: var(--text-primary);
-    animation: toastSlideInRight 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
 @keyframes toastSlideInRight {
     from { transform: translateX(120%); opacity: 0; }
     to   { transform: translateX(0);    opacity: 1; }
