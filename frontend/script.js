@@ -3471,7 +3471,7 @@ function initEventListeners() {
                 if (page === 'history') HistoryUI.loadHistory();
                 if (page === 'settings') SettingsManager.updateSystemInfo();
                 if (page === 'products') { setTimeout(function() { try { ProductGraph._renderGrid(); } catch(e) { console.warn('[PageSwitch] 产品图谱渲染失败:', e); } }, 100); }
-            });
+            }).catch(err => console.warn('[PageSwitch] 页面切换失败:', err));
         });
     });
 
@@ -3489,7 +3489,7 @@ function initEventListeners() {
                 if (page === 'history') HistoryUI.loadHistory();
                 if (page === 'settings') SettingsManager.updateSystemInfo();
                 if (page === 'products') { setTimeout(function() { try { ProductGraph._renderGrid(); } catch(e) { console.warn('[PageSwitch] 产品图谱渲染失败:', e); } }, 100); }
-            });
+            }).catch(err => console.warn('[PageSwitch] 页面切换失败:', err));
         });
     });
     
@@ -3506,7 +3506,7 @@ function initEventListeners() {
                 if (page === 'history') HistoryUI.loadHistory();
                 if (page === 'settings') SettingsManager.updateSystemInfo();
                 if (page === 'products') { setTimeout(function() { try { ProductGraph._renderGrid(); } catch(e) { console.warn('[PageSwitch] 产品图谱渲染失败:', e); } }, 100); }
-            });
+            }).catch(err => console.warn('[PageSwitch] 页面切换失败:', err));
         });
     });
 
