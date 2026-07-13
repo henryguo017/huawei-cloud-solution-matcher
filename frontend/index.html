@@ -6,8 +6,8 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260713i">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260713i">
+    <link rel="stylesheet" href="style.css?v=20260713j">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260713j">
 </head>
 <body>
     <!-- 密码重置链接检测（内联，不受外部JS缓存影响） -->
@@ -247,7 +247,7 @@
                     </button>
                     <div class="topbar-search">
                         <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
-                        <input type="text" placeholder="搜索方案、竞品、文档…" aria-label="搜索" autocomplete="off" name="q">
+                        <input type="text" id="topbar-search-input" placeholder="搜索方案、竞品、文档…" aria-label="搜索" autocomplete="off" name="q" readonly onfocus="this.removeAttribute('readonly')">
                     </div>
                 </div>
                 <div class="topbar-right">
@@ -1605,10 +1605,10 @@
         </div><!-- /.app-main -->
     </div><!-- /.app-shell -->
 
-    <script src="js/chart.umd.min.js?v=20260713i" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260713i"></script>
-    <script src="js/achievement-ui.js?v=20260713i"></script>
-    <script src="welcome-script.js?v=20260713i"></script>
+    <script src="js/chart.umd.min.js?v=20260713j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
+    <script src="script.js?v=20260713j"></script>
+    <script src="js/achievement-ui.js?v=20260713j"></script>
+    <script src="welcome-script.js?v=20260713j"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">
   <symbol id="i-arrow-down-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10" />
   <path d="M17 7v10H7" /></symbol>

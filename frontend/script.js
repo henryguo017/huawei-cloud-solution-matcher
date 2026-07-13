@@ -3457,6 +3457,16 @@ const FavoriteManager = {
 };
 
 function initEventListeners() {
+    // 防止浏览器自动填充顶栏搜索框（Edge/Chrome 忽略 autocomplete=off）
+    (function clearSearchAutofill() {
+        const si = document.getElementById('topbar-search-input');
+        if (!si) return;
+        const doClear = () => { if (si.value) si.value = ''; };
+        doClear();
+        setTimeout(doClear, 100);
+        setTimeout(doClear, 500);
+    })();
+
     document.querySelectorAll('.navbar-item').forEach(item => {
         item.addEventListener('click', () => {
             const page = item.dataset.page;
