@@ -267,3 +267,6 @@ Clipboard_*
 
 # Test/mock documents (please ignore)
 *测试文档*
+
+# Generated report exports (runtime artifacts, never commit)
+data/exports/
