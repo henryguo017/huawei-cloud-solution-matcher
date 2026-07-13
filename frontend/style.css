@@ -6112,24 +6112,30 @@ body::after {
     margin-bottom: 12px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border-light);
-    min-height: 36px;
+    min-height: 40px;
+    box-sizing: border-box;
 }
 
 .category-group-icon {
     width: 28px;
     height: 28px;
+    min-height: 28px;
     border-radius: 7px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     flex-shrink: 0;
-    vertical-align: middle;
+    overflow: hidden;
+    position: relative;
 }
 
-.category-group-icon .icon {
-    width: 16px;
-    height: 16px;
-    display: block;
+/* SVG 图标：直接子元素，无 .icon 包裹 */
+.category-group-icon > svg,
+.category-group-icon svg {
+    width: 16px !important;
+    height: 16px !important;
+    display: block !important;
+    flex-shrink: 0;
 }
 
 .category-group-title {
@@ -6137,8 +6143,10 @@ body::after {
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: 0.3px;
-    line-height: 28px;
-    align-self: center;
+    line-height: 1 !important;
+    align-self: center !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
 }
 
 .category-group-count {
@@ -6148,8 +6156,7 @@ body::after {
     background: var(--neutral-100);
     padding: 4px 10px;
     border-radius: 10px;
-    line-height: 1;
-    align-self: center;
+    line-height: 1 !important;
     white-space: nowrap;
 }
 
