@@ -70,7 +70,7 @@
 
     /* 表面 / 文字 / 边框 token (v2.0 深色控制台) */
     --bg-page: #E8EAED;              /* L1: 冷灰内容底（原#F5F7FA太白） */
-    --bg-card: rgba(255, 255, 255, 0.72);   /* L2: 毛玻璃卡片（原纯白#FFF） */
+    --bg-card: linear-gradient(90deg, rgba(255,254,250,0.90) 0%, rgba(255,253,251,0.92) 40%, rgba(255,255,255,0.95) 100%);   /* L2: 毛玻璃卡片（极浅米白→纯白渐变） */
     --bg-card-solid: #F4F5F7;        /* 卡片回退色（不支持backdrop-filter时） */
     --bg-elevated: #FFFFFF;           /* L3: 输入框/弹窗（唯一允许纯白的地方） */
     --text-primary: #1A1C23;          /* 主文字 - 深墨色 */
@@ -104,7 +104,7 @@
     --sidebar-width-collapsed: 64px;
 
     /* ===== v2.0 深色控制台 新增 Token ===== */
-    --glass-bg: rgba(255, 255, 255, 0.72);
+    --glass-bg: linear-gradient(90deg, rgba(255,254,250,0.90) 0%, rgba(255,253,251,0.92) 40%, rgba(255,255,255,0.95) 100%);
     --glass-border: rgba(255, 255, 255, 0.45);
     --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
     --glass-hover-shadow: 0 8px 32px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(199, 0, 11, 0.06);
@@ -8514,7 +8514,7 @@ table tbody tr:hover {
 /* 图表区域：浅灰毛玻璃（去黑色） */
 #page-dashboard .dashboard-chart-card,
 .dashboard-chart-card {
-    background: rgba(255, 255, 255, 0.6) !important;
+    background: var(--bg-card) !important;
     backdrop-filter: blur(10px);
     border: 1px solid rgba(0, 0, 0, 0.06) !important;
 }
