@@ -239,7 +239,7 @@ class AgentHarness:
                         await self._emit(event_callback, {
                             "type": "thought",
                             "step": self._step_count,
-                            "text": thought[:200],
+                            "text": thought[:300],
                         })
                     self.memory.add_action(session_id, tool_name, str(tool_input))
 
@@ -364,11 +364,22 @@ Final Answer: [完整方案]）"""
             re.DOTALL | re.IGNORECASE,
         )
         if fa_match:
-            thought_match = re.search(r'Thought\s*[*]*\s*[:：]\s*[*`]*\s*(.+?)(?=\n\s*(?:Final|Action)|$)', text, re.DOTALL | re.IGNORECASE)
+            thought_match = re.search(
+                r'(?:Thought|思考|分析|计划)\s*[*]*\s*[:：]\s*[*`]*\s*(.+?)(?=\n\s*(?:Final|Action|Action\s*Input)|$)',
+                text, re.DOTALL | re.IGNORECASE,
+            )
+            # 兜底：未匹配到显式 Thought 标签时，取 Final Answer 之前的文本作为思考摘要
+            thought_text = ""
+            if thought_match:
+                thought_text = thought_match.group(1).strip()
+            else:
+                before_fa = text[:fa_match.start()].strip()
+                if before_fa and len(before_fa) > 5:
+                    thought_text = before_fa[:200]
             return {
                 "type": "final_answer",
                 "content": fa_match.group(1).strip(),
-                "thought": thought_match.group(1).strip() if thought_match else "",
+                "thought": thought_text,
             }
 
         # 尝试匹配 Action + Action Input
@@ -400,16 +411,26 @@ Final Answer: [完整方案]）"""
                 if raw_input:
                     tool_input = {"query": raw_input[:200]}
 
+            # 提取思考过程（宽松匹配 + 兜底）
             thought_match = re.search(
-                r'Thought\s*[*]*\s*[:：]\s*[*`]*\s*(.+?)(?=\n\s*Action)',
+                r'(?:Thought|思考|分析|计划)\s*[*]*\s*[:：]\s*[*`]*\s*(.+?)(?=\n\s*(?:Action|Action\s*Input|Final)|$)',
                 text,
                 re.DOTALL | re.IGNORECASE,
             )
+            thought_text = ""
+            if thought_match:
+                thought_text = thought_match.group(1).strip()
+            else:
+                # 兜底：取 Action 之前的文本作为思考摘要
+                before_action = text[:action_match.start()].strip()
+                if before_action and len(before_action) > 5:
+                    # 去掉常见的无关前缀
+                    thought_text = before_action[:200]
             return {
                 "type": "action",
                 "tool_name": tool_name,
                 "tool_input": tool_input,
-                "thought": thought_match.group(1).strip() if thought_match else "",
+                "thought": thought_text,
             }
 
         # 没有 Action 也没有 Final Answer — 智能判断
