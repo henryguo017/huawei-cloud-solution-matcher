@@ -8198,10 +8198,10 @@ select:focus {
 .topbar-icon-btn {
     display: flex; align-items: center; gap: 6px;
     height: 36px; padding: 0 14px;
-    background: rgba(199,0,11,0.14);
-    border: 1px solid rgba(199,0,11,0.28);
+    background: rgba(199,0,11,0.10);
+    border: 1px solid rgba(199,0,11,0.22);
     border-radius: 10px;
-    color: #fff; font-size: 0.85rem; font-weight: 600;
+    color: var(--primary-color); font-size: 0.85rem; font-weight: 600;
     cursor: pointer; font-family: var(--font-family);
     transition: all var(--transition-fast);
 }
@@ -8216,7 +8216,7 @@ select:focus {
     border: 1px solid var(--frame-border);
     border-radius: 10px;
     height: 36px; padding: 0 12px;
-    color: #fff; cursor: pointer; font-family: var(--font-family);
+    color: var(--primary-color); cursor: pointer; font-family: var(--font-family);
     transition: background var(--transition-fast);
 }
 .topbar .nav-user-avatar-btn:hover { background: var(--frame-hover); }
