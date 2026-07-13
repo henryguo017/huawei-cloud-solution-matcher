@@ -7891,15 +7891,6 @@ body {
     min-height: 220px;
 }
 
-/* ---- 7. 主页匹配表单卡片：品牌色头部渐变条 ---- */
-#page-match > .content-wrapper > .content-card:first-child {
-    border-top: 4px solid var(--primary-color);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(199, 0, 11, 0.05);
-}
-#page-match > .content-wrapper > .content-card:first-child::before {
-    display: none; /* 避免双重顶线 */
-}
-
 /* ---- 8. 按钮系统统一增强 ---- */
 .btn-primary {
     background: linear-gradient(135deg, var(--primary-color) 0%, #E02020 60%, #D00818 100%);
@@ -8266,21 +8257,18 @@ select:focus {
    v2.0 深色控制台 — 全局组件增强
    ================================================================ */
 
-/* ---- 客户需求描述卡片：米白渐变（与横幅统一） ---- */
-#page-match > .content-wrapper > .content-card:first-child,
-#page-solution > .content-wrapper > .content-card:first-child {
-    background: linear-gradient(90deg, #FFFDF8 0%, #FFFEFC 50%, #FFFFFF 100%) !important;
+/* ---- 客户需求描述卡片：极浅米白→纯白渐变（与横幅统一） ---- */
+#page-solution > .content-card {
+    background: linear-gradient(90deg, #FFFEFA 0%, #FFFDFB 40%, #FFFFFF 100%) !important;
     background-size: 200% 100% !important;
     border: 1px solid rgba(0, 0, 0, 0.06) !important;
     transition: background-position .6s ease, box-shadow .25s ease, border-color .25s ease !important;
 }
-#page-match > .content-wrapper > .content-card:first-child:hover,
-#page-solution > .content-wrapper > .content-card:first-child:hover {
+#page-solution > .content-card:hover {
     background-position: 100% 0 !important;
-    box-shadow: 0 10px 30px rgba(199,0,11,0.1) !important;
+    box-shadow: 0 10px 30px rgba(199,0,11,0.08) !important;
 }
-#page-match > .content-wrapper > .content-card:first-child::before,
-#page-solution > .content-wrapper > .content-card:first-child::before {
+#page-solution > .content-card::before {
     display: none; /* 去掉顶部红条，渐变本身已足够 */
 }
 
@@ -8357,7 +8345,7 @@ table tbody tr:hover {
 
 /* ---- 页面标题区：浅米白→白 左→右渐变横幅（全站统一 + hover 动效） ---- */
 .page-header {
-    background: linear-gradient(90deg, #FFFDF8 0%, #FFFEFC 50%, #FFFFFF 100%) !important;
+    background: linear-gradient(90deg, #FFFEFA 0%, #FFFDFB 40%, #FFFFFF 100%) !important;
     background-size: 200% 100% !important;
     background-position: 0% 0 !important;
     border-radius: 14px !important;
@@ -8448,7 +8436,7 @@ table tbody tr:hover {
 
 /* ---------- 仪表盘 hero（浅米白→白，与全站统一 + hover 动效） ---------- */
 #page-dashboard .page-header {
-    background: linear-gradient(90deg, #FFFDF8 0%, #FFFEFC 50%, #FFFFFF 100%) !important;
+    background: linear-gradient(90deg, #FFFEFA 0%, #FFFDFB 40%, #FFFFFF 100%) !important;
     background-size: 200% 100% !important;
     background-position: 0% 0 !important;
     border-radius: var(--radius-xl);
