@@ -8007,9 +8007,10 @@ select:focus {
     border-bottom: 1px solid var(--frame-border);
 }
 .sidebar-brand .brand-icon {
-    color: var(--primary-color);
+    color: #fff;
     flex-shrink: 0;
     display: flex;
+    filter: drop-shadow(0 0 6px rgba(199,0,11,0.5));
 }
 .sidebar-brand .brand-icon .icon { width: 1.5rem; height: 1.5rem; }
 .sidebar-brand .brand-text {
