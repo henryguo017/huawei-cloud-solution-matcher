@@ -2017,6 +2017,7 @@ const KnowledgeUI = {
                         display: false
                     },
                     tooltip: {
+                        position: 'nearest',
                         callbacks: {
                             label: function(context) {
                                 return `文档数量: ${context.raw}`;
@@ -2029,10 +2030,10 @@ const KnowledgeUI = {
                         beginAtZero: true,
                         max: 50,
                         grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
+                            color: 'rgba(0, 0, 0, 0.06)'
                         },
                         ticks: {
-                            color: '#B0B8C8',
+                            color: '#555D6A',
                             stepSize: 10,
                             font: {
                                 size: 12
@@ -2041,7 +2042,7 @@ const KnowledgeUI = {
                         title: {
                             display: true,
                             text: '文档数量',
-                            color: '#B0B8C8',
+                            color: '#555D6A',
                             font: {
                                 size: 14
                             }
@@ -2052,7 +2053,7 @@ const KnowledgeUI = {
                             display: false
                         },
                         ticks: {
-                            color: '#FFFFFF',
+                            color: '#333',
                             font: {
                                 size: 13
                             }
@@ -2434,6 +2435,7 @@ const DashboardUI = {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        position: 'nearest',
                         callbacks: {
                             label: (ctx) => `文档数: ${ctx.raw} 篇`
                         }
@@ -2442,12 +2444,12 @@ const DashboardUI = {
                 scales: {
                     y: {
                         beginAtZero: true,
-                        grid: { color: 'rgba(255, 255, 255, 0.08)' },
-                        ticks: { color: 'rgba(255, 255, 255, 0.7)', font: { size: 13 } }
+                        grid: { color: 'rgba(0, 0, 0, 0.06)' },
+                        ticks: { color: '#555D6A', font: { size: 13 } }
                     },
                     x: {
                         grid: { display: false },
-                        ticks: { color: 'rgba(255, 255, 255, 0.85)', font: { size: 13, weight: '500' } }
+                        ticks: { color: '#666', font: { size: 13, weight: '500' } }
                     }
                 }
             }
@@ -2507,19 +2509,26 @@ const DashboardUI = {
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
-                        labels: { color: 'rgba(255, 255, 255, 0.8)', font: { size: 12 } }
+                        position: 'top',
+                        align: 'end',
+                        labels: { color: '#555D6A', font: { size: 12 }, usePointStyle: true, padding: 16 }
+                    },
+                    tooltip: {
+                        position: 'nearest',
+                        mode: 'index',
+                        intersect: false
                     }
                 },
                 scales: {
                     y: {
                         beginAtZero: true,
-                        grid: { color: 'rgba(255, 255, 255, 0.08)' },
-                        ticks: { color: 'rgba(255, 255, 255, 0.7)', font: { size: 13 } }
+                        grid: { color: 'rgba(0, 0, 0, 0.06)' },
+                        ticks: { color: '#555D6A', font: { size: 13 } }
                     },
                     x: {
                         grid: { display: false },
                         ticks: { 
-                            color: 'rgba(255, 255, 255, 0.75)', 
+                            color: '#666', 
                             font: { size: 14, weight: '500' },
                             maxRotation: 0
                         }
@@ -2579,6 +2588,7 @@ const DashboardUI = {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        position: 'nearest',
                         callbacks: {
                             label: (ctx) => `占比 ${ctx.raw}%`
                         }
@@ -2587,9 +2597,9 @@ const DashboardUI = {
                 scales: {
                     x: {
                         type: 'linear',
-                        grid: { color: 'rgba(255, 255, 255, 0.08)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.06)' },
                         ticks: {
-                            color: 'rgba(255, 255, 255, 0.85)',
+                            color: '#555D6A',
                             font: { family: 'Inter, sans-serif', size: 15, weight: '600' },
                             callback: (val) => val + '%',
                             padding: 8
@@ -2599,7 +2609,7 @@ const DashboardUI = {
                     y: {
                         grid: { display: false },
                         ticks: {
-                            color: 'rgba(255, 255, 255, 0.9)',
+                            color: '#333',
                             font: { family: 'Inter, sans-serif', size: 14, weight: '600' },
                             padding: 12
                         },
@@ -2619,7 +2629,7 @@ const DashboardUI = {
                         const bar = meta.data[i];
                         if (!bar) return;
                         ctx.save();
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                        ctx.fillStyle = '#555D6A';
                         ctx.font = '600 14px Inter, sans-serif';
                         ctx.textAlign = 'left';
                         ctx.textBaseline = 'middle';

@@ -8266,6 +8266,24 @@ select:focus {
    v2.0 深色控制台 — 全局组件增强
    ================================================================ */
 
+/* ---- 客户需求描述卡片：米白渐变（与横幅统一） ---- */
+#page-match > .content-wrapper > .content-card:first-child,
+#page-solution > .content-wrapper > .content-card:first-child {
+    background: linear-gradient(90deg, #FFFDF8 0%, #FFFEFC 50%, #FFFFFF 100%) !important;
+    background-size: 200% 100% !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    transition: background-position .6s ease, box-shadow .25s ease, border-color .25s ease !important;
+}
+#page-match > .content-wrapper > .content-card:first-child:hover,
+#page-solution > .content-wrapper > .content-card:first-child:hover {
+    background-position: 100% 0 !important;
+    box-shadow: 0 10px 30px rgba(199,0,11,0.1) !important;
+}
+#page-match > .content-wrapper > .content-card:first-child::before,
+#page-solution > .content-wrapper > .content-card:first-child::before {
+    display: none; /* 去掉顶部红条，渐变本身已足够 */
+}
+
 /* ---- 毛玻璃卡片（覆盖旧纯白卡片） ---- */
 .card,
 .match-form-card,
