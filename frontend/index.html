@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260714n">
+    <link rel="stylesheet" href="style.css?v=20260714o">
     <link rel="stylesheet" href="welcome-styles.css?v=20260714j">
 </head>
 <body>
@@ -813,32 +813,54 @@
                         </div>
                     </div>
 
-                    <!-- 右侧：产品详情面板 -->
+                    <!-- 右侧：智能面板（默认/悬停预览/选中详情 三态切换） -->
                     <div id="product-detail-panel" class="product-detail-panel">
-                        <!-- 空状态引导 -->
-                        <div class="product-detail-empty" id="detail-empty-state">
-                            <div class="empty-illustration">
-                                <div class="empty-hand-icon"><svg class="icon" aria-hidden="true"><use href="#i-hand"></use></svg></div>
+                        <!-- 态1：默认 — 统计 + 热门入口 -->
+                        <div class="panel-default" id="panel-default-state">
+                            <!-- 面板头部 -->
+                            <div class="panel-header">
+                                <h4><svg class="icon" aria-hidden="true"><use href="#i-compass"></use></svg> 产品导航</h4>
                             </div>
-                            <h3>点击左侧产品节点</h3>
-                            <p>查看华为云各产品的详细能力与典型应用场景</p>
-                            <div class="empty-tips">
-                                <div class="empty-tip">
-                                    <span class="tip-num">1</span>
-                                    <span>点击任意产品节点</span>
+
+                            <!-- 快速统计 -->
+                            <div class="panel-stats-grid">
+                                <div class="panel-stat-item">
+                                    <span class="panel-stat-num">35</span>
+                                    <span class="panel-stat-label">云产品</span>
                                 </div>
-                                <div class="empty-tip">
-                                    <span class="tip-num">2</span>
-                                    <span>右侧展示产品详细信息</span>
+                                <div class="panel-stat-item">
+                                    <span class="panel-stat-num">9</span>
+                                    <span class="panel-stat-label">分类</span>
                                 </div>
-                                <div class="empty-tip">
-                                    <span class="tip-num">3</span>
-                                    <span>按分类筛选或搜索快速定位产品</span>
+                                <div class="panel-stat-item">
+                                    <span class="panel-stat-num">10+</span>
+                                    <span class="panel-stat-label">行业覆盖</span>
                                 </div>
+                            </div>
+
+                            <!-- 热门产品快捷入口 -->
+                            <div class="panel-section">
+                                <div class="panel-section-title"><svg class="icon" aria-hidden="true"><use href="#i-fire"></use></svg> 热门产品</div>
+                                <div class="panel-hot-list" id="panel-hot-products"></div>
+                            </div>
+
+                            <!-- 使用提示 -->
+                            <div class="panel-tips">
+                                <div class="panel-tip-row"><span class="pt-icon">✦</span> 悬停节点预览摘要</div>
+                                <div class="panel-tip-row"><span class="pt-icon">✦</span> 点击查看完整详情弹窗</div>
+                                <div class="panel-tip-row"><span class="pt-icon">✦</span> 分类筛选快速定位</div>
                             </div>
                         </div>
-                        <!-- 详情内容区（动态填充）-->
-                        <div class="product-detail-content" id="detail-content-area" style="display:none;"></div>
+
+                        <!-- 态2：悬停预览 — 轻量产品卡 -->
+                        <div class="panel-hover-preview" id="panel-hover-state" style="display:none;">
+                            <div class="preview-card" id="hover-preview-card"></div>
+                        </div>
+
+                        <!-- 态3：选中详情 — 面板内嵌精简详情 -->
+                        <div class="panel-selected-detail" id="panel-selected-state" style="display:none;">
+                            <div class="selected-detail-scroll" id="selected-detail-content"></div>
+                        </div>
                     </div>
                 </div>
 

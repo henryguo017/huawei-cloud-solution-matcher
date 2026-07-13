@@ -5110,6 +5110,7 @@ const ProductGraph = {
             this._buildIndex();
             this._renderGrid();
             this._bindEvents();
+            this._initHotProducts(); // 初始化右侧面板热门产品
         } catch (e) {
             console.error('[ProductGraph] 初始化失败:', e);
         }
@@ -5169,6 +5170,8 @@ const ProductGraph = {
 
                 node.innerHTML = '<span class="node-category-dot"></span><span class="node-label">' + product.name + '</span>';
                 node.addEventListener('click', function() { self._onNodeClick(product); });
+                node.addEventListener('mouseenter', function() { self._onNodeHover(product); });
+                node.addEventListener('mouseleave', function() { self._onNodeLeave(); });
                 gridEl.appendChild(node);
                 self.state.nodeElements[product.id] = node;
             });
@@ -5181,7 +5184,169 @@ const ProductGraph = {
         var el = this.state.nodeElements[product.id];
         if (el) el.classList.add('selected');
         this.state.selectedNode = product.id;
+        // 同时更新右侧面板 + 弹窗
+        this._showPanelDetail(product);
         this._showDetail(product);
+    },
+
+    /* ---- 悬停预览（态2） ---- */
+    _onNodeHover(product) {
+        if (!product || !this.state || this.state.selectedNode === product.id) return; // 已选中不覆盖
+        var panel = document.getElementById('panel-hover-state');
+        var card = document.getElementById('hover-preview-card');
+        if (!panel || !card) return;
+
+        var cat = this.categories[product.category] || {};
+        var caps = (product.capabilities || []).slice(0, 4);
+        var catColorMap = {
+            compute: '#D97706', network: '#2563EB', storage: '#059669',
+            database: '#7C3AED', ai: '#DB2777', iot: '#0D9488',
+            security: '#DC2626', media: '#4F46E5', enterprise: '#4B5563'
+        };
+        var catColor = catColorMap[product.category] || '#666';
+
+        var catLabel = (typeof cat === 'object' ? (cat.label || product.category) : String(cat));
+        var capTags = caps.map(function(c) {
+            return '<span class="pv-tag pv-cap">' + c + '</span>';
+        }).join('');
+
+        card.setAttribute('data-pv-cat', product.category);
+        card.innerHTML =
+            '<div class="pv-category-row"><span class="pv-cat-badge">' + catLabel + '</span></div>' +
+            '<h4 class="pv-name">' + product.name + '</h4>' +
+            '<div class="pv-name-en">' + (product.nameEn || '') + '</div>' +
+            (product.desc ? '<div class="pv-desc">' + product.desc + '</div>' : '') +
+            (caps.length > 0 ?
+                '<div><div class="pv-section-title" style="color:' + catColor + ';">核心能力</div>' +
+                '<div class="pv-tag-list">' + capTags + '</div></div>' : '') +
+            '<div class="pv-hint"><svg class="icon" aria-hidden="true"><use href="#i-click"></use></svg> 点击查看完整详情</div>';
+
+        document.getElementById('panel-default-state').style.display = 'none';
+        document.getElementById('panel-selected-state').style.display = 'none';
+        panel.style.display = '';
+    },
+
+    _onNodeLeave() {
+        if (!this.state || !this.state.selectedNode) {
+            // 没有选中任何产品 → 回到默认态
+            var panel = document.getElementById('panel-hover-state');
+            if (panel) panel.style.display = 'none';
+            document.getElementById('panel-default-state').style.display = '';
+        }
+        // 有选中产品 → 保持选中态不变
+    },
+
+    /* ---- 面板选中详情（态3） ---- */
+    _showPanelDetail(product) {
+        if (!product) return;
+        var container = document.getElementById('selected-detail-content');
+        if (!container) return;
+
+        var cat = this.categories[product.category] || {};
+        var catColorMap = {
+            compute: '#D97706', network: '#2563EB', storage: '#059669',
+            database: '#7C3AED', ai: '#DB2777', iot: '#0D9488',
+            security: '#DC2626', media: '#4F46E5', enterprise: '#4B5563'
+        };
+        var catColor = catColorMap[product.category] || '#666';
+
+        var catLabel = (typeof cat === 'object' ? (cat.label || product.category) : String(cat));
+
+        var caps = (product.capabilities || []).slice(0, 6);
+        var sces = (product.scenarios || []).slice(0, 5);
+        var advs = (product.advantages || []).slice(0, 4);
+        var hlts = (product.highlights || []).slice(0, 4);
+
+        var capHtml = caps.map(function(c){return '<span class="sd-chip sd-cap">'+c+'</span>';}).join('');
+        var sceHtml = sces.map(function(s){return '<span class="sd-chip sd-sce">'+s+'</span>';}).join('');
+        var advHtml = advs.map(function(a){return '<li>'+a+'</li>';}).join('');
+        var hltHtml = hlts.map(function(h){return '<span class="sd-chip sd-hlt">'+h+'</span>';}).join('');
+
+        var self = this;
+        var relIds = this._getRelatedProducts(product.id);
+        var relNames = [];
+        relIds.forEach(function(rId){
+            var rn = self.state.nodes[rId];
+            if (rn) relNames.push(rn.name);
+        });
+
+        container.parentElement.setAttribute('data-sd-cat', product.category);
+        container.innerHTML =
+            '<div class="sd-header">'+
+                '<span class="sd-cat-pill">'+catLabel+'</span>'+
+                '<h4>'+product.name+'</h4>'+
+                '<div class="sd-name-en">'+(product.nameEn||'')+'</div>'+
+            '</div>'+
+            (product.desc ?
+                '<div class="sd-section"><div class="sd-section-title" style="color:#555D6A">简介</div>'+
+                '<div style="font-size:0.82rem;line-height:1.65;color:var(--text-primary);padding:10px 12px;background:linear-gradient(135deg,#FAFAF7,#F7F5F1);border-radius:9px;border:1px solid rgba(0,0,0,0.04);">'+product.desc+'</div></div>'
+                : '')+
+            (caps.length > 0 ?
+                '<div class="sd-section"><div class="sd-section-title" style="color:'+catColor+'">核心能力</div>'+
+                '<div class="sd-chip-list">'+capHtml+'</div></div>' : '')+
+            (sces.length > 0 ?
+                '<div class="sd-section"><div class="sd-section-title" style="color:#0876A6">典型场景</div>'+
+                '<div class="sd-chip-list">'+sceHtml+'</div></div>' : '')+
+            (advs.length > 0 ?
+                '<div class="sd-section"><div class="sd-section-title" style="color:#05854B">产品优势</div>'+
+                '<ul class="sd-adv-list">'+advHtml+'</ul></div>' : '')+
+            (hlts.length > 0 ?
+                '<div class="sd-section"><div class="sd-section-title" style="color:#9333EA">技术亮点</div>'+
+                '<div class="sd-chip-list">'+hltHtml+'</div></div>' : '')+
+            (relNames.length > 0 ?
+                '<div class="sd-section"><div class="sd-section-title" style="color:var(--text-secondary)">关联产品</div>'+
+                '<div class="sd-chip-list" style="flex-wrap:wrap;gap:5px">'+relNames.map(function(n){return '<span class="sd-chip" style="background:rgba(199,0,11,0.07);color:#C7000B;font-size:0.72rem;padding:4px 9px;border-radius:7px">'+n+'</span>';}).join('')+'</div></div>' : '')+
+            '<div class="sd-action-bar">'+
+                '<button class="sd-btn sd-btn-primary" onclick="ProductGraph._openFullDetail(\''+product.id+'\')">📋 完整详情</button>'+
+                '<button class="sd-btn sd-btn-outline" onclick="ProductGraph._resetPanel()">✕ 关闭面板</button>'+
+            '</div>';
+
+        // 切换三态：隐藏默认和预览，显示选中
+        document.getElementById('panel-default-state').style.display = 'none';
+        document.getElementById('panel-hover-state').style.display = 'none';
+        document.getElementById('panel-selected-state').style.display = '';
+    },
+
+    /* 打开完整详情弹窗（从面板按钮触发） */
+    _openFullDetail(productId) {
+        var p = this.state.nodes[productId];
+        if (p) this._showDetail(p);
+    },
+
+    /* ---- 热门产品初始化 ---- */
+    _initHotProducts() {
+        var hotIds = ['ecs','obs','rds','modelarts','waf','iotda','cce','gaussdb'];
+        var self = this;
+        var listEl = document.getElementById('panel-hot-products');
+        if (!listEl) return;
+        var html = '';
+        hotIds.forEach(function(id) {
+            var p = self.state.nodes[id];
+            if (p) {
+                html += '<button class="panel-hot-item" data-pid="'+id+'" title="查看 '+p.name+' 详情">'+p.name+'</button>';
+            }
+        });
+        listEl.innerHTML = html;
+        // 绑定点击事件
+        listEl.querySelectorAll('.panel-hot-item').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                var pid = btn.getAttribute('data-pid');
+                var prod = self.state.nodes[pid];
+                if (prod) self._onNodeClick(prod);
+            });
+        });
+    },
+
+    /* 重置面板到默认态 */
+    _resetPanel() {
+        if (!this.state) return;
+        this.state.selectedNode = null;
+        document.querySelectorAll('.product-node.selected').forEach(function(n) { n.classList.remove('selected'); });
+        document.getElementById('panel-default-state').style.display = '';
+        document.getElementById('panel-hover-state').style.display = 'none';
+        document.getElementById('panel-selected-state').style.display = 'none';
+        var overlay = document.getElementById('product-modal-overlay');
+        if (overlay) { overlay.style.display = 'none'; document.body.style.overflow = ''; }
     },
 
     _showDetail(product) {
