@@ -14,6 +14,7 @@
 所有函数均为纯函数（不依赖实例 / 不调用 LLM），便于两种模式复用与单测。
 """
 
+import re
 from typing import Dict, Any, List
 
 
@@ -153,6 +154,52 @@ def build_playbook_text(playbook: Dict[str, Any], industry: str) -> str:
 # ============================================================
 # 7. Markdown → 章节结构解析（供报告生成器消费）
 # ============================================================
+# ============================================================
+# 参考资料节（让 [资料N] 标注可追溯，杜绝悬空引用）
+# ============================================================
+def _extract_ref_field(meta: str, key: str) -> str:
+    """从 [资料N | 来源:.. | 行业:.. | 类型:..] 的元数据串中提取某个字段"""
+    m = re.search(rf'{key}\s*[:：]\s*([^|]+)', meta)
+    return m.group(1).strip() if m else ""
+
+
+def build_references_section(context: str) -> str:
+    """从带来源标注的 context 解析出 [资料N] 映射，生成文档末尾的『参考资料』节。
+
+    正文中的 [资料N] 标注若没有对应出处说明，读者无法得知其指向哪份资料，
+    标注反而制造困惑。本函数在答案末尾追加一节，把每个 [资料N] 映射回真实出处
+    （来源文件名 / 行业 / 类型），使方案书自包含、可追溯。
+
+    Args:
+        context: 已格式化为 [资料N | 来源:... | 行业:... | 类型:...] 的参考材料上下文
+    Returns:
+        "## 15. 参考资料\\n\\n- [资料1] ..." 形式的 Markdown 字符串；无有效资料时返回 ""
+    """
+    if not context or not context.strip():
+        return ""
+    ref_items: List[str] = []
+    pattern = re.compile(r'\[资料(\d+)\s*\|(.*?)\]', re.DOTALL)
+    for m in pattern.finditer(context):
+        idx = m.group(1)
+        meta = m.group(2)
+        source = _extract_ref_field(meta, '来源')
+        industry = _extract_ref_field(meta, '行业')
+        dtype = _extract_ref_field(meta, '类型')
+        if not (source or industry or dtype):
+            continue
+        fields = [f"[资料{idx}]"]
+        if source:
+            fields.append(f"来源：{source}")
+        if industry:
+            fields.append(f"行业：{industry}")
+        if dtype:
+            fields.append(f"类型：{dtype}")
+        ref_items.append("- " + " ｜ ".join(fields))
+    if not ref_items:
+        return ""
+    return "\n\n## 15. 参考资料\n\n" + "\n".join(ref_items) + "\n"
+
+
 def parse_markdown_to_chapters(markdown: str) -> List[Dict[str, Any]]:
     """把 Markdown 方案解析为章节结构（与 report_generator 的章节格式一致）
 

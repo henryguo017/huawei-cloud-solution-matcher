@@ -13,6 +13,7 @@ from app.services.solution_prompt import (
     build_few_shot,
     build_format_block,
     build_playbook_text,
+    build_references_section,
     parse_markdown_to_chapters,
 )
 
@@ -162,6 +163,12 @@ class SolutionMatcherService:
             demand_analysis=demand_analysis or {},
         )
         answer = await get_llm_response(final_prompt)
+        # 追加『参考资料』节：把正文中的 [资料N] 标注映射回真实出处，
+        # 避免悬空引用（读者不知 [资料N] 指向哪份资料）。仅当答案未自带时才追加。
+        if "参考资料" not in answer:
+            refs = build_references_section(context)
+            if refs:
+                answer = answer.rstrip() + "\n" + refs
         return {
             "answer": answer,
             "solution_json": parse_markdown_to_chapters(answer),
