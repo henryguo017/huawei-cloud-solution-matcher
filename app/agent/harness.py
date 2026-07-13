@@ -23,12 +23,20 @@ from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
 
 from app.agent.tools import ToolRegistry
 from app.agent.memory import ConversationMemory
+from app.services.solution_prompt import (
+    parse_markdown_to_chapters,
+    build_anti_hallucination,
+    build_audience_tone,
+    build_few_shot,
+    build_format_block,
+)
+from app.services.solution_matcher import SolutionMatcherService
 
 logger = logging.getLogger(__name__)
 
 
-# ReAct 提示词模板
-REACT_SYSTEM_PROMPT = """你是一个智能解决方案匹配助手，帮助用户找到最合适的华为云解决方案。
+# ReAct 提示词模板（Final Answer 结构与标准模式共用同一套增强指令，保证三模式质量一致）
+REACT_SYSTEM_PROMPT_BASE = """你是一个智能解决方案匹配助手，帮助用户找到最合适的华为云解决方案。
 
 ## 工作方式
 你需要使用"思考-行动-观察"的方式逐步解决问题：
@@ -52,31 +60,7 @@ Action Input: [JSON 格式的参数，如 {{"query": "制造业 工业物联网"
 ### 给出最终答案时：
 Thought: 我已收集到足够信息，可以给出完整方案。
 Final Answer: 
-[你的完整方案报告，按以下结构输出：
-
-## 📋 需求概览
-简要总结客户需求（2-3句）
-
-## 🎯 推荐方案
-推荐华为云解决方案及核心理由
-
-## 🏗️ 产品组合
-列出关键华为云产品及各自作用
-
-## 💰 核心价值
-至少3个价值点，每个含具体数据
-
-## 📊 竞品对比
-华为云 vs 竞品的差异化优势（如有）
-
-## 🗺️ 实施路径
-分3个阶段说明
-
-## 💡 下一步建议
-具体可执行的行动建议
-
----
-注意：内容要具体量化，避免空洞表述，每个部分控制在3-5个要点。]
+[你的完整方案报告。系统会基于你检索到的资料进行来源标注与润色，但请你尽量写全结构、并在引用资料时标注来源文件名（如：据《xxx.docx》）。]
 
 ## 规则
 - 必须调用工具来获取信息，不能凭空编造
@@ -86,6 +70,19 @@ Final Answer:
 - 如果工具返回错误，尝试调整参数重试一次，再失败就基于已有信息回答
 - 最多执行 {max_steps} 步
 - 不要调用 generate_report 工具——你直接用 Final Answer 输出报告即可"""
+
+
+# Final Answer 增强指南：与标准模式共用 14 章结构 + 防幻觉 + 话术
+REACT_FINAL_GUIDE = (
+    "\n\n【Final Answer 报告结构要求（务必覆盖以下全部章节）】\n"
+    + build_format_block()
+    + "\n"
+    + build_anti_hallucination()
+    + build_audience_tone()
+    + build_few_shot()
+    + "【来源标注】引用检索到的资料时，必须在句末注明来源文件名（如：据《xxx.docx》），"
+    "来源文件名已在上方 Observation 的 source 字段给出。\n"
+)
 
 
 class AgentHarness:
@@ -160,7 +157,7 @@ class AgentHarness:
 
         # 构建初始 Prompt
         tools_desc = self.tools.get_tools_prompt()
-        system_prompt = REACT_SYSTEM_PROMPT.format(
+        system_prompt = (REACT_SYSTEM_PROMPT_BASE + REACT_FINAL_GUIDE).format(
             tools=tools_desc,
             max_steps=self.max_steps,
         )
@@ -213,6 +210,8 @@ class AgentHarness:
                     # Agent 认为完成了
                     final_answer = parse_result["content"]
                     self._log("system", "Agent 输出 Final Answer")
+                    # 统一增强管线：基于已检索资料重写最终答案（与标准模式一致）
+                    final_answer = await self._finalize_answer(user_input, final_answer, tool_calls_log)
                     self.memory.add_agent_response(session_id, final_answer)
                     await self._emit(event_callback, {
                         "type": "final",
@@ -278,14 +277,15 @@ Observation: {observation}
                 else:
                     # 解析失败。如果已有工具调用结果，直接把 LLM 输出当最终答案
                     if tool_calls_log:
-                        self._log("warn", f"LLM 格式不对但已有数据，直接作为答案输出")
-                        self.memory.add_agent_response(session_id, llm_response)
+                        self._log("warn", f"LLM 格式不对但已有数据，统一增强管线重写")
+                        final_answer = await self._finalize_answer(user_input, llm_response, tool_calls_log)
+                        self.memory.add_agent_response(session_id, final_answer)
                         await self._emit(event_callback, {
                             "type": "final",
                             "step": self._step_count,
                             "elapsed": round(time.time() - self._start_time, 2),
                         })
-                        return self._make_result(llm_response, tool_calls_log, success=True)
+                        return self._make_result(final_answer, tool_calls_log, success=True)
                     # 第一次就格式错误，引导重试
                     self._log("warn", f"无法解析 LLM 输出: {llm_response[:200]}")
                     current_prompt += f"""
@@ -440,25 +440,97 @@ Final Answer: [完整方案]）"""
             return True
         return False
 
+    # ---- 统一增强管线（与标准模式共用）----
+
+    def _collect_context_and_demand(self, tool_calls: list):
+        """把 Agent 收集到的工具 observation 格式化为带来源标注的上下文，并提取行业/需求结构化。
+
+        返回的 context 与标准模式 _build_context 风格一致（[资料N | 来源 | 行业 | 类型]），
+        供 SolutionMatcherService.generate_enhanced 复用同一套增强 prompt。
+        """
+        parts = []
+        idx = 0
+        industry = ""
+        demand_analysis: Dict[str, Any] = {}
+
+        for tc in tool_calls:
+            tool = tc.get("tool")
+            raw = tc.get("result")
+            if not raw:
+                continue
+            try:
+                data = json.loads(raw) if isinstance(raw, str) else raw
+            except (json.JSONDecodeError, TypeError):
+                # 非 JSON 的 observation（罕见）→ 作为普通资料
+                idx += 1
+                parts.append(f"[资料{idx} | 来源:工具返回 | 类型:参考]\n{raw}")
+                continue
+
+            # analyze_demand 结果 → 提取行业与结构化需求
+            if tool == "analyze_demand" and isinstance(data, dict):
+                industry = data.get("industry", "") or industry
+                if data.get("pain_points") or data.get("scenarios") or data.get("keywords"):
+                    demand_analysis = data
+                continue
+
+            # search_kb / search_competitor 结果 → 格式化资料
+            results = data.get("results", []) if isinstance(data, dict) else []
+            for doc in results:
+                if not isinstance(doc, dict):
+                    continue
+                idx += 1
+                source = doc.get("source", "未知来源")
+                doc_industry = doc.get("industry", "")
+                doc_type = doc.get("type", "华为云方案")
+                # search_competitor 的 type 可能是竞品名；search_kb 无 type → 华为云方案
+                typ = "竞品方案" if (doc_type and doc_type != "华为云") else "华为云方案"
+                content = doc.get("content", "")
+                parts.append(
+                    f"[资料{idx} | 来源:{source} | 行业:{doc_industry or '通用'} | 类型:{typ}]\n{content}"
+                )
+                if idx >= 12:  # 限制上下文规模，避免多步检索导致膨胀
+                    break
+
+        context = "\n\n".join(parts)
+        return context, industry, demand_analysis
+
+    async def _finalize_answer(self, user_input: str, draft: str, tool_calls: list) -> str:
+        """用统一增强管线重写最终答案（与标准模式一致：来源标注/防幻觉/话术/14章）。
+
+        失败（如 LLM 异常）时回退到 Agent 的草稿，保证不阻断主流程。
+        """
+        try:
+            context, industry, demand_analysis = self._collect_context_and_demand(tool_calls)
+            if not context.strip():
+                # 没有检索到任何资料 → 不二次生成，直接用草稿
+                self._log("system", "Agent 未检索到资料，跳过统一增强，使用草稿")
+                return draft
+            matcher = SolutionMatcherService()
+            enhanced = await matcher.generate_enhanced(
+                demand=user_input,
+                context=context,
+                industry=industry,
+                demand_analysis=demand_analysis,
+            )
+            self._log("system", "统一增强管线重写完成")
+            return enhanced["answer"]
+        except Exception as e:
+            logger.warning(f"[Agent] 统一增强生成失败，回退草稿: {e}")
+            return draft
+
     # ---- 兜底方案 ----
 
     async def _generate_fallback(self, user_input: str) -> str:
-        """当 Agent 循环失败时，用简单方式直接生成回答"""
+        """当 Agent 循环失败时，用增强模板直接生成（与标准模式一致的 14 章结构）"""
         from app.models.llm import get_llm_response
 
-        prompt = f"""你是华为云解决方案专家。用户提出了以下需求，请直接给出方案建议。
-
-用户需求：{user_input}
-
-请按以下格式回答：
-## 需求分析
-## 推荐方案
-## 核心价值
-## 产品组合
-## 实施路径
-## 下一步建议
-
-内容要具体量化，避免泛泛而谈。"""
+        prompt = (
+            "你是华为云解决方案专家。用户提出了以下需求，请直接给出完整方案建议。\n\n"
+            f"用户需求：{user_input}\n\n"
+            + build_anti_hallucination()
+            + build_audience_tone()
+            + build_format_block()
+        )
 
         try:
             return await get_llm_response(prompt)
@@ -476,6 +548,7 @@ Final Answer: [完整方案]）"""
         elapsed = time.time() - self._start_time
         return {
             "answer": answer,
+            "solution_json": parse_markdown_to_chapters(answer),
             "steps": self._step_count,
             "elapsed": round(elapsed, 2),
             "tool_calls": tool_calls,
