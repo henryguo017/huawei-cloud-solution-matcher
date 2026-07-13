@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260714q">
+    <link rel="stylesheet" href="style.css?v=20260714r">
     <link rel="stylesheet" href="welcome-styles.css?v=20260714j">
 </head>
 <body>
@@ -247,9 +247,9 @@
                     <button class="topbar-menu-btn" id="navbar-toggle" title="菜单">
                         <svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>
                     </button>
-                    <div class="topbar-search">
-                        <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
-                        <input type="text" id="topbar-search-input" placeholder="搜索方案、竞品、文档…" aria-label="搜索" autocomplete="off" name="q" readonly onfocus="this.removeAttribute('readonly')">
+                    <div class="topbar-ai-btn" id="topbar-ai-btn" title="AI 智能助手">
+                        <svg class="icon ai-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg>
+                        <span class="ai-text">AI 助手</span>
                     </div>
                 </div>
                 <div class="topbar-right">
@@ -307,6 +307,62 @@
         </button>
     </nav>
     
+    <!-- AI 智能助手面板 -->
+    <div id="ai-assistant-overlay" class="ai-assistant-overlay" style="display:none;">
+        <div class="ai-assistant-panel">
+            <!-- 头部 -->
+            <div class="ai-panel-header">
+                <div class="ai-header-left">
+                    <div class="ai-avatar"><svg class="icon" aria-hidden="true"><use href="#i-sparkle"></use></svg></div>
+                    <div>
+                        <h3>华为云智能助手</h3>
+                        <span class="ai-status"><i class="ai-dot"></i>基于 DeepSeek</span>
+                    </div>
+                </div>
+                <button class="ai-close-btn" id="ai-panel-close">&times;</button>
+            </div>
+
+            <!-- 快捷建议（首次打开显示） -->
+            <div class="ai-quick-actions" id="ai-quick-actions">
+                <div class="ai-quick-title">✦ 你可以问我</div>
+                <div class="ai-quick-grid">
+                    <button class="ai-quick-card" data-q="华为云有哪些核心产品？适合中小企业的入门方案是什么？">
+                        <span class="aq-icon">🏢</span>中小企业入门方案
+                    </button>
+                    <button class="ai-quick-card" data-q="华为云数据库产品有哪些？RDS和GaussDB有什么区别？">
+                        <span class="aq-icon">🗄️</span>数据库产品对比
+                    </button>
+                    <button class="ai-quick-card" data-q="金融行业上华为云有什么合规要求？推荐什么架构方案？">
+                        <span class="aq-icon">🏦</span>金融行业合规方案
+                    </button>
+                    <button class="ai-quick-card" data-q="华为云和阿里云在云计算领域各有什么优势？如何选型？">
+                        <span class="aq-icon">⚖️</span>华为云 vs 阿里云
+                    </button>
+                    <button class="ai-quick-card" data-q="智慧园区的典型架构是什么样的？涉及哪些华为云产品？">
+                        <span class="aq-icon">🏘️</span>智慧园区架构
+                    </button>
+                    <button class="ai-quick-card" data-q="华为云AI算力产品有哪些？ModelArts怎么用？">
+                        <span class="aq-icon">🤖</span>AI/ModelArts 介绍
+                    </button>
+                </div>
+            </div>
+
+            <!-- 对话消息区 -->
+            <div class="ai-chat-messages" id="ai-chat-messages"></div>
+
+            <!-- 输入区 -->
+            <div class="ai-input-area">
+                <div class="ai-input-wrapper">
+                    <textarea id="ai-input" placeholder="输入你的问题，例如：金融行业用什么华为云产品？" rows="1" maxlength="2000"></textarea>
+                    <button class="ai-send-btn" id="ai-send-btn" disabled>
+                        <svg class="icon" aria-hidden="true"><use href="#i-send"></use></svg>
+                    </button>
+                </div>
+                <div class="ai-input-hint">按 Enter 发送，Shift+Enter 换行 · 基于 AI 生成，仅供参考</div>
+            </div>
+        </div>
+    </div>
+
     <!-- 产品详情弹窗 -->
     <div id="product-modal-overlay" class="product-modal-overlay" style="display:none;">
         <div class="product-modal">

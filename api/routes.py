@@ -1261,3 +1261,57 @@ async def refine_competitor_analysis(request: RefineCompetitorRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"竞品分析优化失败: {str(e)}"
         )
+
+
+# ==================== AI 智能助手 ====================
+
+@router.post("/ai/chat", tags=["AI 助手"])
+async def ai_chat(
+    request: dict,
+    user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    AI 智能助手 - 自由问答
+    基于华为云知识库 + LLM，回答关于华为云产品、方案、技术的问题
+    """
+    try:
+        question = request.get("question", "").strip()
+        if not question:
+            raise HTTPException(status_code=400, detail="问题不能为空")
+
+        # 使用用户独立知识库（登录用户）；匿名用户使用全局知识库
+        user_id = user.get('id') if user else 0
+        if user_id > 0:
+            matcher = get_solution_matcher_for_user(user_id)
+        else:
+            matcher = get_solution_matcher()
+
+        # 构建 AI 助手专用 prompt（比匹配更自然对话）
+        system_prompt = """你是「华为云智能助手」，一位专业的云计算解决方案顾问。
+你的职责是帮助用户了解华为云的产品能力、技术方案和行业实践。
+
+回答原则：
+1. 准确引用华为云产品名称和官方信息
+2. 结合行业场景给出实用建议（金融/政务/制造/教育等）
+3. 如果问题涉及竞品对比，客观分析各厂商优劣，突出华为云优势
+4. 回答结构清晰，使用 Markdown 格式（标题/列表/表格等）
+5. 语气专业但亲切，像一位经验丰富的售前工程师
+6. 如果不确定的信息，诚实说明而非编造
+
+当前用户问题："""
+
+        # 复用 solution matcher 的 match 方法（内部已做 RAG + LLM）
+        result = await matcher.match(question)
+
+        answer = result.get("answer", "抱歉，暂时无法回答这个问题。请稍后再试。")
+
+        return {"answer": answer}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI 助手请求失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI 助手暂时不可用: {str(e)}"
+        )

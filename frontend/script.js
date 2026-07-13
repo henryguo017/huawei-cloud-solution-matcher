@@ -4951,6 +4951,10 @@ function init() {
         try { ProductGraph.init(); } catch (e) {
             console.warn('[Init] ProductGraph初始化延迟，切换到产品页时会重试:', e.message);
         }
+        // 初始化 AI 智能助手
+        try { AIAssistant.init(); } catch (e) {
+            console.warn('[Init] AI助手初始化失败:', e.message);
+        }
         // ArchTree3D 已移除（v20260531w — 3D产品架构弹窗功能废弃）
 
         // 隐藏分页容器（无数据时）
@@ -5004,6 +5008,182 @@ function init() {
 
 document.addEventListener('DOMContentLoaded', init);
 
+
+/* ==================== AI 智能助手模块 ==================== */
+const AIAssistant = {
+    isOpen: false,
+    isTyping: false,
+
+    init() {
+        // 打开按钮
+        var aiBtn = document.getElementById('topbar-ai-btn');
+        if (aiBtn) aiBtn.addEventListener('click', () => this.open());
+
+        // 关闭按钮 + 遮罩点击
+        var closeBtn = document.getElementById('ai-panel-close');
+        if (closeBtn) closeBtn.addEventListener('click', () => this.close());
+        var overlay = document.getElementById('ai-assistant-overlay');
+        if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) this.close(); });
+
+        // 快捷建议卡片
+        document.querySelectorAll('.ai-quick-card').forEach(card => {
+            card.addEventListener('click', () => {
+                var q = card.getAttribute('data-q');
+                if (q) this.sendQuestion(q);
+            });
+        });
+
+        // 输入框
+        var input = document.getElementById('ai-input');
+        if (input) {
+            input.addEventListener('input', () => this._updateSendBtn());
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._doSend(); }
+            });
+
+            // 自动高度
+            input.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+        }
+
+        // 发送按钮
+        var sendBtn = document.getElementById('ai-send-btn');
+        if (sendBtn) sendBtn.addEventListener('click', () => this._doSend());
+
+        // ESC 关闭
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isOpen) this.close();
+        });
+    },
+
+    open() {
+        this.isOpen = true;
+        var overlay = document.getElementById('ai-assistant-overlay');
+        if (overlay) overlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        // 聚焦输入
+        setTimeout(() => {
+            var input = document.getElementById('ai-input');
+            if (input) input.focus();
+        }, 300);
+    },
+
+    close() {
+        this.isOpen = false;
+        var overlay = document.getElementById('ai-assistant-overlay');
+        if (overlay) overlay.style.display = 'none';
+        document.body.style.overflow = '';
+    },
+
+    toggle() {
+        this.isOpen ? this.close() : this.open();
+    },
+
+    sendQuestion(q) {
+        var input = document.getElementById('ai-input');
+        if (input) { input.value = q; this._doSend(); }
+    },
+
+    _updateSendBtn() {
+        var btn = document.getElementById('ai-send-btn');
+        var input = document.getElementById('ai-input');
+        if (btn && input) btn.disabled = !input.value.trim();
+    },
+
+    _doSend() {
+        var input = document.getElementById('ai-input');
+        if (!input || this.isTyping) return;
+        var text = input.value.trim();
+        if (!text) return;
+
+        // 隐藏快捷建议
+        var qa = document.getElementById('ai-quick-actions');
+        if (qa) qa.style.display = 'none';
+
+        // 显示用户消息
+        this._addMsg(text, 'user');
+
+        // 清空输入
+        input.value = '';
+        input.style.height = 'auto';
+        this._updateSendBtn();
+
+        // 发送请求
+        this._askAI(text);
+    },
+
+    _addMsg(text, role) {
+        var container = document.getElementById('ai-chat-messages');
+        if (!container) return;
+
+        var div = document.createElement('div');
+        div.className = 'ai-msg ai-msg-' + role;
+        div.innerHTML = '<div class="ai-msg-bubble">' + this._escapeHtml(text).replace(/\n/g, '<br>') + '</div>';
+        container.appendChild(div);
+
+        // 自动滚动到底部
+        container.scrollTop = container.scrollHeight;
+
+        return div;
+    },
+
+    _showThinking() {
+        var container = document.getElementById('ai-chat-messages');
+        if (!container) return null;
+
+        var div = document.createElement('div');
+        div.className = 'ai-msg ai-msg-ai';
+        div.id = 'ai-thinking-msg';
+        div.innerHTML = '<div class="ai-msg-thinking"><span></span><span></span><span></span></div>';
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+        return div;
+    },
+
+    _removeThinking() {
+        var el = document.getElementById('ai-thinking-msg');
+        if (el) el.remove();
+    },
+
+    async _askAI(question) {
+        this.isTyping = true;
+        this._showThinking();
+
+        try {
+            var resp = await fetch('/api/ai/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: question })
+            });
+
+            var data = await resp.json();
+
+            this._removeThinking();
+
+            if (data.answer) {
+                this._addMsg(data.answer, 'ai');
+            } else if (data.error) {
+                this._addMsg('抱歉，处理时出现错误：' + data.error, 'ai');
+            } else {
+                this._addMsg('抱歉，暂时无法回答这个问题。请稍后再试。', 'ai');
+            }
+        } catch (err) {
+            this._removeThinking();
+            this._addMsg('网络连接失败，请检查网络后重试。', 'ai');
+        } finally {
+            this.isTyping = false;
+        }
+    },
+
+    _escapeHtml(s) {
+        var d = document.createElement('div');
+        d.appendChild(document.createTextNode(s));
+        return d.innerHTML;
+    }
+};
 
 /* ==================== 产品图谱模块（网格卡片布局版）==================== */
 
