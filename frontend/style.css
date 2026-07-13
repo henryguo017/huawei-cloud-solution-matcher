@@ -7561,3 +7561,13 @@ body::after {
 }
 .cat-dot.huawei { background: var(--primary-color); }
 .cat-dot.competitor { background: #3B82F6; }
+
+/* ===== Phase 4: 图标与文字间距/对齐微调 ===== */
+/* 仅当图标后还有文字时留出间距；纯图标容器(only-child)不加，避免多余留白 */
+.icon:not(:only-child) { margin-right: 0.4em; }
+.cat-dot { margin-right: 6px; }
+
+/* ===== Phase 5: 图标动效/移动端回归 ===== */
+.icon { transition: color 0.2s ease, transform 0.2s ease; }
+/* 移动端底部导航图标与桌面一致，随 font-size 缩放（已在 .icon 基类中处理） */
+.mobile-nav-item .mobile-nav-icon .icon { width: 1.4em; height: 1.4em; }
