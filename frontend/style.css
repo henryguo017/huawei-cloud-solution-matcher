@@ -6112,17 +6112,18 @@ body::after {
     margin-bottom: 12px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border-light);
-    line-height: 1.4;
+    min-height: 36px;
 }
 
 .category-group-icon {
     width: 28px;
     height: 28px;
     border-radius: 7px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    vertical-align: middle;
 }
 
 .category-group-icon .icon {
@@ -6137,6 +6138,7 @@ body::after {
     color: var(--text-primary);
     letter-spacing: 0.3px;
     line-height: 28px;
+    align-self: center;
 }
 
 .category-group-count {
@@ -6144,10 +6146,11 @@ body::after {
     color: var(--text-tertiary);
     margin-left: auto;
     background: var(--neutral-100);
-    padding: 3px 10px;
+    padding: 4px 10px;
     border-radius: 10px;
     line-height: 1;
     align-self: center;
+    white-space: nowrap;
 }
 
 /* 分类颜色 */
