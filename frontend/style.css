@@ -8006,39 +8006,25 @@ select:focus {
     padding: 0 16px;
     border-bottom: 1px solid var(--frame-border);
 }
-/* 品牌Logo（华为红花瓣） */
-.brand-logo {
+/* 品牌图标（云朵 + 白色+红光晕） */
+.sidebar-brand .brand-icon {
+    color: #fff;
     flex-shrink: 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px; height: 32px;
-    text-decoration: none;
+    filter: drop-shadow(0 0 6px rgba(199,0,11,0.5));
 }
-.brand-logo-svg {
-    width: 28px; height: 28px;
-    filter: drop-shadow(0 2px 6px rgba(199,0,11,0.35));
-}
-/* 品牌文字区 */
-.brand-info {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.25;
-    min-width: 0;
-    overflow: hidden;
-}
-.brand-title {
+.sidebar-brand .brand-icon .icon { width: 1.5rem; height: 1.5rem; }
+/* 品牌文字 */
+.sidebar-brand .brand-text {
     font-size: 0.9rem;
     font-weight: 700;
     color: #fff;
     white-space: nowrap;
-    letter-spacing: 0.02em;
 }
-.brand-subtitle {
+.sidebar-brand .brand-sub {
     font-size: 0.7rem;
     color: var(--frame-text-dim);
     white-space: nowrap;
-    letter-spacing: 0.03em;
 }
 .sidebar-collapse-btn {
     margin-left: auto;
@@ -8120,8 +8106,9 @@ select:focus {
 /* 收起态 */
 .app-shell.collapsed .sidebar { width: var(--sidebar-width-collapsed); }
 .app-shell.collapsed .sidebar-brand { padding: 0; justify-content: center; }
-.app-shell.collapsed .brand-info { display: none; }
-.app-shell.collapsed .brand-logo .brand-logo-svg { width: 24px; height: 24px; }
+.app-shell.collapsed .sidebar-brand .brand-icon,
+.app-shell.collapsed .sidebar-brand .brand-text,
+.app-shell.collapsed .sidebar-brand .brand-sub { display: none; }
 .app-shell.collapsed .sidebar-collapse-btn {
     display: flex;   /* 始终可见，允许再次点击展开 */
     margin-left: 0;
