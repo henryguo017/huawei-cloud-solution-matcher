@@ -148,7 +148,7 @@ async def _tool_search_kb(query: str) -> str:
     """
     kb = _get_kb()
     try:
-        docs = await asyncio.to_thread(kb.search, query)
+        docs = await asyncio.to_thread(kb.search_huawei, query, 4)
         if not docs:
             # 关键优化：空结果时给出明确的换关键词引导，避免 LLM 直接放弃
             return json.dumps({
@@ -201,11 +201,11 @@ async def _tool_search_competitor(competitor: str, industry: str = "") -> str:
 
         # 先检索华为方案
         hw_query = f"华为云" + (f"在{industry}行业的解决方案 竞争优势" if industry else "解决方案")
-        hw_docs = await asyncio.to_thread(kb.search, hw_query)
+        hw_docs = await asyncio.to_thread(kb.search_huawei, hw_query, 4)
 
         # 再检索竞品方案
         comp_query = f"{competitor}" + (f"在{industry}行业的解决方案 产品 优势" if industry else "解决方案")
-        comp_docs = await asyncio.to_thread(kb.search, comp_query)
+        comp_docs = await asyncio.to_thread(kb.search_competitor, comp_query, 4)
 
         hw_results = []
         for i, doc in enumerate(hw_docs[:3]):

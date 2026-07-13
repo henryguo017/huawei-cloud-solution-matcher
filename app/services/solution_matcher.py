@@ -196,7 +196,12 @@ class SolutionMatcherService:
             context_content = ""
         else:
             try:
-                docs = await asyncio.to_thread(self.kb_service.search, customer_demand)
+                # 拆分检索：主方案只用华为云方案文档落地，竞品仅用于第6章对比
+                huawei_docs, comp_docs = await asyncio.gather(
+                    asyncio.to_thread(self.kb_service.search_huawei, customer_demand, 4),
+                    asyncio.to_thread(self.kb_service.search_competitor, customer_demand, 2),
+                )
+                docs = (huawei_docs or []) + (comp_docs or [])
             except Exception as e:
                 logger.warning(f"向量检索异常，回退到 LLM 模式: {e}")
                 docs = []

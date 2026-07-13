@@ -2,10 +2,13 @@ from app.models.llm import get_embeddings
 from app.models.vector_db import get_vector_db
 from app.config import *
 import os
+import logging
 import hashlib
 import shutil
 import contextvars
 from urllib.parse import quote, unquote
+
+logger = logging.getLogger(__name__)
 
 # ===== 用户上下文：在线程中传递当前 user_id，供 Agent 工具等无参接口使用 =====
 _kb_current_user_id: contextvars.ContextVar[int] = contextvars.ContextVar('kb_user_id', default=0)
@@ -51,6 +54,8 @@ class KnowledgeBaseService:
         self.embeddings = get_embeddings()
         self.vector_db = get_vector_db(self.embeddings, persist_directory=self._vector_db_dir)
         self.retriever = self.vector_db.as_retriever(search_kwargs={"k": VECTOR_SEARCH_TOP_K})
+        # 预计算竞品公司集合，供检索时区分华为/竞品文档
+        self._competitor_companies = self._compute_competitor_companies()
 
     def _load_docs_from_dir(self, directory, dir_label=""):
         """从指定目录加载文档"""
@@ -205,6 +210,39 @@ class KnowledgeBaseService:
     def search(self, query):
         """检索相关文档"""
         return self.retriever.get_relevant_documents(query)
+
+    # ===== 拆分检索：主方案用华为云方案文档，竞品对比用竞品文档 =====
+    def _compute_competitor_companies(self):
+        """从竞品目录子文件夹名推断竞品公司集合"""
+        companies = set()
+        if os.path.isdir(self._competitor_dir):
+            try:
+                for name in os.listdir(self._competitor_dir):
+                    if os.path.isdir(os.path.join(self._competitor_dir, name)):
+                        companies.add(name)
+            except Exception:
+                pass
+        return companies
+
+    def _similarity_pool(self, query, pool_size=15):
+        """取一个较大的候选池，供后续按华为/竞品拆分"""
+        try:
+            return self.vector_db.similarity_search(query, k=pool_size)
+        except Exception as e:
+            logger.warning(f"向量检索异常: {e}")
+            return []
+
+    def search_huawei(self, query, k=4):
+        """只召回华为云方案文档（主方案落地用），竞品不参与"""
+        pool = self._similarity_pool(query, pool_size=max(k * 3, 15))
+        huawei = [d for d in pool if (d.metadata or {}).get("industry", "") not in self._competitor_companies]
+        return huawei[:k]
+
+    def search_competitor(self, query, k=2):
+        """只召回竞品方案文档（竞品对比章节用）"""
+        pool = self._similarity_pool(query, pool_size=max(k * 3, 15))
+        comp = [d for d in pool if (d.metadata or {}).get("industry", "") in self._competitor_companies]
+        return comp[:k]
 
     def get_stats(self):
         """统计知识库数据 + 行业分布"""

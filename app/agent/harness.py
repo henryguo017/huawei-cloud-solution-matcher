@@ -469,8 +469,8 @@ Final Answer: [完整方案]）"""
         返回的 context 与标准模式 _build_context 风格一致（[资料N | 来源 | 行业 | 类型]），
         供 SolutionMatcherService.generate_enhanced 复用同一套增强 prompt。
         """
-        parts = []
-        idx = 0
+        huawei_items = []
+        comp_items = []
         industry = ""
         demand_analysis: Dict[str, Any] = {}
 
@@ -482,9 +482,8 @@ Final Answer: [完整方案]）"""
             try:
                 data = json.loads(raw) if isinstance(raw, str) else raw
             except (json.JSONDecodeError, TypeError):
-                # 非 JSON 的 observation（罕见）→ 作为普通资料
-                idx += 1
-                parts.append(f"[资料{idx} | 来源:工具返回 | 类型:参考]\n{raw}")
+                # 非 JSON 的 observation（罕见）→ 作为华为类参考
+                huawei_items.append(("参考", "工具返回", "通用", raw))
                 continue
 
             # analyze_demand 结果 → 提取行业与结构化需求
@@ -499,18 +498,24 @@ Final Answer: [完整方案]）"""
             for doc in results:
                 if not isinstance(doc, dict):
                     continue
-                idx += 1
                 source = doc.get("source", "未知来源")
                 doc_industry = doc.get("industry", "")
                 doc_type = doc.get("type", "华为云方案")
                 # search_competitor 的 type 可能是竞品名；search_kb 无 type → 华为云方案
                 typ = "竞品方案" if (doc_type and doc_type != "华为云") else "华为云方案"
-                content = doc.get("content", "")
-                parts.append(
-                    f"[资料{idx} | 来源:{source} | 行业:{doc_industry or '通用'} | 类型:{typ}]\n{content}"
-                )
-                if idx >= 12:  # 限制上下文规模，避免多步检索导致膨胀
-                    break
+                item = (typ, source, doc_industry or "通用", doc.get("content", ""))
+                (comp_items if typ == "竞品方案" else huawei_items).append(item)
+
+        # 华为资料排在前（主方案落地），竞品资料排在后（仅第6章对比），统一连续编号
+        parts = []
+        idx = 0
+        for typ, source, doc_industry, content in huawei_items + comp_items:
+            if idx >= 12:  # 限制上下文规模，避免多步检索导致膨胀
+                break
+            idx += 1
+            parts.append(
+                f"[资料{idx} | 来源:{source} | 行业:{doc_industry} | 类型:{typ}]\n{content}"
+            )
 
         context = "\n\n".join(parts)
         return context, industry, demand_analysis
