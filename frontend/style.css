@@ -6112,7 +6112,7 @@ body::after {
     margin-bottom: 12px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border-light);
-    line-height: 1;
+    line-height: 1.4;
 }
 
 .category-group-icon {
@@ -6153,6 +6153,8 @@ body::after {
 /* 分类颜色 */
 .product-category-group[data-cat="compute"] .category-group-icon { background: rgba(59, 130, 246, 0.15); }
 .product-category-group[data-cat="compute"] .category-group-title { color: #60A5FA; }
+.product-category-group[data-cat="network"] .category-group-icon { background: rgba(245, 158, 11, 0.15); }
+.product-category-group[data-cat="network"] .category-group-title { color: #F59E0B; }
 .product-category-group[data-cat="storage"] .category-group-icon { background: rgba(34, 197, 94, 0.15); }
 .product-category-group[data-cat="storage"] .category-group-title { color: #4ADE80; }
 .product-category-group[data-cat="database"] .category-group-icon { background: rgba(168, 85, 247, 0.15); }
@@ -6249,6 +6251,7 @@ body::after {
     height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
+    background: #94A3B8;
 }
 .product-node[data-category="compute"] .node-category-dot { background: #3B82F6; }
 .product-node[data-category="network"] .node-category-dot { background: #F59E0B; }
