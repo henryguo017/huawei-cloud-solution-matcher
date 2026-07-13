@@ -359,12 +359,12 @@ Final Answer: [完整方案]）"""
         """
         # 先尝试匹配 Final Answer（显式声明）
         fa_match = re.search(
-            r'Final\s*Answer\s*[:：]\s*(.*?)$',
+            r'Final\s*Answer\s*[*]*\s*[:：]\s*[*`]*\s*(.*?)$',
             text,
             re.DOTALL | re.IGNORECASE,
         )
         if fa_match:
-            thought_match = re.search(r'Thought\s*[:：]\s*(.+?)(?=\n\s*(?:Final|Action)|$)', text, re.DOTALL | re.IGNORECASE)
+            thought_match = re.search(r'Thought\s*[*]*\s*[:：]\s*[*`]*\s*(.+?)(?=\n\s*(?:Final|Action)|$)', text, re.DOTALL | re.IGNORECASE)
             return {
                 "type": "final_answer",
                 "content": fa_match.group(1).strip(),
@@ -373,7 +373,7 @@ Final Answer: [完整方案]）"""
 
         # 尝试匹配 Action + Action Input
         action_match = re.search(
-            r'Action\s*[:：]\s*(\w+)',
+            r'Action\s*[*]*\s*[:：]\s*[*`\s]*(\w+)',
             text,
             re.IGNORECASE,
         )
@@ -382,7 +382,7 @@ Final Answer: [完整方案]）"""
 
             # 尝试解析 Action Input（JSON 格式）
             input_match = re.search(
-                r'Action\s*Input\s*[:：]\s*(\{.*?\})',
+                r'Action\s*Input\s*[*]*\s*[:：]\s*.*?(\{.*?\})',
                 text,
                 re.DOTALL | re.IGNORECASE,
             )
@@ -401,7 +401,7 @@ Final Answer: [完整方案]）"""
                     tool_input = {"query": raw_input[:200]}
 
             thought_match = re.search(
-                r'Thought\s*[:：]\s*(.+?)(?=\n\s*Action)',
+                r'Thought\s*[*]*\s*[:：]\s*[*`]*\s*(.+?)(?=\n\s*Action)',
                 text,
                 re.DOTALL | re.IGNORECASE,
             )
