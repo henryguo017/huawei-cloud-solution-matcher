@@ -202,8 +202,8 @@ const AuthManager = {
         overlay.className = 'auth-modal-overlay';
         overlay.innerHTML = `
             <div class="auth-modal">
-                <button class="auth-modal-close" id="email-binding-close">✕</button>
-                <h2 style="text-align:center; margin-bottom:20px; color:#333;">建议绑定邮箱 📧</h2>
+                <button class="auth-modal-close" id="email-binding-close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                <h2 style="text-align:center; margin-bottom:20px; color:#333;">建议绑定邮箱 <svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg></h2>
                 <p style="text-align:center; color:#666; margin-bottom:25px; font-size:14px;">绑定邮箱后可通过邮件找回密码，提升账户安全</p>
                 <form id="email-binding-form" class="auth-form">
                     <div class="form-group">
@@ -500,7 +500,7 @@ const SettingsManager = {
     showSavedToast() {
         const toast = document.createElement('div');
         toast.className = 'settings-saved-toast';
-        toast.textContent = '✅ 设置已保存';
+        toast.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 设置已保存';
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 2800);
     },
@@ -759,7 +759,7 @@ const ErrorHandler = {
         if (!overlay) return;
 
         document.getElementById('error-boundary-title').textContent = title || '系统遇到了一点问题';
-        document.getElementById('error-boundary-message').textContent = message || '请尝试刷新页面或稍后再试';
+        document.getElementById('error-boundary-message').innerHTML = message || '请尝试刷新页面或稍后再试';
 
         const detailEl = document.getElementById('error-boundary-detail');
         if (detail) {
@@ -783,7 +783,7 @@ const ErrorHandler = {
         const retryBtn = document.getElementById('global-error-retry');
         if (!el || !textEl) return;
 
-        textEl.textContent = message;
+        textEl.innerHTML = message;
         State.globalError = message;
         State.retryHandler = retryHandler || null;
 
@@ -1381,7 +1381,7 @@ class ProgressManager {
             const iconEl = el.querySelector('.step-icon');
             const labelEl = el.querySelector('.step-label');
             const descEl = el.querySelector('.step-desc');
-            if (iconEl) iconEl.textContent = step.icon;
+            if (iconEl) iconEl.innerHTML = step.icon;
             if (labelEl) labelEl.textContent = step.label;
             if (descEl) descEl.textContent = step.desc;
         });
@@ -1459,7 +1459,7 @@ class ProgressManager {
         }
 
         const title = this.panel ? this.panel.querySelector('.progress-title') : null;
-        if (title) title.textContent = message || '完成！';
+        if (title) title.innerHTML = message || '完成！';
 
         clearInterval(this.timer);
 
@@ -1482,7 +1482,7 @@ class ProgressManager {
         clearInterval(this.timer);
         if (this.panel) this.panel.classList.remove('success');
         const title = this.panel ? this.panel.querySelector('.progress-title') : null;
-        if (title) title.textContent = message || '出错了';
+        if (title) title.innerHTML = message || '出错了';
         if (this.bar) this.bar.style.background = 'linear-gradient(90deg, var(--error) 0%, #D4191F 100%)';
     }
 
@@ -1527,16 +1527,16 @@ const DemandWizard = {
 
     // 行业列表
     industries: [
-        { name: '智慧农业', icon: '🌾' },
-        { name: '工业互联网', icon: '⚙️' },
-        { name: '智慧园区', icon: '🏗️' },
-        { name: '智慧城市', icon: '🏙️' },
-        { name: '智慧医疗', icon: '🏥' },
-        { name: '智慧金融', icon: '💰' },
-        { name: '智慧能源', icon: '⚡' },
-        { name: '智慧交通', icon: '🚗' },
-        { name: '智慧教育', icon: '📚' },
-        { name: '智慧文旅', icon: '🎭' },
+        { name: '智慧农业', icon: '<svg class="icon" aria-hidden="true"><use href="#i-wheat"></use></svg>' },
+        { name: '工业互联网', icon: '<svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg>' },
+        { name: '智慧园区', icon: '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>' },
+        { name: '智慧城市', icon: '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>' },
+        { name: '智慧医疗', icon: '<svg class="icon" aria-hidden="true"><use href="#i-stethoscope"></use></svg>' },
+        { name: '智慧金融', icon: '<svg class="icon" aria-hidden="true"><use href="#i-banknote"></use></svg>' },
+        { name: '智慧能源', icon: '<svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>' },
+        { name: '智慧交通', icon: '<svg class="icon" aria-hidden="true"><use href="#i-car"></use></svg>' },
+        { name: '智慧教育', icon: '<svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg>' },
+        { name: '智慧文旅', icon: '<svg class="icon" aria-hidden="true"><use href="#i-landmark"></use></svg>' },
     ],
 
     // 痛点标签
@@ -1655,15 +1655,15 @@ const DemandWizard = {
         const scaleLabels = { startup: '初创团队', sme: '中小企业', large: '大型企业', group: '集团/跨国' };
         container.innerHTML = `
             <div class="wizard-summary-item">
-                <span class="wsi-label">📌 行业</span>
+                <span class="wsi-label"><svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg> 行业</span>
                 <span class="wsi-value">${d.industry || '未选择'}</span>
             </div>
             <div class="wizard-summary-item">
-                <span class="wsi-label">🏢 规模</span>
+                <span class="wsi-label"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg> 规模</span>
                 <span class="wsi-value">${scaleLabels[d.scale] || '未选择'}</span>
             </div>
             <div class="wizard-summary-item">
-                <span class="wsi-label">🎯 关注点</span>
+                <span class="wsi-label"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg> 关注点</span>
                 <span class="wsi-tags">${d.pains.length > 0 
                     ? d.pains.map(p => `<span class="wsi-tag">${p}</span>`).join('') 
                     : '<span style="color:rgba(255,255,255,0.3)">未选择</span>'}</span>
@@ -1777,7 +1777,7 @@ const UI = {
         const container = document.getElementById('toast-container');
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        toast.textContent = message;
+        toast.innerHTML = message;
         container.appendChild(toast);
         
         setTimeout(() => {
@@ -2104,11 +2104,11 @@ Object.assign(KnowledgeUI, {
             return;
         }
 
-        const catIcons = { huawei: '🔴', competitor: '🔵' };
+        const catIcons = { huawei: '<span class="cat-dot huawei"></span>', competitor: '<span class="cat-dot competitor"></span>' };
         const isLoggedIn = AuthManager.isLoggedIn();
         listEl.innerHTML = docs.map(d => `
             <div class="kb-doc-item" data-id="${d.id}">
-                <span class="kb-doc-item-icon">${catIcons[d.category] || '📄'}</span>
+                <span class="kb-doc-item-icon">${catIcons[d.category] || '<svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>'}</span>
                 <div class="kb-doc-item-info">
                     <div class="kb-doc-item-title">${d.title}</div>
                     <div class="kb-doc-item-meta">
@@ -2119,9 +2119,9 @@ Object.assign(KnowledgeUI, {
                 </div>
                 ${isLoggedIn ? `
                 <div class="kb-doc-item-actions">
-                    <button class="kb-doc-action-btn" data-action="edit" data-id="${d.id}">✏️ 编辑</button>
-                    <button class="kb-doc-action-btn" data-action="reindex" data-id="${d.id}">🔄 重索引</button>
-                    <button class="kb-doc-action-btn danger" data-action="delete" data-id="${d.id}">🗑️</button>
+                    <button class="kb-doc-action-btn" data-action="edit" data-id="${d.id}"><svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg> 编辑</button>
+                    <button class="kb-doc-action-btn" data-action="reindex" data-id="${d.id}"><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 重索引</button>
+                    <button class="kb-doc-action-btn danger" data-action="delete" data-id="${d.id}"><svg class="icon" aria-hidden="true"><use href="#i-trash-2"></use></svg></button>
                 </div>
                 ` : ''}
             </div>
@@ -2825,7 +2825,7 @@ const HistoryUI = {
                 : '在「竞品分析」页面选择竞品和行业并分析后，报告会自动保存到这里';
             container.innerHTML = `
                 <div class="history-empty">
-                    <div class="empty-icon">📋</div>
+                    <div class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></div>
                     <p>暂无${typeLabel}历史记录</p>
                     <p class="empty-sub">${hintText}</p>
                 </div>
@@ -2853,7 +2853,7 @@ const HistoryUI = {
                     data-fav-content="${this.escapeHtml((item.solution_preview || '').substring(0, 500))}"
                     data-fav-industry="${this.escapeHtml(item.industry || '')}"
                     onclick="HistoryUI.onItemClick(event, ${item.id})">
-                    <div class="history-item-checkbox">${isSelected ? '✓' : ''}</div>
+                    <div class="history-item-checkbox">${isSelected ? '<svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg>' : ''}</div>
                     <div class="history-item-content">
                         <div class="history-item-header">
                             <span class="history-item-date">${dateStr}</span>
@@ -2862,7 +2862,7 @@ const HistoryUI = {
                         <div class="history-item-demand">${this.escapeHtml(demandPreview)}${item.demand_text && item.demand_text.length > 200 ? '...' : ''}</div>
                     </div>
                     <div class="history-item-actions">
-                        <button class="btn-favorite fav-action-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); FavoriteManager.toggleFromItem(this.closest('.history-item'))" title="${isFav ? '点击取消收藏' : '点击收藏'}">${isFav ? '⭐ 已收藏' : '☆ 收藏'}</button>
+                        <button class="btn-favorite fav-action-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); FavoriteManager.toggleFromItem(this.closest('.history-item'))" title="${isFav ? '点击取消收藏' : '点击收藏'}">${isFav ? '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 已收藏' : '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏'}</button>
                         <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); HistoryUI.showDetail(${item.id})">查看</button>
                     </div>
                 </div>
@@ -2886,7 +2886,7 @@ const HistoryUI = {
                         <div class="history-item-demand" style="color: rgba(255,255,255,0.6);">分析报告已生成 · 点击查看详情</div>
                     </div>
                     <div class="history-item-actions">
-                        <button class="btn-favorite fav-action-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); FavoriteManager.toggleFromItem(this.closest('.history-item'))" title="${isFav ? '点击取消收藏' : '点击收藏'}">${isFav ? '⭐ 已收藏' : '☆ 收藏'}</button>
+                        <button class="btn-favorite fav-action-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); FavoriteManager.toggleFromItem(this.closest('.history-item'))" title="${isFav ? '点击取消收藏' : '点击收藏'}">${isFav ? '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 已收藏' : '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏'}</button>
                         <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); HistoryUI.showCompetitorDetail(${item.id})">查看</button>
                     </div>
                 </div>
@@ -3218,7 +3218,7 @@ const FavoriteManager = {
                 console.log('[Fav:ToggleFromItem] toggle()完成，更新按钮', { isFav: this.isFavorited(name) });
                 const btn = el.querySelector('.fav-action-btn');
                 if (btn) {
-                    btn.textContent = this.isFavorited(name) ? '⭐ 已收藏' : '☆ 收藏';
+                    btn.innerHTML = this.isFavorited(name) ? '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 已收藏' : '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏';
                     btn.className = this.isFavorited(name) ? 'btn-favorite active fav-action-btn' : 'btn-favorite fav-action-btn';
                 }
             }).catch(e => {
@@ -3273,7 +3273,7 @@ const FavoriteManager = {
                 console.log('[Fav:Toggle] 添加收藏响应', { ok: resp.ok, status: resp.status, detail: data.detail || data.message });
                 if (resp.ok) {
                     this.favoriteNames.add(solutionName);
-                    UI.showToast('⭐ 已收藏', 'success');
+                    UI.showToast('<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 已收藏', 'success');
                     const refreshResult = await this.loadForProfile();  // 刷新侧边栏收藏列表
                     console.log('[Fav:Toggle] loadForProfile结果', { refreshed: refreshResult });
                 } else {
@@ -3353,7 +3353,7 @@ const FavoriteManager = {
                             <div class="profile-fav-item-name">${HistoryUI.escapeHtml(namePreview)}${f.solution_name.length > 40 ? '...' : ''}</div>
                             <div class="profile-fav-item-meta">${dateStr}${f.industry ? ' · ' + HistoryUI.escapeHtml(f.industry) : ''}</div>
                         </div>
-                        <button class="profile-fav-item-delete" onclick="FavoriteManager.deleteFavorite(${f.id}, '${HistoryUI.escapeHtml(f.solution_name).replace(/'/g, "\\'")}')" title="取消收藏">✕</button>
+                        <button class="profile-fav-item-delete" onclick="FavoriteManager.deleteFavorite(${f.id}, '${HistoryUI.escapeHtml(f.solution_name).replace(/'/g, "\\'")}')" title="取消收藏"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
                     </div>
                 `;
             }).join('');
@@ -3385,7 +3385,7 @@ const FavoriteManager = {
             // Close profile panel first
             document.getElementById('profile-panel').style.display = 'none';
             
-            if (headerTitle) headerTitle.textContent = '⭐ 收藏详情';
+            if (headerTitle) headerTitle.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏详情';
             body.innerHTML = `
                 <div class="detail-section">
                     <div class="detail-section-label">收藏时间</div>
@@ -3438,10 +3438,10 @@ const FavoriteManager = {
         const btn = document.getElementById(btnId);
         if (!btn) return;
         if (this.isFavorited(name)) {
-            btn.textContent = '⭐ 已收藏';
+            btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 已收藏';
             btn.classList.add('active');
         } else {
-            btn.textContent = btnId === 'fav-solution-btn' ? '☆ 收藏方案' : '☆ 收藏报告';
+            btn.innerHTML = btnId === 'fav-solution-btn' ? '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏方案' : '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏报告';
             btn.classList.remove('active');
         }
     }
@@ -4058,9 +4058,9 @@ function initEventListeners() {
         try {
             SkeletonUI.showMatchFormSkeleton();
             if (isAgentMode) MatchProgress.setSteps([
-                { icon: '🧠', label: '分析需求意图', desc: 'AI 理解模糊需求，提取关键信息' },
-                { icon: '🔍', label: '智能搜索知识库', desc: '用结构化关键词精准检索' },
-                { icon: '✨', label: '综合生成方案', desc: '基于知识库 + AI 生成完整方案' }
+                { icon: '<svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg>', label: '分析需求意图', desc: 'AI 理解模糊需求，提取关键信息' },
+                { icon: '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>', label: '智能搜索知识库', desc: '用结构化关键词精准检索' },
+                { icon: '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>', label: '综合生成方案', desc: '基于知识库 + AI 生成完整方案' }
             ]);
 
             let result;
@@ -4095,19 +4095,19 @@ function initEventListeners() {
                     if (event.type === 'step') {
                         if (tsBadge) tsBadge.textContent = `Step ${event.step}`;
                     } else if (event.type === 'thought') {
-                        addThinkEntry('thought', 'thought', '💭', '思考', event.text);
+                        addThinkEntry('thought', 'thought', '<svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg>', '思考', event.text);
                         MatchProgress.setStep(0);
                     } else if (event.type === 'tool_start') {
                         const stepIdx = toolStepMap[event.tool] ?? 1;
                         MatchProgress.setStep(stepIdx);
                         const inputJson = JSON.stringify(event.input || {}, null, 0);
-                        addThinkEntry('action', 'action', '🔧', `调用工具: ${event.tool}`, `<code>${inputJson}</code>`);
+                        addThinkEntry('action', 'action', '<svg class="icon" aria-hidden="true"><use href="#i-wrench"></use></svg>', `调用工具: ${event.tool}`, `<code>${inputJson}</code>`);
                     } else if (event.type === 'tool_end') {
                         if (tsEntries) {
                             const lastEntry = tsEntries.lastElementChild;
                             if (lastEntry) {
                                 const iconEl = lastEntry.querySelector('.think-icon');
-                                if (iconEl) iconEl.textContent = '✅';
+                                if (iconEl) iconEl.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg>';
                             }
                         }
                     } else if (event.type === 'final') {
@@ -4147,15 +4147,15 @@ function initEventListeners() {
                 var existingContainer2 = document.getElementById('solution-result');
                 if (existingContainer2 && !document.getElementById('solution-content')) {
                     existingContainer2.innerHTML = `
-                        <div class="result-header"><span class="result-badge success">✅ 匹配完成</span></div>
+                        <div class="result-header"><span class="result-badge success"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 匹配完成</span></div>
                         <div class="result-content content-card" id="solution-content"></div>
                         <div class="result-actions">
-                            <button class="btn btn-primary" id="download-solution-btn">📥 下载方案报告</button>
-                            <button class="btn btn-secondary" id="export-docx-btn">📘 导出方案书</button>
-                            <button class="btn btn-favorite-result" id="fav-solution-btn">☆ 收藏方案</button>
+                            <button class="btn btn-primary" id="download-solution-btn"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载方案报告</button>
+                            <button class="btn btn-secondary" id="export-docx-btn"><svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg> 导出方案书</button>
+                            <button class="btn btn-favorite-result" id="fav-solution-btn"><svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏方案</button>
                         </div>
                         <details class="source-documents content-card">
-                            <summary class="source-summary">📚 查看参考的解决方案文档</summary>
+                            <summary class="source-summary"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg> 查看参考的解决方案文档</summary>
                             <div id="solution-sources"></div>
                         </details>
                     `;
@@ -4187,7 +4187,7 @@ function initEventListeners() {
             // 检查 answer 是否有效
             if (!result || !result.answer || (typeof result.answer === 'string' && result.answer.trim() === '')) {
                 console.warn('[SolutionMatch] API返回的answer为空', result);
-                resultContent.innerHTML = '<div class="result-empty"><p style="color: var(--text-secondary); text-align: center; padding: 40px 20px;">⚠️ 匹配服务返回了空结果，请稍后重试。</p></div>';
+                resultContent.innerHTML = '<div class="result-empty"><p style="color: var(--text-secondary); text-align: center; padding: 40px 20px;"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg> 匹配服务返回了空结果，请稍后重试。</p></div>';
                 resultContainer.style.display = 'block';
                 return;
             }
@@ -4257,10 +4257,10 @@ function initEventListeners() {
             return;
         }
         const btn = document.getElementById('export-docx-btn');
-        const origHtml = btn ? btn.innerHTML : '📘 导出方案书';
+        const origHtml = btn ? btn.innerHTML : '<svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg> 导出方案书';
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '⏳ 生成中...';
+            btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg> 生成中...';
         }
         UI.showToast('正在生成方案书...', 'info');
         try {
@@ -4388,14 +4388,14 @@ function initEventListeners() {
                 var existingContainer = document.getElementById('competitor-result');
                 if (existingContainer && !document.getElementById('competitor-content')) {
                     existingContainer.innerHTML = `
-                        <div class="result-header"><span class="result-badge success">✅ 分析完成</span></div>
+                        <div class="result-header"><span class="result-badge success"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 分析完成</span></div>
                         <div class="result-content content-card" id="competitor-content"></div>
                         <div class="result-actions">
-                            <button class="btn btn-primary" id="download-competitor-btn">📥 下载竞争分析报告</button>
-                            <button class="btn btn-favorite-result" id="fav-competitor-btn">☆ 收藏报告</button>
+                            <button class="btn btn-primary" id="download-competitor-btn"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载竞争分析报告</button>
+                            <button class="btn btn-favorite-result" id="fav-competitor-btn"><svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏报告</button>
                         </div>
                         <details class="source-documents content-card">
-                            <summary class="source-summary">📚 查看参考的解决方案文档</summary>
+                            <summary class="source-summary"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg> 查看参考的解决方案文档</summary>
                             <div id="competitor-sources"></div>
                         </details>
                     `;
@@ -4426,7 +4426,7 @@ function initEventListeners() {
             // 检查 answer 是否有效
             if (!result || !result.answer || (typeof result.answer === 'string' && result.answer.trim() === '')) {
                 console.warn('[CompetitorAnalysis] API返回的answer为空', result);
-                resultContent.innerHTML = '<div class="result-empty"><p style="color: var(--text-secondary); text-align: center; padding: 40px 20px;">⚠️ 分析服务返回了空结果，请稍后重试。</p></div>';
+                resultContent.innerHTML = '<div class="result-empty"><p style="color: var(--text-secondary); text-align: center; padding: 40px 20px;"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg> 分析服务返回了空结果，请稍后重试。</p></div>';
                 resultContainer.style.display = 'block';
                 return;
             }
@@ -4954,15 +4954,15 @@ const ProductGraph = {
 
     // 分类配置
     categories: {
-        compute:   { label: '计算',     icon: '☁️', color: '#3B82F6' },
-        network:   { label: '网络',     icon: '🌐', color: '#F59E0B' },
-        storage:   { label: '存储',     icon: '📂', color: '#22C55E' },
-        database:  { label: '数据库',   icon: '📄',  color: '#A855F7' },
-        ai:         { label: 'AI/大数据', icon: '🤖',  color: '#EF4444' },
-        iot:       { label: 'IoT',      icon: '📡',  color: '#F97316' },
-        security:  { label: '安全',     icon: '🛡️',  color: '#EC4899' },
-        media:     { label: '音视频/CDN', icon: '🎬',  color: '#06B6D4' },
-        enterprise:{ label: '企业应用', icon: '💼',  color: '#84CC16' }
+        compute:   { label: '计算',     icon: '<svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>', color: '#3B82F6' },
+        network:   { label: '网络',     icon: '<svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>', color: '#F59E0B' },
+        storage:   { label: '存储',     icon: '<svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>', color: '#22C55E' },
+        database:  { label: '数据库',   icon: '<svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>',  color: '#A855F7' },
+        ai:         { label: 'AI/大数据', icon: '<svg class="icon" aria-hidden="true"><use href="#i-bot"></use></svg>',  color: '#EF4444' },
+        iot:       { label: 'IoT',      icon: '<svg class="icon" aria-hidden="true"><use href="#i-radio"></use></svg>',  color: '#F97316' },
+        security:  { label: '安全',     icon: '<svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg>',  color: '#EC4899' },
+        media:     { label: '音视频/CDN', icon: '<svg class="icon" aria-hidden="true"><use href="#i-film"></use></svg>',  color: '#06B6D4' },
+        enterprise:{ label: '企业应用', icon: '<svg class="icon" aria-hidden="true"><use href="#i-briefcase"></use></svg>',  color: '#84CC16' }
     },
 
     categoryOrder: ['compute', 'network', 'database', 'storage', 'ai', 'iot', 'security', 'media', 'enterprise'],
@@ -5269,3 +5269,84 @@ const ProductGraph = {
 };
 
 /* ===== 3D产品架构树形图 (ArchTree3D) 已于 v20260531w 移除 ===== */
+
+/* ===== Phase 3: 运行时 emoji→线性图标 助手（后端返回的 emoji 也能转图标） ===== */
+window.EMOJI_SVG = {
+  '✨': '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>',
+  '🔍': '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>',
+  '⚔️': '<svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg>',
+  '📚': '<svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg>',
+  '🚀': '<svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg>',
+  '💡': '<svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg>',
+  '🎯': '<svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg>',
+  '✕': '<svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>',
+  '🏭': '<svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg>',
+  '🌾': '<svg class="icon" aria-hidden="true"><use href="#i-wheat"></use></svg>',
+  '🏢': '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>',
+  '☁️': '<svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>',
+  '🗺️': '<svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg>',
+  '📊': '<svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg>',
+  '📋': '<svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg>',
+  '🏆': '<svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg>',
+  '⚙️': '<svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg>',
+  '👤': '<svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>',
+  '🚪': '<svg class="icon" aria-hidden="true"><use href="#i-log-out"></use></svg>',
+  '☰': '<svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>',
+  '🌐': '<svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>',
+  '⚠️': '<svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg>',
+  '🧠': '<svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg>',
+  '💬': '<svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg>',
+  '📥': '<svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>',
+  '📘': '<svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg>',
+  '☆': '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>',
+  '↗': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-up-right"></use></svg>',
+  '↘': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg>',
+  '←': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg>',
+  '→': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"></use></svg>',
+  '🤖': '<svg class="icon" aria-hidden="true"><use href="#i-bot"></use></svg>',
+  '📡': '<svg class="icon" aria-hidden="true"><use href="#i-radio"></use></svg>',
+  '🛡️': '<svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg>',
+  '🎬': '<svg class="icon" aria-hidden="true"><use href="#i-film"></use></svg>',
+  '💼': '<svg class="icon" aria-hidden="true"><use href="#i-briefcase"></use></svg>',
+  '🔒': '<svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>',
+  '📧': '<svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg>',
+  '⚡': '<svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>',
+  '🎨': '<svg class="icon" aria-hidden="true"><use href="#i-palette"></use></svg>',
+  '🥉': '<svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg>',
+  '🥈': '<svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg>',
+  '🥇': '<svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg>',
+  '💎': '<svg class="icon" aria-hidden="true"><use href="#i-gem"></use></svg>',
+  '🎪': '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>',
+  '📂': '<svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>',
+  '📁': '<svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>',
+  '💾': '<svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg>',
+  '🗄️': '<svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg>',
+  '👆': '<svg class="icon" aria-hidden="true"><use href="#i-hand"></use></svg>',
+  '📄': '<svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>',
+  '🔄': '<svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg>',
+  '🗑️': '<svg class="icon" aria-hidden="true"><use href="#i-trash-2"></use></svg>',
+  '⏳': '<svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg>',
+  '⚖️': '<svg class="icon" aria-hidden="true"><use href="#i-scale"></use></svg>',
+  '⭐': '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>',
+  '💰': '<svg class="icon" aria-hidden="true"><use href="#i-banknote"></use></svg>',
+  '🚗': '<svg class="icon" aria-hidden="true"><use href="#i-car"></use></svg>',
+  '🏙️': '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>',
+  '🏥': '<svg class="icon" aria-hidden="true"><use href="#i-stethoscope"></use></svg>',
+  '🎭': '<svg class="icon" aria-hidden="true"><use href="#i-landmark"></use></svg>',
+  '📌': '<svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg>',
+  '🌡️': '<svg class="icon" aria-hidden="true"><use href="#i-thermometer"></use></svg>',
+  '📈': '<svg class="icon" aria-hidden="true"><use href="#i-trending-up"></use></svg>',
+  '🎉': '<svg class="icon" aria-hidden="true"><use href="#i-party-popper"></use></svg>',
+  '🔧': '<svg class="icon" aria-hidden="true"><use href="#i-wrench"></use></svg>',
+  '💭': '<svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg>',
+  '🏗️': '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>',
+  '✏️': '<svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>',
+  '✅': '<svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg>',
+  '✓': '<svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg>',
+  '🔴': '<span class="cat-dot huawei"></span>',
+  '🔵': '<span class="cat-dot competitor"></span>'
+};
+window.emojiToSvg = function(e, fb) {
+  if (!e) return fb ? window.EMOJI_SVG[fb] || '' : '';
+  return window.EMOJI_SVG[e] || (fb ? (window.EMOJI_SVG[fb] || e) : e);
+};

@@ -109,7 +109,7 @@ const AchievementUI = {
             const isHiddenLocked = !it.unlocked && it.rarity === 'hidden';
             const name = isHiddenLocked ? '???' : it.name;
             const desc = isHiddenLocked ? '解锁后可见' : it.description;
-            const icon = isHiddenLocked ? '🔒' : it.icon;
+            const icon = isHiddenLocked ? window.emojiToSvg('🔒', 'lock') : window.emojiToSvg(it.icon, 'trophy');
             const rarityCls = it.rarity || 'copper';
             const rarityText = rarityLabel[it.rarity] || it.rarity;
             const unlockedAt = it.unlocked_at ? `解锁于: ${it.unlocked_at}` : '';
@@ -142,9 +142,9 @@ const AchievementUI = {
         const toast = document.createElement('div');
         toast.className = 'achievement-toast';
         toast.innerHTML = `
-            <span class="toast-icon">${ach.icon || '🏆'}</span>
+            <span class="toast-icon">${window.emojiToSvg(ach.icon, 'trophy')}</span>
             <div class="toast-body">
-                <div class="toast-title">🎉 成就解锁！</div>
+                <div class="toast-title"><svg class="icon" aria-hidden="true"><use href="#i-party-popper"></use></svg> 成就解锁！</div>
                 <div class="toast-name">${this._escapeHtml(ach.name || '???')}</div>
                 <div class="toast-desc">${this._escapeHtml(ach.description || '')}</div>
                 <span class="toast-rarity ${rarityCls}">${rarityLabel[ach.rarity] || ach.rarity}</span>

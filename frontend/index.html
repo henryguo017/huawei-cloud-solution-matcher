@@ -6,8 +6,8 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260713a">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260713a">
+    <link rel="stylesheet" href="style.css?v=20260713b">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260713b">
 </head>
 <body>
     <!-- 密码重置链接检测（内联，不受外部JS缓存影响） -->
@@ -78,7 +78,7 @@
         <canvas id="welcome-particle-canvas"></canvas>
         
         <div class="welcome-content">
-            <div class="welcome-badge">✨ AI 智能匹配系统</div>
+            <div class="welcome-badge"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg> AI 智能匹配系统</div>
             
             <h1 class="welcome-title">
                 <span class="title-gradient">华为云解决方案</span>
@@ -108,22 +108,22 @@
             
             <div class="welcome-features">
                 <div class="feature-item">
-                    <span class="feature-icon">🔍</span>
+                    <span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
                     <span class="feature-text">智能匹配解决方案</span>
                 </div>
                 <div class="feature-item">
-                    <span class="feature-icon">⚔️</span>
+                    <span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
                     <span class="feature-text">竞争对手分析</span>
                 </div>
                 <div class="feature-item">
-                    <span class="feature-icon">📚</span>
+                    <span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
                     <span class="feature-text">知识库管理</span>
                 </div>
             </div>
             
             <div class="welcome-actions">
                 <button id="start-experience-btn" class="btn btn-primary btn-lg">
-                    <span class="btn-icon">🚀</span>
+                    <span class="btn-icon"><svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg></span>
                     <span class="btn-text">立即体验</span>
                 </button>
                 <div class="skip-option">
@@ -137,7 +137,7 @@
                 </div>
             </div>
             
-            <p class="welcome-hint">💡 也可以点击右上角"快速体验"按钮随时体验</p>
+            <p class="welcome-hint"><svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg> 也可以点击右上角"快速体验"按钮随时体验</p>
         </div>
     </div>
     
@@ -146,26 +146,26 @@
         <div class="demo-modal-overlay"></div>
         <div class="demo-modal-content content-card">
             <div class="demo-modal-header">
-                <h3>🎯 选择 Demo 案例</h3>
-                <button class="demo-close-btn" id="close-demo-modal">✕</button>
+                <h3><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg> 选择 Demo 案例</h3>
+                <button class="demo-close-btn" id="close-demo-modal"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
             </div>
             <div class="demo-cases">
                 <div class="demo-case" data-case="manufacturing">
-                    <div class="case-icon">🏭</div>
+                    <div class="case-icon"><svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg></div>
                     <div class="case-info">
                         <h4>制造业预测性维护</h4>
                         <p>50台生产设备的故障预测与停机优化</p>
                     </div>
                 </div>
                 <div class="demo-case" data-case="agriculture">
-                    <div class="case-icon">🌾</div>
+                    <div class="case-icon"><svg class="icon" aria-hidden="true"><use href="#i-wheat"></use></svg></div>
                     <div class="case-info">
                         <h4>智慧农业植物方舱</h4>
                         <p>环境监测、自动化管理与产量提升</p>
                     </div>
                 </div>
                 <div class="demo-case" data-case="park">
-                    <div class="case-icon">🏢</div>
+                    <div class="case-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></div>
                     <div class="case-info">
                         <h4>智慧园区管理</h4>
                         <p>安防、能源、停车综合管理</p>
@@ -173,64 +173,64 @@
                 </div>
             </div>
             <div class="demo-modal-footer">
-                <p class="demo-tip">💡 选择案例后将自动填充需求并演示匹配过程</p>
+                <p class="demo-tip"><svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg> 选择案例后将自动填充需求并演示匹配过程</p>
             </div>
         </div>
     </div>
     
     <!-- 演示提示 -->
     <div id="demo-notice" class="demo-notice" style="display: none;">
-        <span class="notice-icon">💡</span>
+        <span class="notice-icon"><svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg></span>
         <span class="notice-text">这是演示结果，您可以输入自己的需求进行匹配</span>
-        <button class="notice-close" id="close-demo-notice">✕</button>
+        <button class="notice-close" id="close-demo-notice"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
     </div>
     
     <!-- 顶部导航栏 -->
     <header class="navbar">
         <div class="navbar-container">
             <div class="navbar-brand">
-                <span class="brand-icon">☁️</span>
+                <span class="brand-icon"><svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg></span>
                 <span class="brand-text">华为云方案匹配</span>
             </div>
 
             <nav class="navbar-menu">
                 <button class="navbar-item active" data-page="solution">
-                    <span class="nav-icon">🔍</span>
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
                     <span class="nav-text">方案匹配</span>
                 </button>
                 <button class="navbar-item" data-page="competitor">
-                    <span class="nav-icon">⚔️</span>
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
                     <span class="nav-text">竞品分析</span>
                 </button>
                 <button class="navbar-item" data-page="products">
-                    <span class="nav-icon">🗺️</span>
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg></span>
                     <span class="nav-text">产品图谱</span>
                 </button>
                 <button class="navbar-item" data-page="dashboard">
-                    <span class="nav-icon">📊</span>
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
                     <span class="nav-text">仪表盘</span>
                 </button>
                 <button class="navbar-item" data-page="history">
-                    <span class="nav-icon">📋</span>
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
                     <span class="nav-text">历史记录</span>
                 </button>
                 <button class="navbar-item" data-page="achievement">
-                    <span class="nav-icon">🏆</span>
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
                     <span class="nav-text">成就</span>
                 </button>
                 <button class="navbar-item" data-page="knowledge">
-                    <span class="nav-icon">📚</span>
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
                     <span class="nav-text">知识库</span>
                 </button>
                 <button class="navbar-item" data-page="settings">
-                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></span>
                     <span class="nav-text">设置</span>
                 </button>
             </nav>
             
             <div class="navbar-status">
                 <button id="quick-demo-btn" class="quick-demo-btn" title="快速体验 Demo">
-                    <span class="demo-icon">🎯</span>
+                    <span class="demo-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></span>
                     <span class="demo-text">体验</span>
                 </button>
                 <div class="status-divider"></div>
@@ -244,60 +244,60 @@
                 </div>
                 <div class="status-divider"></div>
                 <button id="nav-login-btn" class="nav-login-btn" title="登录 / 注册">
-                    <span class="nav-icon">👤</span>
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
                     <span class="nav-text">登录</span>
                 </button>
                 <div id="nav-user-menu" class="nav-user-menu" style="display: none;">
                     <button id="nav-user-avatar-btn" class="nav-user-avatar-btn" title="用户菜单">
-                        <span class="user-avatar-icon">👤</span>
+                        <span class="user-avatar-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
                         <span class="user-name" id="nav-user-name"></span>
                         <span class="dropdown-arrow">▾</span>
                     </button>
                     <div id="user-dropdown" class="user-dropdown" style="display: none;">
-                        <button class="dropdown-item" id="dropdown-profile">👤 个人信息</button>
-                        <button class="dropdown-item" id="dropdown-logout">🚪 退出登录</button>
+                        <button class="dropdown-item" id="dropdown-profile"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg> 个人信息</button>
+                        <button class="dropdown-item" id="dropdown-logout"><svg class="icon" aria-hidden="true"><use href="#i-log-out"></use></svg> 退出登录</button>
                     </div>
                 </div>
             </div>
 
             <!-- 移动端登录按钮 -->
             <button id="mobile-login-btn" class="mobile-login-btn" title="登录 / 注册">
-                <span class="login-icon">👤</span>
+                <span class="login-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
                 <span class="login-text">登录</span>
             </button>
 
-            <button class="navbar-toggle" id="navbar-toggle">☰</button>
+            <button class="navbar-toggle" id="navbar-toggle"><svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg></button>
         </div>
     </header>
     
     <!-- 移动端底部导航栏 -->
     <nav class="mobile-bottom-nav" id="mobile-menu">
         <button class="mobile-nav-item active" data-page="solution">
-            <span class="mobile-nav-icon">🔍</span>
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
             <span class="mobile-nav-label">匹配</span>
         </button>
         <button class="mobile-nav-item" data-page="competitor">
-            <span class="mobile-nav-icon">⚔️</span>
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
             <span class="mobile-nav-label">竞品</span>
         </button>
         <button class="mobile-nav-item" data-page="products">
-            <span class="mobile-nav-icon">🗺️</span>
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg></span>
             <span class="mobile-nav-label">产品</span>
         </button>
         <button class="mobile-nav-item" data-page="dashboard">
-            <span class="mobile-nav-icon">📊</span>
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
             <span class="mobile-nav-label">仪表盘</span>
         </button>
         <button class="mobile-nav-item" data-page="knowledge">
-            <span class="mobile-nav-icon">📚</span>
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
             <span class="mobile-nav-label">知识库</span>
         </button>
         <button class="mobile-nav-item" data-page="history">
-            <span class="mobile-nav-icon">📋</span>
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
             <span class="mobile-nav-label">历史</span>
         </button>
         <button class="mobile-nav-item" data-page="achievement">
-            <span class="mobile-nav-icon">🏆</span>
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
             <span class="mobile-nav-label">成就</span>
         </button>
     </nav>
@@ -363,7 +363,7 @@
     <div id="confirm-clear-overlay" class="confirm-overlay" style="display:none;">
         <div class="confirm-modal">
             <div class="confirm-header">
-                <h3>⚠️ 危险操作</h3>
+                <h3><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg> 危险操作</h3>
                 <button class="confirm-close" id="cancel-clear-btn">×</button>
             </div>
             <div class="confirm-body">
@@ -433,7 +433,7 @@
                         <!-- Step 0: 选择行业 -->
                         <div class="wizard-panel active" data-wp="0">
                             <div class="wizard-question">
-                                <span class="wizard-q-icon">🏭</span>
+                                <span class="wizard-q-icon"><svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg></span>
                                 <h3>请选择客户所在的行业</h3>
                             </div>
                             <div class="wizard-industry-grid" id="wizard-industry-grid">
@@ -444,31 +444,31 @@
                         <!-- Step 1: 公司规模 -->
                         <div class="wizard-panel" data-wp="1">
                             <div class="wizard-question">
-                                <span class="wizard-q-icon">🏢</span>
+                                <span class="wizard-q-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
                                 <h3>客户的团队规模大约是多少？</h3>
                             </div>
                             <div class="wizard-scale-options" id="wizard-scale-options">
                                 <label class="wizard-radio-card" data-value="startup">
                                     <input type="radio" name="wizard-scale" value="startup" hidden>
-                                    <span class="wizard-radio-icon">🚀</span>
+                                    <span class="wizard-radio-icon"><svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg></span>
                                     <span class="wizard-radio-title">初创团队</span>
                                     <span class="wizard-radio-desc">1-50人，刚起步</span>
                                 </label>
                                 <label class="wizard-radio-card" data-value="sme">
                                     <input type="radio" name="wizard-scale" value="sme" hidden>
-                                    <span class="wizard-radio-icon">🏗️</span>
+                                    <span class="wizard-radio-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
                                     <span class="wizard-radio-title">中小企业</span>
                                     <span class="wizard-radio-desc">50-500人</span>
                                 </label>
                                 <label class="wizard-radio-card" data-value="large">
                                     <input type="radio" name="wizard-scale" value="large" hidden>
-                                    <span class="wizard-radio-icon">🏭</span>
+                                    <span class="wizard-radio-icon"><svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg></span>
                                     <span class="wizard-radio-title">大型企业</span>
                                     <span class="wizard-radio-desc">500-5000人</span>
                                 </label>
                                 <label class="wizard-radio-card" data-value="group">
                                     <input type="radio" name="wizard-scale" value="group" hidden>
-                                    <span class="wizard-radio-icon">🌐</span>
+                                    <span class="wizard-radio-icon"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg></span>
                                     <span class="wizard-radio-title">集团/跨国</span>
                                     <span class="wizard-radio-desc">5000人以上</span>
                                 </label>
@@ -478,7 +478,7 @@
                         <!-- Step 2: 核心痛点 -->
                         <div class="wizard-panel" data-wp="2">
                             <div class="wizard-question">
-                                <span class="wizard-q-icon">🎯</span>
+                                <span class="wizard-q-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></span>
                                 <h3>客户最关心哪些问题？（可多选）</h3>
                             </div>
                             <div class="wizard-pain-tags" id="wizard-pain-tags">
@@ -493,7 +493,7 @@
                         <!-- Step 3: 确认 & 补充分享 -->
                         <div class="wizard-panel" data-wp="3">
                             <div class="wizard-question">
-                                <span class="wizard-q-icon">✅</span>
+                                <span class="wizard-q-icon"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg></span>
                                 <h3>确认需求，补充更多细节</h3>
                             </div>
                             <div class="wizard-summary" id="wizard-summary">
@@ -505,10 +505,10 @@
 
                         <!-- 向导导航按钮 -->
                         <div class="wizard-nav">
-                            <button class="btn btn-secondary btn-sm" id="wizard-prev-btn" disabled>← 上一步</button>
+                            <button class="btn btn-secondary btn-sm" id="wizard-prev-btn" disabled><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg> 上一步</button>
                             <div class="wizard-nav-right">
                                 <button class="btn btn-link btn-sm" id="wizard-skip-btn">跳过向导，自由输入</button>
-                                <button class="btn btn-primary btn-sm" id="wizard-next-btn">下一步 →</button>
+                                <button class="btn btn-primary btn-sm" id="wizard-next-btn">下一步 <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"></use></svg></button>
                                 <button class="btn btn-primary btn-sm" id="wizard-submit-btn" style="display: none;">
                                     <span class="btn-text">开始匹配</span>
                                 </button>
@@ -536,7 +536,7 @@
                     </div>
                     <div class="progress-steps" id="match-progress-steps">
                         <div class="progress-step" data-step="0">
-                            <div class="step-icon">🧠</div>
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg></div>
                             <div class="step-info">
                                 <div class="step-label">理解客户需求</div>
                                 <div class="step-desc">分析业务痛点与关键诉求</div>
@@ -544,7 +544,7 @@
                             <div class="step-status waiting"></div>
                         </div>
                         <div class="progress-step" data-step="1">
-                            <div class="step-icon">🔍</div>
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></div>
                             <div class="step-info">
                                 <div class="step-label">检索知识库</div>
                                 <div class="step-desc">从 172 个文档片段中匹配相关方案</div>
@@ -552,7 +552,7 @@
                             <div class="step-status waiting"></div>
                         </div>
                         <div class="progress-step" data-step="2">
-                            <div class="step-icon">✨</div>
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></div>
                             <div class="step-info">
                                 <div class="step-label">生成解决方案</div>
                                 <div class="step-desc">AI 专家撰写定制化方案建议</div>
@@ -568,7 +568,7 @@
                 <!-- Agent 思考流（SSE 实时推送） -->
                 <div id="thinking-stream" class="thinking-stream content-card" style="display: none;">
                     <div class="thinking-header">
-                        <span class="thinking-title">🧠 AI 思考过程</span>
+                        <span class="thinking-title"><svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg> AI 思考过程</span>
                         <span class="thinking-step-badge" id="thinking-step-badge">Step 1</span>
                     </div>
                     <div id="thinking-entries" class="thinking-entries"></div>
@@ -576,13 +576,13 @@
 
                 <div id="solution-result" class="result-container" style="display: none;">
                     <div class="result-header">
-                        <span class="result-badge success">✅ 匹配完成</span>
+                        <span class="result-badge success"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 匹配完成</span>
                     </div>
                     <div class="result-content content-card" id="solution-content"></div>
                     <!-- 方案追问优化区域 -->
                     <div class="follow-up-section" id="follow-up-section" style="display: none;">
                         <div class="follow-up-divider">
-                            <span class="follow-up-divider-text">💬 方案追问优化</span>
+                            <span class="follow-up-divider-text"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg> 方案追问优化</span>
                             <button class="btn-link" id="clear-follow-up-btn">清空历史</button>
                         </div>
                         <div class="follow-up-history" id="follow-up-history"></div>
@@ -597,22 +597,22 @@
                             <button class="btn btn-primary btn-sm" id="send-follow-up-btn">发送</button>
                         </div>
                         <div class="follow-up-actions" id="follow-up-actions" style="display: none;">
-                            <button class="btn btn-success btn-sm" id="apply-refined-btn">✅ 使用此优化结果</button>
+                            <button class="btn btn-success btn-sm" id="apply-refined-btn"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 使用此优化结果</button>
                         </div>
                     </div>
                     <div class="result-actions">
                         <button class="btn btn-primary" id="download-solution-btn">
-                            📥 下载方案文档
+                            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载方案文档
                         </button>
                         <button class="btn btn-secondary" id="export-docx-btn">
-                            📘 导出方案书
+                            <svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg> 导出方案书
                         </button>
                         <button class="btn btn-favorite-result" id="fav-solution-btn">
-                            ☆ 收藏方案
+                            <svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏方案
                         </button>
                     </div>
                     <details class="source-documents content-card">
-                        <summary class="source-summary">📚 查看参考的解决方案文档</summary>
+                        <summary class="source-summary"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg> 查看参考的解决方案文档</summary>
                         <div id="solution-sources"></div>
                     </details>
                 </div>
@@ -687,7 +687,7 @@
                     </div>
                     <div class="progress-steps" id="analyze-progress-steps">
                         <div class="progress-step" data-step="0">
-                            <div class="step-icon">🔍</div>
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></div>
                             <div class="step-info">
                                 <div class="step-label">检索华为云方案</div>
                                 <div class="step-desc">调取华为云该行业解决方案资料</div>
@@ -695,7 +695,7 @@
                             <div class="step-status waiting"></div>
                         </div>
                         <div class="progress-step" data-step="1">
-                            <div class="step-icon">📊</div>
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></div>
                             <div class="step-info">
                                 <div class="step-label">检索竞品资料</div>
                                 <div class="step-desc">调取竞品行业方案与优劣势分析</div>
@@ -703,7 +703,7 @@
                             <div class="step-status waiting"></div>
                         </div>
                         <div class="progress-step" data-step="2">
-                            <div class="step-icon">🧠</div>
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg></div>
                             <div class="step-info">
                                 <div class="step-label">分析竞争态势</div>
                                 <div class="step-desc">对比双方方案，提炼差异化优势</div>
@@ -711,7 +711,7 @@
                             <div class="step-status waiting"></div>
                         </div>
                         <div class="progress-step" data-step="3">
-                            <div class="step-icon">💬</div>
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg></div>
                             <div class="step-info">
                                 <div class="step-label">生成销售话术</div>
                                 <div class="step-desc">撰写应对策略与实战销售话术</div>
@@ -726,12 +726,12 @@
 
                 <div id="competitor-result" class="result-container" style="display: none;">
                     <div class="result-header">
-                        <span class="result-badge success">✅ 分析完成</span>
+                        <span class="result-badge success"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 分析完成</span>
                     </div>
                     <div class="result-content content-card" id="competitor-content"></div>
                     <div class="follow-up-section competitor-follow-up" id="competitor-follow-up-section" style="display: none;">
                         <div class="follow-up-divider">
-                            <span class="follow-up-divider-text">💬 分析追问优化</span>
+                            <span class="follow-up-divider-text"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg> 分析追问优化</span>
                             <button class="btn-link" id="clear-competitor-follow-up-btn">清空历史</button>
                         </div>
                         <div class="follow-up-history" id="competitor-follow-up-history"></div>
@@ -746,19 +746,19 @@
                             <button class="btn btn-primary btn-sm" id="send-competitor-follow-up-btn">发送</button>
                         </div>
                         <div class="follow-up-actions" id="competitor-follow-up-actions" style="display: none;">
-                            <button class="btn btn-success btn-sm" id="apply-competitor-refined-btn">✅ 使用此优化结果</button>
+                            <button class="btn btn-success btn-sm" id="apply-competitor-refined-btn"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 使用此优化结果</button>
                         </div>
                     </div>
                     <div class="result-actions">
                         <button class="btn btn-primary" id="download-competitor-btn">
-                            📥 下载竞争分析报告
+                            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载竞争分析报告
                         </button>
                         <button class="btn btn-favorite-result" id="fav-competitor-btn">
-                            ☆ 收藏报告
+                            <svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏报告
                         </button>
                     </div>
                     <details class="source-documents content-card">
-                        <summary class="source-summary">📚 查看参考的解决方案文档</summary>
+                        <summary class="source-summary"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg> 查看参考的解决方案文档</summary>
                         <div id="competitor-sources"></div>
                     </details>
                 </div>
@@ -769,7 +769,7 @@
                 <!-- 页面标题 + 统计 -->
                 <header class="products-header">
                     <div class="products-header-left">
-                        <h2>🗺️ 华为云产品图谱</h2>
+                        <h2><svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg> 华为云产品图谱</h2>
                         <p>覆盖 9 大类、35 款核心云产品 · 点击任意节点查看详情</p>
                     </div>
                     <div class="products-header-center">
@@ -785,18 +785,18 @@
                 <!-- 分类筛选 + 搜索 -->
                 <div class="products-toolbar">
                     <div class="products-filter-group">
-                        <button class="product-filter-btn active" data-category="all">🌐 全部</button>
-                        <button class="product-filter-btn" data-category="compute">☁️ 计算</button>
-                        <button class="product-filter-btn" data-category="network">🌐 网络</button>
-                        <button class="product-filter-btn" data-category="storage">💾 存储</button>
-                        <button class="product-filter-btn" data-category="database">🗄️ 数据库</button>
-                        <button class="product-filter-btn" data-category="ai">🤖 AI</button>
-                        <button class="product-filter-btn" data-category="iot">📡 IoT</button>
-                        <button class="product-filter-btn" data-category="security">🛡️ 安全</button>
-                        <button class="product-filter-btn" data-category="media">🎬 音视频</button>
-                        <button class="product-filter-btn" data-category="enterprise">💼 企业应用</button>
+                        <button class="product-filter-btn active" data-category="all"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg> 全部</button>
+                        <button class="product-filter-btn" data-category="compute"><svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg> 计算</button>
+                        <button class="product-filter-btn" data-category="network"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg> 网络</button>
+                        <button class="product-filter-btn" data-category="storage"><svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg> 存储</button>
+                        <button class="product-filter-btn" data-category="database"><svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg> 数据库</button>
+                        <button class="product-filter-btn" data-category="ai"><svg class="icon" aria-hidden="true"><use href="#i-bot"></use></svg> AI</button>
+                        <button class="product-filter-btn" data-category="iot"><svg class="icon" aria-hidden="true"><use href="#i-radio"></use></svg> IoT</button>
+                        <button class="product-filter-btn" data-category="security"><svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg> 安全</button>
+                        <button class="product-filter-btn" data-category="media"><svg class="icon" aria-hidden="true"><use href="#i-film"></use></svg> 音视频</button>
+                        <button class="product-filter-btn" data-category="enterprise"><svg class="icon" aria-hidden="true"><use href="#i-briefcase"></use></svg> 企业应用</button>
                     </div>
-                    <input type="text" id="product-search-input" class="product-search-input" placeholder="🔍 搜索产品名称或能力...">
+                    <input type="text" id="product-search-input" class="product-search-input" placeholder=" 搜索产品名称或能力...">
                 </div>
 
                 <!-- 产品图谱主体：左侧图谱 + 右侧详情 -->
@@ -813,7 +813,7 @@
                         <!-- 空状态引导 -->
                         <div class="product-detail-empty" id="detail-empty-state">
                             <div class="empty-illustration">
-                                <div class="empty-hand-icon">👆</div>
+                                <div class="empty-hand-icon"><svg class="icon" aria-hidden="true"><use href="#i-hand"></use></svg></div>
                             </div>
                             <h3>点击左侧产品节点</h3>
                             <p>查看华为云各产品的详细能力与典型应用场景</p>
@@ -840,7 +840,7 @@
                 <!-- 底部提示栏 -->
                 <div id="products-highlight-bar" class="products-highlight-bar">
                     <div class="info-pill">
-                        <span class="info-icon">💡</span>
+                        <span class="info-icon"><svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg></span>
                         <span>点击左侧任意产品，查看详细介绍、核心能力与典型应用场景</span>
                     </div>
                 </div>
@@ -850,30 +850,30 @@
             <!-- Dashboard 数据仪表盘页面 -->
             <div id="page-dashboard" class="page">
                 <header class="page-header">
-                    <h2 class="page-title">📊 数据仪表盘 Dashboard</h2>
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg> 数据仪表盘 Dashboard</h2>
                     <p class="page-subtitle">实时监控系统的使用数据、行业覆盖与竞品分析洞察</p>
                 </header>
                 
                 <!-- KPI 统计卡片 -->
                 <div class="dashboard-kpi-grid">
                     <div class="dashboard-kpi-card">
-                        <div class="kpi-icon">🔍</div>
+                        <div class="kpi-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></div>
                         <div class="kpi-content">
                             <div class="kpi-value" id="dash-total-matches">--</div>
                             <div class="kpi-label">近7天匹配</div>
                         </div>
-                        <div class="kpi-trend" id="dash-match-trend">↗ +12%</div>
+                        <div class="kpi-trend" id="dash-match-trend"><svg class="icon" aria-hidden="true"><use href="#i-arrow-up-right"></use></svg> +12%</div>
                     </div>
                     <div class="dashboard-kpi-card">
-                        <div class="kpi-icon">⚔️</div>
+                        <div class="kpi-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></div>
                         <div class="kpi-content">
                             <div class="kpi-value" id="dash-total-analyses">--</div>
                             <div class="kpi-label">近7天分析</div>
                         </div>
-                        <div class="kpi-trend" id="dash-analyze-trend">↗ +8%</div>
+                        <div class="kpi-trend" id="dash-analyze-trend"><svg class="icon" aria-hidden="true"><use href="#i-arrow-up-right"></use></svg> +8%</div>
                     </div>
                     <div class="dashboard-kpi-card">
-                        <div class="kpi-icon">📁</div>
+                        <div class="kpi-icon"><svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg></div>
                         <div class="kpi-content">
                             <div class="kpi-value" id="dash-total-docs">--</div>
                             <div class="kpi-label">知识库文档</div>
@@ -881,7 +881,7 @@
                         <div class="kpi-trend static">实时</div>
                     </div>
                     <div class="dashboard-kpi-card">
-                        <div class="kpi-icon">🎯</div>
+                        <div class="kpi-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></div>
                         <div class="kpi-content">
                             <div class="kpi-value" id="dash-accuracy">--%</div>
                             <div class="kpi-label">方案覆盖度</div>
@@ -895,7 +895,7 @@
                     <!-- 行业覆盖热力图 -->
                     <div class="dashboard-chart-card">
                         <div class="chart-header">
-                            <h3 class="chart-title">🌡️ 行业覆盖热力图</h3>
+                            <h3 class="chart-title"><svg class="icon" aria-hidden="true"><use href="#i-thermometer"></use></svg> 行业覆盖热力图</h3>
                             <span class="chart-subtitle">各行业解决方案文档覆盖度</span>
                         </div>
                         <div class="chart-body">
@@ -906,7 +906,7 @@
                     <!-- 最近匹配趋势图 -->
                     <div class="dashboard-chart-card">
                         <div class="chart-header">
-                            <h3 class="chart-title">📈 最近匹配趋势</h3>
+                            <h3 class="chart-title"><svg class="icon" aria-hidden="true"><use href="#i-trending-up"></use></svg> 最近匹配趋势</h3>
                             <span class="chart-subtitle">近7天解决方案匹配活跃度</span>
                         </div>
                         <div class="chart-body">
@@ -917,7 +917,7 @@
                     <!-- 竞品分析频次统计 -->
                     <div class="dashboard-chart-card wide">
                         <div class="chart-header">
-                            <h3 class="chart-title">🏆 热门对比方向 Top12</h3>
+                            <h3 class="chart-title"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg> 热门对比方向 Top12</h3>
                             <span class="chart-subtitle">全部用户分析占比（数据脱敏，仅展示比例）</span>
                         </div>
                         <div class="chart-body">
@@ -950,7 +950,7 @@
             <!-- 成就勋章页面 -->
             <div id="page-achievement" class="page">
                 <header class="page-header">
-                    <h2 class="page-title">🏆 成就勋章</h2>
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg> 成就勋章</h2>
                     <p class="page-subtitle">完成指定操作解锁成就，收集全部 45 枚勋章！</p>
                 </header>
                 <div class="achievement-progress-bar">
@@ -959,11 +959,11 @@
                 </div>
                 <div class="achievement-filter" id="ach-filter">
                     <button class="ach-filter-btn active" data-rarity="all">全部</button>
-                    <button class="ach-filter-btn" data-rarity="copper">🥉 铜</button>
-                    <button class="ach-filter-btn" data-rarity="silver">🥈 银</button>
-                    <button class="ach-filter-btn" data-rarity="gold">🥇 金</button>
-                    <button class="ach-filter-btn" data-rarity="diamond">💎 钻</button>
-                    <button class="ach-filter-btn" data-rarity="hidden">🎪 隐藏</button>
+                    <button class="ach-filter-btn" data-rarity="copper"><svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg> 铜</button>
+                    <button class="ach-filter-btn" data-rarity="silver"><svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg> 银</button>
+                    <button class="ach-filter-btn" data-rarity="gold"><svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg> 金</button>
+                    <button class="ach-filter-btn" data-rarity="diamond"><svg class="icon" aria-hidden="true"><use href="#i-gem"></use></svg> 钻</button>
+                    <button class="ach-filter-btn" data-rarity="hidden"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg> 隐藏</button>
                 </div>
                 <div class="achievement-grid" id="ach-grid">
                     <!-- JS 动态渲染 -->
@@ -995,7 +995,7 @@
                 <!-- 知识库空状态（当无文档时显示） -->
                 <div id="kb-empty-state" class="empty-state-card content-card" style="display: none;">
                     <div class="empty-state-content">
-                        <div class="empty-state-icon">📂</div>
+                        <div class="empty-state-icon"><svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg></div>
                         <h3 class="empty-state-title">知识库暂无数据</h3>
                         <p class="empty-state-desc">上传文档或初始化示例数据来开始使用</p>
                         <div class="empty-state-steps">
@@ -1016,7 +1016,7 @@
                 </div>
 
                 <div class="content-card">
-                    <h3 class="card-title">📈 行业分布</h3>
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-trending-up"></use></svg> 行业分布</h3>
                     <div class="chart-container">
                         <canvas id="industry-chart"></canvas>
                     </div>
@@ -1025,7 +1025,7 @@
                 <!-- 文档列表管理 -->
                 <div class="content-card">
                     <div class="kb-doc-toolbar">
-                        <h3 class="card-title" style="margin:0;">📄 文档管理</h3>
+                        <h3 class="card-title" style="margin:0;"><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg> 文档管理</h3>
                         <div class="kb-doc-toolbar-right">
                             <input type="text" id="kb-doc-search" class="kb-doc-search" placeholder="搜索文档...">
                             <button class="btn btn-primary btn-sm" id="kb-doc-add-btn">+ 新增文档</button>
@@ -1045,13 +1045,13 @@
                 </div>
 
                 <div class="content-card">
-                    <h3 class="card-title">⚙️ 知识库操作</h3>
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg> 知识库操作</h3>
                     <div class="button-row">
                         <button class="btn btn-primary" id="rebuild-btn">
-                            <span class="btn-text">🔄 重建知识库</span>
+                            <span class="btn-text"><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 重建知识库</span>
                             <span class="btn-loader"></span>
                         </button>
-                        <button class="btn btn-danger" id="clear-kb-btn">🗑️ 清空知识库</button>
+                        <button class="btn btn-danger" id="clear-kb-btn"><svg class="icon" aria-hidden="true"><use href="#i-trash-2"></use></svg> 清空知识库</button>
                     </div>
 
                     <!-- 知识库重建进度面板 -->
@@ -1068,7 +1068,7 @@
                 </div>
                 
                 <div class="info-card content-card">
-                    <h4>💡 提示</h4>
+                    <h4><svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg> 提示</h4>
                     <ol>
                         <li>点击"+ 新增文档"按钮，直接输入文档标题和内容（支持 Markdown 格式）</li>
                         <li>选择分类（华为方案 / 竞品方案）和对应行业，保存后自动入库建索引</li>
@@ -1080,14 +1080,14 @@
             <!-- 历史记录页面 -->
             <div id="page-history" class="page">
                 <header class="page-header">
-                    <h2 class="page-title">📋 历史记录</h2>
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg> 历史记录</h2>
                     <p class="page-subtitle">随时调阅过往方案与分析报告，沉淀经验</p>
                     <div class="history-tabs">
                         <button class="history-tab active" data-tab="match" id="history-tab-match">
-                            🔍 方案匹配
+                            <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg> 方案匹配
                         </button>
                         <button class="history-tab" data-tab="analyze" id="history-tab-analyze">
-                            ⚔️ 竞品分析
+                            <svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg> 竞品分析
                         </button>
                     </div>
                 </header>
@@ -1110,15 +1110,15 @@
                 <div id="history-list" class="history-list">
                     <!-- 由 JS 动态生成 -->
                     <div class="history-empty">
-                        <div class="empty-icon">📋</div>
+                        <div class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></div>
                         <p>暂无历史记录</p>
                         <p class="empty-sub">使用「解决方案匹配」或「竞争分析」功能后，记录会自动保存到这里</p>
                         <div class="empty-state-actions">
                             <button class="btn btn-primary btn-sm" onclick="document.querySelector('[data-page=\'solution\']').click()">
-                                🔍 去匹配方案
+                                <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg> 去匹配方案
                             </button>
                             <button class="btn btn-secondary btn-sm" onclick="document.querySelector('[data-page=\'competitor\']').click()">
-                                ⚔️ 去分析竞品
+                                <svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg> 去分析竞品
                             </button>
                         </div>
                     </div>
@@ -1138,13 +1138,13 @@
             <!-- 系统设置页面 -->
             <div id="page-settings" class="page">
                 <header class="page-header">
-                    <h2 class="page-title">⚙️ 系统设置</h2>
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg> 系统设置</h2>
                     <p class="page-subtitle">管理系统偏好、显示选项和数据配置</p>
                 </header>
 
                 <!-- 显示设置 -->
                 <div class="content-card">
-                    <h3 class="card-title">🎨 显示设置</h3>
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-palette"></use></svg> 显示设置</h3>
                     <div class="settings-grid">
                         <div class="setting-item" id="setting-animation-toggle">
                             <div class="setting-info">
@@ -1181,7 +1181,7 @@
 
                 <!-- 功能设置 -->
                 <div class="content-card">
-                    <h3 class="card-title">⚡ 功能设置</h3>
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg> 功能设置</h3>
                     <div class="settings-grid">
                         <div class="setting-item">
                             <div class="setting-info">
@@ -1219,7 +1219,7 @@
 
                 <!-- 系统信息 -->
                 <div class="content-card">
-                    <h3 class="card-title">📋 系统信息</h3>
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg> 系统信息</h3>
                     <div class="settings-info-grid">
                         <div class="settings-info-item">
                             <span class="settings-info-label">系统版本</span>
@@ -1251,10 +1251,10 @@
                 <!-- 操作按钮 -->
                 <div class="settings-actions">
                     <button class="btn btn-primary" id="settings-save-btn">
-                        💾 保存设置
+                        <svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg> 保存设置
                     </button>
                     <button class="btn btn-secondary" id="settings-reset-btn">
-                        🔄 恢复默认
+                        <svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 恢复默认
                     </button>
                 </div>
             </div>
@@ -1265,12 +1265,12 @@
     <!-- 全局错误边界（移到 body 级别避免被 main 层叠上下文限制） -->
     <div id="global-error-boundary" class="global-error-boundary" style="display: none;">
         <div class="global-error-content">
-            <div class="global-error-emoji">⚠️</div>
+            <div class="global-error-emoji"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg></div>
             <h3 id="error-boundary-title" class="global-error-title">系统遇到了一点问题</h3>
             <p id="error-boundary-message" class="global-error-message">请尝试刷新页面或稍后再试</p>
             <p id="error-boundary-detail" class="global-error-detail" style="display: none;"></p>
             <div class="global-error-actions">
-                <button class="btn btn-primary" onclick="location.reload()">🔄 刷新页面</button>
+                <button class="btn btn-primary" onclick="location.reload()"><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 刷新页面</button>
                 <button class="btn btn-secondary" id="error-boundary-close">关闭</button>
             </div>
         </div>
@@ -1279,10 +1279,10 @@
     <!-- 内联错误提示（移到 body 级别） -->
     <div id="global-inline-error" class="global-inline-error" style="display: none;">
         <div class="global-inline-error-content">
-            <span class="global-inline-error-icon">⚠️</span>
+            <span class="global-inline-error-icon"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg></span>
             <span id="global-error-text" class="global-inline-error-text">发生了错误</span>
             <button class="btn btn-primary btn-sm" id="global-error-retry" style="display: none;">重试</button>
-            <button class="global-inline-error-close" id="global-error-close">✕</button>
+            <button class="global-inline-error-close" id="global-error-close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
         </div>
     </div>
 
@@ -1290,8 +1290,8 @@
     <div id="history-compare-panel" class="history-compare-overlay" style="display: none;">
         <div class="history-compare-content">
             <div class="compare-header">
-                <h3>⚖️ 方案对比</h3>
-                <button class="btn-close" id="close-compare">✕</button>
+                <h3><svg class="icon" aria-hidden="true"><use href="#i-scale"></use></svg> 方案对比</h3>
+                <button class="btn-close" id="close-compare"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
             </div>
             <div class="compare-body" id="compare-body">
                 <!-- 左右分栏由 JS 动态生成 -->
@@ -1299,14 +1299,14 @@
             <!-- AI 智能总结区域（底部） -->
             <div class="compare-ai-summary-bottom" id="compare-ai-summary-bottom" style="display: none;">
                 <div class="ai-summary-label">
-                    <span class="ai-icon">✨</span>
+                    <span class="ai-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></span>
                     <span>AI 智能对比总结</span>
                 </div>
                 <div class="ai-summary-content result-content" id="ai-summary-content"></div>
             </div>
             <div class="compare-ai-action" id="compare-ai-action">
                 <button class="btn btn-primary ai-summary-btn" id="btn-ai-summary">
-                    <span class="ai-btn-icon">✨</span>
+                    <span class="ai-btn-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></span>
                     <span>AI 智能总结</span>
                 </button>
                 <div class="ai-summary-loading" id="ai-summary-loading" style="display: none;">
@@ -1321,8 +1321,8 @@
     <div id="history-detail-modal" class="history-modal" style="display: none;">
         <div class="history-modal-content">
             <div class="modal-header">
-                <h3>📄 方案详情</h3>
-                <button class="btn-close" id="close-detail">✕</button>
+                <h3><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg> 方案详情</h3>
+                <button class="btn-close" id="close-detail"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
             </div>
             <div class="modal-body" id="detail-body">
                 <!-- 由 JS 动态生成 -->
@@ -1336,8 +1336,8 @@
         <div class="profile-drawer">
             <!-- Header -->
             <div class="profile-header">
-                <h3>👤 个人中心</h3>
-                <button class="btn-close" id="close-profile">✕</button>
+                <h3><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg> 个人中心</h3>
+                <button class="btn-close" id="close-profile"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
             </div>
 
             <!-- User Avatar & Name Section -->
@@ -1351,7 +1351,7 @@
 
             <!-- Stats Overview -->
             <div class="profile-section">
-                <h4 class="profile-section-title">📊 使用概览</h4>
+                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg> 使用概览</h4>
                 <div class="profile-stats-grid">
                     <div class="profile-stat-item">
                         <div class="profile-stat-value" id="stat-match">0</div>
@@ -1374,7 +1374,7 @@
 
             <!-- Favorites Section -->
             <div class="profile-section" id="profile-favorites-section">
-                <h4 class="profile-section-title">⭐ 收藏方案（<span id="fav-count">0</span>）</h4>
+                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏方案（<span id="fav-count">0</span>）</h4>
                 <div id="fav-list-empty" class="profile-fav-empty">暂无收藏方案，去匹配结果里收藏吧～</div>
                 <div id="fav-list" class="profile-fav-list" style="display: none;">
                     <!-- JS populated -->
@@ -1383,7 +1383,7 @@
 
             <!-- Account Info -->
             <div class="profile-section">
-                <h4 class="profile-section-title">📧 基本信息</h4>
+                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg> 基本信息</h4>
                 <div class="profile-info-list">
                     <div class="profile-info-row">
                         <span class="profile-info-label">用户名</span>
@@ -1421,7 +1421,7 @@
 
             <!-- Security Settings -->
             <div class="profile-section">
-                <h4 class="profile-section-title">🔒 安全设置</h4>
+                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg> 安全设置</h4>
                 <div id="password-section-view">
                     <div class="profile-info-row">
                         <span class="profile-info-label">登录密码</span>
@@ -1455,7 +1455,7 @@
             <!-- Logout -->
             <div class="profile-section">
                 <button class="btn btn-danger profile-logout-btn" id="btn-profile-logout">
-                    🚪 退出登录
+                    <svg class="icon" aria-hidden="true"><use href="#i-log-out"></use></svg> 退出登录
                 </button>
             </div>
         </div>
@@ -1464,7 +1464,7 @@
     <!-- 登录/注册弹窗 -->
     <div id="auth-modal-overlay" class="auth-modal-overlay" style="display: none;">
         <div class="auth-modal">
-            <button class="auth-modal-close" id="auth-modal-close">✕</button>
+            <button class="auth-modal-close" id="auth-modal-close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
 
             <div class="auth-tabs">
                 <button class="auth-tab active" data-tab="login">登录</button>
@@ -1490,12 +1490,12 @@
                 </div>
                 <div id="login-error" class="auth-error" style="display: none;"></div>
                 <div id="login-auto-fill-hint" class="login-auto-fill-hint" style="display: none;">
-                    ⚠️ 当前将登录为：<strong id="login-hint-username"></strong>
+                    <svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg> 当前将登录为：<strong id="login-hint-username"></strong>
                     <br><small>如不是你的账号，请手动修改用户名</small>
                 </div>
                 <button type="submit" class="auth-submit-btn" id="login-submit-btn">
                     <span class="btn-text">登录</span>
-                    <span class="btn-spinner" style="display: none;">⏳</span>
+                    <span class="btn-spinner" style="display: none;"><svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg></span>
                 </button>
                 <div class="forgot-password-link" style="text-align: center; margin-top: 12px;">
                     <a href="javascript:void(0);" id="forgot-password-link" style="color: #667eea; text-decoration: none; font-size: 14px;">忘记密码？</a>
@@ -1530,7 +1530,7 @@
                 <div id="register-error" class="auth-error" style="display: none;"></div>
                 <button type="submit" class="auth-submit-btn" id="register-submit-btn">
                     <span class="btn-text">注册</span>
-                    <span class="btn-spinner" style="display: none;">⏳</span>
+                    <span class="btn-spinner" style="display: none;"><svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg></span>
                 </button>
             </form>
 
@@ -1544,7 +1544,7 @@
     <!-- 忘记密码弹窗 -->
     <div id="forgot-password-modal-overlay" class="auth-modal-overlay" style="display: none;">
         <div class="auth-modal">
-            <button class="auth-modal-close" id="forgot-password-modal-close">✕</button>
+            <button class="auth-modal-close" id="forgot-password-modal-close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
             <h2 style="text-align:center; margin-bottom:20px; color:#333;">忘记密码</h2>
             <p style="text-align:center; color:#666; margin-bottom:25px; font-size:14px;">请输入注册邮箱，我们将发送重置链接</p>
             <form id="forgot-password-form" class="auth-form">
@@ -1556,7 +1556,7 @@
                 <div id="forgot-password-success" style="display:none; color:green; text-align:center; padding:10px;"></div>
                 <button type="submit" class="auth-submit-btn" id="forgot-password-submit-btn">
                     <span class="btn-text">发送重置链接</span>
-                    <span class="btn-spinner" style="display:none;">⏳</span>
+                    <span class="btn-spinner" style="display:none;"><svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg></span>
                 </button>
             </form>
             <div class="auth-footer">
@@ -1568,7 +1568,7 @@
     <!-- 重置密码弹窗 -->
     <div id="reset-password-modal-overlay" class="auth-modal-overlay" style="display: none;">
         <div class="auth-modal">
-            <button class="auth-modal-close" id="reset-password-modal-close">✕</button>
+            <button class="auth-modal-close" id="reset-password-modal-close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
             <h2 style="text-align:center; margin-bottom:20px; color:#333;">重置密码</h2>
             <form id="reset-password-form" class="auth-form">
                 <div class="form-group">
@@ -1583,7 +1583,7 @@
                 <div id="reset-password-success" style="display:none; color:green; text-align:center; padding:10px;"></div>
                 <button type="submit" class="auth-submit-btn" id="reset-password-submit-btn">
                     <span class="btn-text">重置密码</span>
-                    <span class="btn-spinner" style="display:none;">⏳</span>
+                    <span class="btn-spinner" style="display:none;"><svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg></span>
                 </button>
             </form>
         </div>
@@ -1600,9 +1600,233 @@
         </a>
     </footer>
     
-    <script src="js/chart.umd.min.js?v=20260713a" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260713a"></script>
-    <script src="js/achievement-ui.js?v=20260713a"></script>
-    <script src="welcome-script.js?v=20260713a"></script>
+    <script src="js/chart.umd.min.js?v=20260713b" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
+    <script src="script.js?v=20260713b"></script>
+    <script src="js/achievement-ui.js?v=20260713b"></script>
+    <script src="welcome-script.js?v=20260713b"></script>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">
+  <symbol id="i-arrow-down-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10" />
+  <path d="M17 7v10H7" /></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7" />
+  <path d="M19 12H5" /></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" />
+  <path d="m12 5 7 7-7 7" /></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10" />
+  <path d="M7 17 17 7" /></symbol>
+  <symbol id="i-banknote" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2" />
+  <circle cx="12" cy="12" r="2" />
+  <path d="M6 12h.01M18 12h.01" /></symbol>
+  <symbol id="i-bar-chart-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></symbol>
+  <symbol id="i-book-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14" />
+  <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8" />
+  <rect width="16" height="12" x="4" y="8" rx="2" />
+  <path d="M2 14h2" />
+  <path d="M20 14h2" />
+  <path d="M15 13v2" />
+  <path d="M9 13v2" /></symbol>
+  <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+  <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+  <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+  <path d="M17.599 6.5a3 3 0 0 0 .399-1.375" />
+  <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
+  <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
+  <path d="M19.938 10.5a4 4 0 0 1 .585.396" />
+  <path d="M6 18a4 4 0 0 1-1.967-.516" />
+  <path d="M19.967 17.484A4 4 0 0 1 18 18" /></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+  <rect width="20" height="14" x="2" y="6" rx="2" /></symbol>
+  <symbol id="i-building-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+  <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+  <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+  <path d="M10 6h4" />
+  <path d="M10 10h4" />
+  <path d="M10 14h4" />
+  <path d="M10 18h4" /></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+  <circle cx="7" cy="17" r="2" />
+  <path d="M9 17h6" />
+  <circle cx="17" cy="17" r="2" /></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></symbol>
+  <symbol id="i-circle-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" />
+  <path d="m9 12 2 2 4-4" /></symbol>
+  <symbol id="i-clipboard-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+  <path d="M12 11h4" />
+  <path d="M12 16h4" />
+  <path d="M8 11h.01" />
+  <path d="M8 16h.01" /></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3" />
+  <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+  <path d="M3 12A9 3 0 0 0 21 12" /></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+  <polyline points="7 10 12 15 17 10" />
+  <line x1="12" x2="12" y1="15" y2="3" /></symbol>
+  <symbol id="i-factory" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+  <path d="M17 18h1" />
+  <path d="M12 18h1" />
+  <path d="M7 18h1" /></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+  <path d="M14 2v4a2 2 0 0 0 2 2h4" /></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+  <path d="M10 9H8" />
+  <path d="M16 13H8" />
+  <path d="M16 17H8" /></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M7 3v18" />
+  <path d="M3 7.5h4" />
+  <path d="M3 12h18" />
+  <path d="M3 16.5h4" />
+  <path d="M17 3v18" />
+  <path d="M17 7.5h4" />
+  <path d="M17 16.5h4" /></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></symbol>
+  <symbol id="i-gem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9Z" />
+  <path d="M11 3 8 9l4 13 4-13-3-6" />
+  <path d="M2 9h20" /></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" />
+  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+  <path d="M2 12h20" /></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+  <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+  <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+  <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" /></symbol>
+  <symbol id="i-landmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="22" y2="22" />
+  <line x1="6" x2="6" y1="18" y2="11" />
+  <line x1="10" x2="10" y1="18" y2="11" />
+  <line x1="14" x2="14" y1="18" y2="11" />
+  <line x1="18" x2="18" y1="18" y2="11" />
+  <polygon points="12 2 20 7 4 7" /></symbol>
+  <symbol id="i-lightbulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+  <path d="M9 18h6" />
+  <path d="M10 22h4" /></symbol>
+  <symbol id="i-loader" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4" />
+  <path d="m16.2 7.8 2.9-2.9" />
+  <path d="M18 12h4" />
+  <path d="m16.2 16.2 2.9 2.9" />
+  <path d="M12 18v4" />
+  <path d="m4.9 19.1 2.9-2.9" />
+  <path d="M2 12h4" />
+  <path d="m4.9 4.9 2.9 2.9" /></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></symbol>
+  <symbol id="i-log-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+  <polyline points="16 17 21 12 16 7" />
+  <line x1="21" x2="9" y1="12" y2="12" /></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" />
+  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z" />
+  <path d="M15 5.764v15" />
+  <path d="M9 3.236v15" /></symbol>
+  <symbol id="i-medal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15" />
+  <path d="M11 12 5.12 2.2" />
+  <path d="m13 12 5.88-9.8" />
+  <path d="M8 7h8" />
+  <circle cx="12" cy="17" r="5" />
+  <path d="M12 18v-2h-.5" /></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12" />
+  <line x1="4" x2="20" y1="6" y2="6" />
+  <line x1="4" x2="20" y1="18" y2="18" /></symbol>
+  <symbol id="i-message-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+  <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+  <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+  <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" /></symbol>
+  <symbol id="i-party-popper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.8 11.3 2 22l10.7-3.79" />
+  <path d="M4 3h.01" />
+  <path d="M22 8h.01" />
+  <path d="M15 2h.01" />
+  <path d="M22 20h.01" />
+  <path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10" />
+  <path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17" />
+  <path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7" />
+  <path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z" /></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+  <path d="m15 5 4 4" /></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5" />
+  <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" /></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
+  <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5" />
+  <circle cx="12" cy="12" r="2" />
+  <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5" />
+  <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19" /></symbol>
+  <symbol id="i-refresh-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+  <path d="M21 3v5h-5" />
+  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+  <path d="M8 16H3v5" /></symbol>
+  <symbol id="i-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+  <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+  <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+  <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" /></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+  <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" />
+  <path d="M7 3v4a1 1 0 0 0 1 1h7" /></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+  <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+  <path d="M7 21h10" />
+  <path d="M12 3v18" />
+  <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" /></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8" />
+  <path d="m21 21-4.3-4.3" /></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+  <circle cx="12" cy="12" r="3" /></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+  <path d="M20 3v4" />
+  <path d="M22 5h-4" />
+  <path d="M4 17v2" />
+  <path d="M5 18H3" /></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></symbol>
+  <symbol id="i-stethoscope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2v2" />
+  <path d="M5 2v2" />
+  <path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1" />
+  <path d="M8 15a6 6 0 0 0 12 0v-3" />
+  <circle cx="20" cy="10" r="2" /></symbol>
+  <symbol id="i-swords" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5" />
+  <line x1="13" x2="19" y1="19" y2="13" />
+  <line x1="16" x2="20" y1="16" y2="20" />
+  <line x1="19" x2="21" y1="21" y2="19" />
+  <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5" />
+  <line x1="5" x2="9" y1="14" y2="18" />
+  <line x1="7" x2="4" y1="17" y2="20" />
+  <line x1="3" x2="5" y1="19" y2="21" /></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" />
+  <circle cx="12" cy="12" r="6" />
+  <circle cx="12" cy="12" r="2" /></symbol>
+  <symbol id="i-thermometer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" /></symbol>
+  <symbol id="i-trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18" />
+  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+  <line x1="10" x2="10" y1="11" y2="17" />
+  <line x1="14" x2="14" y1="11" y2="17" /></symbol>
+  <symbol id="i-trending-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+  <polyline points="16 7 22 7 22 13" /></symbol>
+  <symbol id="i-triangle-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+  <path d="M12 9v4" />
+  <path d="M12 17h.01" /></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+  <path d="M4 22h16" />
+  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+  <circle cx="12" cy="7" r="4" /></symbol>
+  <symbol id="i-wheat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22 16 8" />
+  <path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+  <path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+  <path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+  <path d="M20 2h2v2a4 4 0 0 1-4 4h-2V6a4 4 0 0 1 4-4Z" />
+  <path d="M11.47 17.47 13 19l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L5 19l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
+  <path d="M15.47 13.47 17 15l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L9 15l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
+  <path d="M19.47 9.47 21 11l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L13 11l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" /></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" />
+  <path d="m6 6 12 12" /></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
+</svg>
 </body>
 </html>
