@@ -8337,9 +8337,9 @@ table tbody tr:hover {
     background: rgba(199, 0, 11, 0.04) !important;
 }
 
-/* ---- 页面标题区：暖白渐变横幅（去黑色） ---- */
+/* ---- 页面标题区：米白色左→右渐变横幅 ---- */
 .page-header:not(#page-dashboard .page-header) {
-    background: linear-gradient(135deg, #f8f9fb 0%, #eef0f4 50%, #f5f0ee 100%) !important;
+    background: linear-gradient(to right, #FFFBF7 0%, #FDF6EE 40%, #F8F0E3 100%) !important;
     border-radius: 14px !important;
     padding: 24px 28px !important;
     margin-bottom: 24px !important;
@@ -8348,14 +8348,14 @@ table tbody tr:hover {
 .page-header h1,
 .page-header h2,
 .page-header .page-title {
-    color: #1D2129 !important;
+    color: #2D2D2D !important;
     font-size: 1.6rem !important;
     font-weight: 700 !important;
 }
 .page-header p,
 .page-header .page-subtitle,
 .page-header .page-desc {
-    color: #555D6A !important;
+    color: #666 !important;
     margin-top: 6px !important;
 }
 
@@ -8406,14 +8406,14 @@ table tbody tr:hover {
     animation: fadeInUp 0.4s cubic-bezier(.16,1,.3,1) both;
 }
 
-/* ---------- 仪表盘红渐变 hero（开放问题4：需要） ---------- */
+/* ---------- 仪表盘米白渐变 hero（去大红色） ---------- */
 #page-dashboard .page-header {
-    background: linear-gradient(120deg, #C7000B 0%, #E02020 55%, #FF6A3D 100%);
+    background: linear-gradient(to right, #FFFBF7 0%, #F5EBD8 50%, #EDDFCC 100%);
     border-radius: var(--radius-xl);
     padding: 28px 32px;
     margin-bottom: var(--spacing-lg);
-    color: #fff;
-    box-shadow: 0 8px 28px rgba(199,0,11,0.28);
+    color: #2D2D2D;
+    box-shadow: 0 4px 20px rgba(139,115,85,0.12);
     position: relative;
     overflow: hidden;
 }
@@ -8422,34 +8422,24 @@ table tbody tr:hover {
     position: absolute;
     right: -40px; top: -40px;
     width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(199,0,11,0.06) 0%, transparent 70%);
     pointer-events: none;
 }
-#page-dashboard .page-title { color: #fff; font-size: 1.75rem; }
-#page-dashboard .page-subtitle { color: rgba(255,255,255,0.85); }
+#page-dashboard .page-title { color: #C7000B; font-size: 1.75rem; font-weight: 700; }
+#page-dashboard .page-subtitle { color: #666; }
 
 /* ================================================================
    v2.0 仪表盘专属增强 — 深色卡片 + 白字
    ================================================================ */
 
-/* Hero 增强纹理 + 光点动画 */
+/* Hero 增强纹理 + 光点动画（米白底适配） */
 #page-dashboard .page-header::before {
     content: '';
     position: absolute;
     inset: 0;
-    background-image: 
-        radial-gradient(circle at 20% 50%, rgba(255,255,255,0.08) 0%, transparent 50%),
-        radial-gradient(circle at 80% 30%, rgba(255,255,255,0.05) 0%, transparent 40%),
-        url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-    pointer-events: none;
-    animation: shimmer 8s linear infinite;
-}
-#page-dashboard .page-header::after {
-    content: '';
-    position: absolute;
-    right: -40px; top: -40px;
-    width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+    background-image:
+        radial-gradient(circle at 20% 50%, rgba(199,0,11,0.04) 0%, transparent 50%),
+        radial-gradient(circle at 80% 30%, rgba(199,0,11,0.03) 0%, transparent 40%);
     pointer-events: none;
 }
 
