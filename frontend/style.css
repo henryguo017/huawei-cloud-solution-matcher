@@ -6275,7 +6275,7 @@ body::after {
 .product-detail-panel {
     width: 350px;
     flex-shrink: 0;
-    background: linear-gradient(180deg, rgba(20, 23, 45, 0.98) 0%, rgba(14, 16, 35, 0.98) 100%);
+    background: var(--bg-card);
     border-left: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
@@ -7571,3 +7571,183 @@ body::after {
 .icon { transition: color 0.2s ease, transform 0.2s ease; }
 /* 移动端底部导航图标与桌面一致，随 font-size 缩放（已在 .icon 基类中处理） */
 .mobile-nav-item .mobile-nav-icon .icon { width: 1.4em; height: 1.4em; }
+
+
+/* ===== Phase 5.5: 视觉增强 — 大厂质感（浅色白卡 + 层次感 + 品牌色点缀） ===== */
+
+/* 1. 全局卡片层次：多层阴影替代扁平 */
+.dashboard-kpi-card, .kb-doc-item, .stat-card, .ach-filter-btn, .product-node,
+.setting-item, .history-item, .profile-stat-card, .compare-card {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+  transition: transform 0.2s ease, box-shadow 0.25s ease;
+}
+.dashboard-kpi-card:hover, .kb-doc-item:hover, .stat-card:hover,
+.setting-item:hover, .profile-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08), 0 3px 6px rgba(0,0,0,0.05);
+}
+
+/* 2. KPI卡片：左侧品牌色装饰线 */
+.dashboard-kpi-card { position: relative; overflow: hidden; }
+.dashboard-kpi-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, var(--primary-color), var(--primary-light));
+  border-radius: 3px 0 0 3px; opacity: 0.8;
+}
+.kpi-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 12px;
+  background: linear-gradient(135deg, rgba(199,0,11,0.07), rgba(199,0,11,0.03));
+  color: var(--primary-color); margin-bottom: 12px;
+}
+.kpi-icon .icon { width: 22px; height: 22px; }
+
+/* 3. 导航激活态增强 */
+.navbar-item.active .nav-text, .mobile-nav-item.active .mobile-nav-label { font-weight: 600; }
+.navbar-item.active::after {
+  content: ''; position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);
+  width: 20px; height: 2.5px; background: var(--primary-color); border-radius: 2px;
+}
+.mobile-nav-item.active .mobile-nav-icon { color: var(--primary-color); }
+
+/* 4. 按钮精致化 */
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+  box-shadow: 0 2px 8px rgba(199,0,11,0.25); transition: all 0.2s ease;
+}
+.btn-primary:hover { box-shadow: 0 4px 14px rgba(199,0,11,0.35); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); box-shadow: 0 1px 4px rgba(199,0,11,0.2); }
+.btn-secondary:hover { background: var(--neutral-100); border-color: var(--neutral-300); }
+
+/* 5. 表单输入焦点发光 */
+.form-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(199,0,11,0.1); }
+.textarea-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(199,0,11,0.08); }
+
+/* 6. 产品节点增强 */
+.product-node { border: 1px solid var(--border-color); transition: all 0.2s ease; }
+.product-node:hover { border-color: var(--primary-color); box-shadow: 0 4px 12px rgba(199,0,11,0.1); }
+.product-node.selected {
+  border-color: var(--primary-color);
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(199,0,11,0.02) 100%);
+  box-shadow: 0 2px 8px rgba(199,0,11,0.12);
+}
+
+/* 7. 分类组标题增强 */
+.category-group-title { font-weight: 600; letter-spacing: 0.3px; }
+.category-group-header {
+  border-left: 3px solid var(--primary-color); padding-left: 12px;
+  background: linear-gradient(90deg, rgba(199,0,11,0.03), transparent);
+  border-radius: 0 8px 8px 0;
+}
+
+/* 8. 结果内容排版优化 */
+.result-content h1, .result-content h2, .result-content h3 {
+  position: relative; padding-left: 14px;
+}
+.result-content h1::before, .result-content h2::before, .result-content h3::before {
+  content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px;
+  background: linear-gradient(180deg, var(--primary-color), var(--primary-light)); border-radius: 2px;
+}
+.result-content strong { color: var(--neutral-900); font-weight: 600; }
+.result-content code {
+  background: var(--neutral-100); padding: 2px 6px; border-radius: 4px;
+  font-size: 0.88em; color: var(--error);
+}
+.result-content blockquote {
+  border-left: 3px solid var(--primary-color);
+  background: linear-gradient(90deg, rgba(199,0,11,0.03), transparent);
+  padding: 12px 16px; border-radius: 0 8px 8px 0;
+}
+
+/* 9. 进度条增强 */
+.progress-bar-container { background: var(--neutral-100); border-radius: 999px; overflow: hidden; }
+.progress-bar {
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
+  border-radius: 999px; position: relative; overflow: hidden;
+}
+.progress-bar::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  animation: shimmer 2s infinite;
+}
+@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+/* 10. 竞品分析步骤 */
+.competitor-step { border: 1px solid var(--border-color); transition: all 0.2s ease; }
+.competitor-step.active {
+  border-color: var(--primary-color);
+  background: linear-gradient(135deg, rgba(255,240,240,0.7), rgba(255,245,245,0.4));
+  box-shadow: 0 2px 10px rgba(199,0,11,0.08);
+}
+.competitor-step.done { border-color: #4ade80; background: rgba(74,222,128,0.04); }
+
+/* 11. 成就卡片增强 */
+.achievement-card {
+  border: 1px solid var(--border-color); transition: all 0.25s ease;
+  position: relative; overflow: hidden;
+}
+.achievement-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  opacity: 0; transition: opacity 0.25s;
+}
+.achievement-card.unlocked::before { background: linear-gradient(90deg, #fbbf24, #f59e0b); opacity: 1; }
+.achievement-card.locked::before { background: var(--neutral-300); opacity: 0.5; }
+.achievement-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+.achievement-card.unlocked:hover { box-shadow: 0 8px 20px rgba(251,191,36,0.2); }
+.ach-icon {
+  width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
+  border-radius: 14px; background: var(--neutral-50); margin-bottom: 10px;
+}
+.ach-icon .icon { width: 26px; height: 26px; }
+
+/* 12. 知识库文档项 */
+.kb-doc-item { border: 1px solid var(--border-color); border-radius: 12px; }
+.kb-doc-item:hover { border-color: var(--primary-color); }
+
+/* 13. 设置开关美化 */
+.toggle-switch { width: 48px; height: 26px; }
+.toggle-slider:before { box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+input:checked + .toggle-slider { background: linear-gradient(90deg, var(--primary-color), var(--primary-hover)); }
+input:checked + .toggle-slider:before { transform: translateX(22px); }
+
+/* 14. 分页增强 */
+.pagination-btn {
+  border: 1px solid var(--border-color); min-width: 34px; height: 34px;
+  border-radius: 8px; transition: all 0.15s;
+}
+.pagination-btn:hover:not(.active):not(:disabled) {
+  border-color: var(--primary-color); color: var(--primary-color);
+  background: rgba(199,0,11,0.04);
+}
+.pagination-btn.active {
+  background: var(--primary-color); color: #fff; border-color: var(--primary-color);
+  box-shadow: 0 2px 6px rgba(199,0,11,0.25);
+}
+
+/* 15. Toast通知增强 */
+.toast { border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); backdrop-filter: blur(8px); }
+.toast.success { border-left: 4px solid #4ade80; }
+.toast.error { border-left: 4px solid var(--error); }
+.toast.warning { border-left: 4px solid #f59e0b; }
+.toast.info { border-left: 4px solid #3b82f6; }
+
+/* 16. Modal弹窗统一增强 */
+.auth-modal, .confirm-modal, .kb-editor-modal, .profile-drawer {
+  box-shadow: 0 20px 60px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08);
+}
+.auth-modal-overlay { backdrop-filter: blur(4px); }
+
+/* 17. 空状态图标容器 */
+.empty-state-icon {
+  width: 80px; height: 80px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: linear-gradient(135deg, var(--neutral-100), var(--neutral-50));
+  margin-bottom: 16px;
+}
+.empty-state-icon .icon { width: 36px; height: 36px; color: var(--neutral-400); }
+
+/* 18. 底部导航移动端增强 */
+.mobile-bottom-nav { box-shadow: 0 -1px 3px rgba(0,0,0,0.06), 0 -2px 8px rgba(0,0,0,0.04); }
+.mobile-nav-item.active .mobile-nav-label { color: var(--primary-color); font-weight: 600; }
+
+/* 19. Footer微调 */
+.site-footer { border-top: 1px solid var(--border-color); background: var(--bg-card); }
