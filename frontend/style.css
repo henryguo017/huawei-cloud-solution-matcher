@@ -10006,11 +10006,35 @@ table tbody tr:hover {
 
 /* ==================== 全局移动端修复 ==================== */
 @media (max-width: 767px) {
+    /* ---- 核心修复：消除过度滚动留白 ---- */
+    html, body { overscroll-behavior-y: none; }
+    .app-main { min-height: auto; height: calc(100vh - var(--topbar-height, 56px)); overflow: hidden; }
+    .main-content {
+        min-height: 0 !important;   /* 覆盖 base 的 min-height:100vh */
+        overflow-y: auto !important; /* 内容多时自身可滚，不多时不撑出多余空间 */
+        overflow-x: clip;
+        padding-top: var(--spacing-sm) !important;  /* 原 spacing-xl(32px) → 8px */
+        padding-bottom: 70px;      /* 给底部导航留空间 */
+        -webkit-overflow-scrolling: touch;
+    }
+    .page.active { min-height: 0; }
+
+    /* ---- 卡片间距收紧（原 spacing-lg=24px 太松）---- */
+    .content-card {
+        padding: 14px 16px !important;     /* 原 24px → 14/16px */
+        margin-bottom: 12px !important;     /* 原 24px → 12px */
+        border-radius: 12px !important;
+    }
+    #page-solution > .content-card:first-child {
+        margin-bottom: 10px !important;
+        padding: 14px 16px 10px !important;
+    }
+
     /* ---- 表格横向滚动包裹（防截断）---- */
     .table-wrapper {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
-        margin: 8px 0;
+        margin: 6px 0;
         border-radius: 8px;
     }
     .table-wrapper > table { min-width: 480px; }
@@ -10024,9 +10048,6 @@ table tbody tr:hover {
         -webkit-overflow-scrolling: touch;
         max-width: 100%;
     }
-
-    /* 放开主内容区裁剪，允许内部横向滚动生效 */
-    .main-content { overflow-x: clip; overflow-y: visible; }
 
     /* ---- 输入框统一 16px 防 iOS 缩放 ---- */
     input, textarea, select,
@@ -10077,20 +10098,61 @@ table tbody tr:hover {
     .history-tabs::-webkit-scrollbar { display: none; }
     .history-tab { flex-shrink: 0; white-space: nowrap; }
 
-    /* ---- 模式切换按钮组：换行兜底 ---- */
+    /* ---- 模式切换按钮组：紧凑排列 ---- */
     .mode-btn-group {
         display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
+        flex-wrap: nowrap;
+        gap: 8px;
         justify-content: center;
+        margin: 6px 0 10px !important;  /* 收紧上下间距 */
+    }
+    .mode-btn-group .mode-btn { padding: 8px 14px !important; font-size: 0.82rem !important; }
+
+    /* ---- 精准搜索提示文字 ---- */
+    .mode-btn-group + * { margin-top: 4px !important; }
+    [class*="精准"], .match-form-card > p:last-of-type {
+        font-size: 0.78rem !important;
+        margin: 2px 0 8px !important;
+        color: var(--text-tertiary) !important;
     }
 
-    /* ---- 主操作按钮全宽 ---- */
+    /* ---- 主操作按钮全宽 + 紧凑间距 ---- */
     .result-actions .btn,
     .settings-actions .btn,
     .match-btn,
     #start-match-btn {
         width: 100%;
+        margin-bottom: 8px !important;   /* 按钮之间收紧 */
+        padding: 12px 16px !important;   /* 高度稍缩 */
+    }
+    #start-match-btn { padding: 14px 20px !important; }  /* 主按钮略高保持醒目 */
+
+    /* ---- AI 输入框紧凑化 ---- */
+    .ai-input-box {
+        border-radius: 12px !important;
+        padding: 8px 12px !important;
+    }
+    .ai-input-box textarea {
+        min-height: 60px !important;     /* 缩小最小高度（原 24px 但视觉上撑得高） */
+        max-height: 120px !important;
+        font-size: 15px !important;      /* 接近 16px 防缩放但略小一点 */
+    }
+
+    /* ---- 方案页标题卡片紧凑 ---- */
+    #page-solution > .content-card:first-child h2 {
+        font-size: 1.15rem !important;    /* 原更大 */
+        margin-bottom: 4px !important;
+    }
+    #page-solution > .content-card:first-child p {
+        font-size: 0.82rem !important;
+        margin: 0 !important;
+        line-height: 1.35 !important;
+    }
+
+    /* ---- 客户需求描述 label ---- */
+    #page-solution label, .demand-section label {
+        font-size: 0.85rem !important;
+        margin-bottom: 4px !important;
     }
 
     /* ---- 成就卡片 2 列（原 4 列太挤）---- */
