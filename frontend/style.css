@@ -7626,7 +7626,7 @@ body::after {
 
 /* ---- 输入区 ---- */
 .ai-input-area {
-    padding: 16px 20px 20px;
+    padding: 18px 20px 22px;
     flex-shrink: 0;
     background: #fff;
 }
@@ -7634,16 +7634,14 @@ body::after {
     display: flex;
     align-items: center;
     gap: 0;
-    background: #f5f6f8;
-    border: 1px solid #dde0e6;
+    background: #f0f1f4;
+    border: none;
     border-radius: 12px;
-    padding: 0 12px;
-    transition: border-color 0.2s, background 0.2s;
+    padding: 6px 14px;
 }
 .ai-input-wrapper:focus-within {
-    border-color: #c9cdd4;
     background: #fff;
-    box-shadow: 0 0 0 3px rgba(100,110,140,0.06);
+    box-shadow: 0 0 0 2px #e0e2e8;
 }
 .ai-input-wrapper textarea {
     flex: 1;
@@ -7653,50 +7651,44 @@ body::after {
     outline: none;
     font-size: 0.88rem;
     line-height: 1.5;
-    color: var(--text-primary);
+    color: #1a1d26;
     font-family: inherit;
     max-height: 120px;
-    min-height: 40px;
-    padding: 10px 0;
-    overflow-y: auto;
+    min-height: 36px;
+    padding: 5px 8px;
 }
 .ai-input-wrapper textarea::placeholder {
-    color: #aeb2bf;
+    color: #9ca0ad;
 }
 .ai-send-btn {
-    width: 34px; height: 34px;
-    border-radius: 8px;
-    background: transparent;
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    background: none;
     border: none;
-    color: #c4c8d4;
+    color: #c8ccd6;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: color 0.15s, background 0.15s;
-    padding: 0;
-    margin: 0;
+    transition: color 0.15s;
 }
 .ai-send-btn:not(:disabled) {
     color: #C7000B;
-    background: rgba(199,0,11,0.06);
 }
 .ai-send-btn:not(:disabled):hover {
-    background: rgba(199,0,11,0.12);
     color: #a00009;
 }
 .ai-send-btn:disabled {
-    color: #d0d3dc;
     cursor: default;
 }
-.ai-send-btn svg { width: 17px; height: 17px; }
+.ai-send-btn svg { width: 16px; height: 16px; }
 
 .ai-input-hint {
-    font-size: 0.68rem;
+    font-size: 0.67rem;
     color: #c4c8d4;
     text-align: center;
-    margin-top: 8px;
+    margin-top: 10px;
 }
 
 /* 移动端适配 */
