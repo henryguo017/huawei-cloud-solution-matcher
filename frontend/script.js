@@ -4395,6 +4395,10 @@ function initEventListeners() {
             resultContainer.style.display = 'block';
             resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+            // ★ 匹配完成：隐藏思考流面板（释放占用的空间，尤其移动端）
+            const tsDone = document.getElementById('thinking-stream');
+            if (tsDone) { tsDone.style.display = 'none'; }
+
             State.resultCache.solution = { ...result, demand };
             // 更新收藏按钮状态
             FavoriteManager._updateResultBtn('fav-solution-btn', demand);
@@ -4633,6 +4637,10 @@ function initEventListeners() {
             UI.renderSources(sourcesContainer, result.source_documents);
             resultContainer.style.display = 'block';
             resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // ★ 匹配完成：隐藏思考流面板（释放占用的空间，尤其移动端）
+            const tsDone = document.getElementById('thinking-stream');
+            if (tsDone) { tsDone.style.display = 'none'; }
             
             State.resultCache.competitor = { ...result, competitor, industry };
             // 更新收藏按钮状态

@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260715e">
+    <link rel="stylesheet" href="style.css?v=20260715l">
     <link rel="stylesheet" href="welcome-styles.css?v=20260714ad">
 </head>
 <body>
@@ -1796,7 +1796,7 @@
     </div><!-- /.app-shell -->
 
     <script src="js/chart.umd.min.js?v=20260714j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260715e"></script>
+    <script src="script.js?v=20260715l"></script>
     <script src="js/achievement-ui.js?v=20260714j"></script>
     <script src="welcome-script.js?v=20260714j"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">
@@ -2023,5 +2023,122 @@
   <path d="m6 6 12 12" /></symbol>
   <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
 </svg>
+<!-- ==================== 移动端留白修复 v6（根因：thinking-stream 未隐藏 + flex stretch）==================== -->
+<style>
+/* 仅移动端生效 */
+@media (max-width: 767px) {
+    html { height:100% !important; overflow:hidden !important; overscroll-behavior:none !important; }
+    body { height:100% !important; min-height:0 !important; overflow:hidden !important; margin:0 !important; overscroll-behavior:none !important; }
+    .app-shell { height:100vh !important; max-height:100vh !important; min-height:0 !important; overflow:hidden !important; display:flex !important; flex-direction:column !important; }
+    .app-main {
+        flex:1 1 0% !important;
+        min-height:0 !important;
+        height:0 !important;
+        overflow:hidden !important;
+        display:flex !important;
+        flex-direction:column !important;
+        align-items:stretch !important;
+    }
+    .topbar { flex-shrink:0 !important; }
+
+    /* ★ 核心：阻止 main-content 被 flex 纵向拉伸 ★ */
+    .main-content {
+        align-self: flex-start !important;
+        width:100% !important;
+        min-height:0 !important;
+        height:auto !important;
+        overflow-y:auto !important;
+        overflow-x:clip !important;
+        overscroll-behavior-y:contain !important;
+        padding-bottom:60px !important;
+        box-sizing:border-box !important;
+        -webkit-overflow-scrolling:touch;
+    }
+
+    /* ★★★ 根因修复：thinking-stream 空白占位 493px → 移动端强制折叠 ★★★ */
+    #thinking-stream {
+        display: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    /* Agent 匹配进行中时由 JS 临时移除 display:none；完成后 JS 负责加回 */
+
+    .content-wrapper {
+        width:100% !important;
+        max-width:1200px !important;
+        margin:0 auto !important;
+        padding:0 var(--spacing-md) !important;
+        height:auto !important;
+        min-height:0 !important;
+    }
+
+    .page { min-height:0 !important; }
+    .page.active {
+        min-height:0 !important;
+        height:auto !important;
+        position:relative !important;
+    }
+    .page:not(.active) {
+        position:absolute !important;
+        visibility:hidden !important;
+        pointer-events:none !important;
+        display:block !important;
+    }
+
+    /* 紧凑化 */
+    .content-card{padding:14px 16px!important;margin-bottom:12px!important;}
+    #demand-input { min-height:80px !important; max-height:120px !important; }
+}
+</style>
+<script>
+// 移动端修复 v6：锁容器 + 强制隐藏 thinking-stream（根因：493px 空白占位）
+(function(){
+    function h(e){if(!e)return 0;return Math.round(e.getBoundingClientRect().height);}
+    var el=function(s){return document.querySelector(s);};
+
+    function lockMobileLayout() {
+        if(window.innerWidth>767)return false;
+        var html=document.documentElement;
+        var body=document.body;
+        html.style.cssText='height:'+window.innerHeight+'px!important;overflow:hidden!important;overscroll-behavior:none!important';
+        body.style.cssText='height:'+window.innerHeight+'px!important;margin:0!important;overflow:hidden!important;overscroll-behavior:none!important';
+        var shell=el('.app-shell');
+        if(shell)shell.style.cssText='height:'+window.innerHeight+'px!important;max-height:'+window.innerHeight+'px!important;overflow:hidden!important;display:flex!important;flex-direction:column!important';
+        var am=el('.app-main');
+        if(am)am.style.cssText='flex:1 1 0%!important;height:0!important;min-height:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important';
+
+        // ★ 强制隐藏 thinking-stream（JS bug：匹配完成后未隐藏，残留493px空白）
+        var ts=el('#thinking-stream');
+        if(ts){ts.style.setProperty('display','none','important');}
+
+        return true;
+    }
+
+    // 立即执行 + 监听变化
+    if(document.readyState==='loading'){
+        document.addEventListener('DOMContentLoaded',lockMobileLayout);
+    }else{
+        lockMobileLayout();
+    }
+    window.addEventListener('resize',lockMobileLayout);
+    window.addEventListener('orientationchange',function(){setTimeout(lockMobileLayout,200)});
+
+    // 诊断输出
+    setTimeout(function(){
+        if(window.innerWidth>767)return;
+        lockMobileLayout();
+        var mc=el('.main-content');
+        var ps=el('#page-solution');
+        console.log('=== 移动端诊断 v6 === vp:',window.innerWidth,'x',window.innerHeight);
+        console.log('.main-content: clientH='+(mc?mc.clientHeight:'?')+' scrollH='+(mc?mc.scrollHeight:'?'));
+        console.log('#page-solution:',h(ps),'scrollH:',ps?ps.scrollHeight:'?');
+        console.log('#thinking-stream:',h(el('#thinking-stream')),'display:',el('#thinking-stream')?getComputedStyle(el('#thinking-stream')).display:'?');
+    },800);
+})();
+</script>
 </body>
 </html>
