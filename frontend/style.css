@@ -5511,6 +5511,7 @@ body::after {
     color: #fff;
     position: relative;
     overflow: hidden;
+    min-height: 140px;
 }
 .profile-hero::before {
     content: '';
@@ -5560,18 +5561,17 @@ body::after {
     position: relative; z-index: 1;
 }
 
-/* Avatar */
+/* Avatar — 实心白底+红色首字母，确保在红渐变Hero上清晰可见 */
 .profile-avatar {
     width: 56px; height: 56px;
     min-width: 56px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.2);
-    backdrop-filter: blur(4px);
+    background: #fff;
     display: flex; align-items: center; justify-content: center;
     font-size: 22px; font-weight: 700;
-    color: #fff;
+    color: #C7000B;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18), 0 1px 3px rgba(199,0,11,0.2);
 }
 
 /* Hero text */
@@ -5579,24 +5579,28 @@ body::after {
     display: flex; flex-direction: column; gap: 4px;
 }
 .profile-username {
-    font-size: 1.2rem; font-weight: 700;
-    letter-spacing: 0.3px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    font-size: 1.25rem; font-weight: 800;
+    letter-spacing: 0.5px;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
 .profile-role-badge {
     display: inline-flex; align-items: center;
-    font-size: 0.78rem;
-    opacity: 0.9;
-    background: rgba(255,255,255,0.18);
-    padding: 3px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(255,255,255,0.28);
+    padding: 4px 12px;
     border-radius: 10px;
     width: fit-content;
     backdrop-filter: blur(2px);
+    border: 1px solid rgba(255,255,255,0.15);
 }
 .profile-welcome-sub {
     margin-top: 4px;
-    font-size: 0.75rem;
-    opacity: 0.55;
+    font-size: 0.78rem;
+    opacity: 0.75;
+    font-weight: 400;
+    letter-spacing: 0.3px;
 }
 
 /* ====== Section（统一间距）====== */
