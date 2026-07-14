@@ -7241,6 +7241,7 @@ body::after {
 .topbar-ai-bar {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     flex: 1;
     max-width: 620px;
@@ -7284,11 +7285,6 @@ body::after {
     color: rgba(255,255,255,0.55);
     letter-spacing: 0.3px;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1;
-    flex: 1;
-    text-align: center;
 }
 
 /* 遮罩 */
