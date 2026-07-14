@@ -3597,7 +3597,7 @@ function initEventListeners() {
         const palette = document.getElementById('theme-palette');
 
         let currentSkin = 'blue';
-        try { currentSkin = localStorage.getItem('skin') || 'blue'; } catch(_) {}
+        try { currentSkin = localStorage.getItem('skin') || 'classic-blue'; } catch(_) {}
 
         function applySkin(skin) {
             body.setAttribute('data-skin', skin);

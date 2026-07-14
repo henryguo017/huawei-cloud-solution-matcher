@@ -122,38 +122,47 @@
     --hero-gradient: linear-gradient(135deg, #C7000B 0%, #E02020 50%, #FF6A3D 100%);
 
     /* 皮肤变量（侧栏+顶栏底色，默认深蓝） */
-    --sidebar-bg: #162033;
-    --topbar-bg: #0f1724;
+    --sidebar-bg: #1B4F72;
+    --topbar-bg: #154360;
 }
 
 /* ===== 皮肤系统：data-skin 属性联动（侧栏+顶栏底色+文字纯白） ===== */
 
-[data-skin="blue"] {
-    --sidebar-bg: #162033;
-    --topbar-bg: #0f1724;
+[data-skin="classic-blue"] {
+    --sidebar-bg: #1B4F72;
+    --topbar-bg: #154360;
     --frame-text: #FFFFFF;
     --frame-text-dim: rgba(255,255,255,0.70);
 }
-[data-skin="blue"] .sidebar { background: #162033 !important; }
-[data-skin="blue"] .topbar { background: #0f1724 !important; }
+[data-skin="classic-blue"] .sidebar { background: #1B4F72 !important; }
+[data-skin="classic-blue"] .topbar { background: #154360 !important; }
 
-[data-skin="gold"] {
-    --sidebar-bg: #8a7147;
-    --topbar-bg: #6e593a;
+[data-skin="teal"] {
+    --sidebar-bg: #17A58B;
+    --topbar-bg: #148F77;
     --frame-text: #FFFFFF;
     --frame-text-dim: rgba(255,255,255,0.70);
 }
-[data-skin="gold"] .sidebar { background: #8a7147 !important; }
-[data-skin="gold"] .topbar { background: #6e593a !important; }
+[data-skin="teal"] .sidebar { background: #17A58B !important; }
+[data-skin="teal"] .topbar { background: #148F77 !important; }
 
-[data-skin="green"] {
-    --sidebar-bg: #346b4c;
-    --topbar-bg: #285138;
+[data-skin="summer-yellow"] {
+    --sidebar-bg: #D4AC0D;
+    --topbar-bg: #B7950B;
     --frame-text: #FFFFFF;
-    --frame-text-dim: rgba(255,255,255,0.70);
+    --frame-text-dim: rgba(255,255,255,0.80);
 }
-[data-skin="green"] .sidebar { background: #346b4c !important; }
-[data-skin="green"] .topbar { background: #285138 !important; }
+[data-skin="summer-yellow"] .sidebar { background: #D4AC0D !important; }
+[data-skin="summer-yellow"] .topbar { background: #B7950B !important; }
+
+[data-skin="peach-pink"] {
+    --sidebar-bg: #E74C7A;
+    --topbar-bg: #C23B65;
+    --frame-text: #FFFFFF;
+    --frame-text-dim: rgba(255,255,255,0.75);
+}
+[data-skin="peach-pink"] .sidebar { background: #E74C7A !important; }
+[data-skin="peach-pink"] .topbar { background: #C23B65 !important; }
 
 /* 皮肤模式下侧栏+顶栏全元素强制纯白（兜底，防变量继承断裂） */
 [data-skin] .sidebar-item { color: #fff !important; }
