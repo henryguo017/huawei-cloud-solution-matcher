@@ -7626,24 +7626,25 @@ body::after {
 
 /* ---- 输入区 ---- */
 .ai-input-area {
-    padding: 14px 16px 18px;
-    border-top: 1px solid rgba(0,0,0,0.06);
+    padding: 16px 20px 20px;
     flex-shrink: 0;
     background: #fff;
 }
 .ai-input-wrapper {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
-    background: var(--bg-page);
-    border: 1.5px solid var(--border-color);
-    border-radius: 16px;
-    padding: 8px 12px;
-    transition: border-color 0.2s;
+    gap: 10px;
+    background: #f8f9fc;
+    border: 1px solid #e2e4e9;
+    border-radius: 14px;
+    padding: 10px 14px;
+    transition: all 0.25s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .ai-input-wrapper:focus-within {
-    border-color: #C7000B;
-    box-shadow: 0 0 0 3px rgba(199,0,11,0.08);
+    border-color: #c9cdd8;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 0 0 3px rgba(100,110,140,0.08);
 }
 .ai-input-wrapper textarea {
     flex: 1;
@@ -7651,20 +7652,21 @@ body::after {
     background: transparent;
     resize: none;
     outline: none;
-    font-size: 0.85rem;
-    line-height: 1.5;
+    font-size: 0.88rem;
+    line-height: 1.55;
     color: var(--text-primary);
     font-family: inherit;
     max-height: 120px;
     min-height: 22px;
+    padding: 2px 0;
 }
 .ai-input-wrapper textarea::placeholder {
-    color: var(--text-quaternary);
+    color: #b0b5c3;
 }
 .ai-send-btn {
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    background: var(--primary-color);
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #C7000B, #a00009);
     border: none;
     color: #fff;
     cursor: pointer;
@@ -7672,23 +7674,29 @@ body::after {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 4px rgba(199,0,11,0.3);
 }
 .ai-send-btn:not(:disabled):hover {
-    background: var(--primary-hover);
-    transform: scale(1.06);
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(199,0,11,0.4);
+}
+.ai-send-btn:not(:disabled):active {
+    transform: scale(0.97);
 }
 .ai-send-btn:disabled {
-    background: var(--neutral-300);
+    background: #e0e2e8;
+    box-shadow: none;
     cursor: not-allowed;
 }
-.ai-send-btn svg { width: 16px; height: 16px; }
+.ai-send-btn svg { width: 15px; height: 15px; }
 
 .ai-input-hint {
     font-size: 0.68rem;
-    color: var(--text-quaternary);
+    color: #c0c4cf;
     text-align: center;
-    margin-top: 6px;
+    margin-top: 8px;
+    letter-spacing: 0.02em;
 }
 
 /* 移动端适配 */
