@@ -3599,6 +3599,7 @@ function initEventListeners() {
             // 同步主题选中态
             let skin = 'classic-blue';
             try { skin = localStorage.getItem('skin') || 'classic-blue'; } catch(_) {}
+            if (!['classic-blue','teal','summer-yellow','peach-pink'].includes(skin)) skin = 'classic-blue';
             document.querySelectorAll('.mine-theme-dot').forEach(d => d.classList.toggle('active', d.dataset.skin === skin));
         }
     };
@@ -3671,8 +3672,9 @@ function initEventListeners() {
         const body = document.body;
         const palette = document.getElementById('theme-palette');
 
-        let currentSkin = 'blue';
+        let currentSkin = 'classic-blue';
         try { currentSkin = localStorage.getItem('skin') || 'classic-blue'; } catch(_) {}
+        if (!['classic-blue','teal','summer-yellow','peach-pink'].includes(currentSkin)) currentSkin = 'classic-blue';
 
         function applySkin(skin) {
             body.setAttribute('data-skin', skin);
