@@ -7243,8 +7243,7 @@ body::after {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    flex: 1;
-    max-width: 620px;
+    max-width: 560px;
     padding: 6px 20px;
     height: 34px;
     background: rgba(255,255,255,0.14);
@@ -7573,6 +7572,7 @@ body::after {
 @media (max-width: 600px) {
     .topbar-ai-bar { max-width: 180px; padding: 5px 12px; height: 30px; }
     .topbar-ai-bar .ai-placeholder { font-size: 0.72rem; }
+    .topbar-center { padding: 0 4px; }
     .ai-assistant-panel { width: 100vw; max-width: 100vw; }
     .ai-quick-grid { grid-template-columns: 1fr; }
 }
@@ -9105,7 +9105,13 @@ select:focus {
     gap: 16px;
 }
 .topbar-left, .topbar-right { display: flex; align-items: center; gap: 12px; }
-.topbar-left { flex: 1; min-width: 0; }
+.topbar-left { flex-shrink: 0; }
+.topbar-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+}
 .topbar-menu-btn {
     display: none;
     width: 36px; height: 36px;
