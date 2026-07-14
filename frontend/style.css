@@ -7243,8 +7243,8 @@ body::after {
     align-items: center;
     gap: 8px;
     flex: 1;
-    max-width: 540px;
-    padding: 6px 18px;
+    max-width: 620px;
+    padding: 6px 20px;
     height: 34px;
     background: rgba(255,255,255,0.14);
     border: 1px solid rgba(255,255,255,0.20);
