@@ -56,7 +56,7 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 
 # 向量模型配置 (国内镜像加速)
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-zh-v1.5")
-EMBEDDING_MODEL_LOCAL_PATH = os.getenv("EMBEDDING_MODEL_LOCAL_PATH", "./data/embedding_model")
+EMBEDDING_MODEL_LOCAL_PATH = _resolve_data_path(os.getenv("EMBEDDING_MODEL_LOCAL_PATH", os.path.join(BASE_DIR, "data", "embedding_model")))
 HF_ENDPOINT = os.getenv("HF_ENDPOINT", "https://hf-mirror.com")
 
 # 网络环境配置
@@ -67,11 +67,11 @@ RETRY_INTERVAL = int(os.getenv("RETRY_INTERVAL", "2"))
 DETECTION_TIMEOUT = int(os.getenv("DETECTION_TIMEOUT", "5"))
 
 # ==================== 知识库配置 ====================
-KNOWLEDGE_BASE_DIRECTORY = os.getenv("KNOWLEDGE_BASE_DIRECTORY", "./data/sample_solutions")
-COMPETITOR_DIRECTORY = os.getenv("COMPETITOR_DIRECTORY", "./data/competitors")
+KNOWLEDGE_BASE_DIRECTORY = _resolve_data_path(os.getenv("KNOWLEDGE_BASE_DIRECTORY", os.path.join(BASE_DIR, "data", "sample_solutions")))
+COMPETITOR_DIRECTORY = _resolve_data_path(os.getenv("COMPETITOR_DIRECTORY", os.path.join(BASE_DIR, "data", "competitors")))
 
 # 用户独立知识库根目录（注册时自动创建 data/user_docs/{user_id}/ 子目录）
-USER_DOCS_BASE_DIR = os.getenv("USER_DOCS_BASE_DIR", "./data/user_docs")
+USER_DOCS_BASE_DIR = _resolve_data_path(os.getenv("USER_DOCS_BASE_DIR", os.path.join(BASE_DIR, "data", "user_docs")))
 
 # ==================== 支持的行业列表 ====================
 SUPPORTED_INDUSTRIES = [
