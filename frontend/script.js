@@ -3575,6 +3575,78 @@ function initEventListeners() {
         }
     } catch (_) {}
 
+    // ===== 主题切换器 =====
+    (function initThemeSwitcher() {
+        const body = document.body;
+        const palette = document.getElementById('theme-palette');
+        const previewBar = document.getElementById('theme-preview-bar');
+        const modeToggle = document.getElementById('theme-mode-toggle');
+
+        // 从 localStorage 读取已保存的主题
+        let currentTheme = 'red';
+        let currentMode = 'dark';
+        try { currentTheme = localStorage.getItem('theme-color') || 'red'; } catch(_) {}
+        try { currentMode = localStorage.getItem('theme-mode') || 'dark'; } catch(_) {}
+
+        function applyTheme(theme, mode) {
+            // 应用 data-theme（颜色）
+            if (theme) {
+                body.setAttribute('data-theme', theme);
+                currentTheme = theme;
+                // 更新色盘 active 状态
+                if (palette) {
+                    palette.querySelectorAll('.theme-color').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.theme === theme);
+                    });
+                }
+                // 更新预览条
+                if (previewBar) {
+                    const activeBtn = palette?.querySelector(`.theme-color[data-theme="${theme}"]`);
+                    const colors = activeBtn?.dataset.color || '#C7000B,#E02020,#FF6A3D';
+                    const [c1, c2, c3] = colors.split(',');
+                    previewBar.style.background = `linear-gradient(90deg, ${c1}, ${c2}, ${c3})`;
+                }
+                try { localStorage.setItem('theme-color', theme); } catch(_) {}
+            }
+
+            // 应用 data-mode（明暗）
+            if (mode) {
+                body.setAttribute('data-mode', mode);
+                currentMode = mode;
+                // 更新模式按钮 active 状态
+                if (modeToggle) {
+                    modeToggle.querySelectorAll('.mode-btn').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.mode === mode);
+                    });
+                }
+                try { localStorage.setItem('theme-mode', mode); } catch(_) {}
+            }
+        }
+
+        // 初始化应用
+        applyTheme(currentTheme, currentMode);
+
+        // 色盘点击事件
+        if (palette) {
+            palette.addEventListener('click', (e) => {
+                const btn = e.target.closest('.theme-color');
+                if (!btn || btn.dataset.theme === currentTheme) return;
+                applyTheme(btn.dataset.theme, null);
+            });
+        }
+
+        // 明暗切换事件
+        if (modeToggle) {
+            modeToggle.addEventListener('click', (e) => {
+                const btn = e.target.closest('.mode-btn');
+                if (!btn) return;
+                const newMode = btn.dataset.mode;
+                if (newMode === currentMode) return;
+                applyTheme(null, newMode);
+            });
+        }
+    })();
+
     // 产品详情弹窗关闭
     document.getElementById('product-modal-close')?.addEventListener('click', () => {
         var overlay = document.getElementById('product-modal-overlay');

@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260714af">
+    <link rel="stylesheet" href="style.css?v=20260714ag">
     <link rel="stylesheet" href="welcome-styles.css?v=20260714ad">
 </head>
 <body>
@@ -244,9 +244,32 @@
                     <span class="nav-text">设置</span>
                 </button>
             </nav>
+
+            <!-- ===== 主题切换器（侧栏底部）====== -->
+            <div class="theme-switcher" id="theme-switcher">
+                <!-- Row 1: 标签 + 明暗切换 -->
+                <div class="theme-header">
+                    <span class="theme-label">THEME</span>
+                    <div class="theme-mode-toggle" id="theme-mode-toggle">
+                        <button class="mode-btn" data-mode="light" title="浅色模式">☀</button>
+                        <button class="mode-btn active" data-mode="dark" title="深色模式">🌙</button>
+                    </div>
+                </div>
+                <!-- Row 2: 色盘 -->
+                <div class="theme-palette" id="theme-palette">
+                    <button class="theme-color active" data-theme="red" data-color="#C7000B,#E02020,#FF6A3D" style="background:#C7000B;" title="华为红"></button>
+                    <button class="theme-color" data-theme="blue" data-color="#2563EB,#3B82F6,#60a5fa" style="background:#2563EB;" title="海洋蓝"></button>
+                    <button class="theme-color" data-theme="purple" data-color="#7C3AED,#8B5CF6,#A78BFA" style="background:#7C3AED;" title="星云紫"></button>
+                    <button class="theme-color" data-theme="green" data-color="#059669,#22c55e,#4ade80" style="background:#059669;" title="森林绿"></button>
+                    <button class="theme-color" data-theme="amber" data-color="#D97706,#F59E0B,#fbbf24" style="background:#D97706;" title="琥珀橙"></button>
+                    <button class="theme-color" data-theme="dark" data-color="#334155,#475569,#94a3b8" style="background:linear-gradient(135deg,#0F172A,#1e293b);" title="暗夜黑"></button>
+                </div>
+                <!-- Row 3: 预览条 -->
+                <div class="theme-preview-bar" id="theme-preview-bar"></div>
+            </div>
+
             <div class="sidebar-footer">
                 <div class="sidebar-status">
-                    <span class="status-dot"></span>
                     <span>文档 <b id="nav-doc-count">--</b> · 行业 <b id="nav-industry-count">--</b></span>
                 </div>
             </div>
