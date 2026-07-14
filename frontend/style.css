@@ -7561,7 +7561,7 @@ body::after {
 .ai-chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 0 16px 16px;
+    padding: 16px 16px 16px;
     min-height: 0;
 }
 .ai-chat-messages::-webkit-scrollbar { width: 5px; }
