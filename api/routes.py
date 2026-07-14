@@ -1281,6 +1281,16 @@ async def ai_chat(
         if not question:
             raise HTTPException(status_code=400, detail="问题不能为空")
 
+        # ---- 提取对话历史（用于上下文）----
+        raw_history = request.get("history", [])
+        # 只取最近10轮（20条消息），避免 token 超限
+        recent_history = raw_history[-20:] if len(raw_history) > 20 else raw_history
+        # 格式化为文本："用户：...\n助手：..."
+        history_text = ""
+        for msg in recent_history[:-1]:  # 排除当前这一轮的最后一条（就是 question 本身）
+            role_label = "用户" if msg.get("role") == "user" else "助手"
+            history_text += f"{role_label}：{msg.get('text', '')}\n"
+
         # ---- 路由判断 ----
         # 第一优先级：平台使用类问题
         usage_keywords = [
@@ -1303,7 +1313,7 @@ async def ai_chat(
         is_usage = any(kw in question for kw in usage_keywords)
 
         if is_usage:
-            answer = await _answer_usage_question(question)
+            answer = await _answer_usage_question(question, history_text)
             return {"answer": answer}
 
         # 第二优先级：云计算/IT/技术业务类问题（走 RAG）
@@ -1339,11 +1349,11 @@ async def ai_chat(
         if is_cloud:
             user_id = user.get('id') if user else 0
             kb = get_user_knowledge_base(user_id) if user_id > 0 else get_knowledge_base()
-            answer = await _answer_business_question(question, kb)
+            answer = await _answer_business_question(question, kb, history_text)
             return {"answer": answer}
 
         # 第三优先级：其他所有话题 → 通用 AI 助手
-        answer = await _answer_general_question(question)
+        answer = await _answer_general_question(question, history_text)
         return {"answer": answer}
 
     except HTTPException:
@@ -1356,8 +1366,9 @@ async def ai_chat(
         )
 
 
-async def _answer_usage_question(question: str) -> str:
+async def _answer_usage_question(question: str, history_text: str = "") -> str:
     """回答平台使用类问题（纯LLM，不检索）"""
+    history_block = f"\n【之前的对话】\n{history_text}\n" if history_text.strip() else ""
     system_prompt = """你是「智能方案助手」— 本平台（cloudsol.cn）的使用向导。
 
 【关于本平台 - 身份声明（重要！涉及法律合规）】
@@ -1408,10 +1419,11 @@ async def _answer_usage_question(question: str) -> str:
 - 你是在和一个用户聊天，不是在写文档
 
 用户问题："""
-    return await get_llm_response(system_prompt + "\n" + question)
+    full_prompt = system_prompt + history_block + question
+    return await get_llm_response(full_prompt)
 
 
-async def _answer_business_question(question: str, kb) -> str:
+async def _answer_business_question(question: str, kb, history_text: str = "") -> str:
     """回答华为云业务类问题（对话式RAG：检索文档→自然回答，不是生成方案）"""
     # 1. 检索相关文档
     docs = []
@@ -1473,16 +1485,19 @@ async def _answer_business_question(question: str, kb) -> str:
 
 """
 
+    history_block = f"\n【之前的对话】\n{history_text}\n" if history_text.strip() else ""
+
     if context_text:
-        full_prompt = f"{system_prompt}\n【参考资料（基于知识库检索）】：\n\n{context_text}\n\n【用户提问】：{question}"
+        full_prompt = f"{system_prompt}{history_block}【参考资料（基于知识库检索）】：\n\n{context_text}\n\n【用户提问】：{question}"
     else:
-        full_prompt = f"{system_prompt}\n（注：当前知识库暂无相关资料，请根据您的专业知识尽量准确回答）\n\n【用户提问】：{question}"
+        full_prompt = f"{system_prompt}{history_block}（注：当前知识库暂无相关资料，请根据您的专业知识尽量准确回答）\n\n【用户提问】：{question}"
 
     return await get_llm_response(full_prompt)
 
 
-async def _answer_general_question(question: str) -> str:
+async def _answer_general_question(question: str, history_text: str = "") -> str:
     """回答通用话题（非平台使用、非云计算业务）— 纯 LLM，不检索知识库"""
+    history_block = f"\n【之前的对话】\n{history_text}\n" if history_text.strip() else ""
     system_prompt = """你是「智能方案助手」— 一个友好、博学的 AI 聊天伙伴。
 
 【你的身份】
@@ -1507,4 +1522,5 @@ async def _answer_general_question(question: str) -> str:
 记住：你在和一个真人聊天，轻松自然就好！
 
 用户问题："""
-    return await get_llm_response(system_prompt + "\n" + question)
+    full_prompt = system_prompt + history_block + question
+    return await get_llm_response(full_prompt)

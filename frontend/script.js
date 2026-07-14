@@ -5043,6 +5043,7 @@ document.addEventListener('DOMContentLoaded', init);
 const AIAssistant = {
     isOpen: false,
     isTyping: false,
+    history: [],   // 对话上下文 [{role: 'user'|'ai', text: '...'}]
 
     init() {
         // 打开按钮
@@ -5106,6 +5107,10 @@ const AIAssistant = {
         var overlay = document.getElementById('ai-assistant-overlay');
         if (overlay) overlay.style.display = 'none';
         document.body.style.overflow = '';
+        // 关闭时清空对话历史和消息（新会话）
+        this.history = [];
+        var container = document.getElementById('ai-chat-messages');
+        if (container) container.innerHTML = '';
     },
 
     toggle() {
@@ -5140,6 +5145,9 @@ const AIAssistant = {
         input.value = '';
         input.style.height = 'auto';
         this._updateSendBtn();
+
+        // 记录到历史
+        this.history.push({ role: 'user', text: text });
 
         // 发送请求
         this._askAI(text);
@@ -5186,7 +5194,7 @@ const AIAssistant = {
             var resp = await fetch('/api/ai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: question })
+                body: JSON.stringify({ question: question, history: this.history })
             });
 
             var data = await resp.json();
@@ -5194,6 +5202,8 @@ const AIAssistant = {
             this._removeThinking();
 
             if (data.answer) {
+                // 记录 AI 回复到历史
+                this.history.push({ role: 'ai', text: data.answer });
                 this._addMsg(data.answer, 'ai');
             } else if (data.error) {
                 this._addMsg('抱歉，处理时出现错误：' + data.error, 'ai');
