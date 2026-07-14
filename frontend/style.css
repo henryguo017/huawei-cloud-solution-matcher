@@ -126,11 +126,13 @@
     --topbar-bg: #0f1724;
 }
 
-/* ===== 皮肤系统：data-skin 属性联动（侧栏+顶栏底色） ===== */
+/* ===== 皮肤系统：data-skin 属性联动（侧栏+顶栏底色+文字纯白） ===== */
 
 [data-skin="blue"] {
     --sidebar-bg: #162033;
     --topbar-bg: #0f1724;
+    --frame-text: #FFFFFF;
+    --frame-text-dim: rgba(255,255,255,0.70);
 }
 [data-skin="blue"] .sidebar { background: #162033 !important; }
 [data-skin="blue"] .topbar { background: #0f1724 !important; }
@@ -138,6 +140,8 @@
 [data-skin="gold"] {
     --sidebar-bg: #8a7147;
     --topbar-bg: #6e593a;
+    --frame-text: #FFFFFF;
+    --frame-text-dim: rgba(255,255,255,0.70);
 }
 [data-skin="gold"] .sidebar { background: #8a7147 !important; }
 [data-skin="gold"] .topbar { background: #6e593a !important; }
@@ -145,9 +149,23 @@
 [data-skin="green"] {
     --sidebar-bg: #346b4c;
     --topbar-bg: #285138;
+    --frame-text: #FFFFFF;
+    --frame-text-dim: rgba(255,255,255,0.70);
 }
 [data-skin="green"] .sidebar { background: #346b4c !important; }
 [data-skin="green"] .topbar { background: #285138 !important; }
+
+/* 皮肤模式下侧栏+顶栏全元素强制纯白（兜底，防变量继承断裂） */
+[data-skin] .sidebar-item { color: #fff !important; }
+[data-skin] .sidebar-item .nav-icon { color: rgba(255,255,255,0.85) !important; }
+[data-skin] .sidebar-item.active .nav-icon { color: #fff !important; }
+[data-skin] .sidebar-collapse-btn { color: rgba(255,255,255,0.85) !important; }
+[data-skin] .sidebar-brand .brand-text { color: #fff !important; }
+[data-skin] .sidebar-brand .brand-sub { color: rgba(255,255,255,0.75) !important; -webkit-text-fill-color: rgba(255,255,255,0.75) !important; }
+[data-skin] .theme-label { color: rgba(255,255,255,0.75) !important; }
+[data-skin] .theme-name { color: rgba(255,255,255,0.85) !important; opacity: 1 !important; }
+[data-skin] .sidebar-footer { color: rgba(255,255,255,0.75) !important; }
+[data-skin] .sidebar-status b { color: #fff !important; }
 
 * {
     margin: 0;
