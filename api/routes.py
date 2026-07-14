@@ -1354,10 +1354,11 @@ async def ai_chat(
         raise
     except Exception as e:
         logger.error(f"AI 助手请求失败: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI 助手暂时不可用: {str(e)}"
-        )
+        # 不返回 500（易被误判为系统故障），改为 200 + 友好兜底文案
+        return {
+            "answer": "抱歉，AI 助手暂时开小差了，请稍后再试一次。如果问题持续，可以稍后重试或换个问法。",
+            "error": "ai_unavailable"
+        }
 
 
 async def _answer_usage_question(question: str, history_text: str = "") -> str:
