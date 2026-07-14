@@ -7626,27 +7626,33 @@ body::after {
 
 /* ---- 输入区 v4 全新设计 ---- */
 .ai-input-area {
-    padding: 14px 18px 18px;
+    padding: 16px 20px 20px;
     flex-shrink: 0;
     background: #fff;
 }
 .ai-input-box {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
-    background: #f3f4f6;
-    border-radius: 10px;
-    padding: 8px 10px;
+    gap: 10px;
+    background: #f5f6f8;
+    border-radius: 12px;
+    padding: 10px 14px;
     border: none;
 }
+.ai-input-box:focus-within {
+    background: #fff;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.08), 0 0 0 1px #e2e4ea;
+}
+/* 覆盖全局 textarea:focus 红边规则 */
 .ai-input-box textarea {
     flex: 1;
-    border: none;
+    border: none !important;
     background: transparent;
     resize: none;
-    outline: none;
-    font-size: 0.86rem;
-    line-height: 1.5;
+    outline: none !important;
+    box-shadow: none !important;
+    font-size: 0.87rem;
+    line-height: 1.55;
     color: #222;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     max-height: 110px;
@@ -7654,14 +7660,14 @@ body::after {
     padding: 2px 4px;
 }
 .ai-input-box textarea::placeholder {
-    color: #aaa;
+    color: #a8abb4;
 }
 .ai-send-btn {
-    width: 30px; height: 30px;
-    border-radius: 6px;
+    width: 32px; height: 32px;
+    border-radius: 7px;
     background: transparent;
     border: none;
-    color: #d0d0d0;
+    color: #d4d6dc;
     cursor: default;
     display: flex;
     align-items: center;
