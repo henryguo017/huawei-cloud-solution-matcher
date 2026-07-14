@@ -1271,15 +1271,18 @@ async def ai_chat(
     user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
-    AI 智能助手 - 自由问答
-    平台使用类问题直接回答 / 华为云业务问题走对话式RAG（自然Q&A，不是方案生成）
+    AI 智能助手 - 三路自由问答
+    1. 平台使用类 → 使用向导（纯 LLM）
+    2. 云计算/IT/技术业务类 → 对话式 RAG（专业回答）
+    3. 其他所有话题 → 通用 AI 助手（什么都能聊）
     """
     try:
         question = request.get("question", "").strip()
         if not question:
             raise HTTPException(status_code=400, detail="问题不能为空")
 
-        # ---- 判断是否为平台使用类问题 ----
+        # ---- 路由判断 ----
+        # 第一优先级：平台使用类问题
         usage_keywords = [
             "怎么用", "如何使用", "怎么使用", "如何操作",
             "功能怎么用", "功能使用", "功能介绍",
@@ -1297,19 +1300,51 @@ async def ai_chat(
             "怎么开始", "从哪开始", "第一步",
             "新手指南", "使用教程", "使用帮助",
         ]
-        is_usage_question = any(kw in question for kw in usage_keywords)
+        is_usage = any(kw in question for kw in usage_keywords)
 
-        if is_usage_question:
-            # ===== 平台使用类：直接 LLM 回答（无需检索） =====
+        if is_usage:
             answer = await _answer_usage_question(question)
             return {"answer": answer}
 
-        else:
-            # ===== 华为云业务类：对话式 RAG（检索+自然回答，非方案生成） =====
+        # 第二优先级：云计算/IT/技术业务类问题（走 RAG）
+        cloud_keywords = [
+            "华为云", "阿里云", "腾讯云", "AWS", "Azure", "Google Cloud",
+            "云服务", "云计算", "云服务器", "云数据库", "云存储",
+            "ECS", "OBS", "RDS", "GaussDB", "ModelArts", "CDN",
+            "弹性计算", "对象存储", "关系型数据库", "分布式数据库",
+            "容器", "Kubernetes", "Docker", "微服务",
+            "服务器", "数据库", "负载均衡", "VPC", "VPN",
+            "人工智能", "AI", "机器学习", "深度学习", "大模型",
+            "物联网", "IoT", "边缘计算", "5G",
+            "数字化转型", "智慧城市", "智慧园区", "智慧医疗", "智慧教育",
+            "智慧交通", "智慧农业", "智慧能源", "智慧金融", "智慧文旅",
+            "工业互联网", "智能制造", "DevOps",
+            "公有云", "私有云", "混合云", "多云",
+            "SaaS", "PaaS", "IaaS",
+            "方案匹配", "解决方案", "售前", "架构设计", "技术选型",
+            "竞品", "对比", "哪个好", "推荐", "选型",
+            "带宽", "延迟", "可用性", "容灾", "备份",
+            "安全组", "防火墙", "WAF", "DDoS",
+            "大数据", "数据分析", "数据仓库", "ETL",
+            "虚拟化", "OpenStack", "VMware",
+            "代码托管", "CI/CD", "持续集成", "持续部署",
+            "消息队列", "Redis", "MongoDB", "MySQL", "PostgreSQL",
+            "API 网关", "函数计算", "Serverless",
+            "视频点播", "直播", "RTC",
+            "域名", "DNS", "SSL", "HTTPS", "证书",
+            "监控", "日志", "告警", "Prometheus", "ELK",
+        ]
+        is_cloud = any(kw in question for kw in cloud_keywords)
+
+        if is_cloud:
             user_id = user.get('id') if user else 0
             kb = get_user_knowledge_base(user_id) if user_id > 0 else get_knowledge_base()
             answer = await _answer_business_question(question, kb)
             return {"answer": answer}
+
+        # 第三优先级：其他所有话题 → 通用 AI 助手
+        answer = await _answer_general_question(question)
+        return {"answer": answer}
 
     except HTTPException:
         raise
@@ -1444,3 +1479,32 @@ async def _answer_business_question(question: str, kb) -> str:
         full_prompt = f"{system_prompt}\n（注：当前知识库暂无相关资料，请根据您的专业知识尽量准确回答）\n\n【用户提问】：{question}"
 
     return await get_llm_response(full_prompt)
+
+
+async def _answer_general_question(question: str) -> str:
+    """回答通用话题（非平台使用、非云计算业务）— 纯 LLM，不检索知识库"""
+    system_prompt = """你是「智能方案助手」— 一个友好、博学的 AI 聊天伙伴。
+
+【你的身份】
+- 本工具由郭鸿宇独立开发，他是杭州电子科技大学电气工程及其自动化专业的学生
+- 这是一个独立的云计算方案匹配平台，不属于任何云厂商
+- 你不是任何云厂商的产品或由其开发
+
+当用户问"开发者是谁""谁做的""你是什么"等身份问题时，请如实回答以上信息。
+
+【回答原则】
+1. 用户问什么就答什么，像微信/钉钉聊天一样自然亲切
+2. 用"你"称呼用户，语气轻松友好但不轻浮
+3. 可以聊任何话题：学校/专业、生活常识、历史地理、科技新闻、娱乐、情感建议等
+4. 回答简洁实用，一般 200-500 字
+5. 不确定就诚实说"这个我不太确定"
+6. 如果用户问的问题恰好和云计算/IT 相关，你可以用你的专业知识回答，但不要刻意往云上靠
+
+【格式要求 - 必须遵守！】
+- 禁止使用 Markdown 语法：不要写 # ## ** | ``` [ ]()
+- 用纯文本 + 换行组织内容，列表用 "1." "2." 开头
+
+记住：你在和一个真人聊天，轻松自然就好！
+
+用户问题："""
+    return await get_llm_response(system_prompt + "\n" + question)
