@@ -122,23 +122,23 @@
     --hero-gradient: linear-gradient(135deg, #C7000B 0%, #E02020 50%, #FF6A3D 100%);
 
     /* 皮肤变量（侧栏+顶栏底色，默认深墨） */
-    --sidebar-bg: #1a1f2e;
-    --topbar-bg: #151b28;
+    --sidebar-bg: #171820;
+    --topbar-bg: #11131a;
 }
 
 /* ===== 皮肤系统：data-skin 属性联动（侧栏+顶栏底色） ===== */
 
 [data-skin="default"] {
-    --sidebar-bg: #1a1f2e;
-    --topbar-bg: #151b28;
+    --sidebar-bg: #171820;
+    --topbar-bg: #11131a;
 }
 [data-skin="gray"] {
-    --sidebar-bg: #2c2f38;
-    --topbar-bg: #23262e;
+    --sidebar-bg: #3d414d;
+    --topbar-bg: #2e323c;
 }
 [data-skin="ocean"] {
-    --sidebar-bg: #1a2d4a;
-    --topbar-bg: #142240;
+    --sidebar-bg: #1a3a5c;
+    --topbar-bg: #132b45;
 }
 
 * {
@@ -9103,26 +9103,41 @@ select:focus {
 }
 .theme-palette {
     display: flex;
-    gap: 10px;
+    gap: 14px;
 }
+.theme-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+.theme-name {
+    font-size: 10px;
+    color: var(--frame-text-dim);
+    opacity: 0.55;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+}
+.theme-option:hover .theme-name { opacity: 1; }
 .theme-color {
     flex: 1;
     aspect-ratio: 1;
-    max-width: 36px;
-    min-width: 28px;
+    max-width: 42px;
+    min-width: 36px;
     border-radius: 50%;
-    border: 2px solid transparent;
+    border: 2px solid rgba(255,255,255,0.15);
     cursor: pointer;
     transition: all 0.25s cubic-bezier(0.22,1,0.36,1);
     outline: none;
 }
 .theme-color:hover {
     transform: scale(1.15);
-    box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+    border-color: rgba(255,255,255,0.35);
 }
 .theme-color.active {
-    border-color: rgba(255,255,255,0.88);
-    box-shadow: 0 0 0 1px currentColor, 0 3px 12px rgba(0,0,0,0.4);
+    border-color: rgba(255,255,255,0.9);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.3), 0 4px 16px rgba(0,0,0,0.5);
     transform: scale(1.08);
 }
 
