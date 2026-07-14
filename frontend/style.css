@@ -136,18 +136,18 @@
 [data-skin="blue"] .topbar { background: #0f1724 !important; }
 
 [data-skin="gold"] {
-    --sidebar-bg: #5c4b32;
-    --topbar-bg: #483a26;
+    --sidebar-bg: #8a7147;
+    --topbar-bg: #6e593a;
 }
-[data-skin="gold"] .sidebar { background: #5c4b32 !important; }
-[data-skin="gold"] .topbar { background: #483a26 !important; }
+[data-skin="gold"] .sidebar { background: #8a7147 !important; }
+[data-skin="gold"] .topbar { background: #6e593a !important; }
 
 [data-skin="green"] {
-    --sidebar-bg: #2d4a3a;
-    --topbar-bg: #224035;
+    --sidebar-bg: #346b4c;
+    --topbar-bg: #285138;
 }
-[data-skin="green"] .sidebar { background: #2d4a3a !important; }
-[data-skin="green"] .topbar { background: #224035 !important; }
+[data-skin="green"] .sidebar { background: #346b4c !important; }
+[data-skin="green"] .topbar { background: #285138 !important; }
 
 * {
     margin: 0;
