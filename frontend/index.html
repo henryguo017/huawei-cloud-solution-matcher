@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260714ad">
+    <link rel="stylesheet" href="style.css?v=20260714ae">
     <link rel="stylesheet" href="welcome-styles.css?v=20260714ad">
 </head>
 <body>
@@ -1423,60 +1423,62 @@
         </div>
     </div>
 
-    <!-- 个人中心面板 -->
+    <!-- 个人中心面板 v2 Premium -->
     <div id="profile-panel" class="profile-panel" style="display: none;">
         <div class="profile-backdrop" id="profile-backdrop"></div>
         <div class="profile-drawer">
-            <!-- Header -->
-            <div class="profile-header">
-                <h3><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg> 个人中心</h3>
-                <button class="btn-close" id="close-profile"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
-            </div>
-
-            <!-- User Avatar & Name Section -->
-            <div class="profile-user-card">
-                <div class="profile-avatar" id="profile-avatar">G</div>
-                <div class="profile-user-info">
-                    <div class="profile-username" id="profile-username"></div>
-                    <div class="profile-role" id="profile-role">普通用户</div>
+            <!-- ===== Hero Header：红渐变（与产品弹窗/Demo/仪表盘统一）====== -->
+            <div class="profile-hero">
+                <!-- 关闭按钮：白底实心圆浮于右上角外侧 -->
+                <button class="profile-close-btn" id="close-profile">✕</button>
+                <div class="profile-hero-body">
+                    <div class="profile-avatar" id="profile-avatar">G</div>
+                    <div class="profile-hero-text">
+                        <div class="profile-username" id="profile-username"></div>
+                        <div class="profile-role-badge" id="profile-role">普通用户</div>
+                        <div class="profile-welcome-sub">欢迎回来，今天也要加油哦 ✦</div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Stats Overview -->
+            <!-- ===== 使用概览：分色统计卡 ===== -->
             <div class="profile-section">
-                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg> 使用概览</h4>
                 <div class="profile-stats-grid">
-                    <div class="profile-stat-item">
+                    <div class="profile-stat-card stat-card-red">
                         <div class="profile-stat-value" id="stat-match">0</div>
                         <div class="profile-stat-label">智能匹配</div>
                     </div>
-                    <div class="profile-stat-item">
+                    <div class="profile-stat-card stat-card-amber">
                         <div class="profile-stat-value" id="stat-analyze">0</div>
                         <div class="profile-stat-label">竞品分析</div>
                     </div>
-                    <div class="profile-stat-item">
+                    <div class="profile-stat-card stat-card-green">
                         <div class="profile-stat-value" id="stat-favorites">0</div>
                         <div class="profile-stat-label">收藏方案</div>
                     </div>
-                    <div class="profile-stat-item">
+                    <div class="profile-stat-card stat-card-blue">
                         <div class="profile-stat-value" id="stat-history">0</div>
                         <div class="profile-stat-label">历史记录</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Favorites Section -->
+            <!-- ===== 收藏方案 ===== -->
             <div class="profile-section" id="profile-favorites-section">
-                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏方案（<span id="fav-count">0</span>）</h4>
-                <div id="fav-list-empty" class="profile-fav-empty">暂无收藏方案，去匹配结果里收藏吧～</div>
-                <div id="fav-list" class="profile-fav-list" style="display: none;">
-                    <!-- JS populated -->
+                <div class="profile-fav-box">
+                    <div class="profile-fav-header">
+                        <span class="profile-fav-title"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;"><use href="#i-star"></use></svg> 收藏方案（<span id="fav-count">0</span>）</span>
+                    </div>
+                    <div id="fav-list-empty" class="profile-fav-empty">暂无收藏方案，去匹配结果里收藏吧～</div>
+                    <div id="fav-list" class="profile-fav-list" style="display: none;">
+                        <!-- JS populated -->
+                    </div>
                 </div>
             </div>
 
-            <!-- Account Info -->
+            <!-- ===== 基本信息概览（卡片化行）====== -->
             <div class="profile-section">
-                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg> 基本信息</h4>
+                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px;"><use href="#i-mail"></use></svg> 基本信息概览</h4>
                 <div class="profile-info-list">
                     <div class="profile-info-row">
                         <span class="profile-info-label">用户名</span>
@@ -1512,13 +1514,13 @@
                 </div>
             </div>
 
-            <!-- Security Settings -->
+            <!-- ===== 安全设置（卡片化行）====== -->
             <div class="profile-section">
-                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg> 安全设置</h4>
+                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px;"><use href="#i-lock"></use></svg> 安全设置</h4>
                 <div id="password-section-view">
                     <div class="profile-info-row">
                         <span class="profile-info-label">登录密码</span>
-                        <span class="profile-info-value" style="color: var(--text-secondary);">********</span>
+                        <span class="profile-info-value" style="color: var(--text-secondary);">••••••••</span>
                         <button class="profile-edit-btn" id="btn-change-password">修改</button>
                     </div>
                 </div>
@@ -1545,10 +1547,10 @@
                 </div>
             </div>
 
-            <!-- Logout -->
-            <div class="profile-section">
-                <button class="btn btn-danger profile-logout-btn" id="btn-profile-logout">
-                    <svg class="icon" aria-hidden="true"><use href="#i-log-out"></use></svg> 退出登录
+            <!-- ===== 退出登录（品牌红渐变）====== -->
+            <div class="profile-section profile-logout-section">
+                <button class="profile-logout-btn" id="btn-profile-logout">
+                    <svg class="icon" aria-hidden="true" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;"><use href="#i-log-out"></use></svg> 退出登录
                 </button>
             </div>
         </div>
