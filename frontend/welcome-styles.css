@@ -10,7 +10,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #2a1f4a 100%);
+    /* 跟随皮肤：蓝(#0f1724/#162033) / 金(#6e593a/#8a7147) / 绿(#285138/#346b4c) 自动联动 */
+    background: linear-gradient(135deg, var(--topbar-bg, #0f1724) 0%, var(--sidebar-bg, #162033) 60%, var(--topbar-bg, #0f1724) 100%);
     animation: fadeIn 0.5s ease;
 }
 
@@ -26,7 +27,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: radial-gradient(circle at 50% 50%, rgba(100, 150, 255, 0.1) 0%, transparent 70%);
+    background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.07) 0%, transparent 70%);
     pointer-events: none;
 }
 
@@ -61,10 +62,11 @@
 .welcome-badge {
     display: inline-block;
     padding: 8px 20px;
-    background: rgba(199, 0, 11, 0.15);
-    border: 1px solid rgba(199, 0, 11, 0.3);
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     border-radius: 20px;
     color: #FFFFFF;
+    backdrop-filter: blur(4px);
     font-size: 14px;
     font-weight: 500;
     margin-bottom: 24px;
@@ -84,17 +86,16 @@
 }
 
 .title-gradient {
-    background: linear-gradient(135deg, #FFFFFF 0%, #4A90E2 50%, #7B68EE 100%);
+    background: linear-gradient(135deg, #FFFFFF 0%, rgba(255, 255, 255, 0.72) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
 .title-highlight {
-    background: linear-gradient(135deg, #FF0000 0%, #FF3333 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #FFFFFF;
+    -webkit-text-fill-color: #FFFFFF;
+    text-shadow: 0 0 24px rgba(255, 255, 255, 0.35);
 }
 
 .welcome-subtitle {
@@ -105,8 +106,8 @@
 }
 
 .highlight-time {
-    color: #4A90E2;
-    font-weight: 600;
+    color: #FFFFFF;
+    font-weight: 700;
 }
 
 .welcome-stats {
@@ -128,14 +129,14 @@
 
 .stat-box:hover {
     transform: translateY(-5px);
-    border-color: rgba(100, 150, 255, 0.3);
-    box-shadow: 0 10px 30px rgba(100, 150, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 }
 
 .stat-box .stat-number {
     font-size: 36px;
     font-weight: 800;
-    color: #4A90E2;
+    color: #FFFFFF;
     margin-bottom: 8px;
 }
 
@@ -218,7 +219,7 @@
     width: 16px;
     height: 16px;
     cursor: pointer;
-    accent-color: #4A90E2;
+    accent-color: rgba(255, 255, 255, 0.9);
 }
 
 .skip-checkbox-text {
@@ -236,7 +237,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 14px;
-    background: linear-gradient(135deg, var(--primary-color) 0%, #A30009 100%);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover, var(--primary-color)) 100%);
     border: none;
     border-radius: 6px;
     color: white;
@@ -244,13 +245,13 @@
     font-weight: 500;
     font-family: var(--font-family);
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(199, 0, 11, 0.25);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     transition: all 0.3s ease;
 }
 
 .quick-demo-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(199, 0, 11, 0.35);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .demo-icon {

@@ -854,6 +854,14 @@ const ErrorHandler = {
                 );
             }
         });
+
+        // 全局未处理 Promise 拒绝捕获 —— 避免静默失败（如网络抖动时个别 fetch 未 catch）
+        window.addEventListener('unhandledrejection', (event) => {
+            const reason = event.reason;
+            const msg = (reason && reason.message) ? reason.message : String(reason);
+            console.error('=== 未处理的 Promise 拒绝 ===', reason);
+            ErrorHandler.showInline('操作未能完成：' + msg + '（如持续出现请按 Ctrl+Shift+R 强制刷新）');
+        });
     }
 };
 

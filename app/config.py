@@ -39,8 +39,15 @@ BAIDU_TEMPERATURE = float(os.getenv("BAIDU_TEMPERATURE", "0.1"))
 
 # ==================== 向量数据库配置 ====================
 # 支持的向量数据库：chroma (华为云GaussDB后续添加)
+# 项目根目录（绝对路径，防止工作目录切换导致加载错误路径的向量库）
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def _resolve_data_path(p):
+    """相对路径统一基于项目根目录解析，避免工作目录(cwd)切换导致加载错误路径的库"""
+    return p if os.path.isabs(p) else os.path.join(BASE_DIR, p.lstrip("./\\"))
+
 VECTOR_DB_PROVIDER = os.getenv("VECTOR_DB_PROVIDER", "chroma")
-VECTOR_DB_PERSIST_DIRECTORY = os.getenv("VECTOR_DB_PERSIST_DIRECTORY", "./data/vector_db")
+VECTOR_DB_PERSIST_DIRECTORY = _resolve_data_path(os.getenv("VECTOR_DB_PERSIST_DIRECTORY", os.path.join(BASE_DIR, "data", "vector_db")))
 
 # 向量检索配置
 VECTOR_SEARCH_TOP_K = int(os.getenv("VECTOR_SEARCH_TOP_K", "5"))
@@ -122,7 +129,11 @@ BCRYPT_ROUNDS = int(os.getenv("BCRYPT_ROUNDS", "12"))
 MAX_FAVORITES_PER_USER = int(os.getenv("MAX_FAVORITES_PER_USER", "100"))
 
 # ==================== 数据库配置 ====================
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/users.db")
+# DATABASE_URL 中的相对 sqlite 路径也基于项目根解析（防止 cwd 切换错误）
+_db_url = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'data', 'users.db')}")
+if _db_url.startswith("sqlite:///") and not os.path.isabs(_db_url[len("sqlite:///"):]):
+    _db_url = "sqlite:///" + os.path.join(BASE_DIR, _db_url[len("sqlite:///"):].lstrip("./\\"))
+DATABASE_URL = _db_url
 
 # ==================== 邮件配置（密码重置）====================
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.163.com")

@@ -231,7 +231,7 @@ const WelcomeManager = {
                 if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
                 
                 ctx.beginPath();
-                ctx.fillStyle = 'rgba(100, 150, 255, 0.4)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
                 ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
                 ctx.fill();
             });
