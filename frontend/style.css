@@ -2976,37 +2976,6 @@ body::after {
         max-height: 200px;
     }
 
-    /* ========== Demo 弹窗移动端 ========== */
-    .demo-modal-content {
-        width: 92%;
-        padding: var(--spacing-md);
-    }
-
-    .demo-case {
-        gap: var(--spacing-sm);
-        padding: var(--spacing-sm);
-    }
-
-    .case-icon {
-        font-size: 2rem;
-    }
-
-    .case-info h4 {
-        font-size: var(--font-size-base);
-    }
-
-    .case-info p {
-        font-size: var(--font-size-xs);
-    }
-
-    .demo-notice {
-        left: var(--spacing-md);
-        right: var(--spacing-md);
-        top: calc(var(--navbar-height) + var(--spacing-sm));
-        font-size: var(--font-size-xs);
-        padding: var(--spacing-sm) var(--spacing-md);
-    }
-
     /* ========== 全局错误弹窗移动端 ========== */
     .global-error-content {
         width: 90%;

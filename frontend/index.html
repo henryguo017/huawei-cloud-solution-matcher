@@ -6,8 +6,8 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260714ac">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260714j">
+    <link rel="stylesheet" href="style.css?v=20260714ad">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260714ad">
 </head>
 <body>
     <!-- 密码重置链接检测（内联，不受外部JS缓存影响） -->
@@ -144,36 +144,45 @@
     <!-- Demo 案例选择器 -->
     <div id="demo-selector-modal" class="demo-modal" style="display: none;">
         <div class="demo-modal-overlay"></div>
-        <div class="demo-modal-content content-card">
-            <div class="demo-modal-header">
-                <h3><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg> 选择 Demo 案例</h3>
-                <button class="demo-close-btn" id="close-demo-modal"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+        <div class="demo-modal-content">
+            <!-- Hero Header -->
+            <div class="demo-modal-hero">
+                <div class="hero-icon"><svg class="icon" aria-hidden="true" style="width:22px;height:22px"><use href="#i-target"></use></svg></div>
+                <div>
+                    <h3>选择 Demo 案例</h3>
+                    <p>一键体验 AI 方案匹配全流程</p>
+                </div>
+                <button class="demo-close-btn" id="close-demo-modal">✕</button>
             </div>
-            <div class="demo-cases">
-                <div class="demo-case" data-case="manufacturing">
-                    <div class="case-icon"><svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg></div>
-                    <div class="case-info">
-                        <h4>制造业预测性维护</h4>
-                        <p>50台生产设备的故障预测与停机优化</p>
+            <!-- 场景卡片列表 -->
+            <div class="demo-modal-body">
+                <div class="demo-cases">
+                    <div class="demo-case" data-case="manufacturing">
+                        <div class="case-icon"><svg class="icon" aria-hidden="true" style="width:26px;height:26px"><use href="#i-factory"></use></svg></div>
+                        <div class="case-info">
+                            <h4>制造业预测性维护</h4>
+                            <p>50台生产设备的故障预测与停机优化</p>
+                        </div>
+                    </div>
+                    <div class="demo-case" data-case="agriculture">
+                        <div class="case-icon"><svg class="icon" aria-hidden="true" style="width:26px;height:26px"><use href="#i-wheat"></use></svg></div>
+                        <div class="case-info">
+                            <h4>智慧农业植物方舱</h4>
+                            <p>环境监测、自动化管理与产量提升</p>
+                        </div>
+                    </div>
+                    <div class="demo-case" data-case="park">
+                        <div class="case-icon"><svg class="icon" aria-hidden="true" style="width:26px;height:26px"><use href="#i-building-2"></use></svg></div>
+                        <div class="case-info">
+                            <h4>智慧园区管理</h4>
+                            <p>安防、能源、停车综合管理</p>
+                        </div>
                     </div>
                 </div>
-                <div class="demo-case" data-case="agriculture">
-                    <div class="case-icon"><svg class="icon" aria-hidden="true"><use href="#i-wheat"></use></svg></div>
-                    <div class="case-info">
-                        <h4>智慧农业植物方舱</h4>
-                        <p>环境监测、自动化管理与产量提升</p>
-                    </div>
+                <!-- 底部引导 -->
+                <div class="demo-modal-footer">
+                    <p class="demo-tip">💡 选择案例后将自动填充需求并演示匹配过程</p>
                 </div>
-                <div class="demo-case" data-case="park">
-                    <div class="case-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></div>
-                    <div class="case-info">
-                        <h4>智慧园区管理</h4>
-                        <p>安防、能源、停车综合管理</p>
-                    </div>
-                </div>
-            </div>
-            <div class="demo-modal-footer">
-                <p class="demo-tip"><svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg> 选择案例后将自动填充需求并演示匹配过程</p>
             </div>
         </div>
     </div>

@@ -262,6 +262,11 @@
 }
 
 /* ==================== Demo 案例选择器 ==================== */
+/* ============================================================
+   Demo 选择弹窗 v2 Premium — "Try Before You Trust"
+   设计语言：红渐变 Hero + 分色场景卡片 + 微交互
+   ============================================================ */
+
 .demo-modal {
     position: fixed;
     top: 0;
@@ -276,104 +281,246 @@
 
 .demo-modal-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(5px);
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(8px);
 }
 
 .demo-modal-content {
     position: relative;
     z-index: 1;
-    width: 90%;
-    max-width: 600px;
-    padding: 32px;
-    animation: modalSlideIn 0.3s ease;
+    width: 92%;
+    max-width: 560px;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow:
+        0 25px 60px rgba(0,0,0,0.25),
+        0 10px 30px rgba(199,0,11,0.08);
+    animation: demoModalIn 0.35s cubic-bezier(0.22,1,0.36,1);
 }
 
-@keyframes modalSlideIn {
-    from { opacity: 0; transform: scale(0.9); }
-    to { opacity: 1; transform: scale(1); }
+@keyframes demoModalIn {
+    from { opacity: 0; transform: scale(0.92) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-.demo-modal-header {
+/* ====== Hero Header：红渐变（与产品弹窗/仪表盘统一）====== */
+.demo-modal-hero {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    gap: 14px;
+    padding: 28px 28px 24px;
+    background: linear-gradient(135deg, #C7000B 0%, #E02020 50%, #FF6A3D 100%);
+    color: #fff;
+    position: relative;
+    overflow: hidden;
 }
-
-.demo-modal-header h3 {
+.demo-modal-hero::before {
+    content: '';
+    position: absolute;
+    top: -40%; right: -15%;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.07);
+    pointer-events: none;
+}
+.demo-modal-hero::after {
+    content: '';
+    position: absolute;
+    bottom: -30%; left: 20%;
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+    pointer-events: none;
+}
+.demo-modal-hero .hero-icon {
+    width: 44px; height: 44px;
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.18);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 22px;
-    color: #333333;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+.demo-modal-hero h3 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    margin: 0;
+    line-height: 1.2;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.demo-modal-hero p {
+    font-size: 0.82rem;
+    opacity: 0.85;
+    margin: 4px 0 0 0;
+    font-weight: 400;
 }
 
+/* 关闭按钮：浮于 Hero 右上角 */
 .demo-close-btn {
-    width: 32px;
-    height: 32px;
-    background: rgba(0, 0, 0, 0.05);
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 32px; height: 32px;
+    background: rgba(255,255,255,0.95);
     border: none;
-    border-radius: 8px;
-    color: #666666;
-    font-size: 18px;
+    border-radius: 50%;
+    color: #555;
+    font-size: 16px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
-
 .demo-close-btn:hover {
-    background: rgba(0, 0, 0, 0.1);
-    color: #333333;
+    background: #fff;
+    color: #C7000B;
+    transform: rotate(90deg) scale(1.08);
+    box-shadow: 0 4px 14px rgba(199,0,11,0.25);
 }
 
+/* ====== Body：暖白渐变背景 ====== */
+.demo-modal-body {
+    padding: 24px 28px 20px;
+    background: linear-gradient(180deg, #FFFCF8 0%, #FFFFFF 100%);
+}
+
+/* ====== 场景卡片（分色系统）====== */
 .demo-cases {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: 14px;
+    margin-bottom: 20px;
 }
 
 .demo-case {
     display: flex;
     align-items: center;
-    gap: 20px;
-    padding: 20px;
-    background: #FAFAFA;
-    border: 1px solid #E5E5E5;
-    border-radius: 12px;
+    gap: 16px;
+    padding: 18px 18px 18px 20px;
+    background: linear-gradient(135deg, #FFFDFB, #FFFFFF);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-left: 4px solid transparent;
+    border-radius: 14px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.22,1,0.36,1);
+    position: relative;
+    overflow: hidden;
 }
-
+/* 左侧装饰光晕 */
+.demo-case::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 80px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: 0 8px 8px 0;
+}
 .demo-case:hover {
-    background: #F0F0F0;
-    border-color: #CCCCCC;
-    transform: translateX(5px);
+    transform: translateY(-2px) translateX(3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.04);
+}
+.demo-case:hover::before {
+    opacity: 0.08;
 }
 
+/* 制造业 — 工业橙 */
+.demo-case[data-case="manufacturing"] {
+    border-left-color: #F59E0B;
+}
+.demo-case[data-case="manufacturing"]:hover {
+    border-color: rgba(245,158,11,0.30);
+    box-shadow: 0 8px 24px rgba(245,158,11,0.12), 0 2px 8px rgba(0,0,0,0.04);
+}
+.demo-case[data-case="manufacturing"]::before { background: linear-gradient(90deg, #F59E0B, transparent); }
+.demo-case[data-case="manufacturing"] .case-icon {
+    color: #F59E0B;
+    background: rgba(245,158,11,0.10);
+}
+.demo-case[data-case="manufacturing"] .case-icon svg { filter: drop-shadow(0 2px 6px rgba(245,158,11,0.25)); }
+
+/* 农业 — 森林绿 */
+.demo-case[data-case="agriculture"] {
+    border-left-color: #22A85A;
+}
+.demo-case[data-case="agriculture"]:hover {
+    border-color: rgba(34,168,90,0.30);
+    box-shadow: 0 8px 24px rgba(34,168,90,0.12), 0 2px 8px rgba(0,0,0,0.04);
+}
+.demo-case[data-case="agriculture"]::before { background: linear-gradient(90deg, #22A85A, transparent); }
+.demo-case[data-case="agriculture"] .case-icon {
+    color: #22A85A;
+    background: rgba(34,168,90,0.10);
+}
+.demo-case[data-case="agriculture"] .case-icon svg { filter: drop-shadow(0 2px 6px rgba(34,168,90,0.25)); }
+
+/* 园区 — 科技蓝 */
+.demo-case[data-case="park"] {
+    border-left-color: #3B82F6;
+}
+.demo-case[data-case="park"]:hover {
+    border-color: rgba(59,130,246,0.30);
+    box-shadow: 0 8px 24px rgba(59,130,246,0.12), 0 2px 8px rgba(0,0,0,0.04);
+}
+.demo-case[data-case="park"]::before { background: linear-gradient(90deg, #3B82F6, transparent); }
+.demo-case[data-case="park"] .case-icon {
+    color: #3B82F6;
+    background: rgba(59,130,246,0.10);
+}
+.demo-case[data-case="park"] .case-icon svg { filter: drop-shadow(0 2px 6px rgba(59,130,246,0.25)); }
+
+/* 图标容器 */
 .case-icon {
-    font-size: 48px;
+    width: 48px; height: 48px;
+    min-width: 48px;
+    border-radius: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    transition: all 0.3s cubic-bezier(0.22,1,0.36,1);
+}
+.demo-case:hover .case-icon {
+    transform: scale(1.06) rotate(-3deg);
 }
 
+/* 文案区域 */
 .case-info h4 {
-    font-size: 18px;
-    color: #333333;
-    margin-bottom: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 4px;
+    letter-spacing: 0.2px;
 }
-
 .case-info p {
-    font-size: 14px;
-    color: #666666;
+    font-size: 0.82rem;
+    color: #888;
+    line-height: 1.45;
 }
 
+/* ====== Footer：引导提示 ====== */
 .demo-modal-footer {
+    padding: 0 28px 22px;
     text-align: center;
 }
-
 .demo-tip {
-    font-size: 13px;
-    color: #666666;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #aaa;
+    background: rgba(0,0,0,0.03);
+    padding: 7px 16px;
+    border-radius: 20px;
 }
 
 /* ==================== 演示提示 ==================== */
@@ -531,29 +678,30 @@
     }
     
     .demo-modal-content {
-        padding: 24px 16px;
-        width: 95%;
+        width: 94%;
     }
-    
+
+    .demo-modal-hero {
+        padding: 22px 18px 18px;
+    }
+    .demo-modal-hero h3 { font-size: 1.1rem; }
+    .demo-modal-hero p { font-size: 0.75rem; }
+    .demo-modal-hero .hero-icon { width: 38px; height: 38px; font-size: 19px; }
+
+    .demo-modal-body {
+        padding: 18px 16px 16px;
+    }
+
     .demo-case {
-        padding: 14px;
+        padding: 14px 14px 14px 16px;
         gap: 12px;
+        border-radius: 12px;
     }
-    
+
     .case-icon {
-        font-size: 32px;
-    }
-    
-    .case-info h4 {
-        font-size: 15px;
-    }
-    
-    .case-info p {
-        font-size: 12px;
-    }
-    
-    .demo-modal-header h3 {
-        font-size: 18px;
+        width: 40px; height: 40px; min-width: 40px;
+        font-size: 20px;
+        border-radius: 10px;
     }
     
     .demo-notice {
