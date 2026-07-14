@@ -10006,18 +10006,47 @@ table tbody tr:hover {
 
 /* ==================== 全局移动端修复 ==================== */
 @media (max-width: 767px) {
-    /* ---- 核心修复：消除过度滚动留白 ---- */
-    html, body { overscroll-behavior-y: none; }
-    .app-main { min-height: auto; height: calc(100vh - var(--topbar-height, 56px)); overflow: hidden; }
+    /* ---- 核心修复：App Shell 模式，唯一滚动容器 = .main-content ---- */
+    html {
+        height: 100% !important;
+        overflow: hidden !important;
+        position: relative;
+    }
+    body {
+        min-height: 0 !important;
+        height: 100% !important;
+        overflow: hidden !important;
+    }
+    .app-shell {
+        height: 100vh !important;
+        max-height: 100vh !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column;
+    }
+    .sidebar { display: none !important; flex-shrink: 0; }
+    .app-main {
+        min-height: 0 !important;
+        height: 0 !important;
+        flex: 1 1 0% !important;     /* 填满剩余空间，不超 */
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column;
+    }
+    .topbar { flex-shrink: 0; }
     .main-content {
-        min-height: 0 !important;   /* 覆盖 base 的 min-height:100vh */
-        overflow-y: auto !important; /* 内容多时自身可滚，不多时不撑出多余空间 */
+        min-height: 0 !important;
+        height: 0 !important;
+        flex: 1 1 0% !important;     /* 唯一可滚动区：填满 app-main 剩余空间 */
+        overflow-y: auto !important;
         overflow-x: clip;
         padding-top: var(--spacing-sm) !important;  /* 原 spacing-xl(32px) → 8px */
-        padding-bottom: 70px;      /* 给底部导航留空间 */
+        padding-left: var(--spacing-md) !important;
+        padding-right: var(--spacing-md) !important;
+        padding-bottom: 70px !important;      /* 给底部固定导航留空间 */
         -webkit-overflow-scrolling: touch;
     }
-    .page.active { min-height: 0; }
+    .page.active { min-height: 0 !important; height: auto !important; }
 
     /* ---- 卡片间距收紧（原 spacing-lg=24px 太松）---- */
     .content-card {
