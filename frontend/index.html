@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260714bc">
+    <link rel="stylesheet" href="style.css?v=20260715b">
     <link rel="stylesheet" href="welcome-styles.css?v=20260714ad">
 </head>
 <body>
@@ -313,7 +313,7 @@
                 </div>
             </header>
     
-    <!-- 移动端底部导航栏 -->
+    <!-- 移动端底部导航栏（5 Tab：匹配/竞品/产品/知识库/我的） -->
     <nav class="mobile-bottom-nav" id="mobile-menu">
         <button class="mobile-nav-item active" data-page="solution">
             <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
@@ -327,21 +327,13 @@
             <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg></span>
             <span class="mobile-nav-label">产品</span>
         </button>
-        <button class="mobile-nav-item" data-page="dashboard">
-            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
-            <span class="mobile-nav-label">仪表盘</span>
-        </button>
         <button class="mobile-nav-item" data-page="knowledge">
             <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
             <span class="mobile-nav-label">知识库</span>
         </button>
-        <button class="mobile-nav-item" data-page="history">
-            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
-            <span class="mobile-nav-label">历史</span>
-        </button>
-        <button class="mobile-nav-item" data-page="achievement">
-            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
-            <span class="mobile-nav-label">成就</span>
+        <button class="mobile-nav-item" data-page="mine">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
+            <span class="mobile-nav-label">我的</span>
         </button>
     </nav>
     
@@ -1372,6 +1364,91 @@
                     </button>
                 </div>
             </div>
+
+            <!-- ===== 我的（移动端聚合页，桌面端隐藏）===== -->
+            <div id="page-mine" class="page">
+                <!-- 用户卡片 -->
+                <div class="mine-user-card">
+                    <!-- 未登录态 -->
+                    <div class="mine-user-guest" id="mine-user-guest">
+                        <div class="mine-avatar mine-avatar-guest">
+                            <svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>
+                        </div>
+                        <div class="mine-guest-text">
+                            <div class="mine-guest-title">欢迎使用</div>
+                            <div class="mine-guest-sub">登录后可保存方案、查看历史与成就</div>
+                        </div>
+                        <button class="mine-login-btn" id="mine-login-btn">登录 / 注册</button>
+                    </div>
+                    <!-- 已登录态 -->
+                    <div class="mine-user-logged" id="mine-user-logged" style="display:none;">
+                        <div class="mine-avatar">
+                            <svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>
+                        </div>
+                        <div class="mine-user-info">
+                            <div class="mine-user-name" id="mine-user-name">用户名</div>
+                            <div class="mine-user-email" id="mine-user-email">未绑定邮箱</div>
+                        </div>
+                        <button class="mine-logout-btn" id="mine-logout-btn" title="退出登录">
+                            <svg class="icon" aria-hidden="true"><use href="#i-log-out"></use></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 功能入口列表 -->
+                <div class="mine-menu-list">
+                    <button class="mine-menu-item" data-goto="dashboard">
+                        <span class="mine-menu-icon mine-icon-blue"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
+                        <span class="mine-menu-text">
+                            <span class="mine-menu-title">数据仪表盘</span>
+                            <span class="mine-menu-desc">查看方案统计与趋势</span>
+                        </span>
+                        <span class="mine-menu-arrow">›</span>
+                    </button>
+                    <button class="mine-menu-item" data-goto="history">
+                        <span class="mine-menu-icon mine-icon-green"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
+                        <span class="mine-menu-text">
+                            <span class="mine-menu-title">历史方案</span>
+                            <span class="mine-menu-desc">查看与对比历史匹配记录</span>
+                        </span>
+                        <span class="mine-menu-arrow">›</span>
+                    </button>
+                    <button class="mine-menu-item" data-goto="achievement">
+                        <span class="mine-menu-icon mine-icon-gold"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
+                        <span class="mine-menu-text">
+                            <span class="mine-menu-title">成就徽章</span>
+                            <span class="mine-menu-desc">解锁使用里程碑</span>
+                        </span>
+                        <span class="mine-menu-arrow">›</span>
+                    </button>
+                    <button class="mine-menu-item" data-goto="settings">
+                        <span class="mine-menu-icon mine-icon-gray"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></span>
+                        <span class="mine-menu-text">
+                            <span class="mine-menu-title">系统设置</span>
+                            <span class="mine-menu-desc">偏好、显示与数据配置</span>
+                        </span>
+                        <span class="mine-menu-arrow">›</span>
+                    </button>
+                </div>
+
+                <!-- 主题切换（移动端也可换肤） -->
+                <div class="mine-theme-block">
+                    <div class="mine-block-title">主题皮肤</div>
+                    <div class="mine-theme-row" id="mine-theme-row">
+                        <button class="mine-theme-dot active" data-skin="classic-blue" data-sidebar="#1B4F72" data-topbar="#154360" style="background:#1B4F72;" title="经典蓝"></button>
+                        <button class="mine-theme-dot" data-skin="teal" data-sidebar="#17A58B" data-topbar="#148F77" style="background:#17A58B;" title="浅葱绿"></button>
+                        <button class="mine-theme-dot" data-skin="summer-yellow" data-sidebar="#D4AC0D" data-topbar="#B7950B" style="background:#D4AC0D;" title="盛夏黄"></button>
+                        <button class="mine-theme-dot" data-skin="peach-pink" data-sidebar="#E74C7A" data-topbar="#C23B65" style="background:#E74C7A;" title="桃桃粉"></button>
+                    </div>
+                </div>
+
+                <!-- 底部信息 -->
+                <div class="mine-footer">
+                    <div class="mine-footer-status">文档 <b id="mine-doc-count">--</b> · 行业 <b id="mine-industry-count">--</b></div>
+                    <div class="mine-footer-version">华为云方案匹配系统 v1.0</div>
+                    <a class="mine-footer-icp" href="https://beian.miit.gov.cn" target="_blank" rel="noopener">豫ICP备2026027974号</a>
+                </div>
+            </div>
         </div>
 
     </main>
@@ -1719,7 +1796,7 @@
     </div><!-- /.app-shell -->
 
     <script src="js/chart.umd.min.js?v=20260714j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260715a"></script>
+    <script src="script.js?v=20260715b"></script>
     <script src="js/achievement-ui.js?v=20260714j"></script>
     <script src="welcome-script.js?v=20260714j"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">

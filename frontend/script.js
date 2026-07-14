@@ -285,6 +285,25 @@ const AuthManager = {
             if (mobileLoginBtn) mobileLoginBtn.style.display = '';
             if (userMenu) userMenu.style.display = 'none';
         }
+        // 同步"我的"聚合页用户卡片
+        this._updateMineCard();
+    },
+
+    _updateMineCard() {
+        const guest = document.getElementById('mine-user-guest');
+        const logged = document.getElementById('mine-user-logged');
+        const nameEl = document.getElementById('mine-user-name');
+        const emailEl = document.getElementById('mine-user-email');
+        if (!guest || !logged) return;
+        if (State.user) {
+            guest.style.display = 'none';
+            logged.style.display = 'flex';
+            if (nameEl) nameEl.textContent = State.user.username || '用户';
+            if (emailEl) emailEl.textContent = State.user.email || '未绑定邮箱';
+        } else {
+            guest.style.display = 'flex';
+            logged.style.display = 'none';
+        }
     },
 
     _resetView() {
@@ -2784,8 +2803,11 @@ const PageTransition = {
         document.querySelectorAll('.sidebar-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === pageName);
         });
+        // 移动端底部导航：子页面（仪表盘/历史/成就/设置）归属"我的"Tab
+        const mineSubPages = ['mine', 'dashboard', 'history', 'achievement', 'settings'];
+        const mobileActive = mineSubPages.includes(pageName) ? 'mine' : pageName;
         document.querySelectorAll('.mobile-nav-item').forEach(item => {
-            item.classList.toggle('active', item.dataset.page === pageName);
+            item.classList.toggle('active', item.dataset.page === mobileActive);
         });
     }
 };
@@ -3524,10 +3546,63 @@ function initEventListeners() {
                 if (page === 'dashboard') DashboardUI.loadStats();
                 if (page === 'history') HistoryUI.loadHistory();
                 if (page === 'settings') SettingsManager.updateSystemInfo();
+                if (page === 'mine') { try { AuthManager._updateMineCard(); MineUI.syncCounts(); } catch(e) {} }
                 if (page === 'products') { setTimeout(function() { try { ProductGraph._renderGrid(); } catch(e) { console.warn('[PageSwitch] 产品图谱渲染失败:', e); } }, 100); }
             }).catch(err => console.warn('[PageSwitch] 页面切换失败:', err));
         });
     });
+
+    // ===== "我的"聚合页交互 =====
+    const MineUI = {
+        init() {
+            // 登录按钮
+            document.getElementById('mine-login-btn')?.addEventListener('click', () => AuthManager._openModal());
+            // 退出登录
+            document.getElementById('mine-logout-btn')?.addEventListener('click', () => {
+                if (typeof AuthManager.logout === 'function') AuthManager.logout();
+                else if (typeof AuthManager._logout === 'function') AuthManager._logout();
+            });
+            // 功能入口跳转
+            document.querySelectorAll('.mine-menu-item').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const target = btn.dataset.goto;
+                    if ((target === 'dashboard' || target === 'history') && !AuthManager.isLoggedIn()) {
+                        AuthManager._openModal();
+                        return;
+                    }
+                    PageTransition.switchTo(target).then(() => {
+                        if (target === 'dashboard') DashboardUI.loadStats();
+                        if (target === 'history') HistoryUI.loadHistory();
+                        if (target === 'settings') SettingsManager.updateSystemInfo();
+                    }).catch(() => {});
+                });
+            });
+            // 主题切换（移动端）
+            document.getElementById('mine-theme-row')?.addEventListener('click', (e) => {
+                const dot = e.target.closest('.mine-theme-dot');
+                if (!dot) return;
+                const skin = dot.dataset.skin;
+                document.body.setAttribute('data-skin', skin);
+                try { localStorage.setItem('skin', skin); } catch(_) {}
+                document.querySelectorAll('.mine-theme-dot').forEach(d => d.classList.toggle('active', d.dataset.skin === skin));
+                document.querySelectorAll('.theme-color').forEach(d => d.classList.toggle('active', d.dataset.skin === skin));
+            });
+        },
+        syncCounts() {
+            // 同步侧栏底部的文档/行业统计到"我的"页脚
+            const doc = document.getElementById('nav-doc-count')?.textContent || '--';
+            const ind = document.getElementById('nav-industry-count')?.textContent || '--';
+            const md = document.getElementById('mine-doc-count');
+            const mi = document.getElementById('mine-industry-count');
+            if (md) md.textContent = doc;
+            if (mi) mi.textContent = ind;
+            // 同步主题选中态
+            let skin = 'classic-blue';
+            try { skin = localStorage.getItem('skin') || 'classic-blue'; } catch(_) {}
+            document.querySelectorAll('.mine-theme-dot').forEach(d => d.classList.toggle('active', d.dataset.skin === skin));
+        }
+    };
+    MineUI.init();
     
     document.querySelectorAll('.sidebar-item').forEach(item => {
         item.addEventListener('click', () => {

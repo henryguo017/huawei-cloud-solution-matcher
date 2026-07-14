@@ -7318,7 +7318,13 @@ body::after {
     justify-content: space-around;
     align-items: center;
     padding: 0 4px;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 -1px 3px rgba(0,0,0,0.06), 0 -2px 8px rgba(0,0,0,0.04);
+}
+
+/* 移动端隐藏次要Tab（产品、成就 → 移入汉堡菜单） */
+.mobile-nav-item[data-page="products"],
+.mobile-nav-item[data-page="achievement"] {
+    display: none;
 }
 
 .mobile-nav-item {
@@ -7327,15 +7333,15 @@ body::after {
     align-items: center;
     justify-content: center;
     gap: 2px;
-    padding: 4px 8px;
+    padding: 4px 6px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     cursor: pointer;
     transition: all 0.2s ease;
     flex: 1;
-    max-width: 72px;
+    max-width: 80px;
     border-radius: 8px;
 }
 
@@ -9763,7 +9769,7 @@ table tbody tr:hover {
 #toast-container .toast.toast-error { border-left: 4px solid #C7000B; }
 #toast-container .toast.toast-info { border-left: 4px solid #165DFF; }
 
-/* ---------- 响应式：移动端侧边栏→底部Tab ---------- */
+/* ---------- 响应式：移动端侧边栏→底部Tab + 顶栏精简 ---------- */
 @media (max-width: 767px) {
     .sidebar { display: none; }
     .app-main { margin-left: 0; }
@@ -9771,6 +9777,60 @@ table tbody tr:hover {
     .topbar-search { display: none; }
     .main-content { padding-bottom: 70px; padding-left: var(--spacing-md); padding-right: var(--spacing-md); }
     .sidebar-collapse-btn { display: none; }
+
+    /* ===== 移动端顶栏精简 ===== */
+    /* 隐藏"体验"按钮（移动端空间有限，功能可从页面内访问） */
+    #quick-demo-btn { display: none !important; }
+
+    /* 登录按钮：去掉桌面渐变样式，改为简洁文字按钮 */
+    #nav-login-btn {
+        background: transparent !important;
+        border: 1px solid rgba(255,255,255,0.25) !important;
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        padding: 5px 10px !important;
+        height: 32px !important;
+        font-size: 0.8rem !important;
+        color: rgba(255,255,255,0.9) !important;
+    }
+    #nav-login-btn:hover {
+        background: rgba(255,255,255,0.1) !important;
+        border-color: rgba(255,255,255,0.4) !important;
+    }
+    /* 已登录用户菜单按钮同理 */
+    #nav-user-avatar-btn,
+    .nav-user-menu .topbar-icon-btn {
+        background: transparent !important;
+        border: 1px solid rgba(255,255,255,0.25) !important;
+        box-shadow: none !important;
+        padding: 5px 10px !important;
+        height: 32px !important;
+        color: rgba(255,255,255,0.9) !important;
+    }
+
+    /* AI 搜索栏缩小 */
+    .topbar-ai-bar {
+        max-width: 160px !important;
+        height: 32px !important;
+        padding: 0 8px !important;
+    }
+    .topbar-ai-bar .ai-placeholder {
+        font-size: 0.7rem !important;
+    }
+    .topbar-ai-bar .ai-icon,
+    .topbar-ai-bar .ai-search-icon {
+        width: 0.85rem !important;
+        height: 0.85rem !important;
+    }
+
+    /* 顶栏整体紧缩 */
+    .topbar {
+        padding: 0 10px !important;
+        gap: 8px !important;
+    }
+    .topbar-right {
+        gap: 6px !important;
+    }
 }
 
 /* ---- 13. Tab / 切换按钮组品牌化 ---- */
@@ -9827,4 +9887,235 @@ table tbody tr:hover {
 }
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(199, 0, 11, 0.35);
+}
+
+/* ============================================================
+   手机端重设计 v1.0（PRD 落地）2026-07-15
+   信息架构：底部 5 Tab + "我的"聚合页
+   全局：表格横向滚动 / 输入框 16px / 弹窗底部抽屉 / 逐页美化
+   ============================================================ */
+
+/* ---- "我的"页：桌面端永不显示（仅移动端聚合入口）---- */
+#page-mine { display: none; }
+@media (max-width: 767px) {
+    #page-mine.active { display: block; }
+}
+
+/* ==================== "我的"聚合页组件 ==================== */
+.mine-user-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px 18px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-md);
+}
+.mine-user-guest { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.mine-avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: linear-gradient(135deg, #C7000B 0%, #E84D54 100%);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.mine-avatar .icon { width: 26px; height: 26px; color: #fff; }
+.mine-avatar-guest { background: linear-gradient(135deg, #9AA0AE 0%, #C2C7D0 100%); }
+.mine-guest-text { flex: 1; min-width: 0; }
+.mine-guest-title { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
+.mine-guest-sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
+.mine-login-btn {
+    width: 100%; margin-top: 4px;
+    height: 44px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #C7000B 0%, #E84D54 100%);
+    color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(199,0,11,0.25);
+}
+.mine-login-btn:active { transform: scale(0.98); }
+
+.mine-user-logged { display: flex; align-items: center; gap: 14px; }
+.mine-user-info { flex: 1; min-width: 0; }
+.mine-user-name { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
+.mine-user-email { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mine-logout-btn {
+    width: 40px; height: 40px; flex-shrink: 0;
+    border: 1px solid var(--border-color); border-radius: 10px;
+    background: transparent; color: var(--text-secondary); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+}
+.mine-logout-btn .icon { width: 18px; height: 18px; }
+.mine-logout-btn:active { background: var(--neutral-300); }
+
+/* 功能入口列表 */
+.mine-menu-list {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-md);
+}
+.mine-menu-item {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; padding: 15px 16px;
+    background: transparent; border: none;
+    border-bottom: 1px solid var(--divider);
+    cursor: pointer; text-align: left;
+}
+.mine-menu-item:last-child { border-bottom: none; }
+.mine-menu-item:active { background: var(--neutral-300); }
+.mine-menu-icon {
+    width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+}
+.mine-menu-icon .icon { width: 20px; height: 20px; color: #fff; }
+.mine-icon-blue { background: linear-gradient(135deg, #2F80ED, #56A5FF); }
+.mine-icon-green { background: linear-gradient(135deg, #17A58B, #38C9AC); }
+.mine-icon-gold { background: linear-gradient(135deg, #D4AC0D, #F2CB3A); }
+.mine-icon-gray { background: linear-gradient(135deg, #6B7280, #9AA0AE); }
+.mine-menu-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mine-menu-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); }
+.mine-menu-desc { font-size: 0.75rem; color: var(--text-secondary); }
+.mine-menu-arrow { color: var(--text-tertiary); font-size: 1.3rem; flex-shrink: 0; }
+
+/* 主题切换块 */
+.mine-theme-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-md);
+}
+.mine-block-title { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 12px; }
+.mine-theme-row { display: flex; gap: 16px; justify-content: flex-start; }
+.mine-theme-dot {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 3px solid transparent; cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transition: transform 0.15s ease;
+}
+.mine-theme-dot.active { border-color: var(--text-primary); transform: scale(1.1); }
+.mine-theme-dot:active { transform: scale(0.95); }
+
+/* 底部信息 */
+.mine-footer { text-align: center; padding: 8px 0 4px; }
+.mine-footer-status { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; }
+.mine-footer-status b { color: var(--text-primary); }
+.mine-footer-version { font-size: 0.75rem; color: var(--text-tertiary); margin-bottom: 4px; }
+.mine-footer-icp { font-size: 0.72rem; color: var(--text-tertiary); text-decoration: none; }
+.mine-footer-icp:active { text-decoration: underline; }
+
+/* ==================== 全局移动端修复 ==================== */
+@media (max-width: 767px) {
+    /* ---- 表格横向滚动包裹（防截断）---- */
+    .table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 8px 0;
+        border-radius: 8px;
+    }
+    .table-wrapper > table { min-width: 480px; }
+
+    /* 结果区/知识库/对比表：即便无 wrapper 也允许自身滚动兜底 */
+    .result-content table,
+    .kb-doc-table,
+    .compare-column-solution table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        max-width: 100%;
+    }
+
+    /* 放开主内容区裁剪，允许内部横向滚动生效 */
+    .main-content { overflow-x: clip; overflow-y: visible; }
+
+    /* ---- 输入框统一 16px 防 iOS 缩放 ---- */
+    input, textarea, select,
+    .textarea-input,
+    .follow-up-input-area textarea,
+    .setting-select,
+    #kb-editor-content,
+    #ai-input {
+        font-size: 16px !important;
+    }
+
+    /* ---- 弹窗统一底部抽屉 ---- */
+    .product-modal,
+    .kb-editor-modal,
+    .auth-modal,
+    .history-compare-content,
+    .history-modal-content,
+    .confirm-modal {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        border-radius: 16px 16px 0 0 !important;
+        margin: 0 !important;
+    }
+    .product-modal-overlay,
+    .kb-editor-overlay,
+    .confirm-overlay,
+    .history-compare-overlay { align-items: flex-end !important; }
+
+    /* 关闭按钮加大点击区 */
+    .product-modal-close,
+    .ai-close-btn,
+    .kb-editor-close,
+    .confirm-close,
+    .btn-close {
+        min-width: 40px; min-height: 40px;
+    }
+
+    /* ---- 历史记录 tab 横向滚动，不裁剪 ---- */
+    .history-tabs {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+        max-width: 100%;
+        scrollbar-width: none;
+    }
+    .history-tabs::-webkit-scrollbar { display: none; }
+    .history-tab { flex-shrink: 0; white-space: nowrap; }
+
+    /* ---- 模式切换按钮组：换行兜底 ---- */
+    .mode-btn-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: center;
+    }
+
+    /* ---- 主操作按钮全宽 ---- */
+    .result-actions .btn,
+    .settings-actions .btn,
+    .match-btn,
+    #start-match-btn {
+        width: 100%;
+    }
+
+    /* ---- 成就卡片 2 列（原 4 列太挤）---- */
+    .achievement-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
+
+    /* ---- 仪表盘 KPI 标签允许换行，不截断 ---- */
+    .kpi-label { white-space: normal !important; line-height: 1.3; }
+
+    /* ---- Toast 移动端约束 ---- */
+    #toast-container { max-width: 90vw; left: 50%; transform: translateX(-50%); right: auto; }
+    #toast-container .toast { max-width: 90vw; }
+}
+
+/* ==================== 超小屏微调 ==================== */
+@media (max-width: 480px) {
+    .main-content { padding-left: 12px !important; padding-right: 12px !important; }
+    .mobile-nav-item { font-size: 0.65rem; }
+    .mine-menu-desc { font-size: 0.72rem; }
+    .table-wrapper > table { min-width: 440px; }
+}
+@media (max-width: 375px) {
+    .topbar-ai-bar { max-width: 120px !important; }
+    .topbar-ai-bar .ai-placeholder { font-size: 0.66rem !important; }
+    .table-wrapper > table { min-width: 400px; }
 }
