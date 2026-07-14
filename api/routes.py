@@ -1272,15 +1272,14 @@ async def ai_chat(
 ):
     """
     AI 智能助手 - 自由问答
-    双路由：平台使用类问题直接LLM回答 / 华为云业务类问题走RAG+方案匹配
+    平台使用类问题直接回答 / 华为云业务问题走对话式RAG（自然Q&A，不是方案生成）
     """
     try:
         question = request.get("question", "").strip()
         if not question:
             raise HTTPException(status_code=400, detail="问题不能为空")
 
-        # ---- 判断问题类型 ----
-        # 平台使用类关键词：用户问的是"怎么用这个平台"而非"华为云产品/方案"
+        # ---- 判断是否为平台使用类问题 ----
         usage_keywords = [
             "怎么用", "如何使用", "怎么使用", "如何操作",
             "功能怎么用", "功能使用", "功能介绍",
@@ -1301,14 +1300,32 @@ async def ai_chat(
         is_usage_question = any(kw in question for kw in usage_keywords)
 
         if is_usage_question:
-            # ===== 平台使用类：直接 LLM 回答（不走 RAG） =====
-            system_prompt = """你是「华为云智能助手」，同时具备两个身份：
-1. **华为云解决方案顾问** — 熟悉华为云全系产品、行业方案、技术架构
-2. **平台使用向导** — 熟悉本平台（cloudsol.cn）的全部功能和使用方法
+            # ===== 平台使用类：直接 LLM 回答（无需检索） =====
+            answer = await _answer_usage_question(question)
+            return {"answer": answer}
 
-## 当前问题是「平台使用类」，请直接回答，无需检索知识库。
+        else:
+            # ===== 华为云业务类：对话式 RAG（检索+自然回答，非方案生成） =====
+            user_id = user.get('id') if user else 0
+            kb = get_user_knowledge_base(user_id) if user_id > 0 else get_knowledge_base()
+            answer = await _answer_business_question(question, kb)
+            return {"answer": answer}
 
-## 平台功能概览（供参考）：
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI 助手请求失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI 助手暂时不可用: {str(e)}"
+        )
+
+
+async def _answer_usage_question(question: str) -> str:
+    """回答平台使用类问题（纯LLM，不检索）"""
+    system_prompt = """你是「华为云智能助手」— 本平台（cloudsol.cn）的使用向导。
+
+## 平台功能概览：
 
 ### 方案匹配（核心功能）
 - **标准模式**：输入需求文本 → 向量检索相似方案 → LLM 生成定制化解决方案。适合已有明确需求的用户。
@@ -1329,31 +1346,58 @@ async def ai_chat(
 ## 回答原则：
 1. 针对用户的具体问题给出清晰、步骤化的指引
 2. 必要时举例说明
-3. 语气专业但亲切，像一位经验丰富的产品导师
-4. 使用 Markdown 格式（标题/列表/代码块等）
+3. 语气专业但亲切
+4. 使用 Markdown 格式（标题/列表等）
+5. 回答简洁实用，不要长篇大论
 
-当前用户问题："""
+用户问题："""
+    return await get_llm_response(system_prompt + "\n" + question)
 
-            answer = await get_llm_response(system_prompt + "\n" + question)
-            return {"answer": answer}
 
-        else:
-            # ===== 华为云业务类：走 RAG + 方案匹配管线 =====
-            user_id = user.get('id') if user else 0
-            if user_id > 0:
-                matcher = get_solution_matcher_for_user(user_id)
-            else:
-                matcher = get_solution_matcher()
-
-            result = await matcher.match(question)
-            answer = result.get("answer", "抱歉，暂时无法回答这个问题。请稍后再试。")
-            return {"answer": answer}
-
-    except HTTPException:
-        raise
+async def _answer_business_question(question: str, kb) -> str:
+    """回答华为云业务类问题（对话式RAG：检索文档→自然回答，不是生成方案）"""
+    # 1. 检索相关文档
+    docs = []
+    try:
+        docs = kb.search_huawei(question, k=5)
+        comp_docs = kb.search_competitor(question, k=2)
+        docs = (docs or []) + (comp_docs or [])
     except Exception as e:
-        logger.error(f"AI 助手请求失败: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI 助手暂时不可用: {str(e)}"
-        )
+        logger.warning(f"AI助手向量检索异常: {e}")
+        docs = []
+
+    # 格式化上下文
+    context_text = ""
+    if docs:
+        context_parts = []
+        for i, doc in enumerate(docs, 1):
+            meta = doc.metadata or {}
+            source = meta.get("source", "未知来源")
+            content = doc.page_content.strip()[:800]  # 截断避免超token
+            context_parts.append(f"[资料{i}] 来源：{source}\n{content}")
+        context_text = "\n\n".join(context_parts)
+
+    # 2. 对话式 Prompt（关键区别：这是"问答prompt"而非"方案生成prompt"）
+    system_prompt = """你是「华为云智能助手」— 一位经验丰富的华为云解决方案顾问。
+
+你的任务是**直接回答用户的问题**，像一位专业的技术顾问在聊天，而不是生成一份正式的销售方案文档。
+
+## 回答原则：
+1. **直接回答问题**：用户问什么就答什么，不要跑题
+2. **基于参考资料**：优先使用下方检索到的资料内容来回答，引用具体产品名和数据
+3. **自然对话风格**：
+   - 用"您"称呼用户
+   - 可以分段落、列表，但不要写"## 第X章"、"执行摘要"、"需求分析"这种方案章节
+   - 像微信聊天/钉钉回复那样自然
+4. **简洁实用**：一般控制在 300-500 字以内，除非用户问得很深
+5. **不确定就诚实说**："这个问题我暂时没有足够的资料给您详细解答，建议您可以..."
+6. 使用 Markdown 格式（加粗、列表、代码块）
+
+"""
+
+    if context_text:
+        full_prompt = f"{system_prompt}\n## 参考资料（基于知识库检索）：\n\n{context_text}\n\n## 用户提问：\n{question}"
+    else:
+        full_prompt = f"{system_prompt}\n（注：当前知识库暂无相关资料，请根据您的专业知识尽量准确回答）\n\n## 用户提问：\n{question}"
+
+    return await get_llm_response(full_prompt)
