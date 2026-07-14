@@ -3580,8 +3580,8 @@ function initEventListeners() {
         const body = document.body;
         const palette = document.getElementById('theme-palette');
 
-        let currentSkin = 'default';
-        try { currentSkin = localStorage.getItem('skin') || 'default'; } catch(_) {}
+        let currentSkin = 'blue';
+        try { currentSkin = localStorage.getItem('skin') || 'blue'; } catch(_) {}
 
         function applySkin(skin) {
             body.setAttribute('data-skin', skin);
