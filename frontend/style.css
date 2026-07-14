@@ -9106,6 +9106,7 @@ select:focus {
     gap: 16px;
 }
 .topbar-left, .topbar-right { display: flex; align-items: center; gap: 12px; }
+.topbar-left { flex: 1; min-width: 0; }
 .topbar-menu-btn {
     display: none;
     width: 36px; height: 36px;
