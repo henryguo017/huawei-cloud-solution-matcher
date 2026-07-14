@@ -132,14 +132,22 @@
     --sidebar-bg: #162033;
     --topbar-bg: #0f1724;
 }
+[data-skin="blue"] .sidebar { background: #162033 !important; }
+[data-skin="blue"] .topbar { background: #0f1724 !important; }
+
 [data-skin="gold"] {
     --sidebar-bg: #332a1e;
     --topbar-bg: #261f16;
 }
+[data-skin="gold"] .sidebar { background: #332a1e !important; }
+[data-skin="gold"] .topbar { background: #261f16 !important; }
+
 [data-skin="green"] {
     --sidebar-bg: #1a2b22;
     --topbar-bg: #141f1a;
 }
+[data-skin="green"] .sidebar { background: #1a2b22 !important; }
+[data-skin="green"] .topbar { background: #141f1a !important; }
 
 * {
     margin: 0;
