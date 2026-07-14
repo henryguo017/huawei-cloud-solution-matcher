@@ -7287,9 +7287,8 @@ body::after {
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1;
-    display: flex;
-    align-items: center;
-    text-overflow: ellipsis;
+    flex: 1;
+    text-align: center;
 }
 
 /* 遮罩 */
