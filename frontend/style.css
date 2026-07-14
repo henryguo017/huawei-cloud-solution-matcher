@@ -185,10 +185,16 @@
 button:focus-visible,
 select:focus-visible,
 input:focus-visible,
-textarea:focus-visible,
 a:focus-visible {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
+}
+/* AI 助手输入框 textarea 不用红色 focus 样式 */
+.ai-input-box textarea:focus,
+.ai-input-box textarea:focus-visible {
+    outline: none !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 body {
@@ -7624,64 +7630,75 @@ body::after {
     40% { transform: translateY(-8px); opacity: 1; }
 }
 
-/* ---- 输入区 v4 全新设计 ---- */
+/* ---- 输入区 v5 — 现代AI聊天风格 ---- */
 .ai-input-area {
-    padding: 16px 20px 20px;
+    padding: 16px 20px 22px;
     flex-shrink: 0;
     background: #fff;
 }
 .ai-input-box {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 10px;
-    background: #f5f6f8;
-    border-radius: 12px;
+    background: #fff;
+    border: 1px solid #e2e4ea;
+    border-radius: 18px;
     padding: 10px 14px;
-    border: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 .ai-input-box:focus-within {
-    background: #fff;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.08), 0 0 0 1px #e2e4ea;
+    border-color: #c8cdd6;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
 }
-/* 覆盖全局 textarea:focus 红边规则 */
+/* 覆盖全局 textarea:focus 红边规则（3处全局规则已排除 textarea） */
 .ai-input-box textarea {
     flex: 1;
     border: none !important;
-    background: transparent;
+    background: transparent !important;
     resize: none;
     outline: none !important;
     box-shadow: none !important;
     font-size: 0.87rem;
     line-height: 1.55;
-    color: #222;
+    color: #1a1d26;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     max-height: 110px;
     min-height: 24px;
-    padding: 2px 4px;
+    padding: 3px 4px;
 }
 .ai-input-box textarea::placeholder {
-    color: #a8abb4;
+    color: #aeb2bf;
 }
 .ai-send-btn {
-    width: 32px; height: 32px;
-    border-radius: 7px;
-    background: transparent;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: #2a2d35;
     border: none;
-    color: #d4d6dc;
-    cursor: default;
+    color: #fff;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     padding: 0;
-    transition: color 0.15s;
+    transition: background 0.15s, transform 0.15s;
 }
 .ai-send-btn svg {
-    width: 15px; height: 15px;
+    width: 14px; height: 14px;
+    margin-top: 1px;
+    margin-left: 1px;
 }
 .ai-send-btn:not(:disabled) {
-    color: #C7000B;
     cursor: pointer;
+}
+.ai-send-btn:not(:disabled):hover {
+    background: #3a3d47;
+    transform: scale(1.05);
+}
+.ai-send-btn:disabled {
+    background: #dcdedf;
+    cursor: default;
 }
 
 /* 移动端适配 */
@@ -8927,6 +8944,7 @@ select:focus {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05);
 }
+/* AI 输入框不受此规则影响（已在上方 .ai-input-box 中用 !important 覆盖） */
 
 /* ---- 12. 统计卡片（stat-card）增强 ---- */
 .stat-card {
@@ -9355,10 +9373,11 @@ select:focus {
 }
 
 /* ---- 输入框聚焦红光晕 ---- */
-input:focus, textarea:focus, select:focus {
+input:focus, select:focus {
     border-color: var(--primary-color) !important;
     box-shadow: var(--input-focus-ring) !important;
 }
+/* textarea 聚焦样式已按组件各自处理（AI输入框用 .ai-input-box 内的 !important 规则） */
 input::placeholder, textarea::placeholder {
     color: var(--text-muted) !important;
 }
