@@ -7286,6 +7286,10 @@ body::after {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    text-overflow: ellipsis;
 }
 
 /* 遮罩 */
