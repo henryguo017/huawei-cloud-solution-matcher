@@ -7624,71 +7624,58 @@ body::after {
     40% { transform: translateY(-8px); opacity: 1; }
 }
 
-/* ---- 输入区 ---- */
+/* ---- 输入区 v4 全新设计 ---- */
 .ai-input-area {
-    padding: 18px 20px 22px;
+    padding: 14px 18px 18px;
     flex-shrink: 0;
     background: #fff;
 }
-.ai-input-wrapper {
+.ai-input-box {
     display: flex;
-    align-items: center;
-    gap: 0;
-    background: #f0f1f4;
+    align-items: flex-end;
+    gap: 8px;
+    background: #f3f4f6;
+    border-radius: 10px;
+    padding: 8px 10px;
     border: none;
-    border-radius: 12px;
-    padding: 6px 14px;
 }
-.ai-input-wrapper:focus-within {
-    background: #fff;
-    box-shadow: 0 0 0 2px #e0e2e8;
-}
-.ai-input-wrapper textarea {
+.ai-input-box textarea {
     flex: 1;
     border: none;
     background: transparent;
     resize: none;
     outline: none;
-    font-size: 0.88rem;
+    font-size: 0.86rem;
     line-height: 1.5;
-    color: #1a1d26;
-    font-family: inherit;
-    max-height: 120px;
-    min-height: 36px;
-    padding: 5px 8px;
+    color: #222;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-height: 110px;
+    min-height: 24px;
+    padding: 2px 4px;
 }
-.ai-input-wrapper textarea::placeholder {
-    color: #9ca0ad;
+.ai-input-box textarea::placeholder {
+    color: #aaa;
 }
 .ai-send-btn {
-    width: 32px; height: 32px;
+    width: 30px; height: 30px;
     border-radius: 6px;
-    background: none;
+    background: transparent;
     border: none;
-    color: #c8ccd6;
-    cursor: pointer;
+    color: #d0d0d0;
+    cursor: default;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    padding: 0;
     transition: color 0.15s;
+}
+.ai-send-btn svg {
+    width: 15px; height: 15px;
 }
 .ai-send-btn:not(:disabled) {
     color: #C7000B;
-}
-.ai-send-btn:not(:disabled):hover {
-    color: #a00009;
-}
-.ai-send-btn:disabled {
-    cursor: default;
-}
-.ai-send-btn svg { width: 16px; height: 16px; }
-
-.ai-input-hint {
-    font-size: 0.67rem;
-    color: #c4c8d4;
-    text-align: center;
-    margin-top: 10px;
+    cursor: pointer;
 }
 
 /* 移动端适配 */
