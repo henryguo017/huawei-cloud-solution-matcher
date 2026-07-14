@@ -2072,8 +2072,15 @@ Object.assign(KnowledgeUI, {
     editingDocId: null,
 
     async loadDocList() {
+        const listEl = document.getElementById('kb-doc-list');
+        const countEl = document.getElementById('kb-doc-count');
+        if (!AuthManager.isLoggedIn()) {
+            if (listEl) listEl.innerHTML = '<div class="kb-doc-skeleton">请登录后查看知识库文档</div>';
+            if (countEl) countEl.textContent = '';
+            this.docList = [];
+            return;
+        }
         try {
-            const listEl = document.getElementById('kb-doc-list');
             if (listEl) listEl.innerHTML = '<div class="kb-doc-skeleton">加载中...</div>';
             const data = await API.get('/api/knowledge/documents');
             this.docList = data.documents || [];
