@@ -2830,6 +2830,7 @@ const HistoryUI = {
             PaginationUI.render('pagination-container', 'pagination-buttons', 'pagination-info');
         } catch (error) {
             console.error('加载历史记录失败:', error);
+            document.getElementById('history-list').innerHTML = '';
             ErrorHandler.showInline('加载历史记录失败: ' + error.message, () => this.loadHistory());
         }
     },
