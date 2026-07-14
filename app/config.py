@@ -54,8 +54,8 @@ HF_ENDPOINT = os.getenv("HF_ENDPOINT", "https://hf-mirror.com")
 
 # 网络环境配置
 OFFLINE_MODE = os.getenv("OFFLINE_MODE", "false").lower() == "true"
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
-MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "60"))
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "2"))
 RETRY_INTERVAL = int(os.getenv("RETRY_INTERVAL", "2"))
 DETECTION_TIMEOUT = int(os.getenv("DETECTION_TIMEOUT", "5"))
 
