@@ -1858,19 +1858,19 @@ const UI = {
         html = html.replace(/(<li>.*<\/li>)/s, '<ul style="padding-left:20px;margin:8px 0;">$1</ul>');
         // 有序列表
         html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-        // 表格（在横线之前处理）
+        // 表格（在横线之前处理）— 允许行首缩进（LLM 输出的子内容常带缩进）
         html = (function () {
             const lines = html.split('\n');
             let i = 0;
             while (i < lines.length) {
-                if (/^\|.+\|$/.test(lines[i])) {
-                    // 找到表头行
+                if (/^\s*\|.+\|$/.test(lines[i])) {
+                    // 找到表头行（允许前导空白）
                     const headerLine = lines[i].trim();
                     if (i + 1 < lines.length && /^\|[\s\-:|]+\|$/.test(lines[i + 1].trim())) {
                         // 分隔行，跳过
                         let j = i + 2;
-                        // 收集数据行
-                        while (j < lines.length && /^\|.+\|$/.test(lines[j])) {
+                        // 收集数据行（同样允许前导空白）
+                        while (j < lines.length && /^\s*\|.+\|$/.test(lines[j])) {
                             j++;
                         }
                         // 提取并构建表格
