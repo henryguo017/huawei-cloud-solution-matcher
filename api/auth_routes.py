@@ -158,24 +158,25 @@ async def get_user_stats(current_user: dict = Depends(get_current_user)):
     stats = AuthService.get_user_stats(current_user["id"])
     return stats
 
+# ===== 历史记录子路由（支持无尾部斜杠访问） =====
 router_history = APIRouter(prefix="/history", tags=["历史记录"])
 
-@router_history.post("/")
+@router_history.post("")
 async def add_history(
     history_data: HistoryCreate,
     current_user: dict = Depends(get_current_user)
 ):
     result = AuthService.add_history(current_user["id"], history_data)
-    
+
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result["message"]
         )
-    
+
     return {"message": result["message"]}
 
-@router_history.get("/")
+@router_history.get("")
 async def get_history(
     query_type: Optional[str] = None,
     page: int = 1,
@@ -191,24 +192,25 @@ async def get_history(
     
     return {"history": history, "total": len(history)}
 
+# ===== 收藏子路由（支持无尾部斜杠访问） =====
 router_favorites = APIRouter(prefix="/favorites", tags=["收藏"])
 
-@router_favorites.post("/")
+@router_favorites.post("")
 async def add_favorite(
     favorite_data: FavoriteCreate,
     current_user: dict = Depends(get_current_user)
 ):
     result = AuthService.add_favorite(current_user["id"], favorite_data)
-    
+
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result["message"]
         )
-    
+
     return {"message": result["message"]}
 
-@router_favorites.get("/")
+@router_favorites.get("")
 async def get_favorites(
     page: int = 1,
     page_size: int = 20,
