@@ -2803,8 +2803,8 @@ const PageTransition = {
         document.querySelectorAll('.sidebar-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === pageName);
         });
-        // 移动端底部导航：子页面（仪表盘/历史/成就/设置）归属"我的"Tab
-        const mineSubPages = ['mine', 'dashboard', 'history', 'achievement', 'settings'];
+        // 移动端底部导航：子页面（历史/成就/设置）归属"我的"Tab
+        const mineSubPages = ['mine', 'history', 'achievement', 'settings'];
         const mobileActive = mineSubPages.includes(pageName) ? 'mine' : pageName;
         document.querySelectorAll('.mobile-nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === mobileActive);

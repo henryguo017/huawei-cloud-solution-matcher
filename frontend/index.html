@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260715m">
+    <link rel="stylesheet" href="style.css?v=20260715ao">
     <link rel="stylesheet" href="welcome-styles.css?v=20260714ad">
 </head>
 <body>
@@ -287,7 +287,7 @@
                     <div class="topbar-ai-bar" id="topbar-ai-btn" title="AI 智能助手 - 点击提问">
                         <svg class="icon ai-search-icon" aria-hidden="true"><use href="#i-search"></use></svg>
                         <svg class="icon ai-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg>
-                        <span class="ai-placeholder">问 AI：华为云产品、方案匹配、使用帮助…</span>
+                        <span class="ai-placeholder">问 AI：产品 / 方案匹配…</span>
                     </div>
                 </div>
                 <div class="topbar-right">
@@ -313,7 +313,7 @@
                 </div>
             </header>
     
-    <!-- 移动端底部导航栏（5 Tab：匹配/竞品/产品/知识库/我的） -->
+    <!-- 移动端底部导航栏（5 Tab：匹配/竞品/仪表盘/知识库/我的） -->
     <nav class="mobile-bottom-nav" id="mobile-menu">
         <button class="mobile-nav-item active" data-page="solution">
             <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
@@ -323,9 +323,9 @@
             <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
             <span class="mobile-nav-label">竞品</span>
         </button>
-        <button class="mobile-nav-item" data-page="products">
-            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg></span>
-            <span class="mobile-nav-label">产品</span>
+        <button class="mobile-nav-item" data-page="dashboard">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
+            <span class="mobile-nav-label">仪表盘</span>
         </button>
         <button class="mobile-nav-item" data-page="knowledge">
             <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
@@ -1055,6 +1055,10 @@
             
             <!-- 成就勋章页面 -->
             <div id="page-achievement" class="page">
+                <nav class="mobile-sub-nav">
+                    <button class="mobile-back-btn" onclick="PageTransition.switchTo('mine')" title="返回"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                    <span class="mobile-sub-nav-title">成就勋章</span>
+                </nav>
                 <header class="page-header">
                     <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg> 成就勋章</h2>
                     <p class="page-subtitle">完成指定操作解锁成就，收集全部 45 枚勋章！</p>
@@ -1185,6 +1189,10 @@
 
             <!-- 历史记录页面 -->
             <div id="page-history" class="page">
+                <nav class="mobile-sub-nav">
+                    <button class="mobile-back-btn" onclick="PageTransition.switchTo('mine')" title="返回"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                    <span class="mobile-sub-nav-title">历史记录</span>
+                </nav>
                 <header class="page-header">
                     <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg> 历史记录</h2>
                     <p class="page-subtitle">随时调阅过往方案与分析报告，沉淀经验</p>
@@ -1243,6 +1251,10 @@
 
             <!-- 系统设置页面 -->
             <div id="page-settings" class="page">
+                <nav class="mobile-sub-nav">
+                    <button class="mobile-back-btn" onclick="PageTransition.switchTo('mine')" title="返回"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                    <span class="mobile-sub-nav-title">系统设置</span>
+                </nav>
                 <header class="page-header">
                     <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg> 系统设置</h2>
                     <p class="page-subtitle">管理系统偏好、显示选项和数据配置</p>
@@ -1397,14 +1409,7 @@
 
                 <!-- 功能入口列表 -->
                 <div class="mine-menu-list">
-                    <button class="mine-menu-item" data-goto="dashboard">
-                        <span class="mine-menu-icon mine-icon-blue"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
-                        <span class="mine-menu-text">
-                            <span class="mine-menu-title">数据仪表盘</span>
-                            <span class="mine-menu-desc">查看方案统计与趋势</span>
-                        </span>
-                        <span class="mine-menu-arrow">›</span>
-                    </button>
+                    <button class="mine-menu-item" data-goto="history">
                     <button class="mine-menu-item" data-goto="history">
                         <span class="mine-menu-icon mine-icon-green"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
                         <span class="mine-menu-text">
@@ -1796,7 +1801,7 @@
     </div><!-- /.app-shell -->
 
     <script src="js/chart.umd.min.js?v=20260714j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260715m"></script>
+    <script src="script.js?v=20260715ao"></script>
     <script src="js/achievement-ui.js?v=20260714j"></script>
     <script src="welcome-script.js?v=20260714j"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">
@@ -2046,13 +2051,11 @@
         -webkit-overflow-scrolling:touch;
     }
 
-    /* 所有可能撑高的元素一律归零 */
-    #thinking-stream, #match-progress-panel, #analyze-progress-panel,
-    #rebuild-progress-panel, #solution-result, #competitor-result {
+    /* 只隐藏 thinking-stream（它是493px留白元凶），进度/结果面板由JS业务逻辑控制显示 */
+    #thinking-stream {
         display:none!important; height:0!important; min-height:0!important; max-height:0!important;
         overflow:hidden!important; padding:0!important; margin:0!important;
     }
-    /* JS 匹配进行中时临时恢复 display:block；完成后 JS 负责加回 none */
 
     .content-wrapper { width:100%!important; margin:0 auto!important; padding:0 12px!important; height:auto!important; min-height:0!important; }
     .page { min-height:0!important; height:auto!important; }
@@ -2065,7 +2068,127 @@
     .page-header{padding-bottom:4px!important;margin-bottom:6px!important;}
     .page-title{font-size:1rem!important;margin-bottom:2px!important;}
     .page-subtitle{font-size:0.78rem!important;color:var(--text-secondary)!important;}
-}
+
+    /* 移动端卡片红色上边框（竞品页标题header不加） */
+    #page-solution > .content-card,
+    #page-competitor > .content-card{
+        border-top: 3px solid var(--primary-color) !important;
+        border-left: none !important;
+    }
+    #page-competitor > .page-header {
+        border-left: none !important;
+    }
+    /* 页面切换：极轻上滑（10px→4px，0.25s→0.18s） */
+    .page {
+        transform: translateY(4px) !important;
+        opacity: 0 !important;
+        transition: opacity 0.18s ease, transform 0.18s ease !important;
+    }
+    .page.active {
+        transform: none !important;
+        opacity: 1 !important;
+    }
+    /* 内部卡片动画极轻：6px→3px，0.25s→0.2s */
+    .panel-default { animation: mobileFadeInUp 0.2s ease both !important; }
+    .progress-panel,
+    .kb-doc-card,
+    .dashboard-kpi-card,
+    .achievement-card,
+    .stat-card,
+    .glass-card,
+    .wizard-card,
+    .wizard-panel { animation: none !important; }
+    @keyframes mobileFadeInUp {
+        from { opacity: 0; transform: translateY(3px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+
+    /* 子页面独立导航条（返回按钮 + 标题，在header框外面） */
+    .mobile-sub-nav {
+        display: flex !important;
+        align-items: center;
+        gap: 0;
+        padding: 10px 12px;
+        background: var(--bg-elevated);
+        border-bottom: 1px solid var(--border-color);
+    }
+    .mobile-back-btn {
+        display: flex !important;
+        align-items: center;
+        border: none;
+        background: transparent;
+        color: var(--primary-color);
+        font-size: 0;
+        line-height: 1;
+        cursor: pointer;
+        padding: 6px 4px;
+        margin-right: 4px;
+    }
+    .mobile-back-btn svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .mobile-back-btn:active { opacity: 0.5; }
+    .mobile-sub-nav-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    /* 底部导航Tab隐藏顶部红色指示条 */
+    .mobile-nav-item.active::before { display: none !important; }
+
+    /* 手机端隐藏备案号 */
+    .mine-footer-icp { display: none !important; }
+
+    /* 我的页面底部信息沉到最下面 */
+    #page-mine.active {
+        display: flex !important;
+        flex-direction: column;
+        min-height: calc(100vh - 120px) !important;
+    }
+    #page-mine .mine-footer {
+        margin-top: auto;
+    }
+
+    /* 设置页选项紧凑化 */
+    #page-settings .setting-item {
+        padding: 8px 12px !important;
+        border-radius: 10px !important;
+        gap: 8px !important;
+    }
+    #page-settings .setting-label {
+        font-size: 0.85rem !important;
+    }
+    #page-settings .setting-desc {
+        font-size: 0.72rem !important;
+        margin-top: 1px !important;
+    }
+    #page-settings .settings-section {
+        padding: 12px !important;
+        margin-bottom: 8px !important;
+    }
+    #page-settings .settings-section-title {
+        font-size: 0.82rem !important;
+        margin-bottom: 8px !important;
+    }
+    /* 成就卡片一行3个 */
+    #page-achievement .achievement-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 8px !important;
+    }
+    #page-achievement .achievement-card {
+        padding: 10px 4px 8px !important;
+        border-radius: 10px !important;
+    }
+    #page-achievement .achievement-card .ach-icon {
+        font-size: 24px !important;
+        margin-bottom: 4px !important;
+    }
+    #page-achievement .achievement-card .ach-name {
+        font-size: 0.75rem !important;
+    }
+    #page-achievement .achievement-card .ach-desc {
+        display: none !important;
+    }
 </style>
 <script>
 // 移动端修复 v7：核弹——JS 计算精确像素高度硬锁
@@ -2098,11 +2221,9 @@
             mc.style.webkitOverflowScrolling='touch';
         }
 
-        // 强制隐藏所有可能残留的占位元素
-        ['#thinking-stream','#match-progress-panel','#analyze-progress-panel'].forEach(function(id){
-            var el=document.getElementById(id);
-            if(el)el.style.setProperty('display','none','important');
-        });
+        // 只隐藏 thinking-stream（493px留白元凶），进度/结果面板由业务JS控制
+        var ts=document.getElementById('thinking-stream');
+        if(ts)ts.style.setProperty('display','none','important');
 
         return targetH;
     }
@@ -2112,6 +2233,64 @@
     else lockMobile();
     window.addEventListener('resize',lockMobile);
     window.addEventListener('orientationchange',function(){setTimeout(lockMobile,200)});
+})();
+
+
+// 移动端表格=>卡片自动转换（无需横滑，所有列一屏可见）
+(function(){
+    function transformTables(){
+        if(window.innerWidth>767)return;
+        var tables=document.querySelectorAll('.result-content table:not(.mobile-transformed)');
+        var tLen=tables.length;
+        for(var ti=0;ti<tLen;ti++){
+            var table=tables[ti];
+            var thList=table.querySelectorAll('thead th');
+            var headers=[];
+            var hLen=thList.length;
+            for(var hi=0;hi<hLen;hi++)headers.push(thList[hi].textContent.trim());
+            if(hLen===0){
+                var fths=table.querySelectorAll('tr:first-child th');
+                for(var fi=0;fi<fths.length;fi++)headers.push(fths[fi].textContent.trim());
+            }
+            var bodyRows=table.querySelectorAll('tbody tr');
+            if(bodyRows.length===0)bodyRows=table.querySelectorAll('tr');
+            if(bodyRows.length===0)continue;
+            var cWrap=document.createElement('div');
+            cWrap.className='mobile-table-cards';
+            for(var ri=0;ri<bodyRows.length;ri++){
+                var tr=bodyRows[ri];
+                var card=document.createElement('div');
+                card.className='mobile-table-card';
+                var tds=tr.querySelectorAll('td');
+                if(tds.length===0)tds=tr.querySelectorAll('th');
+                for(var di=0;di<tds.length;di++){
+                    var item=document.createElement('div');
+                    item.className='mobile-table-item';
+                    var lbl=document.createElement('span');
+                    lbl.className='mobile-table-label';
+                    lbl.textContent=headers[di]||('列'+(di+1));
+                    var val=document.createElement('div');
+                    val.className='mobile-table-value';
+                    val.innerHTML=tds[di].innerHTML;
+                    item.appendChild(lbl);
+                    item.appendChild(val);
+                    card.appendChild(item);
+                }
+                if(card.children.length>0)cWrap.appendChild(card);
+            }
+            if(cWrap.children.length>0){
+                table.classList.add('mobile-transformed');
+                table.parentNode.insertBefore(cWrap,table.nextSibling);
+            }
+        }
+    }
+
+    var _tTo=null;
+    function _sched(){clearTimeout(_tTo);_tTo=setTimeout(transformTables,150);}
+    var _obs=new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){if(ml[i].addedNodes.length>0){_sched();break;}}});
+    if(document.body)_obs.observe(document.body,{childList:true,subtree:true});
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',transformTables);else transformTables();
+    window._transformMobileTables=_sched;
 })();
 </script>
 </body>

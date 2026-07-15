@@ -7718,9 +7718,8 @@ body::after {
 
 /* 移动端适配 */
 @media (max-width: 600px) {
-    .topbar-ai-bar { max-width: 180px; padding: 5px 12px; height: 30px; }
-    .topbar-ai-bar .ai-placeholder { font-size: 0.72rem; }
     .topbar-center { padding: 0 4px; }
+    /* 搜索框由 767px 媒体查询统一控制，此处不覆盖 */
     .ai-assistant-panel { width: 100vw; max-width: 100vw; }
     .ai-quick-grid { grid-template-columns: 1fr; }
 }
@@ -9359,7 +9358,14 @@ select:focus {
     box-shadow: 0 10px 30px rgba(199,0,11,0.08) !important;
 }
 #page-solution > .content-card::before {
-    display: none; /* 去掉顶部红条，渐变本身已足够 */
+    display: none; /* 去掉顶部伪元素红条 */
+}
+/* PC端：匹配页/竞品页卡片红色上边框（竞品标题header不加） */
+#page-solution > .content-card {
+    border-top: 3px solid var(--primary-color) !important;
+}
+#page-competitor > .content-card {
+    border-top: 3px solid var(--primary-color) !important;
 }
 
 /* ---- 毛玻璃卡片（覆盖旧纯白卡片） ---- */
@@ -9773,8 +9779,10 @@ table tbody tr:hover {
 @media (max-width: 767px) {
     .sidebar { display: none; }
     .app-main { margin-left: 0; }
-    .topbar-menu-btn { display: flex; }
+    .topbar-menu-btn { display: none !important; }
     .topbar-search { display: none; }
+    /* 左侧区域完全隐藏，给搜索框腾空间 */
+    .topbar-left { display: none !important; }
     .main-content { padding-bottom: 70px; padding-left: var(--spacing-md); padding-right: var(--spacing-md); }
     .sidebar-collapse-btn { display: none; }
 
@@ -9809,27 +9817,75 @@ table tbody tr:hover {
     }
 
     /* AI 搜索栏缩小 */
-    .topbar-ai-bar {
-        max-width: 160px !important;
-        height: 32px !important;
-        padding: 0 8px !important;
-    }
-    .topbar-ai-bar .ai-placeholder {
-        font-size: 0.7rem !important;
-    }
-    .topbar-ai-bar .ai-icon,
-    .topbar-ai-bar .ai-search-icon {
-        width: 0.85rem !important;
-        height: 0.85rem !important;
-    }
-
-    /* 顶栏整体紧缩 */
+    /* ---- 顶栏搜索框：继承 PC 端精致设计，仅调整尺寸 ---- */
     .topbar {
-        padding: 0 10px !important;
+        padding: 0 12px !important;
         gap: 8px !important;
     }
+    .topbar-left { display: none !important; flex-shrink: 0; }
     .topbar-right {
-        gap: 6px !important;
+        gap: 4px !important;
+        flex-shrink: 0 !important;
+    }
+    .topbar-center {
+        flex: 1 !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+        padding: 0 6px !important;
+    }
+    /* ★ 只覆盖尺寸，保留 PC 端的 border-radius/背景/边框/阴影/动画 */
+    .topbar-ai-bar {
+        max-width: none !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        justify-content: flex-start !important;  /* ★ 手机端左对齐 */
+        height: 36px !important;           /* PC端34px，移动端略大方便点击 */
+        padding: 0 16px !important;       /* PC端20px，稍紧凑 */
+        overflow: hidden !important;
+
+        /* 视觉效果与PC端一致（这些是PC端原值） */
+        background: rgba(255,255,255,0.14) !important;
+        border: 1px solid rgba(255,255,255,0.20) !important;
+        border-radius: 999px !important;   /* ★ 胶囊形 */
+        box-shadow:
+            0 1px 8px rgba(0,0,0,0.08),
+            inset 0 1px 0 rgba(255,255,255,0.10) !important;
+    }
+    .topbar-ai-bar:hover,
+    .topbar-ai-bar:active {
+        background: rgba(255,255,255,0.24) !important;
+        border-color: rgba(199,0,11,0.35) !important;
+        box-shadow:
+            0 2px 20px rgba(199,0,11,0.12),
+            inset 0 1px 0 rgba(255,255,255,0.15) !important;
+        transform: scale(1.01) !important;
+        transition: all 0.3s cubic-bezier(0.25,0.46,0.45,0.94) !important;
+    }
+    /* 搜索图标 - 继承PC端半透明风格 */
+    .topbar-ai-bar .ai-search-icon {
+        color: rgba(255,255,255,0.50) !important;
+        width: 15px !important;
+        height: 15px !important;
+        flex-shrink: 0 !important;
+    }
+    /* AI 图标 - 继承PC端红色+脉冲动画 */
+    .topbar-ai-bar .ai-icon {
+        color: #FF6B6B !important;
+        width: 16px !important;
+        height: 16px !important;
+        flex-shrink: 0 !important;
+        filter: drop-shadow(0 0 4px rgba(255,107,107,0.5)) !important;
+    }
+    /* placeholder 文字 */
+    .topbar-ai-bar .ai-placeholder {
+        font-size: 0.78rem !important;
+        font-weight: 400 !important;
+        color: rgba(255,255,255,0.55) !important;
+        letter-spacing: 0.2px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: calc(100% - 36px) !important;
     }
 }
 
@@ -10048,7 +10104,7 @@ table tbody tr:hover {
     }
     .page.active { min-height: 0 !important; height: auto !important; }
 
-    /* ---- 卡片间距收紧（原 spacing-lg=24px 太松）---- */
+    /* ---- card spacing tighten ---- */
     .content-card {
         padding: 14px 16px !important;     /* 原 24px → 14/16px */
         margin-bottom: 12px !important;     /* 原 24px → 12px */
@@ -10068,14 +10124,123 @@ table tbody tr:hover {
     }
     .table-wrapper > table { min-width: 480px; }
 
-    /* 结果区/知识库/对比表：即便无 wrapper 也允许自身滚动兜底 */
-    .result-content table,
-    .kb-doc-table,
-    .compare-column-solution table {
-        display: block;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        max-width: 100%;
+    /* ---- 结果区表格：移动端转为卡片列表（无需横滑！）---- */
+    .result-content {
+        overflow-x: hidden;
+    }
+    /* 原表格隐藏，由JS替换为卡片 */
+    .result-content table.mobile-transformed {
+        display: none !important;
+    }
+
+    /* ====== 表格→卡片布局样式 ====== */
+    .mobile-table-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+    .mobile-table-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 10px !important;
+        padding: 10px 12px !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
+    }
+    /* 所有卡片统一红色左边框 */
+    .mobile-table-card {
+        border-left: 3px solid var(--primary-color) !important;
+    }
+    .mobile-table-card:first-child {
+        /* 首张卡片无额外样式，统一处理 */
+    }
+    .mobile-table-item {
+        display: flex;
+        flex-direction: column;
+        padding: 5px 0;
+        border-bottom: 1px solid rgba(0,0,0,0.04);
+    }
+    .mobile-table-item:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+    .mobile-table-label {
+        font-size: 0.7rem !important;
+        color: var(--text-tertiary) !important;
+        font-weight: 600 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        flex-shrink: 0;
+        min-width: 0;
+    }
+    .mobile-table-value {
+        font-size: 0.85rem !important;
+        color: var(--text-primary) !important;
+        line-height: 1.45 !important;
+        word-break: break-word;
+    }
+    .mobile-table-value p,
+    .mobile-table-value ul,
+    .mobile-table-value ol {
+        margin: 4px 0 !important;
+        padding-left: 16px !important;
+        font-size: inherit !important;
+    }
+
+    /* 结果区整体紧凑化 */
+    .result-content.content-card {
+        padding: 12px 14px !important;
+    }
+    .result-content h2,
+    .result-content h3 {
+        font-size: 1.05rem !important;
+        margin-top: 10px !important;
+        margin-bottom: 6px !important;
+    }
+    .result-content p,
+    .result-content li {
+        font-size: 0.85rem !important;
+        line-height: 1.5 !important;
+    }
+    .result-content ul,
+    .result-content ol {
+        padding-left: 18px !important;
+        margin-bottom: 8px !important;
+    }
+
+    /* ---- 参考资料：列表→卡片化（和表格卡片统一风格）---- */
+    .result-content > ul,
+    .result-content > ol {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 6px !important;
+        padding-left: 0 !important;
+        margin-top: 8px !important;
+        margin-bottom: 10px !important;
+        list-style: none !important;   /* 去掉圆点 */
+    }
+    .result-content > ul > li,
+    .result-content > ol > li {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border-color) !important;
+        border-left: 3px solid var(--primary-color) !important;
+        border-radius: 8px !important;
+        padding: 8px 12px !important;
+        font-size: 0.82rem !important;
+        line-height: 1.5 !important;
+        margin-bottom: 0 !important;      /* 去掉原有间距，用 gap 控制 */
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+    }
+    /* 参考资料里的 code 标签（来源/行业/类型）紧凑化 */
+    .result-content > ul > li code,
+    .result-content > ol > li code {
+        background: var(--neutral-100) !important;
+        color: var(--text-secondary) !important;
+        font-size: 0.75rem !important;
+        padding: 1px 5px !important;
+        border-radius: 4px !important;
     }
 
     /* ---- 输入框统一 16px 防 iOS 缩放 ---- */
@@ -10184,6 +10349,109 @@ table tbody tr:hover {
         margin-bottom: 4px !important;
     }
 
+    /* ---- 方案页/竞品页：标题横幅紧凑化 ---- */
+    #page-solution .page-header,
+    #page-competitor .page-header {
+        padding: 14px 16px !important;
+        margin-bottom: 12px !important;
+        border-radius: 10px !important;
+    }
+    #page-solution .page-header h2,
+    #page-solution .page-header .page-title,
+    #page-competitor .page-header h2,
+    #page-competitor .page-header .page-title {
+        font-size: 1.1rem !important;
+        margin-bottom: 2px !important;
+    }
+    #page-solution .page-header p,
+    #page-solution .page-header .page-subtitle,
+    #page-competitor .page-header p,
+    #page-competitor .page-header .page-subtitle {
+        font-size: 0.75rem !important;
+        line-height: 1.3 !important;
+        margin-top: 2px !important;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* ---- 匹配页表单紧凑化 ---- */
+    #page-solution .content-card .form-group {
+        margin-bottom: 10px !important;
+    }
+    #page-solution .textarea-input {
+        min-height: 100px !important;     /* 原180px → 100px */
+        max-height: 160px !important;
+        padding: 10px 12px !important;
+        font-size: 15px !important;       /* 接近16px防缩放 */
+        border-radius: 8px !important;
+    }
+    #page-solution .char-counter {
+        font-size: 0.7rem !important;
+        margin-top: 2px !important;
+    }
+
+    /* ---- 匹配模式切换栏紧凑化 ---- */
+    #page-solution .mode-toggle-bar {
+        margin-top: 8px !important;
+        padding: 4px 0 !important;
+        gap: 6px !important;
+    }
+    #page-solution .mode-toggle {
+        padding: 2px !important;
+        gap: 2px !important;
+    }
+    #page-solution .mode-option {
+        padding: 5px 10px !important;
+        font-size: 0.78rem !important;
+        border-radius: 14px !important;
+    }
+    #page-solution .mode-badge {
+        font-size: 8px !important;
+        padding: 1px 4px !important;
+    }
+    #page-solution .mode-hint {
+        font-size: 0.7rem !important;
+        margin-top: 2px !important;
+    }
+
+    /* ---- 竞品页表单紧凑化 ---- */
+    #page-competitor .select-row {
+        gap: 10px !important;             /* 原 spacing-lg(24px) → 10px */
+        margin-bottom: 10px !important;
+    }
+    #page-competitor .form-group {
+        margin-bottom: 8px !important;
+    }
+    #page-competitor .select-input {
+        padding: 10px 12px !important;
+        font-size: 15px !important;
+        border-radius: 8px !important;
+    }
+
+    /* ---- 按钮组：主按钮全宽 + 次按钮小巧 ---- */
+    #page-solution .button-group,
+    #page-competitor .button-group {
+        flex-direction: column !important;
+        gap: 6px !important;
+        margin-top: 8px !important;
+    }
+    #page-solution .button-group .btn-primary,
+    #page-competitor .button-group .btn-primary {
+        width: 100% !important;
+        padding: 12px 20px !important;
+        font-size: 0.95rem !important;
+        border-radius: 10px !important;
+    }
+    #page-solution .button-group .btn-secondary,
+    #page-competitor .button-group .btn-secondary {
+        width: 100% !important;
+        padding: 8px 16px !important;
+        font-size: 0.85rem !important;
+        border-radius: 8px !important;
+    }
+
     /* ---- 成就卡片 2 列（原 4 列太挤）---- */
     .achievement-grid {
         grid-template-columns: repeat(2, 1fr) !important;
@@ -10206,7 +10474,6 @@ table tbody tr:hover {
     .table-wrapper > table { min-width: 440px; }
 }
 @media (max-width: 375px) {
-    .topbar-ai-bar { max-width: 120px !important; }
-    .topbar-ai-bar .ai-placeholder { font-size: 0.66rem !important; }
+    .topbar-ai-bar .ai-placeholder { font-size: 0.65rem !important; }
     .table-wrapper > table { min-width: 400px; }
 }
