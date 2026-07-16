@@ -531,6 +531,24 @@ async def agent_match_stream(
                 result["newly_unlocked"] = newly_unlocked
                 result["history_id"] = history_id
 
+                # 从 tool_calls 中提取 source_documents（与非流式 /agent/match 保持一致）
+                _sdocs = []
+                for _tc in result.get("tool_calls", []):
+                    if _tc.get("tool") in ("search_kb", "search_competitor") and _tc.get("result"):
+                        try:
+                            _rd = json.loads(_tc["result"]) if isinstance(_tc["result"], str) else _tc["result"]
+                            for _d in _rd.get("results", []):
+                                _sdocs.append(SourceDocument(
+                                    page_content=_d.get("content", ""),
+                                    metadata={
+                                        "source": _d.get("source", ""),
+                                        "industry": _d.get("industry", ""),
+                                    }
+                                ))
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                result["source_documents"] = _sdocs
+
                 await queue.put({"type": "result", "data": result})
             except Exception as e:
                 logger.error(f"[Agent SSE] 执行失败: {e}")
