@@ -8,6 +8,7 @@
 - execute() 返回字符串 Observation，直接喂给下一轮 LLM
 """
 
+import os
 import json
 import asyncio
 import logging
@@ -252,6 +253,144 @@ async def _tool_search_competitor(competitor: str, industry: str = "") -> str:
 
 
 # ============================================================
+# 阶段1 新增：文件交互工具（读取/落盘/列举）
+# ============================================================
+
+async def _tool_read_customer_file(path: str) -> str:
+    """
+    工具: read_customer_file
+    作用: 读取客户上传的任意格式文件（docx/xlsx/pdf/pptx/txt/csv/md/图片），
+          提取纯文本供需求分析。图片经 OCR 转文字。
+    实现: 复用 file_security 白名单校验 + parsers 多格式解析
+    """
+    from app.services.knowledge_base import get_kb_user_context
+    from app.agent.file_security import safe_resolve
+    from app.agent.parsers.read_file import extract_text, chunk_text
+
+    user_id = get_kb_user_context()
+    if user_id <= 0:
+        return "Error: 未登录用户无法读取文件"
+
+    try:
+        abs_path = safe_resolve(user_id, path)
+    except ValueError as e:
+        return f"Error: {e}"
+
+    if not os.path.exists(abs_path):
+        return f"Error: 文件不存在: {path}"
+
+    text = extract_text(abs_path)
+    if text.startswith("Error:"):
+        return text
+
+    # 不盲截断：返回全量；超长文本按重叠窗口分块，确保全部内容进入上下文、零丢弃
+    chunks = chunk_text(text)
+    if len(chunks) == 1:
+        return f"【客户文件内容 {path}】\n{text}"
+    return (
+        f"【客户文件内容 {path}（共 {len(chunks)} 段，已全量保留）】\n"
+        + "\n---\n".join(f"第{i + 1}段:\n{c}" for i, c in enumerate(chunks))
+    )
+
+
+async def _tool_save_solution_file(content: str = "", filename: str = "客户方案") -> str:
+    """
+    工具: save_solution_file
+    作用: 把当前生成的方案落盘为 Word 文件，存到用户白名单目录 generated_solutions/，
+          并在「历史记录」中登记一条记录（收藏由用户自行决定）。
+    实现: 复用 ReportGeneratorService 生成 docx，复制到白名单目录，再登记历史
+    """
+    from app.services.knowledge_base import get_kb_user_context
+    from app.agent.file_security import safe_solution_path, ensure_user_dirs
+    from app.services.report_generator import ReportGeneratorService, ReportType, ExportFormat
+    from app.services.usage_logger import get_usage_logger
+    import shutil
+    import re
+    import time
+
+    user_id = get_kb_user_context()
+    if user_id <= 0:
+        return "Error: 未登录用户无法保存文件"
+
+    if not content or not content.strip():
+        return "Error: 方案内容为空，无法保存"
+
+    try:
+        # 1. 生成 docx（复用现有报告生成管线）
+        service = ReportGeneratorService()
+        task = service.generate_report(
+            ReportType.SOLUTION, content, ExportFormat.WORD,
+            metadata={"title": filename, "customer": filename},
+        )
+        if not task or task.status.value != "completed" or not task.file_path:
+            return f"Error: 报告生成失败: {getattr(task, 'error_message', '未知错误')}"
+
+        # 2. 复制到白名单目录（同名加时间戳，不覆盖）
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        safe_name = re.sub(r'[\\/:*?"<>|]', "_", filename) or "客户方案"
+        safe_name = f"{safe_name}_{ts}.docx"
+        dest = safe_solution_path(user_id, safe_name)
+        ensure_user_dirs(user_id)
+        shutil.copy2(task.file_path, dest)
+
+        # 3. 登记到历史记录（落盘文件进历史，非收藏）
+        rel_path = os.path.relpath(dest, os.path.join(USER_DOCS_BASE_SAFE(), str(user_id)))
+        try:
+            usage_logger = get_usage_logger()
+            usage_logger.save_match_history(
+                demand_text=f"[AI 保存的方案文件] {filename}",
+                solution=content,
+                industry="",
+                sources=[{"source": rel_path, "industry": ""}],
+                user_id=user_id,
+            )
+        except Exception as log_err:
+            logger.warning(f"[save_solution_file] 登记历史失败: {log_err}")
+
+        return f"已保存方案到：{rel_path}（同时已记入「历史记录」）"
+    except Exception as e:
+        return f"Error: 保存方案失败: {e}"
+
+
+async def _tool_list_dir(dir: str = "") -> str:
+    """
+    工具: list_dir
+    作用: 列出用户白名单目录下的文件，供 Agent 选择/确认
+    """
+    from app.services.knowledge_base import get_kb_user_context
+    from app.agent.file_security import safe_resolve, get_user_root
+
+    user_id = get_kb_user_context()
+    if user_id <= 0:
+        return "Error: 未登录用户无法列举文件"
+
+    try:
+        target = safe_resolve(user_id, dir) if dir else str(get_user_root(user_id))
+    except ValueError as e:
+        return f"Error: {e}"
+
+    if not os.path.isdir(target):
+        return f"Error: 目录不存在: {dir}"
+
+    try:
+        entries = []
+        for name in sorted(os.listdir(target)):
+            full = os.path.join(target, name)
+            kind = "目录" if os.path.isdir(full) else "文件"
+            entries.append(f"- [{kind}] {name}")
+        if not entries:
+            return f"（目录为空: {dir or '用户根目录'}）"
+        return "用户目录文件列表：\n" + "\n".join(entries)
+    except Exception as e:
+        return f"Error: 列举失败: {e}"
+
+
+def USER_DOCS_BASE_SAFE():
+    from app.config import USER_DOCS_BASE_DIR
+    return USER_DOCS_BASE_DIR
+
+
+# ============================================================
 # 工厂函数：创建默认工具集
 # ============================================================
 
@@ -312,6 +451,60 @@ def create_default_tools() -> ToolRegistry:
             "required": ["competitor"]
         },
         func=_tool_search_competitor,
+    ))
+
+    # 4. read_customer_file — 读取客户上传的任意格式文件（含图片 OCR）
+    registry.register(Tool(
+        name="read_customer_file",
+        description="读取客户上传的需求资料文件，提取纯文本供需求分析。支持 Word/Excel/PDF/PPT/TXT/CSV/MD，以及图片（自动 OCR 识别文字）。当用户提到客户资料、上传文件、招标书、需求文档时使用。输入为相对路径（如 customer_uploads/xxx.docx）。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "文件的相对路径，如 customer_uploads/客户需求.docx"
+                }
+            },
+            "required": ["path"]
+        },
+        func=_tool_read_customer_file,
+    ))
+
+    # 5. save_solution_file — 把方案落盘为 Word 并登记历史
+    registry.register(Tool(
+        name="save_solution_file",
+        description="将当前生成的解决方案保存为 Word 文件到用户的方案库，并在历史记录中登记。当用户说'保存方案'/'存到我的方案库'/'导出文件'时使用。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "方案的完整 Markdown 内容"
+                },
+                "filename": {
+                    "type": "string",
+                    "description": "保存的文件名（不含扩展名），如 客户A_智能制造方案"
+                }
+            },
+            "required": ["content"]
+        },
+        func=_tool_save_solution_file,
+    ))
+
+    # 6. list_dir — 列举用户目录文件
+    registry.register(Tool(
+        name="list_dir",
+        description="列出用户文件目录下的文件，确认有哪些上传资料可用。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "dir": {
+                    "type": "string",
+                    "description": "相对目录路径，留空表示用户根目录"
+                }
+            }
+        },
+        func=_tool_list_dir,
     ))
 
     return registry

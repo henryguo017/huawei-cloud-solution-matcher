@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from fastapi import UploadFile, File
 from api.models import (
     MatchRequest, MatchResponse,
     AnalyzeRequest, AnalyzeResponse,
@@ -32,8 +33,10 @@ from app.services.solution_matcher import SolutionMatcherService
 from app.services.competitor_analyzer import CompetitorAnalyzerService
 from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context
 from app.services.usage_logger import UsageLoggerService
-from app.config import APP_NAME, APP_VERSION
+from app.config import APP_NAME, APP_VERSION, USER_DOCS_BASE_DIR
+from app.agent.parsers.read_file import ALLOWED_EXT
 from typing import Optional
+import os
 import json
 import asyncio
 import logging
@@ -104,7 +107,18 @@ async def match_solution(
             request.demand = "（用户未输入需求，请介绍华为云的核心解决方案和产品体系）"
             logger.info("检测到空输入，使用默认 prompt")
 
-        result = await matcher.match(request.demand)
+        # 阶段1：把上传的客户资料文本并入需求（标准/向导模式直接消费，不丢失文件内容）
+        enriched_demand = request.demand
+        if request.customer_files:
+            file_text = _read_customer_files_text(user_id, request.customer_files)
+            if file_text:
+                enriched_demand = (
+                    f"[用户上传的客户资料]\n{file_text}\n[/用户上传的客户资料]\n\n"
+                    f"{request.demand}"
+                )
+                logger.info(f"[匹配] 已并入 {len(request.customer_files)} 个客户资料文件")
+
+        result = await matcher.match(enriched_demand)
         
         source_docs = [
             SourceDocument(
@@ -186,6 +200,92 @@ async def match_solution(
             detail=f"匹配失败: {str(e)}"
         )
     
+# ========== 客户资料文件上传（阶段1） ==========
+
+@router.post("/upload/customer-file", tags=["文件交互"])
+async def upload_customer_file(
+    file: UploadFile = File(...),
+    user: Optional[dict] = Depends(get_current_user),
+):
+    """
+    上传客户资料文件到用户白名单目录 data/user_docs/{user_id}/customer_uploads/。
+
+    校验：扩展名白名单 + 单文件 ≤100MB。返回相对路径供匹配接口使用。
+    最多同时上传 10 个由前端控制；并发安全（每次独立写）。
+    """
+    try:
+        user_id = user.get('id') if user else None
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="请先登录后再上传")
+
+        # 扩展名白名单校验
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        if ext not in ALLOWED_EXT:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"不支持的文件格式: {ext}（仅支持 {', '.join(sorted(ALLOWED_EXT))}）"
+            )
+
+        # 读取内容并校验大小（单文件 ≤100MB）
+        data = await file.read()
+        max_bytes = 100 * 1024 * 1024
+        if len(data) > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"文件超过 100MB 上限（当前 {len(data) // (1024 * 1024)}MB）"
+            )
+
+        # 安全落盘（仅限用户白名单目录）
+        from app.agent.file_security import safe_upload_path, ensure_user_dirs
+        ensure_user_dirs(user_id)
+        save_path = safe_upload_path(user_id, file.filename)
+        with open(save_path, "wb") as f:
+            f.write(data)
+
+        rel = os.path.relpath(save_path, os.path.join(USER_DOCS_BASE_DIR, str(user_id)))
+        logger.info(f"[Upload] 用户 {user_id} 上传文件: {rel} ({len(data)} bytes)")
+        return {
+            "success": True,
+            "filename": os.path.basename(save_path),
+            "path": rel,
+            "size": len(data),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Upload] 上传失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"上传失败: {str(e)}"
+        )
+
+
+# ========== 客户文件辅助（阶段1） ==========
+
+def _read_customer_files_text(user_id: int, paths: list) -> str:
+    """
+    读取用户上传的客户资料文件，合并为纯文本。
+    任一文件失败不影响其余（返回 Error 说明）。用于标准/向导模式直接注入需求。
+    """
+    if not paths:
+        return ""
+    from app.agent.file_security import safe_resolve
+    from app.agent.parsers.read_file import extract_text
+    parts = []
+    for p in paths:
+        try:
+            abs_path = safe_resolve(user_id, p)
+        except ValueError as e:
+            parts.append(f"[文件 {p} 跳过: {e}]")
+            continue
+        if not os.path.exists(abs_path):
+            parts.append(f"[文件 {p} 跳过: 不存在]")
+            continue
+        text = extract_text(abs_path)
+        parts.append(f"===== 客户资料：{p} =====\n{text}")
+    return "\n\n".join(parts)
+
+
 # ========== Agent 智能匹配（单 Agent + Tool Calling） ==========
 
 @router.post("/agent/match", response_model=MatchResponse, tags=["解决方案匹配"])
@@ -215,9 +315,20 @@ async def agent_match_solution(
         agent = get_agent()
         session_id = user.get('id', 'anonymous') if user else 'anonymous'
 
+        # 阶段1：把上传的客户文件路径注入 Agent，引导其用 read_customer_file 读取
+        extra_context = ""
+        if request.customer_files:
+            file_list = "\n".join(f"- {p}" for p in request.customer_files)
+            extra_context = (
+                "\n\n[用户上传了以下客户资料文件，请务必先用 read_customer_file 工具逐一读取并提取需求要点，"
+                "再综合生成方案]\n" + file_list
+            )
+            logger.info(f"[Agent] 注入 {len(request.customer_files)} 个客户资料文件路径")
+
         result = await agent.run(
             user_input=request.demand,
             session_id=str(session_id),
+            extra_context=extra_context,
         )
 
         answer = result.get("answer", "Agent 未能生成有效方案")
@@ -339,9 +450,20 @@ async def agent_match_stream(
                     request.demand = "（用户未输入需求，请介绍华为云的核心解决方案和产品体系）"
 
                 agent = get_agent()
+
+                # 阶段1：注入客户文件路径，引导 Agent 用 read_customer_file 读取
+                extra_context = ""
+                if request.customer_files:
+                    file_list = "\n".join(f"- {p}" for p in request.customer_files)
+                    extra_context = (
+                        "\n\n[用户上传了以下客户资料文件，请务必先用 read_customer_file 工具逐一读取并提取需求要点，"
+                        "再综合生成方案]\n" + file_list
+                    )
+
                 result = await agent.run(
                     user_input=request.demand,
                     session_id=session_id,
+                    extra_context=extra_context,
                     event_callback=event_callback,
                 )
 

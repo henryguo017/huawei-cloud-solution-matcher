@@ -5,12 +5,14 @@ class MatchRequest(BaseModel):
     demand: str = Field(..., description="客户需求描述（可为空，对应'无声胜有声'隐藏成就）", min_length=0, max_length=5000)
     mode: Optional[str] = Field(default="standard", description="匹配模式: standard/agent/wizard")
     is_quick_demo: bool = Field(default=False, description="是否来自快速体验/Demo，为true时不触发成就")
+    customer_files: List[str] = Field(default_factory=list, description="用户上传的客户资料相对路径列表（如 customer_uploads/xxx.docx），由上传接口返回")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "demand": "我们是一家中型制造企业，有50台生产设备，经常因为设备突发故障导致生产线停工，每次停工损失约5万元。",
-                "mode": "standard"
+                "mode": "standard",
+                "customer_files": []
             }
         }
 

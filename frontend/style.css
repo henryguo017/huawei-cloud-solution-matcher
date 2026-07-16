@@ -924,6 +924,204 @@ body::after {
     to { transform: rotate(360deg); }
 }
 
+/* ===== 客户资料上传（阶段1） ===== */
+.form-label-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    vertical-align: -3px;
+    color: var(--primary-color);
+}
+
+.upload-dropzone {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-lg) var(--spacing-md);
+    background: var(--bg-card);
+    border: 1.5px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: center;
+}
+
+.upload-dropzone:hover,
+.upload-dropzone:focus-visible {
+    border-color: var(--primary-color);
+    background: var(--primary-bg, rgba(199, 0, 11, 0.03));
+    outline: none;
+}
+
+.upload-dropzone.dragover {
+    border-color: var(--primary-color);
+    background: var(--primary-bg, rgba(199, 0, 11, 0.06));
+    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.12);
+}
+
+.upload-dropzone-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
+    pointer-events: none;
+}
+
+.upload-dropzone-icon {
+    width: 28px;
+    height: 28px;
+    color: var(--primary-color);
+    opacity: 0.85;
+}
+
+.upload-dropzone-text {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.upload-dropzone-hint {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    line-height: 1.5;
+}
+
+.upload-file-list {
+    list-style: none;
+    margin: var(--spacing-md) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.upload-file-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    transition: all var(--transition);
+}
+
+.upload-file-item:hover {
+    border-color: var(--neutral-300);
+    box-shadow: var(--shadow-sm);
+}
+
+.upload-file-icon {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    color: var(--primary-color);
+    opacity: 0.85;
+}
+
+.upload-file-meta {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.upload-file-name {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upload-file-sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.upload-file-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+}
+
+.upload-file-status.uploading {
+    color: var(--text-secondary);
+}
+
+.upload-file-status.done {
+    color: #52C41A;
+}
+
+.upload-file-status.error {
+    color: var(--error);
+}
+
+.upload-file-remove {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.upload-file-remove:hover {
+    background: var(--error-light);
+    color: var(--error);
+}
+
+.upload-file-remove .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.upload-locked-hint {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+    padding: 10px 12px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    background: var(--neutral-50);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+}
+
+.upload-locked-hint .icon {
+    width: 18px;
+    height: 18px;
+    color: var(--text-tertiary);
+    flex: 0 0 auto;
+}
+
+.upload-dropzone.is-locked {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.upload-dropzone.is-locked:hover,
+.upload-dropzone.is-locked:focus-visible {
+    border-color: var(--border-color);
+    background: var(--bg-card);
+    box-shadow: none;
+}
+
 /* ===== Agent 模式切换 ===== */
 .mode-toggle-bar {
     display: flex;

@@ -998,7 +998,7 @@ const PaginationUI = {
 };
 
 const API = {
-    async match(demand, signal, mode = "standard") {
+    async match(demand, signal, mode = "standard", customerFiles = []) {
         const headers = { 'Content-Type': 'application/json' };
         // 仅登录用户且非快速体验时发送鉴权
         if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
@@ -1007,7 +1007,7 @@ const API = {
         const response = await fetch(`${Config.API_BASE_URL}/match`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ demand, mode, is_quick_demo: State.isQuickDemo }),
+            body: JSON.stringify({ demand, mode, customer_files: customerFiles, is_quick_demo: State.isQuickDemo }),
             signal
         });
 
@@ -1018,7 +1018,7 @@ const API = {
         return await response.json();
     },
 
-    async agentMatchStream(demand, signal, onEvent) {
+    async agentMatchStream(demand, signal, onEvent, customerFiles = []) {
         const headers = { 'Content-Type': 'application/json' };
         if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
             headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
@@ -1026,7 +1026,7 @@ const API = {
         const response = await fetch(`${Config.API_BASE_URL}/agent/match/stream`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ demand, is_quick_demo: State.isQuickDemo }),
+            body: JSON.stringify({ demand, customer_files: customerFiles, is_quick_demo: State.isQuickDemo }),
             signal
         });
 
@@ -4133,9 +4133,205 @@ function initEventListeners() {
         AuthManager.logout();
     });
     
-    const demandInput = document.getElementById('demand-input');
-    const charCount = document.getElementById('demand-char-count');
+    // ========== 客户资料上传（阶段1：标准/智能/向导三模式通用） ==========
+    const CustomerFileUploader = {
+        MAX_FILES: 10,
+        MAX_FILE_MB: 100,
+        ALLOWED_EXTS: ['.docx', '.xlsx', '.pdf', '.pptx', '.txt', '.csv', '.md', '.png', '.jpg', '.jpeg'],
+        files: [],   // {id, file, path, status: 'uploading'|'done'|'error', error}
+        seq: 0,
+        dropzoneEl: null,
+        inputEl: null,
+        listEl: null,
+        lockedHintEl: null,
+
+        init() {
+            this.dropzoneEl = document.getElementById('cf-dropzone');
+            this.inputEl = document.getElementById('cf-file-input');
+            this.listEl = document.getElementById('cf-file-list');
+            this.lockedHintEl = document.getElementById('cf-locked-hint');
+            if (!this.dropzoneEl || !this.inputEl) return;
+
+            this._refreshLockState();
+
+            this.dropzoneEl.addEventListener('click', () => this._onActivate());
+            this.dropzoneEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._onActivate(); }
+            });
+
+            this.inputEl.addEventListener('change', (e) => {
+                this._handleFiles(e.target.files);
+                e.target.value = '';  // 允许重复选择同一文件
+            });
+
+            ['dragenter', 'dragover'].forEach(ev =>
+                this.dropzoneEl.addEventListener(ev, (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    this.dropzoneEl.classList.add('dragover');
+                }));
+            ['dragleave', 'drop'].forEach(ev =>
+                this.dropzoneEl.addEventListener(ev, (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (ev === 'dragleave' && this.dropzoneEl.contains(e.relatedTarget)) return;
+                    this.dropzoneEl.classList.remove('dragover');
+                }));
+            this.dropzoneEl.addEventListener('drop', (e) => {
+                if (e.dataTransfer && e.dataTransfer.files) this._handleFiles(e.dataTransfer.files);
+            });
+        },
+
+        _refreshLockState() {
+            const loggedIn = typeof AuthManager !== 'undefined' && AuthManager.isLoggedIn && AuthManager.isLoggedIn();
+            if (!loggedIn) {
+                this.dropzoneEl.classList.add('is-locked');
+                if (this.lockedHintEl) this.lockedHintEl.style.display = 'flex';
+            } else {
+                this.dropzoneEl.classList.remove('is-locked');
+                if (this.lockedHintEl) this.lockedHintEl.style.display = 'none';
+            }
+        },
+
+        _onActivate() {
+            // 动态重判登录态（登录后不需刷新页面）
+            if (typeof AuthManager !== 'undefined' && AuthManager.isLoggedIn && !AuthManager.isLoggedIn()) {
+                UI.showToast('请先登录后再上传客户资料', 'info');
+                return;
+            }
+            this.inputEl.click();
+        },
+
+        _handleFiles(fileList) {
+            if (typeof AuthManager !== 'undefined' && AuthManager.isLoggedIn && !AuthManager.isLoggedIn()) {
+                UI.showToast('请先登录后再上传客户资料', 'info');
+                return;
+            }
+            const incoming = Array.from(fileList || []);
+            if (!incoming.length) return;
+
+            let remaining = this.MAX_FILES - this.files.length;
+            if (remaining <= 0) {
+                UI.showToast(`最多同时上传 ${this.MAX_FILES} 个文件，请先移除部分`, 'warning');
+                return;
+            }
+
+            const accepted = [];
+            for (const f of incoming) {
+                if (remaining <= 0) {
+                    UI.showToast(`最多同时上传 ${this.MAX_FILES} 个文件，多余的已忽略`, 'warning');
+                    break;
+                }
+                const ext = (f.name.indexOf('.') >= 0 ? f.name.slice(f.name.lastIndexOf('.')).toLowerCase() : '');
+                if (!this.ALLOWED_EXTS.includes(ext)) {
+                    UI.showToast(`不支持的格式：${f.name}`, 'warning');
+                    continue;
+                }
+                if (f.size > this.MAX_FILE_MB * 1024 * 1024) {
+                    UI.showToast(`超过 ${this.MAX_FILE_MB}MB 上限：${f.name}`, 'warning');
+                    continue;
+                }
+                if (this.files.some(x => x.file.name === f.name && x.file.size === f.size)) {
+                    continue;  // 去重（同名同大小）
+                }
+                accepted.push(f);
+                remaining--;
+            }
+
+            for (const f of accepted) {
+                const id = ++this.seq;
+                const item = { id, file: f, path: null, status: 'uploading', error: null };
+                this.files.push(item);
+                this._renderItem(item);
+                this._uploadOne(item);
+            }
+        },
+
+        async _uploadOne(item) {
+            try {
+                const form = new FormData();
+                form.append('file', item.file);
+                const headers = {};
+                if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
+                    headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+                }
+                const resp = await fetch(`${Config.API_BASE_URL}/upload/customer-file`, {
+                    method: 'POST',
+                    headers,
+                    body: form
+                });
+                if (!resp.ok) {
+                    let msg = `上传失败 (${resp.status})`;
+                    try { const j = await resp.json(); if (j.detail) msg = j.detail; } catch (e) {}
+                    throw new Error(msg);
+                }
+                const data = await resp.json();
+                item.path = data.path;
+                item.status = 'done';
+            } catch (err) {
+                item.status = 'error';
+                item.error = (err && err.message) || '上传失败';
+            }
+            this._renderItem(item);
+        },
+
+        _renderItem(item) {
+            if (!this.listEl) return;
+            let li = this.listEl.querySelector(`[data-id="${item.id}"]`);
+            if (!li) {
+                li = document.createElement('li');
+                li.className = 'upload-file-item';
+                li.dataset.id = item.id;
+                this.listEl.appendChild(li);
+            }
+            const sizeKB = item.file.size / 1024;
+            const sizeStr = sizeKB >= 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${Math.round(sizeKB)} KB`;
+            let statusHtml = '';
+            if (item.status === 'uploading') {
+                statusHtml = `<span class="upload-file-status uploading">上传中…</span>`;
+            } else if (item.status === 'done') {
+                statusHtml = `<span class="upload-file-status done"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 已就绪</span>`;
+            } else {
+                statusHtml = `<span class="upload-file-status error" title="${(item.error || '').replace(/"/g, '&quot;')}"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg> ${(item.error || '失败').replace(/</g, '&lt;')}</span>`;
+            }
+            li.innerHTML = `
+                <svg class="icon upload-file-icon" aria-hidden="true"><use href="#i-file"></use></svg>
+                <div class="upload-file-meta">
+                    <div class="upload-file-name" title="${item.file.name.replace(/"/g, '&quot;')}">${item.file.name.replace(/</g, '&lt;')}</div>
+                    <div class="upload-file-sub"><span>${sizeStr}</span> · ${statusHtml}</div>
+                </div>
+                <button class="upload-file-remove" type="button" title="移除" aria-label="移除文件">
+                    <svg class="icon" aria-hidden="true"><use href="#i-trash-2"></use></svg>
+                </button>`;
+            li.querySelector('.upload-file-remove').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._remove(item.id);
+            });
+        },
+
+        _remove(id) {
+            this.files = this.files.filter(x => x.id !== id);
+            const li = this.listEl ? this.listEl.querySelector(`[data-id="${id}"]`) : null;
+            if (li) li.remove();
+        },
+
+        getServerPaths() {
+            return this.files.filter(x => x.status === 'done').map(x => x.path);
+        },
+
+        hasPending() {
+            return this.files.some(x => x.status === 'uploading');
+        },
+
+        clear() {
+            this.files = [];
+            this.seq = 0;
+            if (this.listEl) this.listEl.innerHTML = '';
+            if (this.inputEl) this.inputEl.value = '';
+        }
+    };
+    CustomerFileUploader.init();
     
+    const demandInput = document.getElementById('demand-input');
+    const charCount = document.getElementById('demand-char-count');    
     demandInput?.addEventListener('input', () => {
         const length = demandInput.value.length;
         charCount.textContent = length;
@@ -4208,6 +4404,14 @@ function initEventListeners() {
         const demand = isWizardMode 
             ? DemandWizard.synthesizeDemand()
             : demandInput.value.trim();
+        
+        // 阶段1：收集已上传就绪的客户资料文件路径
+        const customerFiles = CustomerFileUploader.getServerPaths();
+        if (CustomerFileUploader.hasPending()) {
+            UI.showToast('部分客户资料仍在上传中，将仅使用已就绪的文件', 'info');
+        } else if (CustomerFileUploader.files.some(f => f.status === 'error')) {
+            UI.showToast('有客户资料上传失败，已忽略失败文件', 'warning');
+        }
         
         // 空输入：允许提交，后端会检测 easter_empty_search 成就
         if (!demand && !isWizardMode) {
@@ -4310,9 +4514,9 @@ function initEventListeners() {
                     } else if (event.type === 'error') {
                         throw new Error(event.message);
                     }
-                });
+                }, customerFiles);
             } else {
-                result = await API.match(demand, controller.signal, State.matchMode);
+                result = await API.match(demand, controller.signal, State.matchMode, customerFiles);
             }
             
             // API返回，显示完成
@@ -4439,6 +4643,7 @@ function initEventListeners() {
         }
         demandInput.value = '';
         charCount.textContent = '0';
+        CustomerFileUploader.clear();
         document.getElementById('solution-result').style.display = 'none';
         MatchProgress.hide();
         State.resultCache.solution = null;
