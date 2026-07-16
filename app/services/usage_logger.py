@@ -104,6 +104,23 @@ class UsageLoggerService:
             except:
                 pass  # 列已存在
             conn.execute("CREATE INDEX IF NOT EXISTS idx_history_user ON match_history(user_id)")
+
+            # 下载状态（v=20260715 — 历史方案下载标记）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN downloaded INTEGER DEFAULT 0")
+            except:
+                pass  # 列已存在
+            # 归档状态（v=20260715 — 历史方案归档锁定）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN archived INTEGER DEFAULT 0")
+            except:
+                pass  # 列已存在
+            # 追问对话记录（v=20260715 — 历史方案内展开追问优化，JSON 数组）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN conversation TEXT")
+            except:
+                pass  # 列已存在
+
             conn.commit()
             logger.info(f"使用日志数据库已初始化: {self.db_path}")
 
@@ -452,6 +469,83 @@ class UsageLoggerService:
             logger.error(f"更新竞品分析历史失败(id={record_id}): {e}")
             return False
 
+    def set_history_flags(self, record_id: int, user_id: Optional[int] = None,
+                          downloaded: Optional[bool] = None, archived: Optional[bool] = None) -> bool:
+        """
+        更新指定历史记录的下载/归档标记。
+        仅允许记录所有者操作（user_id 提供时）。
+        Returns:
+            更新成功返回 True，失败返回 False
+        """
+        try:
+            assigns = []
+            params: List[Any] = []
+            if downloaded is not None:
+                assigns.append("downloaded = ?")
+                params.append(1 if downloaded else 0)
+            if archived is not None:
+                assigns.append("archived = ?")
+                params.append(1 if archived else 0)
+            if not assigns:
+                return False
+            params.append(record_id)
+            sql = f"UPDATE match_history SET {', '.join(assigns)} WHERE id = ?"
+            if user_id is not None:
+                sql += " AND user_id = ?"
+                params.append(user_id)
+            with self._get_connection() as conn:
+                conn.execute(sql, params)
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"更新历史标记失败(id={record_id}): {e}")
+            return False
+
+    def append_history_conversation(self, record_id: int, user_id: Optional[int] = None,
+                                    follow_up: str = "", refined_solution: str = "",
+                                    conversation_history: Optional[List[Dict[str, str]]] = None) -> Optional[List[Dict[str, str]]]:
+        """
+        追加一条追问对话（用户追问 + AI 优化方案）到历史记录，并同步更新方案正文。
+        - conversation_history 提供时，直接以其为准覆盖（用于前端已维护完整对话）；
+        - 否则按 user/assistant 两条追加到现有 conversation。
+        Returns:
+            更新后的完整对话列表；失败返回 None
+        """
+        try:
+            with self._get_connection() as conn:
+                cur = conn.execute(
+                    "SELECT conversation, solution FROM match_history WHERE id = ?" + (" AND user_id = ?" if user_id is not None else ""),
+                    (record_id, user_id) if user_id is not None else (record_id,)
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                try:
+                    conv = json.loads(row["conversation"]) if row["conversation"] else []
+                except Exception:
+                    conv = []
+                if not isinstance(conv, list):
+                    conv = []
+
+                if conversation_history is not None and isinstance(conversation_history, list):
+                    conv = [{"role": str(m.get("role", "")), "content": str(m.get("content", ""))} for m in conversation_history]
+                else:
+                    if follow_up:
+                        conv.append({"role": "user", "content": follow_up})
+                    if refined_solution:
+                        conv.append({"role": "assistant", "content": refined_solution})
+
+                new_solution = refined_solution if refined_solution else row["solution"]
+                conn.execute(
+                    "UPDATE match_history SET conversation = ?, solution = ? WHERE id = ?" + (" AND user_id = ?" if user_id is not None else ""),
+                    (json.dumps(conv, ensure_ascii=False), new_solution, record_id, user_id) if user_id is not None else (json.dumps(conv, ensure_ascii=False), new_solution, record_id)
+                )
+                conn.commit()
+                return conv
+        except Exception as e:
+            logger.error(f"追加历史追问对话失败(id={record_id}): {e}")
+            return None
+
     def _trim_match_history(self, conn):
         """
         清理超限的历史记录（保留最新的 MAX_MATCH_HISTORY 条）
@@ -510,7 +604,7 @@ class UsageLoggerService:
                 if user_id is not None:
                     cursor = conn.execute(
                         """
-                        SELECT id, demand_text, industry, solution, created_at
+                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived
                         FROM match_history
                         WHERE type = 'match' AND user_id = ?
                         ORDER BY created_at DESC
@@ -522,7 +616,7 @@ class UsageLoggerService:
                 else:
                     cursor = conn.execute(
                         """
-                        SELECT id, demand_text, industry, solution, created_at
+                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived
                         FROM match_history
                         WHERE type = 'match'
                         ORDER BY created_at DESC
@@ -539,7 +633,9 @@ class UsageLoggerService:
                         "demand_text": row["demand_text"],
                         "industry": row["industry"] or "",
                         "solution": row["solution"] or "",
-                        "created_at": row["created_at"]
+                        "created_at": row["created_at"],
+                        "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
+                        "archived": bool(row["archived"]) if "archived" in row.keys() else False,
                     })
                 return results
         except Exception as e:
@@ -571,7 +667,10 @@ class UsageLoggerService:
                     "sources": json.loads(row["sources"]) if row["sources"] else [],
                     "type": row["type"] if "type" in row.keys() else "match",
                     "competitor": row["competitor"] if "competitor" in row.keys() else "",
-                    "created_at": row["created_at"]
+                    "created_at": row["created_at"],
+                    "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
+                    "archived": bool(row["archived"]) if "archived" in row.keys() else False,
+                    "conversation": json.loads(row["conversation"]) if row["conversation"] else [],
                 }
         except Exception as e:
             logger.error(f"获取匹配历史记录失败: {e}")
@@ -613,7 +712,7 @@ class UsageLoggerService:
                 if user_id is not None:
                     cursor = conn.execute(
                         """
-                        SELECT id, demand_text, industry, competitor, solution, created_at
+                        SELECT id, demand_text, industry, competitor, solution, created_at, downloaded, archived
                         FROM match_history
                         WHERE type = 'analyze' AND user_id = ?
                         ORDER BY created_at DESC
@@ -625,7 +724,7 @@ class UsageLoggerService:
                 else:
                     cursor = conn.execute(
                         """
-                        SELECT id, demand_text, industry, competitor, solution, created_at
+                        SELECT id, demand_text, industry, competitor, solution, created_at, downloaded, archived
                         FROM match_history
                         WHERE type = 'analyze'
                         ORDER BY created_at DESC
@@ -642,7 +741,9 @@ class UsageLoggerService:
                         "competitor": row["competitor"] or row["demand_text"] or "",
                         "industry": row["industry"] or "",
                         "solution": row["solution"] or "",
-                        "created_at": row["created_at"]
+                        "created_at": row["created_at"],
+                        "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
+                        "archived": bool(row["archived"]) if "archived" in row.keys() else False,
                     })
                 return results
         except Exception as e:
@@ -672,7 +773,10 @@ class UsageLoggerService:
                     "industry": row["industry"] or "",
                     "analysis": row["solution"],
                     "sources": json.loads(row["sources"]) if row["sources"] else [],
-                    "created_at": row["created_at"]
+                    "created_at": row["created_at"],
+                    "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
+                    "archived": bool(row["archived"]) if "archived" in row.keys() else False,
+                    "conversation": json.loads(row["conversation"]) if row["conversation"] else [],
                 }
         except Exception as e:
             logger.error(f"获取竞品分析历史记录失败: {e}")

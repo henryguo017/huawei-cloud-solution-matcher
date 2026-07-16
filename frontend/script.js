@@ -1352,7 +1352,71 @@ const API = {
         });
         if (!response.ok) throw new Error(`更新竞品分析历史失败: ${response.statusText}`);
         return await response.json();
-    }
+    },
+
+    // 归档 / 取消归档 / 下载 / 追问（历史方案增强）
+    async archiveHistory(historyId) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const response = await fetch(`${Config.API_BASE_URL}/history/${historyId}/archive`, {
+            method: 'POST', headers
+        });
+        if (!response.ok) throw new Error(`归档失败: ${response.statusText}`);
+        return await response.json();
+    },
+
+    async unarchiveHistory(historyId) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const response = await fetch(`${Config.API_BASE_URL}/history/${historyId}/unarchive`, {
+            method: 'POST', headers
+        });
+        if (!response.ok) throw new Error(`取消归档失败: ${response.statusText}`);
+        return await response.json();
+    },
+
+    async downloadHistoryFile(historyId) {
+        const headers = {};
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const response = await fetch(`${Config.API_BASE_URL}/history/${historyId}/download`, {
+            method: 'POST', headers
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `下载失败: ${response.statusText}`);
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        let fname = '华为云方案报告.docx';
+        const cd = response.headers.get('Content-Disposition');
+        if (cd) {
+            const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)/i);
+            if (m) fname = decodeURIComponent(m[1]);
+        }
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        return true;
+    },
+
+    async saveHistoryFollowup(historyId, followUp, refinedSolution, conversationHistory) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const body = { follow_up: followUp, refined_solution: refinedSolution };
+        if (conversationHistory) body.conversation_history = conversationHistory;
+        const response = await fetch(`${Config.API_BASE_URL}/history/${historyId}/followup`, {
+            method: 'POST', headers, body: JSON.stringify(body)
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `追问保存失败: ${response.statusText}`);
+        }
+        return await response.json();
+    },
 };
 
 /* ==================== 进度管理器 ==================== */
@@ -2897,6 +2961,13 @@ const HistoryUI = {
         }
     },
 
+    _statusBadges(item) {
+        let html = '';
+        if (item.downloaded) html += '<span class="history-badge badge-downloaded"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 已下载</span>';
+        if (item.archived) html += '<span class="history-badge badge-archived"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg> 已归档</span>';
+        return html;
+    },
+
     _renderMatchList(container) {
         container.innerHTML = this.items.map(item => {
             const isSelected = this.selectedIds.has(item.id);
@@ -2915,11 +2986,14 @@ const HistoryUI = {
                         <div class="history-item-header">
                             <span class="history-item-date">${dateStr}</span>
                             ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
+                            ${this._statusBadges(item)}
                         </div>
                         <div class="history-item-demand">${this.escapeHtml(demandPreview)}${item.demand_text && item.demand_text.length > 200 ? '...' : ''}</div>
                     </div>
                     <div class="history-item-actions">
-                        <button class="btn-favorite fav-action-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); FavoriteManager.toggleFromItem(this.closest('.history-item'))" title="${isFav ? '点击取消收藏' : '点击收藏'}">${isFav ? '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 已收藏' : '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏'}</button>
+                        <button class="btn-icon" title="下载方案报告" onclick="event.stopPropagation(); HistoryUI.downloadItem(${item.id})"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></button>
+                        <button class="btn-icon ${item.archived ? 'active' : ''}" title="${item.archived ? '取消归档' : '归档'}" onclick="event.stopPropagation(); HistoryUI.toggleArchive(${item.id})"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg></button>
+                        <button class="btn-favorite fav-action-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); FavoriteManager.toggleFromItem(this.closest('.history-item'))" title="${isFav ? '点击取消收藏' : '点击收藏'}">${isFav ? '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>' : '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>'}</button>
                         <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); HistoryUI.showDetail(${item.id})">查看</button>
                     </div>
                 </div>
@@ -2939,11 +3013,14 @@ const HistoryUI = {
                             <span class="history-item-date">${dateStr}</span>
                             <span class="history-item-industry competitor-badge">${this.escapeHtml(item.competitor || '未知竞品')}</span>
                             ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
+                            ${this._statusBadges(item)}
                         </div>
                         <div class="history-item-demand" style="color: rgba(255,255,255,0.6);">分析报告已生成 · 点击查看详情</div>
                     </div>
                     <div class="history-item-actions">
-                        <button class="btn-favorite fav-action-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); FavoriteManager.toggleFromItem(this.closest('.history-item'))" title="${isFav ? '点击取消收藏' : '点击收藏'}">${isFav ? '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 已收藏' : '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏'}</button>
+                        <button class="btn-icon" title="下载分析报告" onclick="event.stopPropagation(); HistoryUI.downloadItem(${item.id})"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></button>
+                        <button class="btn-icon ${item.archived ? 'active' : ''}" title="${item.archived ? '取消归档' : '归档'}" onclick="event.stopPropagation(); HistoryUI.toggleArchive(${item.id})"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg></button>
+                        <button class="btn-favorite fav-action-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); FavoriteManager.toggleFromItem(this.closest('.history-item'))" title="${isFav ? '点击取消收藏' : '点击收藏'}">${isFav ? '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>' : '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>'}</button>
                         <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); HistoryUI.showCompetitorDetail(${item.id})">查看</button>
                     </div>
                 </div>
@@ -3118,27 +3195,7 @@ const HistoryUI = {
                 return this.showCompetitorDetail(id);
             }
             const item = await API.getHistoryDetail(id);
-            const modal = document.getElementById('history-detail-modal');
-            const body = document.getElementById('detail-body');
-            if (!modal || !body) return;
-
-            const dateStr = item.created_at ? item.created_at.replace('T', ' ').substring(0, 16) : '--';
-            body.innerHTML = `
-                <div class="detail-section">
-                    <div class="detail-section-label">创建时间</div>
-                    <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">${dateStr}</div>
-                </div>
-                <div class="detail-section">
-                    <div class="detail-section-label">客户需求</div>
-                    <div class="detail-demand">${this.escapeHtml(item.demand_text || '')}</div>
-                </div>
-                <div class="detail-section">
-                    <div class="detail-section-label">匹配方案</div>
-                    <div class="detail-solution result-content">${item.solution ? UI.renderMarkdown(item.solution) : '<p style="color: var(--text-muted)">无方案内容</p>'}</div>
-                </div>
-            `;
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
+            this._openDetailModal(item, 'match');
         } catch (error) {
             console.error('加载详情失败:', error);
             UI.showToast('加载详情失败', 'warning');
@@ -3148,34 +3205,202 @@ const HistoryUI = {
     async showCompetitorDetail(id) {
         try {
             const item = await API.getCompetitorHistoryDetail(id);
-            const modal = document.getElementById('history-detail-modal');
-            const body = document.getElementById('detail-body');
-            if (!modal || !body) return;
-
-            const dateStr = item.created_at ? item.created_at.replace('T', ' ').substring(0, 16) : '--';
-            body.innerHTML = `
-                <div class="detail-section">
-                    <div class="detail-section-label">创建时间</div>
-                    <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">${dateStr}</div>
-                </div>
-                <div class="detail-section">
-                    <div class="detail-section-label">竞品名称</div>
-                    <div class="detail-demand">${this.escapeHtml(item.competitor || '')}</div>
-                </div>
-                <div class="detail-section">
-                    <div class="detail-section-label">所属行业</div>
-                    <div class="detail-demand">${this.escapeHtml(item.industry || '')}</div>
-                </div>
-                <div class="detail-section">
-                    <div class="detail-section-label">分析报告</div>
-                    <div class="detail-solution result-content">${item.analysis ? UI.renderMarkdown(item.analysis) : '<p style="color: var(--text-muted)">无分析内容</p>'}</div>
-                </div>
-            `;
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
+            this._openDetailModal(item, 'analyze');
         } catch (error) {
             console.error('加载竞品详情失败:', error);
             UI.showToast('加载详情失败', 'warning');
+        }
+    },
+
+    _openDetailModal(item, type) {
+        const modal = document.getElementById('history-detail-modal');
+        const body = document.getElementById('detail-body');
+        if (!modal || !body) return;
+        this.currentDetail = item;
+        this.currentDetailType = type;
+        this._pendingRefined = null;
+        body.innerHTML = this.renderDetailBody(item, type);
+        this.bindDetailEvents(item, type);
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    },
+
+    renderDetailBody(item, type) {
+        const dateStr = item.created_at ? item.created_at.replace('T', ' ').substring(0, 16) : '--';
+        const contentLabel = type === 'analyze' ? '分析报告' : '匹配方案';
+        const contentHtml = type === 'analyze'
+            ? (item.analysis ? UI.renderMarkdown(item.analysis) : '<p style="color: var(--text-muted)">无分析内容</p>')
+            : (item.solution ? UI.renderMarkdown(item.solution) : '<p style="color: var(--text-muted)">无方案内容</p>');
+        const demandBlock = type === 'analyze'
+            ? `<div class="detail-section"><div class="detail-section-label">竞品名称</div><div class="detail-demand">${this.escapeHtml(item.competitor || '')}</div></div>
+               <div class="detail-section"><div class="detail-section-label">所属行业</div><div class="detail-demand">${this.escapeHtml(item.industry || '')}</div></div>`
+            : `<div class="detail-section"><div class="detail-section-label">客户需求</div><div class="detail-demand">${this.escapeHtml(item.demand_text || '')}</div></div>`;
+        const statusLine = this._statusBadges(item) ? `<div class="detail-status">${this._statusBadges(item)}</div>` : '';
+        const archiveBtn = item.archived
+            ? `<button class="btn btn-secondary btn-sm" id="detail-unarchive-btn"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg> 取消归档</button>`
+            : `<button class="btn btn-secondary btn-sm" id="detail-archive-btn"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg> 归档</button>`;
+        const followupBtn = item.archived ? '' : `<button class="btn btn-primary btn-sm" id="detail-followup-toggle">追问优化</button>`;
+        return `
+            <div class="detail-section">
+                <div class="detail-section-label">创建时间</div>
+                <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">${dateStr}</div>
+            </div>
+            ${demandBlock}
+            <div class="detail-section">
+                <div class="detail-section-label">${contentLabel}</div>
+                <div class="detail-solution result-content" id="detail-solution-content">${contentHtml}</div>
+            </div>
+            <div class="detail-actions">
+                ${statusLine}
+                <div class="detail-action-btns">
+                    <button class="btn btn-secondary btn-sm" id="detail-download-btn"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载报告</button>
+                    ${archiveBtn}
+                    ${followupBtn}
+                </div>
+            </div>
+            <div class="followup-section" id="followup-section" style="display:none;">
+                <div class="followup-title">追问优化（基于当前方案继续对话，优化后自动保存）</div>
+                <div class="followup-conversation" id="followup-conversation">${this.renderConversation(item.conversation || [])}</div>
+                <div class="followup-input-row">
+                    <textarea id="followup-input" class="followup-input" placeholder="例如：补充预算控制在 50 万以内的实施路径，并突出华为云差异化优势"></textarea>
+                    <button class="btn btn-primary btn-sm" id="followup-send">发送</button>
+                </div>
+                <div class="followup-preview" id="followup-preview" style="display:none;"></div>
+                <div class="followup-preview-actions" id="followup-preview-actions" style="display:none;">
+                    <button class="btn btn-success btn-sm" id="followup-apply">应用并保存</button>
+                    <button class="btn btn-ghost btn-sm" id="followup-discard">放弃</button>
+                </div>
+            </div>
+        `;
+    },
+
+    renderConversation(conv) {
+        if (!conv || !conv.length) {
+            return '<div class="followup-empty">暂无追问记录。输入你的问题，AI 会基于当前方案继续优化并保存到本记录。</div>';
+        }
+        return conv.map(m => {
+            if (m.role === 'user') {
+                return `<div class="followup-msg user"><div class="followup-role">你</div><div class="followup-text">${this.escapeHtml(m.content || '')}</div></div>`;
+            }
+            return `<div class="followup-msg assistant"><div class="followup-role">AI</div><div class="followup-text followup-ai-summary">✓ 已根据上方追问优化方案（更新于上方方案正文）</div></div>`;
+        }).join('');
+    },
+
+    bindDetailEvents(item, type) {
+        const dl = document.getElementById('detail-download-btn');
+        if (dl) dl.addEventListener('click', async () => {
+            try {
+                UI.showToast('正在生成并下载文件...', 'info');
+                await API.downloadHistoryFile(item.id);
+                item.downloaded = true;
+                this.renderList();
+                UI.showToast('已下载到本地', 'success');
+            } catch (e) {
+                UI.showToast(e.message || '下载失败', 'error');
+            }
+        });
+        const ab = document.getElementById('detail-archive-btn');
+        if (ab) ab.addEventListener('click', async () => {
+            try {
+                await API.archiveHistory(item.id);
+                item.archived = true;
+                this.renderList();
+                this._openDetailModal(item, type);
+                UI.showToast('已归档，记录已锁定不可修改', 'success');
+            } catch (e) {
+                UI.showToast(e.message || '归档失败', 'error');
+            }
+        });
+        const ub = document.getElementById('detail-unarchive-btn');
+        if (ub) ub.addEventListener('click', async () => {
+            try {
+                await API.unarchiveHistory(item.id);
+                item.archived = false;
+                this.renderList();
+                this._openDetailModal(item, type);
+                UI.showToast('已取消归档', 'info');
+            } catch (e) {
+                UI.showToast(e.message || '操作失败', 'error');
+            }
+        });
+        const ft = document.getElementById('detail-followup-toggle');
+        if (ft) ft.addEventListener('click', () => {
+            const sec = document.getElementById('followup-section');
+            if (sec) sec.style.display = sec.style.display === 'none' ? 'block' : 'none';
+        });
+        const send = document.getElementById('followup-send');
+        if (send) send.addEventListener('click', () => this.sendFollowup(item, type));
+        const apply = document.getElementById('followup-apply');
+        if (apply) apply.addEventListener('click', () => this.applyFollowup(item, type));
+        const discard = document.getElementById('followup-discard');
+        if (discard) discard.addEventListener('click', () => {
+            const p = document.getElementById('followup-preview');
+            const pa = document.getElementById('followup-preview-actions');
+            if (p) p.style.display = 'none';
+            if (pa) pa.style.display = 'none';
+            this._pendingRefined = null;
+        });
+    },
+
+    async sendFollowup(item, type) {
+        const input = document.getElementById('followup-input');
+        const followUp = (input && input.value || '').trim();
+        if (!followUp) { UI.showToast('请输入追问内容', 'warning'); return; }
+        const preview = document.getElementById('followup-preview');
+        const previewActions = document.getElementById('followup-preview-actions');
+        const sendBtn = document.getElementById('followup-send');
+        try {
+            sendBtn.disabled = true;
+            sendBtn.textContent = '生成中...';
+            const history = (item.conversation || []).filter(m => m.role === 'user' || m.role === 'assistant');
+            let data;
+            if (type === 'analyze') {
+                data = await API.refineCompetitorAnalysis(item.competitor || '', item.industry || '', item.analysis || '', followUp, history);
+            } else {
+                data = await API.refineSolution(item.demand_text || '', item.solution || '', followUp, history);
+            }
+            this._pendingRefined = data.refined_solution;
+            preview.innerHTML = `<div class="detail-section-label">AI 优化结果预览</div><div class="detail-solution result-content">${UI.renderMarkdown(data.refined_solution)}</div>`;
+            preview.style.display = 'block';
+            previewActions.style.display = 'flex';
+        } catch (e) {
+            UI.showToast(e.message || '优化失败', 'error');
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.textContent = '发送';
+        }
+    },
+
+    async applyFollowup(item, type) {
+        const input = document.getElementById('followup-input');
+        const followUp = (input && input.value || '').trim();
+        if (!this._pendingRefined) return;
+        try {
+            const resp = await API.saveHistoryFollowup(item.id, followUp, this._pendingRefined);
+            item.conversation = resp.conversation || (item.conversation || []).concat([
+                { role: 'user', content: followUp },
+                { role: 'assistant', content: this._pendingRefined }
+            ]);
+            if (type === 'analyze') { item.analysis = this._pendingRefined; } else { item.solution = this._pendingRefined; }
+            const li = this.items.find(it => it.id === item.id);
+            if (li) {
+                if (type === 'analyze') li.analysis_preview = (this._pendingRefined || '').substring(0, 500);
+                else li.solution_preview = (this._pendingRefined || '').substring(0, 500);
+            }
+            const solEl = document.getElementById('detail-solution-content');
+            if (solEl) solEl.innerHTML = UI.renderMarkdown(this._pendingRefined);
+            const convEl = document.getElementById('followup-conversation');
+            if (convEl) convEl.innerHTML = this.renderConversation(item.conversation);
+            const p = document.getElementById('followup-preview');
+            const pa = document.getElementById('followup-preview-actions');
+            if (p) p.style.display = 'none';
+            if (pa) pa.style.display = 'none';
+            if (input) input.value = '';
+            this._pendingRefined = null;
+            this.renderList();
+            UI.showToast('优化结果已保存', 'success');
+        } catch (e) {
+            UI.showToast(e.message || '保存失败', 'error');
         }
     },
 
@@ -3183,6 +3408,42 @@ const HistoryUI = {
         const modal = document.getElementById('history-detail-modal');
         if (modal) modal.style.display = 'none';
         document.body.style.overflow = '';
+    },
+
+    // 列表项：下载方案/报告（重新生成 docx 并标记已下载）
+    async downloadItem(id) {
+        const item = this.items.find(it => it.id === id);
+        try {
+            UI.showToast('正在生成并下载文件...', 'info');
+            await API.downloadHistoryFile(id);
+            if (item) item.downloaded = true;
+            this.renderList();
+            UI.showToast('已下载到本地', 'success');
+        } catch (e) {
+            console.error('下载失败:', e);
+            UI.showToast(e.message || '下载失败', 'error');
+        }
+    },
+
+    // 列表项：归档 / 取消归档
+    async toggleArchive(id) {
+        const item = this.items.find(it => it.id === id);
+        if (!item) return;
+        try {
+            if (item.archived) {
+                await API.unarchiveHistory(id);
+                item.archived = false;
+                UI.showToast('已取消归档', 'info');
+            } else {
+                await API.archiveHistory(id);
+                item.archived = true;
+                UI.showToast('已归档，记录将被锁定不可修改', 'success');
+            }
+            this.renderList();
+        } catch (e) {
+            console.error('归档操作失败:', e);
+            UI.showToast(e.message || '操作失败', 'error');
+        }
     },
 
     init() {

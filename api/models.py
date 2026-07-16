@@ -142,6 +142,25 @@ class UpdateSolutionResponse(BaseModel):
     message: str = Field(default="方案已更新", description="操作消息")
 
 
+class HistoryFlagResponse(BaseModel):
+    success: bool = Field(..., description="操作是否成功")
+    archived: Optional[bool] = Field(default=None, description="最新归档状态")
+    downloaded: Optional[bool] = Field(default=None, description="最新下载状态")
+    message: str = Field(default="", description="操作消息")
+
+
+class HistoryFollowUpRequest(BaseModel):
+    follow_up: str = Field(..., description="用户的追问/优化要求")
+    refined_solution: str = Field(..., description="LLM 优化后的方案/分析报告（Markdown）")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(default=None, description="完整对话记录（提供则以此覆盖）")
+
+
+class HistoryFollowUpResponse(BaseModel):
+    success: bool = Field(..., description="操作是否成功")
+    conversation: List[Dict[str, str]] = Field(default_factory=list, description="更新后的完整对话记录")
+    message: str = Field(default="", description="操作消息")
+
+
 class DashboardStatsResponse(BaseModel):
     industry_coverage: Dict[str, int] = Field(default_factory=dict, description="各行业文档覆盖数量")
     match_trends: List[Dict[str, Any]] = Field(default_factory=list, description="最近7天匹配趋势")
@@ -183,6 +202,8 @@ class MatchHistoryItem(BaseModel):
     solution_preview: str = Field(default="", description="方案内容预览（前500字）")
     industry: str = Field(default="", description="识别出的行业")
     created_at: str = Field(..., description="创建时间")
+    downloaded: bool = Field(default=False, description="是否已下载到本地")
+    archived: bool = Field(default=False, description="是否已归档锁定")
 
 class MatchHistoryDetail(BaseModel):
     id: int = Field(..., description="记录ID")
@@ -191,6 +212,9 @@ class MatchHistoryDetail(BaseModel):
     industry: str = Field(default="", description="识别出的行业")
     sources: List[Dict[str, Any]] = Field(default_factory=list, description="参考文档列表")
     created_at: str = Field(..., description="创建时间")
+    downloaded: bool = Field(default=False, description="是否已下载到本地")
+    archived: bool = Field(default=False, description="是否已归档锁定")
+    conversation: List[Dict[str, str]] = Field(default_factory=list, description="追问优化对话记录")
 
 class MatchHistoryListResponse(BaseModel):
     items: List[MatchHistoryItem] = Field(default_factory=list, description="历史记录列表")
@@ -222,6 +246,8 @@ class CompetitorHistoryItem(BaseModel):
     industry: str = Field(default="", description="行业名称")
     analysis_preview: str = Field(default="", description="分析报告预览（前500字）")
     created_at: str = Field(..., description="创建时间")
+    downloaded: bool = Field(default=False, description="是否已下载到本地")
+    archived: bool = Field(default=False, description="是否已归档锁定")
 
 class CompetitorHistoryDetail(BaseModel):
     id: int = Field(..., description="记录ID")
@@ -230,6 +256,9 @@ class CompetitorHistoryDetail(BaseModel):
     analysis: str = Field(..., description="完整分析报告（Markdown）")
     sources: List[Dict[str, Any]] = Field(default_factory=list, description="参考文档列表")
     created_at: str = Field(..., description="创建时间")
+    downloaded: bool = Field(default=False, description="是否已下载到本地")
+    archived: bool = Field(default=False, description="是否已归档锁定")
+    conversation: List[Dict[str, str]] = Field(default_factory=list, description="追问优化对话记录")
 
 class CompetitorHistoryListResponse(BaseModel):
     items: List[CompetitorHistoryItem] = Field(default_factory=list, description="历史记录列表")

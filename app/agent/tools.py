@@ -293,63 +293,6 @@ async def _tool_read_customer_file(path: str) -> str:
     )
 
 
-async def _tool_save_solution_file(content: str = "", filename: str = "客户方案") -> str:
-    """
-    工具: save_solution_file
-    作用: 把当前生成的方案落盘为 Word 文件，存到用户白名单目录 generated_solutions/，
-          并在「历史记录」中登记一条记录（收藏由用户自行决定）。
-    实现: 复用 ReportGeneratorService 生成 docx，复制到白名单目录，再登记历史
-    """
-    from app.services.knowledge_base import get_kb_user_context
-    from app.agent.file_security import safe_solution_path, ensure_user_dirs
-    from app.services.report_generator import ReportGeneratorService, ReportType, ExportFormat
-    from app.services.usage_logger import get_usage_logger
-    import shutil
-    import re
-    import time
-
-    user_id = get_kb_user_context()
-    if user_id <= 0:
-        return "Error: 未登录用户无法保存文件"
-
-    if not content or not content.strip():
-        return "Error: 方案内容为空，无法保存"
-
-    try:
-        # 1. 生成 docx（复用现有报告生成管线）
-        service = ReportGeneratorService()
-        task = service.generate_report(
-            ReportType.SOLUTION, content, ExportFormat.WORD,
-            metadata={"title": filename, "customer": filename},
-        )
-        if not task or task.status.value != "completed" or not task.file_path:
-            return f"Error: 报告生成失败: {getattr(task, 'error_message', '未知错误')}"
-
-        # 2. 复制到白名单目录（同名加时间戳，不覆盖）
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        safe_name = re.sub(r'[\\/:*?"<>|]', "_", filename) or "客户方案"
-        safe_name = f"{safe_name}_{ts}.docx"
-        dest = safe_solution_path(user_id, safe_name)
-        ensure_user_dirs(user_id)
-        shutil.copy2(task.file_path, dest)
-
-        # 3. 登记到历史记录（落盘文件进历史，非收藏）
-        rel_path = os.path.relpath(dest, os.path.join(USER_DOCS_BASE_SAFE(), str(user_id)))
-        try:
-            usage_logger = get_usage_logger()
-            usage_logger.save_match_history(
-                demand_text=f"[AI 保存的方案文件] {filename}",
-                solution=content,
-                industry="",
-                sources=[{"source": rel_path, "industry": ""}],
-                user_id=user_id,
-            )
-        except Exception as log_err:
-            logger.warning(f"[save_solution_file] 登记历史失败: {log_err}")
-
-        return f"已保存方案到：{rel_path}（同时已记入「历史记录」）"
-    except Exception as e:
-        return f"Error: 保存方案失败: {e}"
 
 
 async def _tool_list_dir(dir: str = "") -> str:
@@ -470,28 +413,7 @@ def create_default_tools() -> ToolRegistry:
         func=_tool_read_customer_file,
     ))
 
-    # 5. save_solution_file — 把方案落盘为 Word 并登记历史
-    registry.register(Tool(
-        name="save_solution_file",
-        description="将当前生成的解决方案保存为 Word 文件到用户的方案库，并在历史记录中登记。当用户说'保存方案'/'存到我的方案库'/'导出文件'时使用。",
-        parameters={
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "方案的完整 Markdown 内容"
-                },
-                "filename": {
-                    "type": "string",
-                    "description": "保存的文件名（不含扩展名），如 客户A_智能制造方案"
-                }
-            },
-            "required": ["content"]
-        },
-        func=_tool_save_solution_file,
-    ))
-
-    # 6. list_dir — 列举用户目录文件
+    # 5. list_dir — 列举用户目录文件
     registry.register(Tool(
         name="list_dir",
         description="列出用户文件目录下的文件，确认有哪些上传资料可用。",

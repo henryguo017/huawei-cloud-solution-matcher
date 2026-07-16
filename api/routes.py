@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi import UploadFile, File
 from api.models import (
     MatchRequest, MatchResponse,
@@ -17,7 +17,9 @@ from api.models import (
     KBDocumentCreateRequest, KBDocumentCreateResponse,
     KBDocumentUpdateRequest, KBDocumentUpdateResponse,
     KBDocumentDeleteResponse, KBDocumentReindexResponse,
+    HistoryFlagResponse, HistoryFollowUpRequest, HistoryFollowUpResponse,
 )
+from app.services.report_generator import ReportGeneratorService, ReportType, ExportFormat
 from api.dependencies import (
     get_solution_matcher,
     get_competitor_analyzer,
@@ -1004,7 +1006,9 @@ async def get_match_history_list(
                     demand_text=item["demand_text"],
                     solution_preview=(item.get("solution") or "")[:500],
                     industry=item["industry"],
-                    created_at=item["created_at"]
+                    created_at=item["created_at"],
+                    downloaded=bool(item.get("downloaded", False)),
+                    archived=bool(item.get("archived", False))
                 )
                 for item in items
             ],
@@ -1044,7 +1048,10 @@ async def get_match_history_detail(
             solution=item["solution"],
             industry=item["industry"],
             sources=item["sources"],
-            created_at=item["created_at"]
+            created_at=item["created_at"],
+            downloaded=item.get("downloaded", False),
+            archived=item.get("archived", False),
+            conversation=item.get("conversation", [])
         )
     except HTTPException:
         raise
@@ -1088,7 +1095,10 @@ async def compare_match_history(
                 solution=item_a["solution"],
                 industry=item_a["industry"],
                 sources=item_a["sources"],
-                created_at=item_a["created_at"]
+                created_at=item_a["created_at"],
+                downloaded=item_a.get("downloaded", False),
+                archived=item_a.get("archived", False),
+                conversation=item_a.get("conversation", [])
             ),
             item_b=MatchHistoryDetail(
                 id=item_b["id"],
@@ -1096,7 +1106,10 @@ async def compare_match_history(
                 solution=item_b["solution"],
                 industry=item_b["industry"],
                 sources=item_b["sources"],
-                created_at=item_b["created_at"]
+                created_at=item_b["created_at"],
+                downloaded=item_b.get("downloaded", False),
+                archived=item_b.get("archived", False),
+                conversation=item_b.get("conversation", [])
             )
         )
     except HTTPException:
@@ -1166,6 +1179,10 @@ async def update_history_solution(
 ):
     """更新历史记录中的方案内容（用于追问优化后保存最终版）"""
     try:
+        # 归档记录禁止修改
+        _existing = usage_logger.get_match_history_by_id(history_id, user_id=current_user.get("id"))
+        if _existing and _existing.get("archived"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="该记录已归档，无法修改")
         success = usage_logger.update_match_history_solution(history_id, request.solution, user_id=current_user.get("id"))
         if not success:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"历史记录 {history_id} 不存在或更新失败")
@@ -1189,6 +1206,10 @@ async def update_competitor_history_solution(
 ):
     """更新竞品分析历史记录中的分析内容（用于追问优化后保存最终版）"""
     try:
+        # 归档记录禁止修改
+        _existing = usage_logger.get_competitor_history_by_id(history_id, user_id=current_user.get("id"))
+        if _existing and _existing.get("archived"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="该记录已归档，无法修改")
         success = usage_logger.update_competitor_history_solution(history_id, request.solution, user_id=current_user.get("id"))
         if not success:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"竞品分析历史记录 {history_id} 不存在或更新失败")
@@ -1201,6 +1222,124 @@ async def update_competitor_history_solution(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"更新失败: {str(e)}"
         )
+
+
+# ========== 历史记录：归档 / 下载 / 追问优化 ==========
+
+@router.post("/history/{history_id}/archive", response_model=HistoryFlagResponse, tags=["历史记录"])
+async def archive_history(
+    history_id: int,
+    current_user: dict = Depends(get_current_user),
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """归档历史记录（归档后不可修改，仅可查看/下载）"""
+    try:
+        ok = usage_logger.set_history_flags(history_id, user_id=current_user.get("id"), archived=True)
+        if not ok:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"历史记录 {history_id} 不存在")
+        return HistoryFlagResponse(success=True, archived=True, message="已归档")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"归档失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"归档失败: {str(e)}")
+
+
+@router.post("/history/{history_id}/unarchive", response_model=HistoryFlagResponse, tags=["历史记录"])
+async def unarchive_history(
+    history_id: int,
+    current_user: dict = Depends(get_current_user),
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """取消归档历史记录"""
+    try:
+        ok = usage_logger.set_history_flags(history_id, user_id=current_user.get("id"), archived=False)
+        if not ok:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"历史记录 {history_id} 不存在")
+        return HistoryFlagResponse(success=True, archived=False, message="已取消归档")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"取消归档失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"取消归档失败: {str(e)}")
+
+
+@router.post("/history/{history_id}/download", tags=["历史记录"])
+async def download_history_file(
+    history_id: int,
+    current_user: dict = Depends(get_current_user),
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """
+    从历史记录重新生成方案/分析报告 Word 文件并下载，同时标记已下载。
+    浏览器无法访问用户本地文件，故采用「重新下载服务器副本」方式。
+    """
+    try:
+        item = usage_logger.get_match_history_by_id(history_id, user_id=current_user.get("id"))
+        if item is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="历史记录不存在")
+        content = item.get("solution") or ""
+        if not content.strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="该记录无方案内容，无法生成文件")
+        is_analyze = item.get("type") == "analyze"
+        report_type = ReportType.COMPETITOR if is_analyze else ReportType.SOLUTION
+        title = (item.get("competitor") or item.get("demand_text") or "华为云方案")[:60]
+        service = ReportGeneratorService()
+        task = service.generate_report(
+            report_type=report_type,
+            content=content,
+            format=ExportFormat.WORD,
+            metadata={"title": title, "customer": title},
+        )
+        if not task or task.status.value != "completed" or not task.file_path:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"文件生成失败: {getattr(task, 'error_message', '未知错误')}"
+            )
+        # 标记已下载
+        usage_logger.set_history_flags(history_id, user_id=current_user.get("id"), downloaded=True)
+        return FileResponse(
+            path=task.file_path,
+            filename=task.file_name,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"历史下载失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"下载失败: {str(e)}")
+
+
+@router.post("/history/{history_id}/followup", response_model=HistoryFollowUpResponse, tags=["历史记录"])
+async def history_followup(
+    history_id: int,
+    request: HistoryFollowUpRequest,
+    current_user: dict = Depends(get_current_user),
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """在历史记录内继续追问优化：追加对话记录并更新方案正文（归档记录禁止）"""
+    try:
+        existing = usage_logger.get_match_history_by_id(history_id, user_id=current_user.get("id"))
+        if existing is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="历史记录不存在")
+        if existing.get("archived"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="该记录已归档，无法修改")
+        conv = usage_logger.append_history_conversation(
+            history_id,
+            user_id=current_user.get("id"),
+            follow_up=request.follow_up,
+            refined_solution=request.refined_solution,
+            conversation_history=request.conversation_history,
+        )
+        if conv is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="历史记录不存在或更新失败")
+        return HistoryFollowUpResponse(success=True, conversation=conv, message="已保存优化结果")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"历史追问保存失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"追问保存失败: {str(e)}")
+
 
 # ========== 竞品分析历史记录 ==========
 
@@ -1244,7 +1383,9 @@ async def get_competitor_history_list(
                     competitor=item["competitor"],
                     industry=item["industry"],
                     analysis_preview=(item.get("solution") or "")[:500],
-                    created_at=item["created_at"]
+                    created_at=item["created_at"],
+                    downloaded=bool(item.get("downloaded", False)),
+                    archived=bool(item.get("archived", False))
                 )
                 for item in items
             ],
@@ -1284,7 +1425,10 @@ async def get_competitor_history_detail(
             industry=item["industry"],
             analysis=item["analysis"],
             sources=item.get("sources", []),
-            created_at=item["created_at"]
+            created_at=item["created_at"],
+            downloaded=item.get("downloaded", False),
+            archived=item.get("archived", False),
+            conversation=item.get("conversation", [])
         )
     except HTTPException:
         raise

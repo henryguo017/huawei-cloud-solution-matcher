@@ -3866,6 +3866,182 @@ body::after {
     overflow-x: auto;
 }
 
+/* ===== 历史记录增强：下载状态 / 归档徽标 / 操作按钮 / 追问面板 ===== */
+.history-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    line-height: 1;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.history-badge .icon {
+    width: 12px;
+    height: 12px;
+}
+.badge-downloaded {
+    background: rgba(22, 163, 74, 0.12);
+    color: #15803d;
+    border: 1px solid rgba(22, 163, 74, 0.3);
+}
+.badge-archived {
+    background: rgba(202, 138, 4, 0.14);
+    color: #b45309;
+    border: 1px solid rgba(202, 138, 4, 0.32);
+}
+
+/* 列表项图标按钮（下载 / 归档） */
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.btn-icon:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: rgba(199, 0, 11, 0.06);
+}
+.btn-icon.active {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: rgba(199, 0, 11, 0.1);
+}
+.btn-icon .icon {
+    width: 16px;
+    height: 16px;
+}
+
+/* 详情弹窗：状态 + 操作区 */
+.detail-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: var(--spacing-sm);
+}
+.detail-actions {
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px dashed var(--border-color);
+}
+.detail-action-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+}
+.detail-action-btns .btn .icon {
+    width: 15px;
+    height: 15px;
+    margin-right: 4px;
+    vertical-align: -2px;
+}
+
+/* 追问优化面板 */
+.followup-section {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: var(--bg-subtle, #f7f8fa);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg, 12px);
+}
+.followup-title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+}
+.followup-conversation {
+    max-height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
+.followup-empty {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary, #999);
+    padding: var(--spacing-sm) 0;
+}
+.followup-msg {
+    max-width: 92%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-lg, 12px);
+    font-size: var(--font-size-sm);
+    line-height: 1.7;
+}
+.followup-msg.user {
+    align-self: flex-end;
+    background: var(--primary-color);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+}
+.followup-msg.assistant {
+    align-self: flex-start;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-bottom-left-radius: 4px;
+}
+.followup-role {
+    font-size: 11px;
+    font-weight: 700;
+    opacity: .7;
+    margin-bottom: 3px;
+}
+.followup-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.followup-ai-summary {
+    color: var(--text-secondary);
+}
+.followup-input-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: flex-end;
+}
+.followup-input {
+    flex: 1;
+    min-height: 44px;
+    max-height: 120px;
+    resize: vertical;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 8px);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+.followup-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.12);
+}
+.followup-preview {
+    margin-top: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg, 12px);
+}
+.followup-preview-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-sm);
+}
+
 /* 历史记录 - 对比视图 */
 .history-compare-overlay {
     position: fixed;
