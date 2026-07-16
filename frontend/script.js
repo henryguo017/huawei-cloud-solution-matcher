@@ -4140,6 +4140,7 @@ function initEventListeners() {
         ALLOWED_EXTS: ['.docx', '.xlsx', '.pdf', '.pptx', '.txt', '.csv', '.md', '.png', '.jpg', '.jpeg'],
         files: [],   // {id, file, path, status: 'uploading'|'done'|'error', error}
         seq: 0,
+        _lockedTimer: null,
         dropzoneEl: null,
         inputEl: null,
         listEl: null,
@@ -4152,7 +4153,8 @@ function initEventListeners() {
             this.lockedHintEl = document.getElementById('cf-locked-hint');
             if (!this.dropzoneEl || !this.inputEl) return;
 
-            this._refreshLockState();
+            // 默认隐藏锁定提示（登录态可能还没初始化，延迟刷新）
+            if (this.lockedHintEl) this.lockedHintEl.style.display = 'none';
 
             this.dropzoneEl.addEventListener('click', () => this._onActivate());
             this.dropzoneEl.addEventListener('keydown', (e) => {
@@ -4178,15 +4180,18 @@ function initEventListeners() {
             this.dropzoneEl.addEventListener('drop', (e) => {
                 if (e.dataTransfer && e.dataTransfer.files) this._handleFiles(e.dataTransfer.files);
             });
+
+            // 延迟刷新：等 AuthManager.init() 完成后再判一次登录态
+            setTimeout(() => this._refreshLockState(), 500);
         },
 
         _refreshLockState() {
             const loggedIn = typeof AuthManager !== 'undefined' && AuthManager.isLoggedIn && AuthManager.isLoggedIn();
             if (!loggedIn) {
                 this.dropzoneEl.classList.add('is-locked');
-                if (this.lockedHintEl) this.lockedHintEl.style.display = 'flex';
             } else {
                 this.dropzoneEl.classList.remove('is-locked');
+                // 登录后始终隐藏锁定提示
                 if (this.lockedHintEl) this.lockedHintEl.style.display = 'none';
             }
         },
@@ -4195,6 +4200,14 @@ function initEventListeners() {
             // 动态重判登录态（登录后不需刷新页面）
             if (typeof AuthManager !== 'undefined' && AuthManager.isLoggedIn && !AuthManager.isLoggedIn()) {
                 UI.showToast('请先登录后再上传客户资料', 'info');
+                // 闪现锁定提示条，3 秒后自动消失
+                if (this.lockedHintEl) {
+                    this.lockedHintEl.style.display = 'flex';
+                    clearTimeout(this._lockedTimer);
+                    this._lockedTimer = setTimeout(() => {
+                        if (this.lockedHintEl) this.lockedHintEl.style.display = 'none';
+                    }, 3000);
+                }
                 return;
             }
             this.inputEl.click();

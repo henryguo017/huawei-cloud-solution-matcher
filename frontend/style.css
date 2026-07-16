@@ -938,9 +938,9 @@ body::after {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-lg) var(--spacing-md);
-    background: var(--bg-card);
-    border: 1.5px dashed var(--border-color);
+    padding: 24px 16px;
+    background: rgba(199, 0, 11, 0.02);
+    border: 2px dashed rgba(199, 0, 11, 0.35);
     border-radius: var(--radius-lg);
     cursor: pointer;
     transition: all var(--transition);
@@ -950,41 +950,41 @@ body::after {
 .upload-dropzone:hover,
 .upload-dropzone:focus-visible {
     border-color: var(--primary-color);
-    background: var(--primary-bg, rgba(199, 0, 11, 0.03));
+    background: rgba(199, 0, 11, 0.05);
     outline: none;
 }
 
 .upload-dropzone.dragover {
     border-color: var(--primary-color);
-    background: var(--primary-bg, rgba(199, 0, 11, 0.06));
-    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.12);
+    background: rgba(199, 0, 11, 0.08);
+    box-shadow: 0 0 0 4px rgba(199, 0, 11, 0.1), inset 0 0 20px rgba(199, 0, 11, 0.03);
 }
 
 .upload-dropzone-inner {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: 8px;
     pointer-events: none;
 }
 
 .upload-dropzone-icon {
-    width: 28px;
-    height: 28px;
+    width: 36px;
+    height: 36px;
     color: var(--primary-color);
-    opacity: 0.85;
+    opacity: 0.9;
 }
 
 .upload-dropzone-text {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     font-weight: 600;
     color: var(--text-primary);
 }
 
 .upload-dropzone-hint {
     font-size: var(--font-size-xs);
-    color: var(--text-tertiary);
-    line-height: 1.5;
+    color: var(--text-secondary);
+    line-height: 1.6;
 }
 
 .upload-file-list {
@@ -1111,8 +1111,8 @@ body::after {
 }
 
 .upload-dropzone.is-locked {
-    opacity: 0.55;
-    cursor: not-allowed;
+    opacity: 0.6;
+    cursor: pointer;
 }
 
 .upload-dropzone.is-locked:hover,
