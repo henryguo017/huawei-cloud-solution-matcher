@@ -39,6 +39,7 @@ from app.services.usage_logger import UsageLoggerService
 from app.config import APP_NAME, APP_VERSION, USER_DOCS_BASE_DIR
 from app.agent.parsers.read_file import ALLOWED_EXT
 from typing import Optional
+from datetime import datetime, date
 import os
 import json
 import asyncio
@@ -50,6 +51,23 @@ from api.auth_dependencies import get_current_user, get_current_user_optional, r
 from app.agent import SolutionAgent, get_agent
 
 logger = logging.getLogger(__name__)
+
+# SSE 生成器防御：遇到非标准 JSON 类型（Pydantic 模型/日期/集合等）时安全降级，
+# 避免 json.dumps 抛 TypeError 静默切断流式连接（如 SourceDocument 序列化问题）
+def _sse_json_default(obj):
+    for attr in ("model_dump", "dict"):
+        if hasattr(obj, attr):
+            try:
+                return getattr(obj, attr)()
+            except Exception:
+                pass
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, set):
+        return list(obj)
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", "replace")
+    return str(obj)
 
 router = APIRouter()
 
@@ -561,7 +579,7 @@ async def agent_match_stream(
                                         "source": _d.get("source", ""),
                                         "industry": _d.get("industry", ""),
                                     }
-                                ))
+                                ).model_dump())
                         except (json.JSONDecodeError, TypeError):
                             pass
                 result["source_documents"] = _sdocs
@@ -584,7 +602,7 @@ async def agent_match_stream(
                 if event is None:
                     break
                 event_type = event.get("type", "message")
-                yield f"event: {event_type}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                yield f"event: {event_type}\ndata: {json.dumps(event, ensure_ascii=False, default=_sse_json_default)}\n\n"
         except asyncio.CancelledError:
             logger.info("[Agent SSE] 客户端断开连接")
             task.cancel()
