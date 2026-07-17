@@ -6119,10 +6119,13 @@ const AIAssistant = {
         var overlay = document.getElementById('ai-assistant-overlay');
         if (overlay) overlay.style.display = 'none';
         document.body.style.overflow = '';
-        // 关闭时清空对话历史和消息（新会话）
+        // 关闭时清空对话历史和消息（新会话），并恢复快捷建议
         this.history = [];
+        this.isTyping = false;
         var container = document.getElementById('ai-chat-messages');
         if (container) container.innerHTML = '';
+        var qa = document.getElementById('ai-quick-actions');
+        if (qa) qa.style.display = '';
     },
 
     toggle() {
