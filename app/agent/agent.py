@@ -67,6 +67,8 @@ class SolutionAgent:
         session_id: str = "default",
         extra_context: str = "",
         event_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+        clarify_id: Optional[str] = None,
+        answers: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         运行 Agent
@@ -76,6 +78,8 @@ class SolutionAgent:
             session_id:     会话 ID，用于记忆隔离（默认 "default"）
             extra_context:  额外上下文，如产品页面传递的行业信息
             event_callback: 可选异步回调，用于 SSE 流式推送进度事件
+            clarify_id:     澄清会话 ID（续跑时传入，从 ClarifySessionStore 恢复上下文）
+            answers:        用户对澄清问题的回答列表（续跑时传入）
 
         返回:
             {
@@ -92,6 +96,8 @@ class SolutionAgent:
             session_id=session_id,
             extra_context=extra_context,
             event_callback=event_callback,
+            clarify_id=clarify_id,
+            answers=answers,
         )
 
     async def run_with_competitor(
