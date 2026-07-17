@@ -167,6 +167,7 @@ class AgentHarness:
 
         if clarify_id:
             # ── 续跑模式：从澄清会话状态恢复，跳过初始化，把用户回答作为 Observation 接回 ──
+            self._log("system", f"[CLARIFY_RESUME] 开始恢复 clarify_id={clarify_id}")
             state = ClarifySessionStore.get(clarify_id)
             if not state:
                 self._log("error", "澄清会话不存在或已过期")
@@ -188,11 +189,12 @@ class AgentHarness:
                 ans = a.get("answer", "") if isinstance(a, dict) else str(a)
                 ans_lines.append(f"- {q}：{ans}")
             ans_text = "\n".join(ans_lines) or "（用户未提供补充信息）"
-            current_prompt = state.get("current_prompt", "") + f"""
+            saved_prompt = state.get("current_prompt", "") or ""
+            current_prompt = saved_prompt + f"""
 Observation: 用户补充信息：
 {ans_text}
 请继续分析。如果信息足够，请输出 Final Answer。"""
-            self._log("system", f"ReAct 续跑（澄清轮次 {self._clarify_round}）")
+            self._log("system", f"ReAct 续跑（澄清轮次 {self._clarify_round}）answers={len(ans_lines)} prompt_len={len(current_prompt)}")
         else:
             # ── 首轮：清空短期记忆，记录用户输入，构建初始 Prompt ──
             self.memory.clear_short_term(session_id)
@@ -237,9 +239,11 @@ Observation: 用户补充信息：
 
                 # 调用 LLM
                 try:
+                    self._log("system", f"[CLARIFY_RESUME] 开始调用 LLM (prompt_len={len(current_prompt)})")
                     llm_response = await self._call_llm(current_prompt)
+                    self._log("system", f"[CLARIFY_RESUME] LLM 返回 len={len(llm_response)}")
                 except Exception as e:
-                    self._log("error", f"LLM 调用失败: {e}")
+                    self._log("error", f"[CLARIFY_RESUME] LLM 调用失败: {e}")
                     fallback = await self._generate_fallback(user_input)
                     return self._make_result(fallback, tool_calls_log, success=False)
 
