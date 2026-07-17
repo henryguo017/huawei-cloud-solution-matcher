@@ -11033,6 +11033,83 @@ table tbody tr:hover {
     #toast-container .toast { max-width: 90vw; }
 }
 
+/* ==================== 方案详情弹窗移动端适配 ==================== */
+@media (max-width: 767px) {
+    /* 弹窗全屏化，留顶部标题栏空间 */
+    #history-detail-modal {
+        align-items: flex-end !important;
+        padding: 0 !important;
+    }
+
+    .detail-modal {
+        width: 100vw !important;
+        max-width: none !important;
+        max-height: 92vh !important;
+        border-radius: 20px 20px 0 0 !important;
+        overflow: hidden;
+    }
+
+    /* 操作按钮区：紧凑横向排列 */
+    .detail-action-btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px !important;
+        padding: 10px 12px !important;
+    }
+
+    .detail-action-btns .btn {
+        flex: 1 1 calc(45% - 3px);
+        min-width: 0;
+        font-size: 0.8rem;
+        padding: 7px 4px !important;
+        white-space: nowrap;
+    }
+
+    /* 追问区域优化 */
+    .followup-section {
+        margin-top: 8px !important;
+        padding: 10px 12px !important;
+        border-radius: 10px !important;
+    }
+
+    .followup-title {
+        font-size: 0.85rem !important;
+        margin-bottom: 6px !important;
+    }
+
+    .followup-input-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 6px !important;
+    }
+
+    .followup-input {
+        min-height: 60px !important;
+        max-height: 100px !important;
+        font-size: 0.88rem !important;
+    }
+
+    .followup-send-btn {
+        width: 100% !important;
+        padding: 10px !important;
+    }
+
+    /* 方案内容区可滚动 */
+    .detail-body-wrapper {
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+
+    .detail-section {
+        margin-bottom: 10px !important;
+    }
+
+    .detail-section-label {
+        font-size: 0.78rem !important;
+    }
+}
+
 /* ==================== 超小屏微调 ==================== */
 @media (max-width: 480px) {
     .main-content { padding-left: 12px !important; padding-right: 12px !important; }

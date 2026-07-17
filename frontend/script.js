@@ -1250,14 +1250,14 @@ const API = {
     async get(url) {
         const headers = {};
         if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
-        const resp = await fetch(url, { headers });
+        const resp = await fetch(`${Config.API_BASE_URL}${url}`, { headers });
         if (!resp.ok) throw new Error((await resp.json().catch(() => ({}))).detail || resp.statusText);
         return resp.json();
     },
     async post(url, body) {
         const headers = { 'Content-Type': 'application/json' };
         if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
-        const resp = await fetch(url, {
+        const resp = await fetch(`${Config.API_BASE_URL}${url}`, {
             method: 'POST',
             headers,
             body: JSON.stringify(body)
@@ -1271,7 +1271,7 @@ const API = {
     async put(url, body) {
         const headers = { 'Content-Type': 'application/json' };
         if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
-        const resp = await fetch(url, {
+        const resp = await fetch(`${Config.API_BASE_URL}${url}`, {
             method: 'PUT',
             headers,
             body: JSON.stringify(body)
@@ -1285,7 +1285,7 @@ const API = {
     async delete(url) {
         const headers = {};
         if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
-        const resp = await fetch(url, { method: 'DELETE', headers });
+        const resp = await fetch(`${Config.API_BASE_URL}${url}`, { method: 'DELETE', headers });
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({}));
             throw new Error(err.detail || `删除失败: ${resp.statusText}`);
@@ -1304,7 +1304,7 @@ const API = {
 
     // 方案版本化：获取同一分组的全部版本（v1/v2/v3...）
     async getHistoryGroup(groupId) {
-        return await this.get(`${Config.API_BASE_URL}/history/group/${groupId}`);
+        return await this.get(`/history/group/${groupId}`);
     },
 
     // 方案版本化：将某版本标记为「定稿」（同组仅一个定稿）
