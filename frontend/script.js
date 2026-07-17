@@ -1074,6 +1074,60 @@ const API = {
         }
     },
 
+    // 阶段 2.5：澄清续跑 —— 用户回答后带 clarify_id 续跑，SSE 流式返回（与 agentMatchStream 同构）
+    async agentClarify(clarifyId, answers, clientId = null, signal, onEvent) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
+            headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        }
+        const response = await fetch(`${Config.API_BASE_URL}/agent/clarify`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ clarify_id: clarifyId, answers: answers, client_id: clientId }),
+            signal
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `澄清续跑失败: ${response.statusText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
+
+            for (const part of parts) {
+                if (!part.trim()) continue;
+                const lines = part.split('\n');
+                let eventType = '';
+                let dataStr = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) {
+                        eventType = line.slice(7).trim();
+                    } else if (line.startsWith('data: ')) {
+                        dataStr = line.slice(6);
+                    }
+                }
+                if (dataStr) {
+                    try {
+                        const data = JSON.parse(dataStr);
+                        onEvent(data);
+                    } catch (e) {
+                        console.warn('[SSE clarify] JSON 解析失败:', dataStr);
+                    }
+                }
+            }
+        }
+    },
+
     async analyze(competitor, industry, signal) {
         const headers = { 'Content-Type': 'application/json' };
         if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
@@ -1246,6 +1300,21 @@ const API = {
         });
         if (!response.ok) throw new Error(`获取历史记录失败: ${response.statusText}`);
         return await response.json();
+    },
+
+    // 方案版本化：获取同一分组的全部版本（v1/v2/v3...）
+    async getHistoryGroup(groupId) {
+        return await this.get(`${Config.API_BASE_URL}/history/group/${groupId}`);
+    },
+
+    // 方案版本化：将某版本标记为「定稿」（同组仅一个定稿）
+    async finalizeHistory(id) {
+        return await this.post(`/history/${id}/finalize`, {});
+    },
+
+    // 方案版本化：回滚（非破坏性复制为新版本）
+    async rollbackHistory(id) {
+        return await this.post(`/history/${id}/rollback`, {});
     },
 
     async getHistoryDetail(id) {
@@ -2967,6 +3036,18 @@ const HistoryUI = {
         return html;
     },
 
+    // 方案版本化徽标：v1/v2/v3 + 定稿
+    _versionBadge(item) {
+        let html = '';
+        if (item.version && item.version >= 1) {
+            html += `<span class="history-badge badge-version">v${item.version}</span>`;
+        }
+        if (item.is_final) {
+            html += '<span class="history-badge badge-final"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 定稿</span>';
+        }
+        return html;
+    },
+
     _renderMatchList(container) {
         container.innerHTML = this.items.map(item => {
             const isSelected = this.selectedIds.has(item.id);
@@ -2986,6 +3067,7 @@ const HistoryUI = {
                             <span class="history-item-date">${dateStr}</span>
                             <span class="history-item-tags">
                                 ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
+                                ${this._versionBadge(item)}
                                 ${this._statusBadges(item)}
                             </span>
                         </div>
@@ -3243,12 +3325,27 @@ const HistoryUI = {
             ? `<button class="btn btn-secondary btn-sm" id="detail-unarchive-btn"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg> 取消归档</button>`
             : `<button class="btn btn-secondary btn-sm" id="detail-archive-btn"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg> 归档</button>`;
         const followupBtn = item.archived ? '' : `<button class="btn btn-primary btn-sm" id="detail-followup-toggle">追问优化</button>`;
+        // 方案版本化：版本徽标 + 定稿/回滚/查看版本按钮（仅方案匹配 & 未归档）
+        const versionLine = (type === 'match' && (item.version || item.is_final))
+            ? `<div class="detail-status">${this._versionBadge(item)}</div>` : '';
+        const finalizeBtn = (type === 'match' && !item.is_final && !item.archived)
+            ? `<button class="btn btn-success btn-sm" id="detail-finalize-btn"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 定稿</button>` : '';
+        const rollbackBtn = (type === 'match' && !item.archived)
+            ? `<button class="btn btn-secondary btn-sm" id="detail-rollback-btn"><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 回滚为新版本</button>` : '';
+        const versionsBtn = (type === 'match' && item.group_id)
+            ? `<button class="btn btn-ghost btn-sm" id="detail-versions-btn"><svg class="icon" aria-hidden="true"><use href="#i-layers"></use></svg> 查看版本</button>` : '';
+        const versionsSection = (type === 'match' && item.group_id)
+            ? `<div class="detail-section" id="detail-versions-section" style="display:none;">
+                   <div class="detail-section-label">方案版本（v1/v2/v3）</div>
+                   <div id="detail-versions-list" class="versions-list"></div>
+               </div>` : '';
         return `
             <div class="detail-section">
                 <div class="detail-section-label">创建时间</div>
                 <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">${dateStr}</div>
             </div>
             ${demandBlock}
+            ${versionLine}
             <div class="detail-section">
                 <div class="detail-section-label">${contentLabel}</div>
                 <div class="detail-solution result-content" id="detail-solution-content">${contentHtml}</div>
@@ -3259,8 +3356,12 @@ const HistoryUI = {
                     <button class="btn btn-secondary btn-sm" id="detail-download-btn"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载报告</button>
                     ${archiveBtn}
                     ${followupBtn}
+                    ${finalizeBtn}
+                    ${rollbackBtn}
+                    ${versionsBtn}
                 </div>
             </div>
+            ${versionsSection}
             <div class="followup-section" id="followup-section" style="display:none;">
                 <div class="followup-title">追问优化（基于当前方案继续对话，优化后自动保存）</div>
                 <div class="followup-conversation" id="followup-conversation">${this.renderConversation(item.conversation || [])}</div>
@@ -3343,6 +3444,76 @@ const HistoryUI = {
             if (pa) pa.style.display = 'none';
             this._pendingRefined = null;
         });
+        // 方案版本化：定稿 / 回滚 / 查看版本
+        const fb = document.getElementById('detail-finalize-btn');
+        if (fb) fb.addEventListener('click', async () => {
+            try {
+                const resp = await API.finalizeHistory(item.id);
+                item.is_final = true;
+                this.renderList();
+                this._openDetailModal(item, type);
+                UI.showToast(resp.message || '已定稿', 'success');
+            } catch (e) {
+                UI.showToast(e.message || '定稿失败', 'error');
+            }
+        });
+        const rb = document.getElementById('detail-rollback-btn');
+        if (rb) rb.addEventListener('click', async () => {
+            try {
+                const resp = await API.rollbackHistory(item.id);
+                this.renderList();
+                UI.showToast(resp.message || '已回滚生成新版本', 'success');
+                const sec = document.getElementById('detail-versions-section');
+                if (sec && sec.style.display !== 'none' && item.group_id) {
+                    this._loadVersions(item.group_id, item.id);
+                }
+            } catch (e) {
+                UI.showToast(e.message || '回滚失败', 'error');
+            }
+        });
+        const vb = document.getElementById('detail-versions-btn');
+        if (vb) vb.addEventListener('click', () => {
+            const sec = document.getElementById('detail-versions-section');
+            if (!sec) return;
+            if (sec.style.display === 'none') {
+                sec.style.display = 'block';
+                this._loadVersions(item.group_id, item.id);
+            } else {
+                sec.style.display = 'none';
+            }
+        });
+    },
+
+    // 加载并渲染同一分组的全部版本（v1/v2/v3）
+    async _loadVersions(groupId, currentId) {
+        const listEl = document.getElementById('detail-versions-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<div class="versions-loading">加载中...</div>';
+        try {
+            const group = await API.getHistoryGroup(groupId);
+            const versions = group.versions || [];
+            if (versions.length === 0) {
+                listEl.innerHTML = '<div class="versions-empty">暂无其他版本</div>';
+                return;
+            }
+            listEl.innerHTML = versions.map(v => {
+                const cur = v.id === currentId ? ' current' : '';
+                const fin = v.is_final ? '<span class="history-badge badge-final"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 定稿</span>' : '';
+                const dt = v.created_at ? v.created_at.replace('T', ' ').substring(0, 16) : '';
+                return `
+                    <div class="version-item${cur}">
+                        <div class="version-item-head">
+                            <span class="version-tag">v${v.version}</span>
+                            ${fin}
+                            <span class="version-date">${dt}</span>
+                        </div>
+                        <div class="version-preview">${this.escapeHtml((v.solution_preview || '').substring(0, 120))}</div>
+                        <button class="btn btn-ghost btn-sm version-view-btn" onclick="event.stopPropagation(); HistoryUI.showDetail(${v.id})">查看此版本</button>
+                    </div>`;
+            }).join('');
+        } catch (e) {
+            listEl.innerHTML = '<div class="versions-empty">版本加载失败</div>';
+        }
     },
 
     async sendFollowup(item, type) {
@@ -4861,136 +5032,21 @@ function initEventListeners() {
                 const resultContainer = document.getElementById('solution-result');
                 const resultContent = document.getElementById('solution-content');
 
+                State.lastAgentDemand = demand;
                 await API.agentMatchStream(demand, controller.signal, (event) => {
-                    if (event.type === 'step') {
-                        if (tsBadge) tsBadge.textContent = `Step ${event.step}`;
-                    } else if (event.type === 'thought') {
-                        addThinkEntry('thought', 'thought', '<svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg>', '思考', event.text);
-                        MatchProgress.setStep(0);
-                    } else if (event.type === 'tool_start') {
-                        const stepIdx = toolStepMap[event.tool] ?? 1;
-                        MatchProgress.setStep(stepIdx);
-                        const inputJson = JSON.stringify(event.input || {}, null, 0);
-                        addThinkEntry('action', 'action', '<svg class="icon" aria-hidden="true"><use href="#i-wrench"></use></svg>', `调用工具: ${event.tool}`, `<code>${inputJson}</code>`);
-                    } else if (event.type === 'tool_end') {
-                        if (tsEntries) {
-                            const lastEntry = tsEntries.lastElementChild;
-                            if (lastEntry) {
-                                const iconEl = lastEntry.querySelector('.think-icon');
-                                if (iconEl) iconEl.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg>';
-                            }
-                        }
-                    } else if (event.type === 'final') {
-                        MatchProgress.stopSimulation();
-                        MatchProgress.setProgress(95);
-                        if (tsContainer) tsContainer.classList.add('done');
-                    } else if (event.type === 'result') {
+                    applyAgentProgressEvents(event);
+                    if (event.type === 'result') {
                         result = event.data;
                     } else if (event.type === 'error') {
-                    throw new Error(event.message);
-                }
-            }, customerFiles, State.currentClientId);
+                        throw new Error(event.message);
+                    }
+                }, customerFiles, State.currentClientId);
             } else {
                 result = await API.match(demand, controller.signal, State.matchMode, customerFiles);
             }
             
-            // API返回，显示完成
-            console.log('[SolutionMatch] API返回结果:', {
-                hasAnswer: !!result?.answer,
-                answerLength: result?.answer?.length || 0,
-                answerPreview: result?.answer?.substring(0, 100) || '(empty)',
-                sourceCount: result?.source_documents?.length || 0,
-                historyId: result?.history_id
-            });
-            MatchProgress.success('方案匹配完成！');
-            
-            const resultContainer = document.getElementById('solution-result');
-            const resultContent = document.getElementById('solution-content');
-            const sourcesContainer = document.getElementById('solution-sources');
-            
-            // 防御性检查：如果容器被异常清空导致子元素丢失，尝试重建
-            if (!resultContainer || !resultContent) {
-                console.warn('[SolutionMatch] 结果容器异常，尝试恢复...', {
-                    resultContainer: !!resultContainer,
-                    resultContent: !!resultContent
-                });
-                var existingContainer2 = document.getElementById('solution-result');
-                if (existingContainer2 && !document.getElementById('solution-content')) {
-                    existingContainer2.innerHTML = `
-                        <div class="result-header"><span class="result-badge success"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 匹配完成</span></div>
-                        <div class="result-content content-card" id="solution-content"></div>
-                        <div class="result-actions">
-                            <button class="btn btn-primary" id="download-solution-btn"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载方案报告</button>
-                            <button class="btn btn-secondary" id="export-docx-btn"><svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg> 导出方案书</button>
-                            <button class="btn btn-favorite-result" id="fav-solution-btn"><svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏方案</button>
-                        </div>
-                        <details class="source-documents content-card">
-                            <summary class="source-summary"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg> 查看参考的解决方案文档</summary>
-                            <div id="solution-sources"></div>
-                        </details>
-                    `;
-                    resultContainer = existingContainer2;
-                    resultContent = document.getElementById('solution-content');
-                    sourcesContainer = document.getElementById('solution-sources');
-                    var dlBtn2 = document.getElementById('download-solution-btn');
-                    if (dlBtn2) dlBtn2.addEventListener('click', function() {
-                        if (State.resultCache.match) {
-                            var r = State.resultCache.match;
-                            UI.downloadFile(r.answer, '华为云_' + (r.industry || '解决方案') + '_方案匹配报告.md');
-                        }
-                    });
-                    var exBtn2 = document.getElementById('export-docx-btn');
-                    if (exBtn2) exBtn2.addEventListener('click', triggerExportSolutionBook);
-                }
-            }
-            
-            if (!resultContainer || !resultContent) {
-                console.error('[SolutionMatch] 方案结果容器无法恢复', {
-                    resultContainer: !!resultContainer,
-                    resultContent: !!resultContent,
-                    sourcesContainer: !!sourcesContainer
-                });
-                UI.showToast('匹配完成，但页面结构异常，请刷新后重试', 'warning');
-                return;
-            }
-            
-            // 检查 answer 是否有效
-            if (!result || !result.answer || (typeof result.answer === 'string' && result.answer.trim() === '')) {
-                console.warn('[SolutionMatch] API返回的answer为空', result);
-                resultContent.innerHTML = '<div class="result-empty"><p style="color: var(--text-secondary); text-align: center; padding: 40px 20px;"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg> 匹配服务返回了空结果，请稍后重试。</p></div>';
-                resultContainer.style.display = 'block';
-                return;
-            }
-            
-            // 安全渲染 Markdown
-            try {
-                resultContent.innerHTML = UI.renderMarkdown(result.answer);
-            } catch (renderErr) {
-                console.error('[SolutionMatch] Markdown渲染失败:', renderErr);
-                const escapedText = (result.answer || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                resultContent.innerHTML = '<div class="result-content"><p>方案已生成，但渲染失败。请尝试下载报告查看完整内容。</p><pre style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;">' + escapedText.substring(0, 2000) + '</pre></div>';
-            }
-            UI.renderSources(sourcesContainer, result.source_documents);
-            resultContainer.style.display = 'block';
-            resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-            // ★ 匹配完成：隐藏思考流面板（释放占用的空间，尤其移动端）
-            const tsDone = document.getElementById('thinking-stream');
-            if (tsDone) { tsDone.style.display = 'none'; }
-
-            State.resultCache.solution = { ...result, demand };
-            // 更新收藏按钮状态
-            FavoriteManager._updateResultBtn('fav-solution-btn', demand);
-            FollowUpUI.show(demand, result.answer, result.history_id);
-
-            // 成就通知
-            console.log('[Achievement] newly_unlocked:', result.newly_unlocked, 'type:', typeof result.newly_unlocked, 'length:', result.newly_unlocked?.length);
-            if (result.newly_unlocked && result.newly_unlocked.length > 0 && window.AchievementUI && AchievementUI.showUnlockToast) {
-                console.log('[Achievement] Showing toast for', result.newly_unlocked.length, 'achievements');
-                setTimeout(() => AchievementUI.showUnlockToast(result.newly_unlocked), 500);
-            }
-            
-            // 高亮功能已按需求移除 —— 用户只需要点击查看产品详情
+            // 统一渲染结果（首轮与澄清续跑共用；含暂停/过期守卫）
+            renderAgentResult(result, demand);
         } catch (error) {
             if (error.name === 'AbortError') {
                 // 用户主动取消，不报错
@@ -5010,6 +5066,263 @@ function initEventListeners() {
             State.abortControllers.match = null;
         }
     });
+
+    // ==================== Agent 流式事件处理 + 结果渲染（首轮与澄清续跑共用） ====================
+
+    // 将工具名映射到进度面板语义步骤（analyze=0, search=1, generate=2）
+    function _toolStepIndex(tool) {
+        if (tool === 'analyze_demand') return 0;
+        if (tool === 'search_kb' || tool === 'search_competitor') return 1;
+        return 2;
+    }
+
+    // 处理 SSE 进度事件：更新思考流面板 + 进度条（首轮与澄清续跑共用）
+    function applyAgentProgressEvents(event) {
+        if (!event || !event.type) return;
+        const tsEntries = document.getElementById('thinking-entries');
+        const tsBadge = document.getElementById('thinking-step-badge');
+
+        const addThinkEntry = (type, labelClass, icon, labelText, text) => {
+            if (!tsEntries) return;
+            const div = document.createElement('div');
+            div.className = 'think-entry';
+            div.innerHTML = `<div class="think-icon ${type}">${icon}</div><div class="think-body"><div class="think-label ${labelClass}-label">${labelText}</div><div class="think-text">${text}</div></div>`;
+            tsEntries.appendChild(div);
+            tsEntries.scrollTop = tsEntries.scrollHeight;
+        };
+
+        switch (event.type) {
+            case 'step':
+                if (tsBadge) tsBadge.textContent = `Step ${event.step}`;
+                break;
+            case 'thought':
+                addThinkEntry('thought', 'think', '<svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg>', '思考', event.text || '');
+                break;
+            case 'tool_start':
+                MatchProgress.setStep(_toolStepIndex(event.tool));
+                addThinkEntry('tool', 'tool', '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>', '调用工具', `正在执行：${event.tool}`);
+                break;
+            case 'tool_end':
+                addThinkEntry('tool', 'tool', '<svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg>', '工具完成', `${event.tool} 执行完成`);
+                break;
+            case 'final':
+                MatchProgress.setStep(2);
+                addThinkEntry('final', 'final', '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>', '完成', '方案生成完成');
+                break;
+            default:
+                break;
+        }
+    }
+
+    // 统一渲染匹配结果（标准模式 / Agent 首轮 / 澄清续跑共用）；含 paused/expired/空答案守卫
+    function renderAgentResult(result, demand) {
+        if (!result) {
+            UI.showToast('匹配未返回结果', 'error');
+            return;
+        }
+        // 阶段 2.5：澄清暂停 —— 展示提问卡，等待用户作答后续跑
+        if (result.paused) {
+            MatchProgress.hide();
+            showClarifyCard({ clarify_id: result.clarify_id, questions: result.questions || [] });
+            return;
+        }
+        // 澄清会话过期
+        if (result.expired) {
+            clearClarifyCard();
+            MatchProgress.hide();
+            UI.showToast('澄清会话已过期，请重新发起匹配', 'warning');
+            return;
+        }
+        // 空答案守卫
+        if (!result.answer || (typeof result.answer === 'string' && result.answer.trim() === '')) {
+            MatchProgress.error('未生成方案内容');
+            UI.showToast('未生成方案内容，请重试', 'warning');
+            return;
+        }
+
+        const resultContainer = document.getElementById('solution-result');
+        const resultContent = document.getElementById('solution-content');
+        if (!resultContainer || !resultContent) return;
+
+        try {
+            resultContent.innerHTML = UI.renderMarkdown(result.answer);
+        } catch (e) {
+            resultContent.innerHTML = '<div class="result-content"><p>方案已生成，但渲染失败，请尝试下载方案文档查看。</p></div>';
+        }
+        UI.renderSources(document.getElementById('solution-sources'), result.source_documents);
+        resultContainer.style.display = 'block';
+        resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // 隐藏思考流面板
+        const ts = document.getElementById('thinking-stream');
+        if (ts) ts.style.display = 'none';
+
+        // 缓存 + 收藏按钮 + FollowUp + 成就（含版本元信息回填）
+        State.resultCache.solution = {
+            answer: result.answer,
+            solution_json: result.solution_json || null,
+            source_documents: result.source_documents || [],
+            demand: demand,
+            history_id: result.history_id,
+            group_id: result.group_id,
+            version: result.version,
+            is_final: result.is_final,
+            title: result.title,
+        };
+        const favName = (demand || '方案匹配结果').substring(0, 50);
+        FavoriteManager._updateResultBtn('fav-solution-btn', favName);
+
+        MatchProgress.success('匹配完成！');
+        UI.showToast('匹配完成！', 'success');
+
+        if (result.history_id) {
+            FollowUpUI.show(demand, result.answer, result.history_id);
+        }
+
+        if (result.newly_unlocked && result.newly_unlocked.length > 0 && window.AchievementUI && AchievementUI.showUnlockToast) {
+            setTimeout(() => AchievementUI.showUnlockToast(result.newly_unlocked), 500);
+        }
+    }
+
+    // 展示澄清提问卡（阶段 2.5）
+    function showClarifyCard(event) {
+        clearClarifyCard();
+        const clarifyId = event.clarify_id;
+        const questions = event.questions || [];
+        if (!clarifyId || questions.length === 0) {
+            UI.showToast('AI 需要补充信息，但未提供具体问题', 'warning');
+            return;
+        }
+
+        const ts = document.getElementById('thinking-stream');
+        if (ts) ts.style.display = 'none';
+
+        const card = document.createElement('div');
+        card.className = 'clarify-card content-card';
+        card.id = 'clarify-card';
+
+        const qHtml = questions.map((q, i) => {
+            const opts = (q.options || []).map(o =>
+                `<button type="button" class="clarify-opt-btn" data-qindex="${i}">${HistoryUI.escapeHtml(o)}</button>`
+            ).join('');
+            return `
+                <div class="clarify-q">
+                    <div class="clarify-q-text">${i + 1}. ${HistoryUI.escapeHtml(q.question)}</div>
+                    ${opts ? `<div class="clarify-opts">${opts}</div>` : ''}
+                    <input type="text" class="clarify-input" id="clarify-input-${i}" placeholder="输入你的补充（也可点选上方选项）" />
+                </div>`;
+        }).join('');
+
+        card.innerHTML = `
+            <div class="clarify-header">
+                <span class="clarify-title"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg> AI 需要你补充一点信息</span>
+            </div>
+            <div class="clarify-body">${qHtml}</div>
+            <div class="clarify-actions">
+                <button class="btn btn-primary btn-sm" id="clarify-submit-btn">提交并继续</button>
+                <button class="btn btn-ghost btn-sm" id="clarify-skip-btn">跳过，直接生成</button>
+            </div>
+        `;
+
+        // 插入到思考流之后（思考流已隐藏），位置稳定且符合现有布局
+        if (ts && ts.parentNode) {
+            ts.parentNode.insertBefore(card, ts.nextSibling);
+        } else {
+            const wrap = document.getElementById('solution-result');
+            if (wrap && wrap.parentNode) wrap.parentNode.insertBefore(card, wrap);
+            else document.body.appendChild(card);
+        }
+
+        card.querySelectorAll('.clarify-opt-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = btn.dataset.qindex;
+                const input = document.getElementById(`clarify-input-${idx}`);
+                if (input) input.value = btn.textContent.trim();
+                card.querySelectorAll(`.clarify-opt-btn[data-qindex="${idx}"]`).forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+            });
+        });
+
+        const submit = () => {
+            const answers = questions.map((q, i) => {
+                const input = document.getElementById(`clarify-input-${i}`);
+                return { question: q.question, answer: input ? input.value.trim() : '' };
+            });
+            if (!answers.some(a => a.answer)) {
+                UI.showToast('请至少补充一项，或点「跳过」', 'warning');
+                return;
+            }
+            agentClarifyResume(clarifyId, answers);
+        };
+        card.querySelector('#clarify-submit-btn').addEventListener('click', submit);
+        card.querySelector('#clarify-skip-btn').addEventListener('click', () => agentClarifyResume(clarifyId, []));
+
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // 清除澄清提问卡
+    function clearClarifyCard() {
+        const card = document.getElementById('clarify-card');
+        if (card) card.remove();
+    }
+
+    // 用户作答后续跑 Agent（阶段 2.5）
+    async function agentClarifyResume(clarifyId, answers) {
+        clearClarifyCard();
+        const controller = new AbortController();
+        State.abortControllers.match = controller;
+        State.loadingStates.match = true;
+
+        const matchBtn = document.getElementById('match-btn');
+        const matchBtnText = matchBtn ? matchBtn.querySelector('.btn-text') : null;
+        if (matchBtn) {
+            if (matchBtnText) matchBtnText.textContent = '取消匹配';
+            matchBtn.classList.add('btn-cancel');
+        }
+
+        MatchProgress.start();
+        MatchProgress.setSteps([
+            { icon: '<svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg>', label: '分析需求意图', desc: 'AI 理解补充信息，提取关键要点' },
+            { icon: '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>', label: '智能搜索知识库', desc: '用结构化关键词精准检索' },
+            { icon: '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>', label: '综合生成方案', desc: '基于知识库 + AI 生成完整方案' }
+        ]);
+
+        const tsContainer = document.getElementById('thinking-stream');
+        const tsEntries = document.getElementById('thinking-entries');
+        if (tsContainer) {
+            if (tsEntries) tsEntries.innerHTML = '';
+            tsContainer.style.display = 'block';
+            tsContainer.classList.remove('done');
+        }
+
+        try {
+            let result;
+            await API.agentClarify(clarifyId, answers, State.currentClientId, controller.signal, (event) => {
+                applyAgentProgressEvents(event);
+                if (event.type === 'result') {
+                    result = event.data;
+                } else if (event.type === 'error') {
+                    throw new Error(event.message);
+                }
+            });
+            renderAgentResult(result, State.lastAgentDemand);
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                const ts = document.getElementById('thinking-stream');
+                if (ts) ts.style.display = 'none';
+                return;
+            }
+            console.error('澄清续跑失败:', error);
+            MatchProgress.error('生成失败，请重试');
+            UI.showToast(error.message || '生成失败，请重试', 'error');
+        } finally {
+            State.loadingStates.match = false;
+            State.isQuickDemo = false;
+            if (matchBtnText) matchBtnText.textContent = '开始匹配';
+            if (matchBtn) matchBtn.classList.remove('btn-cancel');
+            if (State.abortControllers.match === controller) State.abortControllers.match = null;
+        }
+    }
     
     document.getElementById('clear-solution-btn')?.addEventListener('click', () => {
         // 如果正在匹配，先触发取消

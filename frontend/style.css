@@ -3958,6 +3958,145 @@ body::after {
     border: 1px solid rgba(202, 138, 4, 0.32);
 }
 
+/* 方案版本化徽标：v1/v2/v3 + 定稿 */
+.badge-version {
+    background: rgba(59, 130, 246, 0.14);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.32);
+}
+.badge-final {
+    background: rgba(168, 85, 247, 0.16);
+    color: #9333ea;
+    border: 1px solid rgba(168, 85, 247, 0.34);
+}
+
+/* 阶段 2.5：澄清提问卡 */
+.clarify-card {
+    margin: 16px 0;
+    padding: 18px 18px 16px;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.06), rgba(59, 130, 246, 0.02));
+    border-radius: 14px;
+}
+.clarify-header {
+    margin-bottom: 12px;
+}
+.clarify-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    font-size: var(--font-size-base, 15px);
+    color: var(--text-primary, #e8edf5);
+}
+.clarify-title .icon {
+    width: 18px;
+    height: 18px;
+    color: #3b82f6;
+}
+.clarify-q {
+    margin-bottom: 14px;
+}
+.clarify-q-text {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--text-secondary, #aab4c4);
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+.clarify-opts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.clarify-opt-btn {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+    background: var(--surface-2, rgba(255, 255, 255, 0.04));
+    color: var(--text-secondary, #aab4c4);
+    font-size: var(--font-size-sm, 13px);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.clarify-opt-btn:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    color: var(--text-primary, #e8edf5);
+}
+.clarify-opt-btn.selected {
+    background: rgba(59, 130, 246, 0.18);
+    border-color: #3b82f6;
+    color: #fff;
+}
+.clarify-input {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+    background: var(--surface-1, rgba(15, 20, 30, 0.6));
+    color: var(--text-primary, #e8edf5);
+    font-size: var(--font-size-sm, 13px);
+    outline: none;
+}
+.clarify-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+.clarify-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+/* 方案版本化：版本列表 */
+.versions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+}
+.versions-loading,
+.versions-empty {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--text-muted, #6b7686);
+    padding: 6px 0;
+}
+.version-item {
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    background: var(--surface-1, rgba(15, 20, 30, 0.5));
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+.version-item.current {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.08);
+}
+.version-item-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.version-tag {
+    font-weight: 700;
+    font-size: var(--font-size-sm, 13px);
+    color: #3b82f6;
+}
+.version-date {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-muted, #6b7686);
+}
+.version-preview {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--text-secondary, #aab4c4);
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+.version-view-btn {
+    font-size: var(--font-size-sm, 13px);
+}
+
 /* 列表项图标按钮（下载 / 归档） */
 .btn-icon {
     display: inline-flex;

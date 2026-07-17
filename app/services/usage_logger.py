@@ -121,6 +121,28 @@ class UsageLoggerService:
             except:
                 pass  # 列已存在
 
+            # 方案版本化（阶段 2.5 配套 — 同组方案 v1/v2/v3...，支持定稿）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN group_id INTEGER")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN version INTEGER DEFAULT 1")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN is_final INTEGER DEFAULT 0")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN title TEXT")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_history_group ON match_history(group_id)")
+            except:
+                pass
+
             conn.commit()
             logger.info(f"使用日志数据库已初始化: {self.db_path}")
 
@@ -395,23 +417,42 @@ class UsageLoggerService:
 
     # ========== 历史记录（方案匹配回溯 & 对比） ==========
 
-    def save_match_history(self, demand_text: str, solution: str, industry: str = "", sources: List[Dict[str, Any]] = None, user_id: Optional[int] = None) -> Optional[int]:
+    def save_match_history(self, demand_text: str, solution: str, industry: str = "", sources: List[Dict[str, Any]] = None, user_id: Optional[int] = None, group_id: Optional[int] = None, title: Optional[str] = None) -> Optional[int]:
         """
         保存一次匹配方案到历史记录
+
+        版本化逻辑：
+        - group_id 为 None → 新建一个分组（group_id = 当前最大+1），版本号固定为 1
+        - group_id 已提供   → 在同组内追加新版本（version = 该组最大版本号+1）
 
         Returns:
             新记录 id，保存失败返回 None
         """
         try:
+            if not title:
+                title = (demand_text or "解决方案").strip().replace("\n", " ")[:60]
             with self._get_connection() as conn:
+                if group_id is None:
+                    row = conn.execute("SELECT COALESCE(MAX(group_id), 0) AS mx FROM match_history").fetchone()
+                    group_id = (row["mx"] if row and row["mx"] is not None else 0) + 1
+                    version = 1
+                else:
+                    row = conn.execute(
+                        "SELECT COALESCE(MAX(version), 0) AS mx FROM match_history WHERE group_id = ?",
+                        (group_id,)
+                    ).fetchone()
+                    version = (row["mx"] if row and row["mx"] is not None else 0) + 1
                 cursor = conn.execute(
-                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id, group_id, version, is_final, title) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
                     (
                         demand_text,
                         solution,
                         industry,
                         json.dumps(sources or [], ensure_ascii=False),
-                        user_id
+                        user_id,
+                        group_id,
+                        version,
+                        title,
                     )
                 )
                 conn.commit()
@@ -419,6 +460,162 @@ class UsageLoggerService:
                 return cursor.lastrowid
         except Exception as e:
             logger.error(f"保存匹配历史记录失败: {e}")
+            return None
+
+    def get_match_history_meta(self, record_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """获取单条记录的版本元信息（group_id/version/is_final/title），用于接口回填。"""
+        try:
+            with self._get_connection() as conn:
+                sql = "SELECT group_id, version, is_final, title FROM match_history WHERE id = ?"
+                params = (record_id,)
+                if user_id is not None:
+                    sql += " AND user_id = ?"
+                    params = (record_id, user_id)
+                row = conn.execute(sql, params).fetchone()
+                if row is None:
+                    return None
+                return {
+                    "group_id": row["group_id"],
+                    "version": row["version"] if row["version"] is not None else 1,
+                    "is_final": bool(row["is_final"]) if "is_final" in row.keys() else False,
+                    "title": row["title"] or "",
+                }
+        except Exception as e:
+            logger.error(f"获取历史版本元信息失败: {e}")
+            return None
+
+    def get_match_history_group(self, group_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        获取同一分组的全部版本（按版本号升序），用于版本对比 / 回滚 / 定稿。
+
+        Returns:
+            {"group_id":, "title":, "demand_text":, "total_versions":, "final_version":, "versions":[...]}
+            分组不存在返回 None
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = [group_id]
+                if user_id is not None:
+                    where_user = " AND user_id = ?"
+                    params.append(user_id)
+                rows = conn.execute(
+                    f"""SELECT id, version, is_final, title, demand_text, industry, solution, created_at
+                        FROM match_history WHERE group_id = ?{where_user}
+                        ORDER BY version ASC""",
+                    params
+                ).fetchall()
+                if not rows:
+                    return None
+                versions = []
+                final_version = None
+                for r in rows:
+                    is_final = bool(r["is_final"]) if "is_final" in r.keys() else False
+                    if is_final:
+                        final_version = r["version"]
+                    versions.append({
+                        "id": r["id"],
+                        "version": r["version"] if r["version"] is not None else 1,
+                        "is_final": is_final,
+                        "title": r["title"] or "",
+                        "demand_text": r["demand_text"] or "",
+                        "industry": r["industry"] or "",
+                        "created_at": r["created_at"],
+                        "solution_preview": (r["solution"] or "")[:300],
+                    })
+                first = rows[0]
+                return {
+                    "group_id": group_id,
+                    "title": first["title"] or "",
+                    "demand_text": first["demand_text"] or "",
+                    "total_versions": len(versions),
+                    "final_version": final_version,
+                    "versions": versions,
+                }
+        except Exception as e:
+            logger.error(f"获取历史版本分组失败: {e}")
+            return None
+
+    def finalize_match_history(self, record_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        将某版本标记为「定稿」：该版本 is_final=1，同组其余版本 is_final=0（同组仅一个定稿）。
+
+        Returns:
+            {"id":, "group_id":, "version":} 或 None
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = [record_id]
+                if user_id is not None:
+                    where_user = " AND user_id = ?"
+                    params.append(user_id)
+                row = conn.execute(
+                    f"SELECT id, group_id, version FROM match_history WHERE id = ?{where_user}", params
+                ).fetchone()
+                if row is None:
+                    return None
+                gid = row["group_id"]
+                ver = row["version"] if row["version"] is not None else 1
+                # 先清空同组定稿标记
+                if gid is not None:
+                    conn.execute("UPDATE match_history SET is_final = 0 WHERE group_id = ?", (gid,))
+                conn.execute(
+                    f"UPDATE match_history SET is_final = 1 WHERE id = ?{where_user}", params
+                )
+                conn.commit()
+                return {"id": row["id"], "group_id": gid, "version": ver}
+        except Exception as e:
+            logger.error(f"定稿历史版本失败(id={record_id}): {e}")
+            return None
+
+    def rollback_match_history(self, record_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        回滚（非破坏性）：把选定版本的方案内容复制为同组的新版本（version = 最大+1）。
+        不修改原版本，安全可重入。
+
+        Returns:
+            {"source_id":, "new_id":, "group_id":, "version":} 或 None
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = [record_id]
+                if user_id is not None:
+                    where_user = " AND user_id = ?"
+                    params.append(user_id)
+                row = conn.execute(
+                    f"SELECT id, group_id, version, demand_text, solution, industry, sources, title FROM match_history WHERE id = ?{where_user}", params
+                ).fetchone()
+                if row is None:
+                    return None
+                gid = row["group_id"]
+                if gid is None:
+                    # 没有分组（极旧数据），为其建立分组再复制
+                    mx = conn.execute("SELECT COALESCE(MAX(group_id),0) AS mx FROM match_history").fetchone()
+                    gid = (mx["mx"] if mx and mx["mx"] is not None else 0) + 1
+                    conn.execute("UPDATE match_history SET group_id = ?, version = 1 WHERE id = ?", (gid, record_id))
+                maxv = conn.execute(
+                    "SELECT COALESCE(MAX(version),0) AS mx FROM match_history WHERE group_id = ?", (gid,)
+                ).fetchone()
+                new_version = (maxv["mx"] if maxv and maxv["mx"] is not None else 0) + 1
+                cur = conn.execute(
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id, group_id, version, is_final, title) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                    (
+                        row["demand_text"],
+                        row["solution"],
+                        row["industry"] or "",
+                        row["sources"] if row["sources"] is not None else json.dumps([], ensure_ascii=False),
+                        user_id,
+                        gid,
+                        new_version,
+                        row["title"] or "",
+                    )
+                )
+                conn.commit()
+                return {"source_id": record_id, "new_id": cur.lastrowid, "group_id": gid, "version": new_version}
+        except Exception as e:
+            logger.error(f"回滚历史版本失败(id={record_id}): {e}")
             return None
 
     def update_match_history_solution(self, record_id: int, solution: str, user_id: Optional[int] = None) -> bool:
@@ -604,7 +801,7 @@ class UsageLoggerService:
                 if user_id is not None:
                     cursor = conn.execute(
                         """
-                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived
+                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived, group_id, version, is_final, title
                         FROM match_history
                         WHERE type = 'match' AND user_id = ?
                         ORDER BY created_at DESC
@@ -616,7 +813,7 @@ class UsageLoggerService:
                 else:
                     cursor = conn.execute(
                         """
-                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived
+                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived, group_id, version, is_final, title
                         FROM match_history
                         WHERE type = 'match'
                         ORDER BY created_at DESC
@@ -636,6 +833,10 @@ class UsageLoggerService:
                         "created_at": row["created_at"],
                         "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
                         "archived": bool(row["archived"]) if "archived" in row.keys() else False,
+                        "group_id": row["group_id"] if "group_id" in row.keys() else None,
+                        "version": row["version"] if row["version"] is not None else 1,
+                        "is_final": bool(row["is_final"]) if "is_final" in row.keys() else False,
+                        "title": row["title"] or "",
                     })
                 return results
         except Exception as e:
@@ -671,6 +872,10 @@ class UsageLoggerService:
                     "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
                     "archived": bool(row["archived"]) if "archived" in row.keys() else False,
                     "conversation": json.loads(row["conversation"]) if row["conversation"] else [],
+                    "group_id": row["group_id"] if "group_id" in row.keys() else None,
+                    "version": row["version"] if row["version"] is not None else 1,
+                    "is_final": bool(row["is_final"]) if "is_final" in row.keys() else False,
+                    "title": row["title"] or "",
                 }
         except Exception as e:
             logger.error(f"获取匹配历史记录失败: {e}")

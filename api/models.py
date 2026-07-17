@@ -7,6 +7,7 @@ class MatchRequest(BaseModel):
     is_quick_demo: bool = Field(default=False, description="是否来自快速体验/Demo，为true时不触发成就")
     customer_files: List[str] = Field(default_factory=list, description="用户上传的客户资料相对路径列表（如 customer_uploads/xxx.docx），由上传接口返回")
     client_id: Optional[int] = Field(default=None, description="客户档案 ID；提供后 Agent 记忆按 用户:客户 维度隔离，避免多客户串味")
+    group_id: Optional[int] = Field(default=None, description="版本分组 ID；提供后本次匹配作为同一方案的「新版本」保存（v2/v3...），不提供则新建分组存为 v1")
     
     class Config:
         json_schema_extra = {
@@ -44,6 +45,11 @@ class MatchResponse(BaseModel):
     solution_json: Optional[Any] = Field(default=None, description="结构化方案（章节+要点），供报告生成器直接消费")
     history_id: Optional[int] = Field(default=None, description="本次匹配的历史记录ID，用于后续更新优化方案")
     newly_unlocked: Optional[List[dict]] = Field(default=None, description="新解锁的成就列表（前端用于弹窗提示）")
+    # 方案版本化（阶段 2.5 配套）
+    group_id: Optional[int] = Field(default=None, description="版本分组 ID（同组方案为 v1/v2/v3...）")
+    version: Optional[int] = Field(default=None, description="本次保存的版本号，从 1 开始")
+    is_final: Optional[bool] = Field(default=False, description="是否为定稿版本")
+    title: Optional[str] = Field(default=None, description="方案分组标题（用于历史面板展示）")
 
 class AnalyzeResponse(BaseModel):
     answer: str = Field(..., description="分析结果（Markdown格式）")
@@ -212,6 +218,11 @@ class MatchHistoryItem(BaseModel):
     created_at: str = Field(..., description="创建时间")
     downloaded: bool = Field(default=False, description="是否已下载到本地")
     archived: bool = Field(default=False, description="是否已归档锁定")
+    # 方案版本化
+    group_id: Optional[int] = Field(default=None, description="版本分组 ID")
+    version: Optional[int] = Field(default=1, description="版本号，从 1 开始")
+    is_final: bool = Field(default=False, description="是否为定稿版本")
+    title: Optional[str] = Field(default=None, description="方案分组标题")
 
 class MatchHistoryDetail(BaseModel):
     id: int = Field(..., description="记录ID")
@@ -223,6 +234,11 @@ class MatchHistoryDetail(BaseModel):
     downloaded: bool = Field(default=False, description="是否已下载到本地")
     archived: bool = Field(default=False, description="是否已归档锁定")
     conversation: List[Dict[str, str]] = Field(default_factory=list, description="追问优化对话记录")
+    # 方案版本化
+    group_id: Optional[int] = Field(default=None, description="版本分组 ID")
+    version: Optional[int] = Field(default=1, description="版本号，从 1 开始")
+    is_final: bool = Field(default=False, description="是否为定稿版本")
+    title: Optional[str] = Field(default=None, description="方案分组标题")
 
 class MatchHistoryListResponse(BaseModel):
     items: List[MatchHistoryItem] = Field(default_factory=list, description="历史记录列表")
@@ -304,3 +320,49 @@ class AchievementUnlockNotification(BaseModel):
     rarity_name: str = Field(..., description="稀有度中文名")
     icon: str = Field(..., description="成就图标")
     is_hidden: bool = Field(default=False, description="是否为隐藏成就")
+
+# ========== Agent 交互式澄清（阶段 2.5） ==========
+
+class ClarifyRequest(BaseModel):
+    clarify_id: str = Field(..., description="澄清会话 ID（由 Agent 首次暂停时下发）")
+    answers: List[Dict[str, str]] = Field(default_factory=list, description="用户对每个问题的回答，形如 [{'question': '...', 'answer': '...'}]")
+    client_id: Optional[int] = Field(default=None, description="客户档案 ID，需与首次匹配一致以复用同一记忆维度")
+
+class ClarifyAnswer(BaseModel):
+    question: str = Field(..., description="被回答的问题")
+    answer: str = Field(..., description="用户给出的回答")
+
+# ========== 方案版本化 ==========
+
+class HistoryVersionItem(BaseModel):
+    id: int = Field(..., description="版本记录ID")
+    version: int = Field(..., description="版本号")
+    is_final: bool = Field(default=False, description="是否定稿")
+    title: str = Field(default="", description="方案分组标题")
+    demand_text: str = Field(default="", description="关联需求")
+    industry: str = Field(default="", description="行业")
+    created_at: str = Field(..., description="创建时间")
+    solution_preview: str = Field(default="", description="方案预览（前300字）")
+
+class HistoryGroupResponse(BaseModel):
+    group_id: int = Field(..., description="版本分组 ID")
+    title: str = Field(default="", description="方案分组标题")
+    demand_text: str = Field(default="", description="关联需求")
+    total_versions: int = Field(default=0, description="版本总数")
+    final_version: Optional[int] = Field(default=None, description="已定稿的版本号（若有）")
+    versions: List[HistoryVersionItem] = Field(default_factory=list, description="按版本号升序排列的版本列表")
+
+class FinalizeResponse(BaseModel):
+    success: bool = Field(..., description="操作是否成功")
+    id: int = Field(..., description="被定稿的版本记录ID")
+    group_id: int = Field(..., description="所属分组ID")
+    version: int = Field(..., description="被定稿的版本号")
+    message: str = Field(default="", description="操作消息")
+
+class RollbackResponse(BaseModel):
+    success: bool = Field(..., description="操作是否成功")
+    source_id: int = Field(..., description="被回滚（复制）的源版本ID")
+    new_id: int = Field(..., description="新生成的版本记录ID")
+    group_id: int = Field(..., description="所属分组ID")
+    version: int = Field(..., description="新版本号")
+    message: str = Field(default="", description="操作消息")

@@ -18,6 +18,7 @@ import re
 import json
 import time
 import asyncio
+import uuid
 import logging
 from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
 
@@ -31,6 +32,7 @@ from app.services.solution_prompt import (
     build_format_block,
 )
 from app.services.solution_matcher import SolutionMatcherService
+from app.agent.clarify_store import ClarifySessionStore
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,10 @@ Thought: 我已收集到足够信息，可以给出完整方案。
 Final Answer: 
 [你的完整方案报告。系统会基于你检索到的资料进行来源标注与润色，但请你尽量写全结构、并在引用资料时标注来源文件名（如：据《xxx.docx》）。]
 
+### 需要向用户澄清时（仅限关键信息缺失）：
+Clarify: [{{"question": "这个项目的预算范围大概是多少？", "options": ["50万以内", "50-200万", "200万以上", "暂不确定"]}}]
+（可一次给 1-2 个问题，每个问题可附带若干候选选项方便用户快速选择）
+
 ## 规则
 - 必须调用工具来获取信息，不能凭空编造
 - 如果用户需求模糊，第一步必须先调用 analyze_demand
@@ -69,7 +75,9 @@ Final Answer:
 - 每次只输出一个 Action，不要一次输出多个
 - 如果工具返回错误，尝试调整参数重试一次，再失败就基于已有信息回答
 - 最多执行 {max_steps} 步
-- 不要调用 generate_report 工具——你直接用 Final Answer 输出报告即可"""
+- 不要调用 generate_report 工具——你直接用 Final Answer 输出报告即可
+- 只有当需求中有关键信息缺失（行业/规模/预算/目标/时间/决策角色）时才用 Clarify 提问；每次最多 1-2 个问题，全程最多提问一次；提问后等待用户回答再继续，不要在提问的同一轮给出 Final Answer
+- 如果你已经向用户提过一次问，请直接基于已有信息给出 Final Answer，不要再提问"""
 
 
 # Final Answer 增强指南：与标准模式共用 14 章结构 + 防幻觉 + 话术
@@ -128,6 +136,8 @@ class AgentHarness:
         session_id: str = "default",
         extra_context: str = "",
         event_callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+        clarify_id: Optional[str] = None,
+        answers: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         运行 ReAct 循环
@@ -150,21 +160,50 @@ class AgentHarness:
         self._start_time = time.time()
         self._logs = []
         tool_calls_log = []
+        self._clarify_round = 0
 
-        # 清空短期记忆，记录用户输入
-        self.memory.clear_short_term(session_id)
-        self.memory.add_user_message(session_id, user_input)
+        if clarify_id:
+            # ── 续跑模式：从澄清会话状态恢复，跳过初始化，把用户回答作为 Observation 接回 ──
+            state = ClarifySessionStore.get(clarify_id)
+            if not state:
+                self._log("error", "澄清会话不存在或已过期")
+                return self._make_result(
+                    "（澄清会话已过期或不存在，请重新发起匹配）", tool_calls_log,
+                    success=False, expired=True,
+                )
+            session_id = state.get("session_id", session_id)
+            user_input = state.get("user_input", user_input)
+            extra_context = state.get("extra_context", "")
+            self._step_count = state.get("step_count", 0)
+            self._start_time = time.time()
+            self._clarify_round = state.get("clarify_round", 0)
 
-        # 构建初始 Prompt
-        tools_desc = self.tools.get_tools_prompt()
-        system_prompt = (REACT_SYSTEM_PROMPT_BASE + REACT_FINAL_GUIDE).format(
-            tools=tools_desc,
-            max_steps=self.max_steps,
-        )
+            # 把用户回答拼成 Observation
+            ans_lines = []
+            for a in (answers or []):
+                q = a.get("question", "") if isinstance(a, dict) else ""
+                ans = a.get("answer", "") if isinstance(a, dict) else str(a)
+                ans_lines.append(f"- {q}：{ans}")
+            ans_text = "\n".join(ans_lines) or "（用户未提供补充信息）"
+            current_prompt = state.get("current_prompt", "") + f"""
+Observation: 用户补充信息：
+{ans_text}
+请继续分析。如果信息足够，请输出 Final Answer。"""
+            self._log("system", f"ReAct 续跑（澄清轮次 {self._clarify_round}）")
+        else:
+            # ── 首轮：清空短期记忆，记录用户输入，构建初始 Prompt ──
+            self.memory.clear_short_term(session_id)
+            self.memory.add_user_message(session_id, user_input)
 
-        history = self.memory.get_conversation_history(session_id)
+            tools_desc = self.tools.get_tools_prompt()
+            system_prompt = (REACT_SYSTEM_PROMPT_BASE + REACT_FINAL_GUIDE).format(
+                tools=tools_desc,
+                max_steps=self.max_steps,
+            )
 
-        current_prompt = f"""{system_prompt}
+            history = self.memory.get_conversation_history(session_id)
+
+            current_prompt = f"""{system_prompt}
 
 {history}
 
@@ -174,7 +213,7 @@ class AgentHarness:
 
 现在请开始分析（如果需求模糊，先调用 analyze_demand）："""
 
-        self._log("system", "ReAct 循环启动")
+            self._log("system", "ReAct 循环启动")
 
         # ---- ReAct 主循环 ----
         try:
@@ -219,6 +258,39 @@ class AgentHarness:
                         "elapsed": round(time.time() - self._start_time, 2),
                     })
                     return self._make_result(final_answer, tool_calls_log, success=True)
+
+                elif parse_result["type"] == "clarify":
+                    # Agent 判断前置信息不足，请求向用户澄清 → 暂停循环，等待续跑
+                    self._clarify_round += 1
+                    if self._clarify_round >= 2:
+                        # 已经问过两轮，强制收尾：追加提示后继续循环（下一轮应出 Final Answer）
+                        self._log("system", "已达澄清轮次上限，强制收尾")
+                        current_prompt += f"""
+{llm_response}
+（注意：你已经向用户提问过，现在请直接基于已有信息给出 Final Answer，不要再提问。）"""
+                        continue
+
+                    new_clarify_id = str(uuid.uuid4())
+                    ClarifySessionStore.put(new_clarify_id, {
+                        "session_id": session_id,
+                        "user_input": user_input,
+                        "extra_context": extra_context,
+                        "current_prompt": current_prompt,
+                        "step_count": self._step_count,
+                        "clarify_round": self._clarify_round,
+                    })
+                    questions = parse_result["questions"]
+                    self._log("system", f"Agent 请求澄清（{new_clarify_id}），暂停循环")
+                    await self._emit(event_callback, {
+                        "type": "clarify",
+                        "clarify_id": new_clarify_id,
+                        "session_id": session_id,
+                        "questions": questions,
+                    })
+                    return self._make_result(
+                        "", tool_calls_log, success=False,
+                        paused=True, clarify_id=new_clarify_id, questions=questions,
+                    )
 
                 elif parse_result["type"] == "action":
                     # 需要执行工具
@@ -357,7 +429,18 @@ Final Answer: [完整方案]）"""
         增强：如果既没有 Action 也没有 Final Answer，
         但文本包含实质性内容（中文、Markdown），视为隐式 Final Answer。
         """
-        # 先尝试匹配 Final Answer（显式声明）
+        # 先尝试匹配 Clarify（向用户澄清提问）
+        clarify_match = re.search(
+            r'Clarify\s*[*]*\s*[:：]\s*(.*?)$',
+            text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if clarify_match:
+            questions = self._parse_clarify_questions(clarify_match.group(1))
+            if questions:
+                return {"type": "clarify", "questions": questions}
+
+        # 尝试匹配 Final Answer（显式声明）
         fa_match = re.search(
             r'Final\s*Answer\s*[*]*\s*[:：]\s*[*`]*\s*(.*?)$',
             text,
@@ -444,6 +527,36 @@ Final Answer: [完整方案]）"""
 
         # 确实无法解析
         return {"type": "unknown", "content": text}
+
+    def _parse_clarify_questions(self, raw: str) -> list:
+        """
+        解析 Clarify 后的问题列表。
+
+        期望 JSON 数组：[{"question": "...", "options": ["...", "..."]}]
+        容错：剥离 ```json 代码围栏；解析失败则宽松提取单个 question。
+        """
+        raw = raw.strip()
+        raw = re.sub(r'^```(?:json)?\s*', '', raw, flags=re.IGNORECASE)
+        raw = re.sub(r'\s*```$', '', raw).strip()
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            data = None
+        if isinstance(data, list):
+            qs = []
+            for item in data:
+                if isinstance(item, dict) and item.get("question"):
+                    qs.append({
+                        "question": str(item["question"]),
+                        "options": [str(o) for o in item.get("options", [])][:6],
+                    })
+            if qs:
+                return qs[:2]  # 每轮最多 2 个问题
+        # 宽松兜底：尝试抓 "question": "xxx"
+        m = re.search(r'question\s*[:：]\s*["\']?(.+?)["\']?\s*$', raw, re.IGNORECASE)
+        if m:
+            return [{"question": m.group(1).strip(), "options": []}]
+        return []
 
     def _looks_like_answer(self, text: str) -> bool:
         """判断文本是否像是一个实质性回答（而非格式错误）"""
@@ -570,16 +683,24 @@ Final Answer: [完整方案]）"""
         answer: str,
         tool_calls: list,
         success: bool,
+        paused: bool = False,
+        clarify_id: Optional[str] = None,
+        questions: Optional[list] = None,
+        expired: bool = False,
     ) -> Dict[str, Any]:
         elapsed = time.time() - self._start_time
         return {
             "answer": answer,
-            "solution_json": parse_markdown_to_chapters(answer),
+            "solution_json": parse_markdown_to_chapters(answer) if answer else [],
             "steps": self._step_count,
             "elapsed": round(elapsed, 2),
             "tool_calls": tool_calls,
             "logs": self._logs,
             "success": success,
+            "paused": paused,
+            "clarify_id": clarify_id,
+            "questions": questions or [],
+            "expired": expired,
         }
 
     # ---- 日志 ----

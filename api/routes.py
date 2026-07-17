@@ -19,6 +19,7 @@ from api.models import (
     KBDocumentDeleteResponse, KBDocumentReindexResponse,
     HistoryFlagResponse, HistoryFollowUpRequest, HistoryFollowUpResponse,
     ClientCreateRequest,
+    ClarifyRequest, HistoryGroupResponse, FinalizeResponse, RollbackResponse,
 )
 from app.services.report_generator import ReportGeneratorService, ReportType, ExportFormat
 from api.dependencies import (
@@ -178,8 +179,10 @@ async def match_solution(
                     solution=result["answer"],
                     industry=industry_hint,
                     sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", [])],
-                    user_id=user['id']
+                    user_id=user['id'],
+                    group_id=request.group_id,
                 )
+                _version_meta = usage_logger.get_match_history_meta(history_id, user_id=user['id']) or {}
             except Exception as hist_err:
                 logger.warning(f"保存匹配历史记录失败: {hist_err}")
 
@@ -212,7 +215,11 @@ async def match_solution(
             source_documents=source_docs,
             solution_json=result.get("solution_json"),
             history_id=history_id,
-            newly_unlocked=achievement_result if user and user.get('id') else None
+            newly_unlocked=achievement_result if user and user.get('id') else None,
+            group_id=_version_meta.get("group_id"),
+            version=_version_meta.get("version"),
+            is_final=_version_meta.get("is_final", False),
+            title=_version_meta.get("title"),
         )
     except Exception as e:
         logger.error(f"解决方案匹配失败: {e}")
@@ -314,6 +321,112 @@ def _resolve_agent_session_id(user: dict, client_id: Optional[int]) -> str:
     if client_id:
         return f"{user['id']}:{client_id}"
     return str(user['id'])
+
+
+async def _process_and_emit_agent_result(queue, result: dict, user: dict, original_demand: str, is_quick_demo: bool, group_id=None):
+    """
+    Agent 流式结束后统一处理：保存历史（含版本化）、成就检测、提取来源文档、推送 result 事件。
+    供 /agent/match/stream 与 /agent/clarify 共用，单一事实来源避免逻辑分叉。
+
+    - 澄清暂停（result.paused=True）：不保存历史、不触发成就，直接下发 result（前端据此保留提问卡等待作答）；
+    - 正常完成：保存历史并回填版本元信息(group_id/version/is_final/title)到 result。
+    """
+    # 澄清暂停或会话过期：不落库、不触发成就，直接下发 result 事件
+    if result.get("paused") or result.get("expired"):
+        result["newly_unlocked"] = []
+        result["history_id"] = None
+        result["source_documents"] = []
+        await queue.put({"type": "result", "data": result})
+        return
+
+    history_id = None
+    if user and user.get('id'):
+        try:
+            usage_logger = get_usage_logger()
+            usage_logger.log_match(original_demand or "", user_id=user['id'], mode="agent")
+            # 提取行业信息
+            industry_hint = ""
+            for tc in result.get("tool_calls", []):
+                if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
+                    try:
+                        rd = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
+                        for doc in rd.get("results", []):
+                            ind = doc.get("industry", "")
+                            if ind:
+                                industry_hint = ind
+                                break
+                    except Exception:
+                        pass
+                if industry_hint:
+                    break
+            history_id = usage_logger.save_match_history(
+                demand_text=original_demand or "",
+                solution=result.get("answer", ""),
+                industry=industry_hint,
+                sources=[],
+                user_id=user['id'],
+                group_id=group_id,
+            )
+            # 回填版本元信息
+            meta = usage_logger.get_match_history_meta(history_id, user_id=user['id'])
+            if meta:
+                result["group_id"] = meta["group_id"]
+                result["version"] = meta["version"]
+                result["is_final"] = meta["is_final"]
+                result["title"] = meta["title"]
+        except Exception as log_err:
+            logger.warning(f"[Agent SSE] 保存历史失败: {log_err}")
+
+    # ── 成就检测 ──
+    newly_unlocked = []
+    if user and user.get('id') and not is_quick_demo:
+        try:
+            achievement_svc = get_achievement_service_dep()
+            industry_hint = ""
+            for tc in result.get("tool_calls", []):
+                if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
+                    try:
+                        rd = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
+                        for doc in rd.get("results", []):
+                            ind = doc.get("industry", "")
+                            if ind:
+                                industry_hint = ind
+                                break
+                    except Exception:
+                        pass
+                if industry_hint:
+                    break
+            newly_unlocked = achievement_svc.check_after_match(
+                user_id=user['id'],
+                demand_text=original_demand,
+                mode="agent",
+                industry=industry_hint,
+            )
+        except Exception as ach_err:
+            logger.warning(f"[Agent SSE] 成就检测失败: {ach_err}")
+
+    result["newly_unlocked"] = newly_unlocked
+    result["history_id"] = history_id
+
+    # 从 tool_calls 中提取 source_documents（与非流式 /agent/match 保持一致）
+    _sdocs = []
+    for _tc in result.get("tool_calls", []):
+        if _tc.get("tool") in ("search_kb", "search_competitor") and _tc.get("result"):
+            try:
+                _rd = json.loads(_tc["result"]) if isinstance(_tc["result"], str) else _tc["result"]
+                for _d in _rd.get("results", []):
+                    _sdocs.append(SourceDocument(
+                        page_content=_d.get("content", ""),
+                        metadata={
+                            "source": _d.get("source", ""),
+                            "industry": _d.get("industry", ""),
+                        }
+                    ).model_dump())
+            except (json.JSONDecodeError, TypeError):
+                pass
+    result["source_documents"] = _sdocs
+
+    await queue.put({"type": "result", "data": result})
 
 
 @router.post("/agent/match", response_model=MatchResponse, tags=["解决方案匹配"])
@@ -502,89 +615,11 @@ async def agent_match_stream(
                 if user and user.get('id'):
                     background_tasks.add_task(agent.update_user_profile, user['id'], session_id)
 
-                # ── 记录使用日志 + 保存历史 ──
-                history_id = None
-                if user and user.get('id'):
-                    try:
-                        usage_logger = get_usage_logger()
-                        usage_logger.log_match(original_demand or "", user_id=user['id'], mode="agent")
-                        # 提取行业信息
-                        industry_hint = ""
-                        for tc in result.get("tool_calls", []):
-                            if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
-                                try:
-                                    rd = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
-                                    for doc in rd.get("results", []):
-                                        ind = doc.get("industry", "")
-                                        if ind:
-                                            industry_hint = ind
-                                            break
-                                except:
-                                    pass
-                            if industry_hint:
-                                break
-                        history_id = usage_logger.save_match_history(
-                            demand_text=original_demand or "",
-                            solution=result.get("answer", ""),
-                            industry=industry_hint,
-                            sources=[],
-                            user_id=user['id']
-                        )
-                    except Exception as log_err:
-                        logger.warning(f"[Agent SSE] 保存历史失败: {log_err}")
-
-                # ── 成就检测 ──
-                newly_unlocked = []
-                if user and user.get('id') and not request.is_quick_demo:
-                    try:
-                        achievement_svc = get_achievement_service_dep()
-                        # 提取行业信息
-                        industry_hint = ""
-                        for tc in result.get("tool_calls", []):
-                            if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
-                                try:
-                                    rd = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
-                                    for doc in rd.get("results", []):
-                                        ind = doc.get("industry", "")
-                                        if ind:
-                                            industry_hint = ind
-                                            break
-                                except:
-                                    pass
-                            if industry_hint:
-                                break
-                        newly_unlocked = achievement_svc.check_after_match(
-                            user_id=user['id'],
-                            demand_text=original_demand,
-                            mode="agent",
-                            industry=industry_hint,
-                        )
-                    except Exception as ach_err:
-                        logger.warning(f"[Agent SSE] 成就检测失败: {ach_err}")
-
-                # 把 newly_unlocked 和 history_id 注入 result
-                result["newly_unlocked"] = newly_unlocked
-                result["history_id"] = history_id
-
-                # 从 tool_calls 中提取 source_documents（与非流式 /agent/match 保持一致）
-                _sdocs = []
-                for _tc in result.get("tool_calls", []):
-                    if _tc.get("tool") in ("search_kb", "search_competitor") and _tc.get("result"):
-                        try:
-                            _rd = json.loads(_tc["result"]) if isinstance(_tc["result"], str) else _tc["result"]
-                            for _d in _rd.get("results", []):
-                                _sdocs.append(SourceDocument(
-                                    page_content=_d.get("content", ""),
-                                    metadata={
-                                        "source": _d.get("source", ""),
-                                        "industry": _d.get("industry", ""),
-                                    }
-                                ).model_dump())
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-                result["source_documents"] = _sdocs
-
-                await queue.put({"type": "result", "data": result})
+                # ── 统一后处理：保存历史（含版本化）+ 成就检测 + 来源文档 + 下发 result ──
+                await _process_and_emit_agent_result(
+                    queue, result, user, original_demand, request.is_quick_demo,
+                    group_id=request.group_id,
+                )
             except Exception as e:
                 logger.error(f"[Agent SSE] 执行失败: {e}")
                 await queue.put({"type": "error", "message": str(e)})
@@ -623,6 +658,92 @@ async def agent_match_stream(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # 禁用 Nginx 缓冲
+        },
+    )
+
+
+@router.post("/agent/clarify", tags=["解决方案匹配"])
+async def agent_clarify(
+    request: ClarifyRequest,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    user: dict = Depends(require_login)
+):
+    """
+    Agent 交互式澄清续跑接口（阶段 2.5）
+
+    用户回答完 Agent 暂停时提出的问题后，带上 clarify_id 与答案调此接口，
+    后端恢复到暂停时的 ReAct 循环状态，把答案作为 Observation 接回并继续生成方案（不是重头再来）。
+    """
+    session_id = _resolve_agent_session_id(user, request.client_id)
+
+    async def generate():
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def event_callback(event):
+            await queue.put(event)
+
+        async def run_agent():
+            try:
+                from app.agent.clarify_store import ClarifySessionStore
+                set_kb_user_context(user['id'])
+                agent = get_agent()
+
+                # 恢复原始需求（用于历史落库与成就检测）
+                state = ClarifySessionStore.get(request.clarify_id)
+                original_demand = state.get("user_input", "") if state else ""
+
+                result = await agent.run(
+                    user_input="",
+                    session_id=session_id,
+                    event_callback=event_callback,
+                    clarify_id=request.clarify_id,
+                    answers=request.answers,
+                )
+
+                if user and user.get('id'):
+                    background_tasks.add_task(agent.update_user_profile, user['id'], session_id)
+
+                await _process_and_emit_agent_result(
+                    queue, result, user, original_demand, is_quick_demo=False, group_id=None,
+                )
+            except Exception as e:
+                logger.error(f"[Agent Clarify] 执行失败: {e}")
+                await queue.put({"type": "error", "message": str(e)})
+            finally:
+                try:
+                    await queue.put(None)
+                except Exception:
+                    pass
+
+        task = asyncio.ensure_future(run_agent())
+
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                event_type = event.get("type", "message")
+                yield f"event: {event_type}\ndata: {json.dumps(event, ensure_ascii=False, default=_sse_json_default)}\n\n"
+        except asyncio.CancelledError:
+            logger.info("[Agent Clarify] 客户端断开连接")
+            task.cancel()
+        except Exception as gen_err:
+            logger.error(f"[Agent Clarify] 生成器异常: {gen_err}")
+            try:
+                yield f"event: error\ndata: {json.dumps({'type':'error','message':f'内部错误: {gen_err}'}, ensure_ascii=False)}\n\n"
+            except Exception:
+                pass
+        finally:
+            await task
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        background=background_tasks,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
         },
     )
 
@@ -1309,6 +1430,70 @@ async def update_history_solution(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"更新失败: {str(e)}"
         )
+
+
+@router.get("/history/group/{group_id}", response_model=HistoryGroupResponse, tags=["历史记录"])
+async def get_history_group(
+    group_id: int,
+    current_user: dict = Depends(get_current_user),
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """获取同一方案分组的全部版本（v1/v2/v3...），用于版本对比 / 回滚 / 定稿。"""
+    try:
+        group = usage_logger.get_match_history_group(group_id, user_id=current_user.get("id"))
+        if group is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本分组不存在")
+        return HistoryGroupResponse(**group)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取版本分组失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"获取版本分组失败: {str(e)}")
+
+
+@router.post("/history/{history_id}/finalize", response_model=FinalizeResponse, tags=["历史记录"])
+async def finalize_history(
+    history_id: int,
+    current_user: dict = Depends(get_current_user),
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """将某版本标记为「定稿」：同组仅保留一个定稿版本。"""
+    try:
+        res = usage_logger.finalize_match_history(history_id, user_id=current_user.get("id"))
+        if res is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="历史记录不存在或无权限")
+        return FinalizeResponse(
+            success=True, id=res["id"], group_id=res["group_id"], version=res["version"],
+            message="已定稿，该版本将作为正式交付版本",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"定稿失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"定稿失败: {str(e)}")
+
+
+@router.post("/history/{history_id}/rollback", response_model=RollbackResponse, tags=["历史记录"])
+async def rollback_history(
+    history_id: int,
+    current_user: dict = Depends(get_current_user),
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """回滚（非破坏性）：把选定版本的方案内容复制为同组的新版本，原版本不变。"""
+    try:
+        res = usage_logger.rollback_match_history(history_id, user_id=current_user.get("id"))
+        if res is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="历史记录不存在或无权限")
+        return RollbackResponse(
+            success=True, source_id=res["source_id"], new_id=res["new_id"],
+            group_id=res["group_id"], version=res["version"],
+            message=f"已基于 v{res['version']-1 if res['version']>1 else 1} 生成新版本 v{res['version']}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"回滚失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"回滚失败: {str(e)}")
 
 
 @router.patch("/competitor/history/{history_id}/solution", response_model=UpdateSolutionResponse, tags=["历史记录"])
