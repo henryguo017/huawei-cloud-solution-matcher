@@ -9629,10 +9629,8 @@ select:focus {
     transform: scale(1.08);
 }
 
-/* 收起态隐藏文字 */
-.app-shell.collapsed .theme-switcher { padding: 10px 8px; }
-.app-shell.collapsed .theme-label { display: none; }
-.app-shell.collapsed .theme-palette { justify-content: center; }
+/* 收起态完全隐藏主题切换器（收缩空间不足，展开时才可用） */
+.app-shell.collapsed .theme-switcher { display: none; }
 
 .sidebar-footer {
     flex-shrink: 0;
