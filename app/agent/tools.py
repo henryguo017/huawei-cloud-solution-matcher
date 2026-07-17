@@ -149,7 +149,11 @@ async def _tool_search_kb(query: str) -> str:
     """
     kb = _get_kb()
     try:
+        logger.info(f"[search_kb] 开始查询, query={query[:50]}...")
+        t0 = __import__('time').time()
         docs = await asyncio.to_thread(kb.search_huawei, query, 4)
+        elapsed = round(__import__('time').time() - t0, 1)
+        logger.info(f"[search_kb] 查询完成, 耗时={elapsed}s, 结果数={len(docs)}")
         if not docs:
             # 关键优化：空结果时给出明确的换关键词引导，避免 LLM 直接放弃
             return json.dumps({

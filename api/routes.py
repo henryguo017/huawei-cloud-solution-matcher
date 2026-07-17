@@ -588,6 +588,12 @@ async def agent_match_stream(
         except asyncio.CancelledError:
             logger.info("[Agent SSE] 客户端断开连接")
             task.cancel()
+        except Exception as gen_err:
+            logger.error(f"[Agent SSE] 生成器异常(连接将中断): {gen_err}")
+            try:
+                yield f"event: error\ndata: {json.dumps({'type':'error','message':f'内部错误: {gen_err}'}, ensure_ascii=False)}\n\n"
+            except Exception:
+                pass
         finally:
             await task
 
