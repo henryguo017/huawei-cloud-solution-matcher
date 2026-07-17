@@ -21,6 +21,7 @@ from api.models import (
     ClientCreateRequest,
     ClarifyRequest, HistoryGroupResponse, FinalizeResponse, RollbackResponse,
 )
+from api.platform_knowledge import PLATFORM_GUIDE, PLATFORM_BRIEF
 from app.services.report_generator import ReportGeneratorService, ReportType, ExportFormat
 from api.dependencies import (
     get_solution_matcher,
@@ -1913,6 +1914,11 @@ async def ai_chat(
             "有什么功能", "哪些功能", "功能有哪些",
             "怎么开始", "从哪开始", "第一步",
             "新手指南", "使用教程", "使用帮助",
+            "对比", "比对", "客户记忆", "追问", "多轮", "澄清",
+            "定稿", "回滚", "归档", "版本", "版本管理", "迭代",
+            "成就", "勋章", "产品图谱", "新手", "上手", "入门",
+            "怎么导出", "怎么对比", "怎么保存", "怎么升级", "怎么用这个",
+            "功能清单", "所有功能", "能干嘛", "能做什么", "有什么用",
         ]
         is_usage = any(kw in question for kw in usage_keywords)
 
@@ -1985,9 +1991,13 @@ async def _answer_usage_question(question: str, history_text: str = "") -> str:
 3. 日常闲聊：任何话题都可以自然交流
 
 【回答原则】
-- 针对用户的具体问题回答，不要跑题或长篇大论
+- 必须优先依据下方《平台功能完整说明》回答用户关于本平台功能/使用/细节的问题，做到准确、具体、不编造
+- 针对用户的具体问题回答，不要跑题或长篇大论；如果用户问的是某个功能，聚焦讲该功能，必要时可顺带提一句相关功能入口
 - 语气专业但亲切，像微信聊天一样自然
 - 禁止 Markdown：用纯文本+换行，不要写 # ## ** ``` 等符号
+
+【平台功能完整说明】
+""" + PLATFORM_GUIDE + """
 
 用户问题："""
     full_prompt = system_prompt + history_block + question
@@ -2048,10 +2058,14 @@ async def _answer_general_question(question: str, history_text: str = "") -> str
 - 本平台由郭鸿宇独立开发（杭州电子科技大学），是一个云计算方案匹配工具
 - 你不属于任何 AI 模型公司（如 DeepSeek、OpenAI 等），不要提及底层技术栈
 
+【平台能力速览（被问到"平台能干嘛/有什么功能"时据此作答）】
+""" + PLATFORM_BRIEF + """
+
 【回答原则】
 - 任何话题都可以自然聊天，像微信朋友一样轻松亲切
 - 用"你"称呼用户，简洁实用（200-500字）
 - 如果被问到"你是谁/谁开发的/哪家公司的"，回答：你是「智能方案助手」，cloudsol.cn 平台的 AI 助手，由郭鸿宇开发
+- 如果用户问的是本平台功能怎么用，请直接给出清晰的使用指引（你已掌握平台全部功能细节）
 - 禁止 Markdown：纯文本+换行，不要写 # ## ** ``` 等符号
 
 用户问题："""
