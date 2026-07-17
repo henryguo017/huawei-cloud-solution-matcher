@@ -13,11 +13,13 @@
 """
 
 import logging
+import json
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 from app.agent.tools import ToolRegistry, create_default_tools
 from app.agent.memory import ConversationMemory
 from app.agent.harness import AgentHarness
+from app.models.llm import get_llm_response
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +49,8 @@ class SolutionAgent:
         # 创建工具注册中心（4 个核心工具）
         self.tools: ToolRegistry = create_default_tools()
 
-        # 创建记忆管理器（保留最近 10 轮对话）
-        self.memory: ConversationMemory = ConversationMemory(max_history_turns=10)
+        # 创建记忆管理器（阶段2 持久记忆，保留最近 15 轮对话）
+        self.memory: ConversationMemory = ConversationMemory(max_history_turns=15)
 
         # 创建执行引擎
         self.harness: AgentHarness = AgentHarness(
@@ -131,6 +133,108 @@ class SolutionAgent:
             "max_steps": self.max_steps,
             "timeout": self.timeout,
         }
+
+    # ---- 阶段2：用户画像提炼（FR-2.4） ----
+
+    async def update_user_profile(self, user_id: int, session_id: str = "default", n: int = 4) -> None:
+        """
+        基于最近 n 轮对话，用 LLM 提炼/更新用户偏好画像，落库 user_profile 表。
+        best-effort：任何异常仅记日志，不影响主流程。
+        """
+        if not user_id or user_id <= 0:
+            return
+        try:
+            recent = self.memory.get_recent_conversation_for_profile(session_id, n=n)
+            if not recent.strip():
+                return
+            existing = self._load_profile(user_id)
+            prompt = _PROFILE_PROMPT.format(existing=existing or "（暂无已有画像）", recent=recent)
+            raw = await get_llm_response(prompt)
+            new_profile = self._extract_json(raw)
+            if new_profile:
+                self._save_profile(user_id, new_profile)
+                logger.info(f"[agent] 用户画像已更新 user={user_id}")
+        except Exception as e:
+            logger.warning(f"[agent] 用户画像更新失败 user={user_id}: {e}")
+
+    def _load_profile(self, user_id: int) -> Optional[dict]:
+        try:
+            from app.utils import db_init
+            conn = db_init.get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT profile_json FROM user_profile WHERE user_id=?", (user_id,))
+            row = cur.fetchone()
+            conn.close()
+            if row and row["profile_json"]:
+                return json.loads(row["profile_json"])
+        except Exception as e:
+            logger.warning(f"[agent] 读取用户画像失败 user={user_id}: {e}")
+        return None
+
+    def _save_profile(self, user_id: int, profile: dict) -> None:
+        try:
+            from app.utils import db_init
+            conn = db_init.get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO user_profile (user_id, profile_json, updated_at)
+                   VALUES (?, ?, datetime('now', 'localtime'))
+                   ON CONFLICT(user_id) DO UPDATE SET
+                       profile_json=excluded.profile_json,
+                       updated_at=datetime('now', 'localtime')""",
+                (user_id, json.dumps(profile, ensure_ascii=False)),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"[agent] 保存用户画像失败 user={user_id}: {e}")
+
+    @staticmethod
+    def _extract_json(raw: str) -> Optional[dict]:
+        if not raw:
+            return None
+        text = raw.strip()
+        # 去掉 ```json ... ``` 围栏
+        if text.startswith("```"):
+            text = text.split("```", 2)[1]
+            if text.lower().startswith("json"):
+                text = text[4:]
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            # 尝试截取第一个 { 到最后一个 }
+            s, e = text.find("{"), text.rfind("}")
+            if s != -1 and e != -1 and e > s:
+                try:
+                    data = json.loads(text[s:e + 1])
+                except json.JSONDecodeError:
+                    return None
+            else:
+                return None
+        if not isinstance(data, dict):
+            return None
+        # 规范化为固定结构
+        return {
+            "industries": data.get("industries", []) or [],
+            "tone_preferences": data.get("tone_preferences", []) or [],
+            "summary": data.get("summary", "") or "",
+        }
+
+
+_PROFILE_PROMPT = """你是一个用户画像提取器。根据销售与华为云解决方案 AI 助手的最近对话，提炼该销售用户的偏好画像。
+已有画像（可在此基础上增量更新，保留仍有价值的旧信息）：
+{existing}
+
+最近对话：
+{recent}
+
+请输出严格的 JSON（不要包含任何解释文字，不要使用 markdown 围栏），结构如下：
+{{
+  "industries": ["该用户常做的行业，如 制造/政务/金融，最多5个"],
+  "tone_preferences": ["偏好的话术/表达风格倾向，如 政企正式/技术细节多/简洁直接，最多5个"],
+  "summary": "一句话总体画像描述"
+}}
+"""
 
 
 # ============================================================

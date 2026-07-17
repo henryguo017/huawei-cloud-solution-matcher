@@ -14,59 +14,59 @@ logger = logging.getLogger(__name__)
 # ── 45 个成就定义（铜7+银7+金8+钻5+隐藏18） ──────────────────────
 ACHIEVEMENTS = [
     # ===== 铜 · 入门 (7) =====
-    {"id": "first_match",    "name": "初出茅庐",   "desc": "完成第一次方案匹配",       "rarity": "copper", "icon": "🌱", "is_hidden": False},
-    {"id": "first_analyze",  "name": "竞品初探",   "desc": "完成第一次竞品分析",       "rarity": "copper", "icon": "🔍", "is_hidden": False},
-    {"id": "first_kb_view",  "name": "知识初窥",   "desc": "首次打开知识库页面",       "rarity": "copper", "icon": "📖", "is_hidden": False},
-    {"id": "first_login",     "name": "登录成功",     "desc": "首次登录账号",           "rarity": "copper", "icon": "👋", "is_hidden": False},
-    {"id": "complete_wizard", "name": "向导学员",   "desc": "通过向导模式完成一次匹配", "rarity": "copper", "icon": "🧭", "is_hidden": False},
-    {"id": "view_dashboard",  "name": "数据爱好者", "desc": "首次打开仪表盘",         "rarity": "copper", "icon": "📊", "is_hidden": False},
-    {"id": "first_share",     "name": "分享达人",   "desc": "首次分享匹配结果",       "rarity": "copper", "icon": "🔗", "is_hidden": False},
+    {"id": "first_match",    "name": "初出茅庐",   "desc": "完成第一次方案匹配",       "rarity": "copper", "icon": "i-wheat", "is_hidden": False},
+    {"id": "first_analyze",  "name": "竞品初探",   "desc": "完成第一次竞品分析",       "rarity": "copper", "icon": "i-search", "is_hidden": False},
+    {"id": "first_kb_view",  "name": "知识初窥",   "desc": "首次打开知识库页面",       "rarity": "copper", "icon": "i-book-open", "is_hidden": False},
+    {"id": "first_login",     "name": "登录成功",     "desc": "首次登录账号",           "rarity": "copper", "icon": "i-circle-check", "is_hidden": False},
+    {"id": "complete_wizard", "name": "向导学员",   "desc": "通过向导模式完成一次匹配", "rarity": "copper", "icon": "i-map", "is_hidden": False},
+    {"id": "view_dashboard",  "name": "数据爱好者", "desc": "首次打开仪表盘",         "rarity": "copper", "icon": "i-bar-chart-3", "is_hidden": False},
+    {"id": "first_share",     "name": "分享达人",   "desc": "首次分享匹配结果",       "rarity": "copper", "icon": "i-upload", "is_hidden": False},
 
     # ===== 银 · 进阶 (7) =====
-    {"id": "match_10",       "name": "渐入佳境",   "desc": "累计完成 10 次方案匹配",  "rarity": "silver", "icon": "⚡", "is_hidden": False},
-    {"id": "analyze_10",     "name": "竞品猎手",   "desc": "累计完成 10 次竞品分析",  "rarity": "silver", "icon": "🎯", "is_hidden": False},
-    {"id": "use_all_modes",  "name": "模式体验官", "desc": "使用过全部 3 种匹配模式", "rarity": "silver", "icon": "🎛️", "is_hidden": False},
-    {"id": "add_kb_doc",     "name": "知识贡献者", "desc": "在知识库新增一篇文档",     "rarity": "silver", "icon": "✍️", "is_hidden": False},
-    {"id": "match_3_day",    "name": "三连击",     "desc": "连续 3 天使用系统",      "rarity": "silver", "icon": "🔥", "is_hidden": False},
-    {"id": "industry_5",      "name": "行业探索者", "desc": "匹配覆盖 5 个不同行业",   "rarity": "silver", "icon": "🗺️", "is_hidden": False},
-    {"id": "night_owl",      "name": "夜猫子",     "desc": "在 22:00–02:00 使用系统", "rarity": "silver", "icon": "🦉", "is_hidden": False},
+    {"id": "match_10",       "name": "渐入佳境",   "desc": "累计完成 10 次方案匹配",  "rarity": "silver", "icon": "i-trending-up", "is_hidden": False},
+    {"id": "analyze_10",     "name": "竞品猎手",   "desc": "累计完成 10 次竞品分析",  "rarity": "silver", "icon": "i-target", "is_hidden": False},
+    {"id": "use_all_modes",  "name": "模式体验官", "desc": "使用过全部 3 种匹配模式", "rarity": "silver", "icon": "i-scale", "is_hidden": False},
+    {"id": "add_kb_doc",     "name": "知识贡献者", "desc": "在知识库新增一篇文档",     "rarity": "silver", "icon": "i-pencil", "is_hidden": False},
+    {"id": "match_3_day",    "name": "三连击",     "desc": "连续 3 天使用系统",      "rarity": "silver", "icon": "i-check", "is_hidden": False},
+    {"id": "industry_5",      "name": "行业探索者", "desc": "匹配覆盖 5 个不同行业",   "rarity": "silver", "icon": "i-building-2", "is_hidden": False},
+    {"id": "night_owl",      "name": "夜猫子",     "desc": "在 22:00–02:00 使用系统", "rarity": "silver", "icon": "i-cloud", "is_hidden": False},
 
     # ===== 金 · 高阶 (8) =====
-    {"id": "match_50",       "name": "方案大师",   "desc": "累计完成 50 次方案匹配",  "rarity": "gold",   "icon": "👑", "is_hidden": False},
-    {"id": "analyze_50",     "name": "竞品专家",   "desc": "累计完成 50 次竞品分析",  "rarity": "gold",   "icon": "🏆", "is_hidden": False},
-    {"id": "industry_10",     "name": "行业通",     "desc": "匹配覆盖全部 10 个行业",   "rarity": "gold",   "icon": "🌐", "is_hidden": False},
-    {"id": "agent_master",    "name": "Agent 觉醒", "desc": "使用 Agent 模式完成 10 次匹配", "rarity": "gold", "icon": "🤖", "is_hidden": False},
-    {"id": "kb_docs_10",     "name": "知识库管理员", "desc": "知识库文档总数达到 10 篇", "rarity": "gold", "icon": "📚", "is_hidden": False},
-    {"id": "match_7_day",     "name": "一周坚守",   "desc": "连续 7 天使用系统",      "rarity": "gold",   "icon": "📅", "is_hidden": False},
-    {"id": "competitor_12",   "name": "竞品全图鉴", "desc": "完成全部 12 家竞品分析",  "rarity": "gold",   "icon": "🃏", "is_hidden": False},
-    {"id": "reindex_20",      "name": "索引工程师", "desc": "累计重建索引 20 次",      "rarity": "gold",   "icon": "🔧", "is_hidden": False},
+    {"id": "match_50",       "name": "方案大师",   "desc": "累计完成 50 次方案匹配",  "rarity": "gold",   "icon": "i-trophy", "is_hidden": False},
+    {"id": "analyze_50",     "name": "竞品专家",   "desc": "累计完成 50 次竞品分析",  "rarity": "gold",   "icon": "i-medal", "is_hidden": False},
+    {"id": "industry_10",     "name": "行业通",     "desc": "匹配覆盖全部 10 个行业",   "rarity": "gold",   "icon": "i-globe", "is_hidden": False},
+    {"id": "agent_master",    "name": "Agent 觉醒", "desc": "使用 Agent 模式完成 10 次匹配", "rarity": "gold", "icon": "i-bot", "is_hidden": False},
+    {"id": "kb_docs_10",     "name": "知识库管理员", "desc": "知识库文档总数达到 10 篇", "rarity": "gold", "icon": "i-database", "is_hidden": False},
+    {"id": "match_7_day",     "name": "一周坚守",   "desc": "连续 7 天使用系统",      "rarity": "gold",   "icon": "i-file-text", "is_hidden": False},
+    {"id": "competitor_12",   "name": "竞品全图鉴", "desc": "完成全部 12 家竞品分析",  "rarity": "gold",   "icon": "i-swords", "is_hidden": False},
+    {"id": "reindex_20",      "name": "索引工程师", "desc": "累计重建索引 20 次",      "rarity": "gold",   "icon": "i-wrench", "is_hidden": False},
 
     # ===== 钻 · 大师 (5) =====
-    {"id": "match_200",      "name": "终极匹配王", "desc": "累计完成 200 次方案匹配",  "rarity": "diamond", "icon": "💎", "is_hidden": False},
-    {"id": "analyze_200",    "name": "终极分析师", "desc": "累计完成 200 次竞品分析",  "rarity": "diamond", "icon": "🧠", "is_hidden": False},
-    {"id": "all_achieve_50", "name": "成就达人",   "desc": "累计解锁 50% 的成就",     "rarity": "diamond", "icon": "🏅", "is_hidden": False},
-    {"id": "perfect_week",    "name": "完美一周",   "desc": "连续 7 天每天至少使用 3 次", "rarity": "diamond", "icon": "⭐", "is_hidden": False},
-    {"id": "early_bird",     "name": "早起鸟",     "desc": "在 05:00–07:00 使用系统", "rarity": "diamond", "icon": "🐦", "is_hidden": False},
+    {"id": "match_200",      "name": "终极匹配王", "desc": "累计完成 200 次方案匹配",  "rarity": "diamond", "icon": "i-gem", "is_hidden": False},
+    {"id": "analyze_200",    "name": "终极分析师", "desc": "累计完成 200 次竞品分析",  "rarity": "diamond", "icon": "i-brain", "is_hidden": False},
+    {"id": "all_achieve_50", "name": "成就达人",   "desc": "累计解锁 50% 的成就",     "rarity": "diamond", "icon": "i-star", "is_hidden": False},
+    {"id": "perfect_week",    "name": "完美一周",   "desc": "连续 7 天每天至少使用 3 次", "rarity": "diamond", "icon": "i-rocket", "is_hidden": False},
+    {"id": "early_bird",     "name": "早起鸟",     "desc": "在 05:00–07:00 使用系统", "rarity": "diamond", "icon": "i-lightbulb", "is_hidden": False},
 
     # ===== 谜 · 隐藏 (18) =====
-    {"id": "easter_april_fool",    "name": "愚人快乐",   "desc": "4 月 1 日当天使用系统",     "rarity": "hidden", "icon": "🤡", "is_hidden": True},
-    {"id": "easter_new_year",       "name": "跨年达人",   "desc": "除夕（12/31）或元旦（1/1）当天使用系统", "rarity": "hidden", "icon": "🎆", "is_hidden": True},
-    {"id": "easter_520",            "name": "520告白",    "desc": "5 月 20 日当天使用系统",      "rarity": "hidden", "icon": "💕", "is_hidden": True},
-    {"id": "easter_late_night",     "name": "深夜修仙",   "desc": "凌晨 3:00–4:59 使用系统",   "rarity": "hidden", "icon": "🌙", "is_hidden": True},
-    {"id": "easter_birthday",       "name": "生日快乐",   "desc": "系统周年日（6月6日）当天使用系统", "rarity": "hidden", "icon": "🎂", "is_hidden": True},
-    {"id": "easter_friday_eve",     "name": "周五狂欢",   "desc": "周五 17:00 后使用系统",     "rarity": "hidden", "icon": "🍻", "is_hidden": True},
-    {"id": "easter_mid_autumn",     "name": "月圆之夜",   "desc": "中秋节当天使用系统",         "rarity": "hidden", "icon": "🥮", "is_hidden": True},
-    {"id": "easter_search_harmony", "name": "鸿蒙探索者", "desc": "搜索内容包含「鸿蒙」",       "rarity": "hidden", "icon": "🔷", "is_hidden": True},
-    {"id": "easter_hello_world",    "name": "Hello World","desc": "搜索内容包含「hello world」","rarity": "hidden", "icon": "💻", "is_hidden": True},
-    {"id": "easter_dev_name",       "name": "我是郭鸿宇", "desc": "搜索内容包含「郭鸿宇」",     "rarity": "hidden", "icon": "😎", "is_hidden": True},
-    {"id": "easter_hidden_word",     "name": "彩蛋猎人",   "desc": "搜索内容包含「隐藏成就」",   "rarity": "hidden", "icon": "🎪", "is_hidden": True},
-    {"id": "easter_empty_search",    "name": "无声胜有声", "desc": "不输入任何内容直接匹配",     "rarity": "hidden", "icon": "🫥", "is_hidden": True},
-    {"id": "easter_retry_3",        "name": "锲而不舍",   "desc": "同一需求匹配 3 次",         "rarity": "hidden", "icon": "🔁", "is_hidden": True},
-    {"id": "easter_first_agent",     "name": "Agent 觉醒", "desc": "首次使用 Agent 模式",       "rarity": "hidden", "icon": "✨", "is_hidden": True},
-    {"id": "easter_mode_master",     "name": "模式大师",   "desc": "同一天用完所有 3 种匹配模式","rarity": "hidden", "icon": "🎮", "is_hidden": True},
-    {"id": "easter_konami",         "name": "秘技大师",   "desc": "匹配时输入「上上下下左右左右BA」", "rarity": "hidden", "icon": "🕹️", "is_hidden": True},
-    {"id": "easter_404_wait",        "name": "页面消失了", "desc": "匹配时输入「404」",          "rarity": "hidden", "icon": "🌀", "is_hidden": True},
-    {"id": "easter_egg_hunter",      "name": "彩蛋收藏家", "desc": "累计解锁 10 个隐藏成就",    "rarity": "hidden", "icon": "🥚", "is_hidden": True},
+    {"id": "easter_april_fool",    "name": "愚人快乐",   "desc": "4 月 1 日当天使用系统",     "rarity": "hidden", "icon": "i-party-popper", "is_hidden": True},
+    {"id": "easter_new_year",       "name": "跨年达人",   "desc": "除夕（12/31）或元旦（1/1）当天使用系统", "rarity": "hidden", "icon": "i-sparkles", "is_hidden": True},
+    {"id": "easter_520",            "name": "520告白",    "desc": "5 月 20 日当天使用系统",      "rarity": "hidden", "icon": "i-mail", "is_hidden": True},
+    {"id": "easter_late_night",     "name": "深夜修仙",   "desc": "凌晨 3:00–4:59 使用系统",   "rarity": "hidden", "icon": "i-film", "is_hidden": True},
+    {"id": "easter_birthday",       "name": "生日快乐",   "desc": "系统周年日（6月6日）当天使用系统", "rarity": "hidden", "icon": "i-banknote", "is_hidden": True},
+    {"id": "easter_friday_eve",     "name": "周五狂欢",   "desc": "周五 17:00 后使用系统",     "rarity": "hidden", "icon": "i-palette", "is_hidden": True},
+    {"id": "easter_mid_autumn",     "name": "月圆之夜",   "desc": "中秋节当天使用系统",         "rarity": "hidden", "icon": "i-landmark", "is_hidden": True},
+    {"id": "easter_search_harmony", "name": "鸿蒙探索者", "desc": "搜索内容包含「鸿蒙」",       "rarity": "hidden", "icon": "i-radio", "is_hidden": True},
+    {"id": "easter_hello_world",    "name": "Hello World","desc": "搜索内容包含「hello world」","rarity": "hidden", "icon": "i-file", "is_hidden": True},
+    {"id": "easter_dev_name",       "name": "我是郭鸿宇", "desc": "搜索内容包含「郭鸿宇」",     "rarity": "hidden", "icon": "i-user", "is_hidden": True},
+    {"id": "easter_hidden_word",     "name": "彩蛋猎人",   "desc": "搜索内容包含「隐藏成就」",   "rarity": "hidden", "icon": "i-pin", "is_hidden": True},
+    {"id": "easter_empty_search",    "name": "无声胜有声", "desc": "不输入任何内容直接匹配",     "rarity": "hidden", "icon": "i-shield", "is_hidden": True},
+    {"id": "easter_retry_3",        "name": "锲而不舍",   "desc": "同一需求匹配 3 次",         "rarity": "hidden", "icon": "i-refresh-cw", "is_hidden": True},
+    {"id": "easter_first_agent",     "name": "Agent 先驱", "desc": "首次使用 Agent 模式",       "rarity": "hidden", "icon": "i-zap", "is_hidden": True},
+    {"id": "easter_mode_master",     "name": "模式大师",   "desc": "同一天用完所有 3 种匹配模式","rarity": "hidden", "icon": "i-clipboard-list", "is_hidden": True},
+    {"id": "easter_konami",         "name": "秘技大师",   "desc": "匹配时输入「上上下下左右左右BA」", "rarity": "hidden", "icon": "i-arrow-up-right", "is_hidden": True},
+    {"id": "easter_404_wait",        "name": "页面消失了", "desc": "匹配时输入「404」",          "rarity": "hidden", "icon": "i-loader", "is_hidden": True},
+    {"id": "easter_egg_hunter",      "name": "彩蛋收藏家", "desc": "累计解锁 10 个隐藏成就",    "rarity": "hidden", "icon": "i-folder", "is_hidden": True},
 ]
 
 # 稀有度显示名
@@ -140,9 +140,9 @@ class AchievementService:
             conn.commit()
 
     def _seed_achievements(self):
-        """首次启动时把 45 个成就写入 achievements 表"""
+        """启动时同步 45 个成就定义到 achievements 表（INSERT 或 UPDATE）"""
         with self._get_connection() as conn:
-            existing = {row["id"] for row in conn.execute("SELECT id FROM achievements").fetchall()}
+            existing = {row["id"]: row["icon"] for row in conn.execute("SELECT id, icon FROM achievements").fetchall()}
             for ach in ACHIEVEMENTS:
                 if ach["id"] not in existing:
                     conn.execute("""
@@ -156,6 +156,12 @@ class AchievementService:
                         ach["icon"],
                         1 if ach["is_hidden"] else 0,
                     ))
+                elif existing[ach["id"]] != ach["icon"]:
+                    # 图标变更时更新（如从 emoji 迁移到 SVG symbol ID）
+                    conn.execute(
+                        "UPDATE achievements SET icon = ? WHERE id = ?",
+                        (ach["icon"], ach["id"]),
+                    )
             conn.commit()
 
     # ── 查询接口 ──────────────────────────────────────────────────

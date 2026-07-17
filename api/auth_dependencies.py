@@ -76,6 +76,25 @@ async def get_current_user_optional(
     except:
         return None
 
+async def require_login(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+) -> dict:
+    """
+    强制登录依赖（用于智能匹配等需要持久化记忆的接口）。
+
+    - 匿名访问（无 Authorization 令牌）→ 401「请先登录后再使用智能匹配」，
+      彻底消灭 user_id=0 的匿名共享记忆池。
+    - 有令牌但失效/过期 → 沿用 get_current_user 的 401 文案（令牌已失效，请重新登录等）。
+    """
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="请先登录后再使用智能匹配",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return await get_current_user(credentials)
+
+
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user['role'] != 'admin':
         raise HTTPException(

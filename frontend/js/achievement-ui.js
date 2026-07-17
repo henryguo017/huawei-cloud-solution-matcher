@@ -5,6 +5,16 @@ const AchievementUI = {
     currentRarity: 'all',
     allItems: [],
 
+    /**
+     * 渲染成就图标：SVG symbol ID 直接 <use>，emoji 字符走 emojiToSvg 兜底
+     */
+    _renderIcon(icon, size) {
+        if (icon && icon.startsWith('i-')) {
+            return `<svg class="ach-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#${icon}"></use></svg>`;
+        }
+        return window.emojiToSvg(icon || 'i-trophy', size);
+    },
+
     init() {
         this._bindEvents();
         this._observePage();
@@ -109,7 +119,7 @@ const AchievementUI = {
             const isHiddenLocked = !it.unlocked && it.rarity === 'hidden';
             const name = isHiddenLocked ? '???' : it.name;
             const desc = isHiddenLocked ? '解锁后可见' : it.description;
-            const icon = isHiddenLocked ? window.emojiToSvg('🔒', 'lock') : window.emojiToSvg(it.icon, 'trophy');
+            const icon = isHiddenLocked ? this._renderIcon('i-lock', 'lock') : this._renderIcon(it.icon, 'trophy');
             const rarityCls = it.rarity || 'copper';
             const rarityText = rarityLabel[it.rarity] || it.rarity;
             const unlockedAt = it.unlocked_at ? `解锁于: ${it.unlocked_at}` : '';
@@ -142,7 +152,7 @@ const AchievementUI = {
         const toast = document.createElement('div');
         toast.className = 'achievement-toast';
         toast.innerHTML = `
-            <span class="toast-icon">${window.emojiToSvg(ach.icon, 'trophy')}</span>
+            <span class="toast-icon">${this._renderIcon(ach.icon, 'trophy')}</span>
             <div class="toast-body">
                 <div class="toast-title"><svg class="icon" aria-hidden="true"><use href="#i-party-popper"></use></svg> 成就解锁！</div>
                 <div class="toast-name">${this._escapeHtml(ach.name || '???')}</div>

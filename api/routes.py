@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse, FileResponse
-from fastapi import UploadFile, File
+from fastapi import UploadFile, File, BackgroundTasks
 from api.models import (
     MatchRequest, MatchResponse,
     AnalyzeRequest, AnalyzeResponse,
@@ -18,6 +18,7 @@ from api.models import (
     KBDocumentUpdateRequest, KBDocumentUpdateResponse,
     KBDocumentDeleteResponse, KBDocumentReindexResponse,
     HistoryFlagResponse, HistoryFollowUpRequest, HistoryFollowUpResponse,
+    ClientCreateRequest,
 )
 from app.services.report_generator import ReportGeneratorService, ReportType, ExportFormat
 from api.dependencies import (
@@ -43,7 +44,7 @@ import json
 import asyncio
 import logging
 
-from api.auth_dependencies import get_current_user, get_current_user_optional
+from api.auth_dependencies import get_current_user, get_current_user_optional, require_login
 
 # Agent 模块导入
 from app.agent import SolutionAgent, get_agent
@@ -290,10 +291,18 @@ def _read_customer_files_text(user_id: int, paths: list) -> str:
 
 # ========== Agent 智能匹配（单 Agent + Tool Calling） ==========
 
+def _resolve_agent_session_id(user: dict, client_id: Optional[int]) -> str:
+    """Agent 记忆的 session_id：提供 client_id 时按 用户:客户 维度隔离，避免多客户串味；否则沿用全局（按用户）。"""
+    if client_id:
+        return f"{user['id']}:{client_id}"
+    return str(user['id'])
+
+
 @router.post("/agent/match", response_model=MatchResponse, tags=["解决方案匹配"])
 async def agent_match_solution(
     request: MatchRequest,
-    user: Optional[dict] = Depends(get_current_user_optional)
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    user: dict = Depends(require_login)
 ):
     """
     Agent 智能匹配接口（ReAct + Tool Calling）
@@ -302,9 +311,8 @@ async def agent_match_solution(
     """
     try:
         # 设置用户上下文，Agent 工具可使用用户独立知识库
-        user_id = user.get('id') if user else 0
-        if user_id > 0:
-            set_kb_user_context(user_id)
+        user_id = user['id']
+        set_kb_user_context(user_id)
 
         # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
         original_demand = request.demand
@@ -315,7 +323,7 @@ async def agent_match_solution(
             logger.info("[Agent] 检测到空输入，使用默认 prompt")
 
         agent = get_agent()
-        session_id = user.get('id', 'anonymous') if user else 'anonymous'
+        session_id = _resolve_agent_session_id(user, request.client_id)
 
         # 阶段1：把上传的客户文件路径注入 Agent，引导其用 read_customer_file 读取
         extra_context = ""
@@ -332,6 +340,9 @@ async def agent_match_solution(
             session_id=str(session_id),
             extra_context=extra_context,
         )
+
+        # 阶段2：后台异步更新用户画像（best-effort，不阻断主响应）
+        background_tasks.add_task(agent.update_user_profile, user['id'], str(session_id))
 
         answer = result.get("answer", "Agent 未能生成有效方案")
         tool_calls = result.get("tool_calls", [])
@@ -418,7 +429,8 @@ async def agent_match_solution(
 @router.post("/agent/match/stream", tags=["解决方案匹配"])
 async def agent_match_stream(
     request: MatchRequest,
-    user: Optional[dict] = Depends(get_current_user_optional)
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    user: dict = Depends(require_login)
 ):
     """
     Agent 智能匹配 SSE 流式接口
@@ -430,7 +442,7 @@ async def agent_match_stream(
     - event: final      → Agent 完成
     - event: result     → 最终结果（answer, steps, elapsed, tool_calls）
     """
-    session_id = str(user.get('id', 'anonymous')) if user else 'anonymous'
+    session_id = _resolve_agent_session_id(user, request.client_id)
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
@@ -441,8 +453,7 @@ async def agent_match_stream(
         async def run_agent():
             try:
                 # 设置用户上下文，Agent 工具可使用用户独立知识库
-                if user and user.get('id'):
-                    set_kb_user_context(user['id'])
+                set_kb_user_context(user['id'])
 
                 # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
                 original_demand = request.demand
@@ -468,6 +479,10 @@ async def agent_match_stream(
                     extra_context=extra_context,
                     event_callback=event_callback,
                 )
+
+                # 阶段2：后台异步更新用户画像（best-effort，不阻断流式响应）
+                if user and user.get('id'):
+                    background_tasks.add_task(agent.update_user_profile, user['id'], session_id)
 
                 # ── 记录使用日志 + 保存历史 ──
                 history_id = None
@@ -579,12 +594,84 @@ async def agent_match_stream(
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
+        background=background_tasks,
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # 禁用 Nginx 缓冲
         },
     )
+
+
+# ===== 客户档案（方案B：Agent 记忆按客户维度隔离） =====
+@router.get("/clients", tags=["客户档案"])
+async def list_clients(user: dict = Depends(require_login)):
+    """列出当前用户的所有客户档案（按创建时间倒序）"""
+    from app.utils.db_init import get_db_connection
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, name, note, created_at FROM clients WHERE user_id=? ORDER BY created_at DESC",
+        (user['id'],),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return {
+        "clients": [
+            {"id": r["id"], "name": r["name"], "note": r["note"], "created_at": r["created_at"]}
+            for r in rows
+        ]
+    }
+
+
+@router.post("/clients", tags=["客户档案"])
+async def create_client(req: ClientCreateRequest, user: dict = Depends(require_login)):
+    """为当前用户新建客户档案（同名去重）"""
+    from app.utils.db_init import get_db_connection
+    name = (req.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="客户名称不能为空")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM clients WHERE user_id=? AND name=?", (user['id'], name))
+    if cur.fetchone():
+        conn.close()
+        raise HTTPException(status_code=409, detail="该客户名称已存在")
+    cur.execute(
+        "INSERT INTO clients (user_id, name, note) VALUES (?, ?, ?)",
+        (user['id'], name, req.note),
+    )
+    cid = cur.lastrowid
+    conn.commit()
+    cur.execute("SELECT id, name, note, created_at FROM clients WHERE id=?", (cid,))
+    row = cur.fetchone()
+    conn.close()
+    return {"id": row["id"], "name": row["name"], "note": row["note"], "created_at": row["created_at"]}
+
+
+@router.delete("/clients/{client_id}", tags=["客户档案"])
+async def delete_client(client_id: int, user: dict = Depends(require_login)):
+    """删除客户档案，并级联清除该客户的 Agent 记忆（避免孤儿记忆）"""
+    from app.utils.db_init import get_db_connection
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM clients WHERE id=? AND user_id=?", (client_id, user['id']))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="客户不存在或无权限")
+    session_id = f"{user['id']}:{client_id}"
+    cur.execute("DELETE FROM agent_memory WHERE user_id=? AND session_id=?", (user['id'], session_id))
+    cur.execute("DELETE FROM agent_memory_archive WHERE user_id=? AND session_id=?", (user['id'], session_id))
+    cur.execute("DELETE FROM clients WHERE id=? AND user_id=?", (client_id, user['id']))
+    # 同步清理运行中的 Agent 记忆单例缓存，避免残留（客户已删，入口消失，但要干净）
+    try:
+        from app.agent import get_agent
+        get_agent().memory.clear_session(session_id)
+    except Exception:
+        pass
+    conn.commit()
+    conn.close()
+    return {"deleted": True, "client_id": client_id}
 
 
 @router.post("/analyze", response_model=AnalyzeResponse, tags=["竞争对手分析"])
@@ -671,7 +758,9 @@ async def get_knowledge_stats(
             total_documents=stats["total_documents"],
             supported_industries=stats["supported_industries"],
             industry_counts=stats["industry_counts"],
-            accuracy=stats.get("accuracy", 50)
+            accuracy=stats.get("accuracy", 50),
+            total_solution_files=stats.get("total_solution_files", 0),
+            competitor_companies=stats.get("competitor_companies", [])
         )
     except Exception as e:
         logger.error(f"获取知识库统计失败: {e}")
@@ -952,6 +1041,7 @@ async def get_dashboard_stats(
             match_growth=match_growth,
             analyze_growth=analyze_growth,
             total_documents=kb_stats.get("total_documents", 0),
+            competitor_companies=kb_stats.get("competitor_companies", []),
             accuracy=kb_stats.get("accuracy", 87),
             system_uptime=system_uptime,
             last_update=datetime.now().strftime("%Y-%m-%d %H:%M"),

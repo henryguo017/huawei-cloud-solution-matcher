@@ -70,7 +70,7 @@
 
     /* 表面 / 文字 / 边框 token (v2.0 深色控制台) */
     --bg-page: #E8EAED;              /* L1: 冷灰内容底（原#F5F7FA太白） */
-    --bg-card: linear-gradient(90deg, rgba(255,254,250,0.90) 0%, rgba(255,253,251,0.92) 40%, rgba(255,255,255,0.95) 100%);   /* L2: 毛玻璃卡片（极浅米白→纯白渐变） */
+    --bg-card: #FFFFFF;   /* L2: 卡片实底白（去毛玻璃） */
     --bg-card-solid: #F4F5F7;        /* 卡片回退色（不支持backdrop-filter时） */
     --bg-elevated: #FFFFFF;           /* L3: 输入框/弹窗（唯一允许纯白的地方） */
     --text-primary: #1A1C23;          /* 主文字 - 深墨色 */
@@ -104,14 +104,14 @@
     --sidebar-width-collapsed: 64px;
 
     /* ===== v2.0 深色控制台 新增 Token ===== */
-    --glass-bg: linear-gradient(90deg, rgba(255,254,250,0.90) 0%, rgba(255,253,251,0.92) 40%, rgba(255,255,255,0.95) 100%);
-    --glass-border: rgba(255, 255, 255, 0.45);
+    --glass-bg: #FFFFFF;   /* 卡片实底白（去毛玻璃） */
+    --glass-border: rgba(0, 0, 0, 0.08);   /* 实底卡片细边框 */
     --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
     --glass-hover-shadow: 0 8px 32px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(199, 0, 11, 0.06);
-    --glass-blur: blur(12px);
+    --glass-blur: none;
 
-    --brand-glow: 0 0 20px rgba(199, 0, 11, 0.15);
-    --brand-glow-strong: 0 0 30px rgba(199, 0, 11, 0.25);
+    --brand-glow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    --brand-glow-strong: 0 4px 16px rgba(0, 0, 0, 0.12);
 
     --input-focus-ring: 0 0 0 3px rgba(199, 0, 11, 0.12);
     --card-accent-grad: linear-gradient(180deg, rgba(199,0,11,0.03) 0%, transparent 100%);
@@ -223,11 +223,7 @@ body::before {
     left: 0;
     right: 0;
     bottom: 0;
-    background:
-        radial-gradient(circle at 15% 15%, rgba(199, 0, 11, 0.15) 0%, transparent 40%),
-        radial-gradient(circle at 85% 60%, rgba(74, 144, 226, 0.18) 0%, transparent 45%),
-        radial-gradient(circle at 50% 50%, rgba(100, 150, 255, 0.1) 0%, transparent 70%),
-        radial-gradient(circle at 30% 70%, rgba(199, 0, 11, 0.1) 0%, transparent 35%);
+    background: transparent;
     pointer-events: none;
     opacity: 0;  /* 阶段0隐藏极光，阶段1清理 */
     z-index: 0;
@@ -933,6 +929,57 @@ body::after {
     color: var(--primary-color);
 }
 
+/* ===== 客户档案栏（方案B：Agent 记忆按客户隔离） ===== */
+.client-hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    margin-left: 8px;
+}
+.client-select-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.client-select {
+    flex: 1;
+    min-height: 42px;
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--font-size-base);
+    font-family: var(--font-family);
+}
+.client-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+.client-new-btn {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    white-space: nowrap;
+}
+.client-del-btn {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+.client-del-btn:hover {
+    background: #FEE2E2;
+    border-color: #FCA5A5;
+    color: #DC2626;
+}
+
 .upload-dropzone {
     position: relative;
     display: flex;
@@ -1195,7 +1242,7 @@ body::after {
     display: inline-block;
     font-size: 9px;
     font-weight: 700;
-    background: linear-gradient(135deg, #4A90E2, #7B68EE);
+    background: var(--primary-color);
     color: var(--text-primary);
     padding: 1px 5px;
     border-radius: 6px;
@@ -1253,7 +1300,7 @@ body::after {
     background: var(--primary-color);
     border-color: var(--primary-color);
     color: #fff;
-    box-shadow: 0 0 14px rgba(199, 0, 11, 0.35);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 .wizard-step-dot.done {
     background: rgba(74, 222, 128, 0.2);
@@ -1322,7 +1369,7 @@ body::after {
 .wizard-industry-card.selected {
     background: var(--primary-light);
     border-color: var(--primary-color);
-    box-shadow: 0 0 16px rgba(199, 0, 11, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
 }
 .wizard-industry-card .wic-icon {
     font-size: 26px; display: block; margin-bottom: 6px;
@@ -1356,7 +1403,7 @@ body::after {
 .wizard-radio-card.selected {
     background: var(--primary-light);
     border-color: var(--primary-color);
-    box-shadow: 0 0 16px rgba(199, 0, 11, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
 }
 .wizard-radio-icon { font-size: 28px; }
 .wizard-radio-title {
@@ -2621,7 +2668,7 @@ body::after {
     background: var(--bg-card);
     border: 1px solid rgba(245, 34, 45, 0.3);
     border-radius: 16px; width: 90%; max-width: 420px;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 40px rgba(245, 34, 45, 0.1);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
     animation: wizardFadeIn 0.25s ease;
     overflow: hidden;
 }
@@ -3688,6 +3735,12 @@ body::after {
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--spacing-xs);
+}
+
+.history-item-tags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .history-item-date {
@@ -5601,6 +5654,7 @@ body::after {
 }
 .user-avatar-icon {
     font-size: 1.125rem;
+    color: var(--primary-color);
 }
 .user-name {
     font-weight: 500;
@@ -6029,7 +6083,7 @@ body::after {
     padding: 4px 12px;
     border-radius: 10px;
     width: fit-content;
-    backdrop-filter: blur(2px);
+    backdrop-filter: none;
     border: 1px solid rgba(255,255,255,0.15);
 }
 .profile-welcome-sub {
@@ -8719,9 +8773,18 @@ body::after {
     opacity: 0.55;
 }
 .achievement-card .ach-icon {
-    font-size: 32px;
-    margin-bottom: 8px;
-    display: block;
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--neutral-50, #f9fafb);
+    margin: 0 auto 10px;
+}
+.achievement-card .ach-icon .ach-icon-svg {
+    width: 22px;
+    height: 22px;
 }
 .achievement-card .ach-name {
     font-size: 13px;
@@ -8773,8 +8836,14 @@ body::after {
         border-radius: 10px;
     }
     .achievement-card .ach-icon {
-        font-size: 22px;
-        margin-bottom: 4px;
+        width: 36px;
+        height: 36px;
+        margin: 0 auto 4px;
+        border-radius: 10px;
+    }
+    .achievement-card .ach-icon svg {
+        width: 20px;
+        height: 20px;
     }
     .achievement-card .ach-name {
         font-size: 11px;
@@ -8813,7 +8882,6 @@ body::after {
     border: 1px solid rgba(255,215,0,0.2);
     box-shadow:
         0 8px 32px rgba(0,0,0,0.5),
-        0 0 20px rgba(255,215,0,0.08),
         inset 0 1px 0 var(--text-secondary);
     color: var(--text-primary);
     animation: toastSlideInRight 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -9075,24 +9143,7 @@ body::after {
 }
 .competitor-step.done { border-color: #4ade80; background: rgba(74,222,128,0.04); }
 
-/* 11. 成就卡片增强 */
-.achievement-card {
-  border: 1px solid var(--border-color); transition: all 0.25s ease;
-  position: relative; overflow: hidden;
-}
-.achievement-card::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-  opacity: 0; transition: opacity 0.25s;
-}
-.achievement-card.unlocked::before { background: linear-gradient(90deg, #fbbf24, #f59e0b); opacity: 1; }
-.achievement-card.locked::before { background: var(--neutral-300); opacity: 0.5; }
-.achievement-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
-.achievement-card.unlocked:hover { box-shadow: 0 8px 20px rgba(251,191,36,0.2); }
-.ach-icon {
-  width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
-  border-radius: 14px; background: var(--neutral-50); margin-bottom: 10px;
-}
-.ach-icon .icon { width: 26px; height: 26px; }
+/* 11. 成就卡片增强（已合并到上方主定义） */
 
 /* 12. 知识库文档项 */
 .kb-doc-item { border: 1px solid var(--border-color); border-radius: 12px; }
@@ -9119,7 +9170,7 @@ input:checked + .toggle-slider:before { transform: translateX(22px); }
 }
 
 /* 15. Toast通知增强 */
-.toast { border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); backdrop-filter: blur(8px); }
+.toast { border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
 .toast.success { border-left: 4px solid #4ade80; }
 .toast.error { border-left: 4px solid var(--error); }
 .toast.warning { border-left: 4px solid #f59e0b; }
@@ -9435,10 +9486,10 @@ select:focus {
 .sidebar-brand .brand-text {
     font-size: 1.15rem;
     font-weight: 700;
-    color: #C7000B;  /* 纯华为红 */
+    color: #fff;
     background: none;
     -webkit-background-clip: unset;
-    -webkit-text-fill-color: #C7000B;
+    -webkit-text-fill-color: #fff;
     white-space: nowrap;
     letter-spacing: 0.02em;
 }
@@ -9669,19 +9720,19 @@ select:focus {
 .topbar-icon-btn {
     display: flex; align-items: center; gap: 6px;
     height: 36px; padding: 0 14px;
-    background: linear-gradient(135deg, rgba(199,0,11,0.18) 0%, rgba(199,0,11,0.08) 100%);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(199,0,11,0.25);
-    box-shadow: 0 2px 8px rgba(199,0,11,0.12), inset 0 1px 0 rgba(255,255,255,0.06);
+    background: var(--primary-color);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid var(--primary-color);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     border-radius: 10px;
     color: rgba(255,255,255,0.92); font-size: 0.85rem; font-weight: 600;
     cursor: pointer; font-family: var(--font-family);
     transition: all var(--transition-fast);
 }
 .topbar-icon-btn:hover {
-    background: linear-gradient(135deg, rgba(199,0,11,0.35) 0%, rgba(199,0,11,0.18) 100%);
-    border-color: rgba(199,0,11,0.45);
+    background: #A30009;
+    border-color: #A30009;
     color: #fff;
 }
 .topbar-icon-btn .icon { width: 1.1rem; height: 1.1rem; }
@@ -9690,22 +9741,26 @@ select:focus {
 .topbar .nav-user-menu { position: relative; }
 .topbar .nav-user-avatar-btn {
     display: flex; align-items: center; gap: 8px;
-    background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(199,0,11,0.20);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.05);
+    background: var(--primary-color);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid var(--primary-color);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    color: rgba(255,255,255,0.92);
     border-radius: 10px;
     height: 36px; padding: 0 12px;
-    color: rgba(255,255,255,0.88); cursor: pointer; font-family: var(--font-family);
+    cursor: pointer; font-family: var(--font-family);
+    font-weight: 600; font-size: 0.85rem;
     transition: all var(--transition-fast);
 }
 .topbar .nav-user-avatar-btn:hover {
-    background: linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%);
-    border-color: rgba(199,0,11,0.35);
+    background: #A30009;
+    border-color: #A30009;
+    color: #fff;
 }
 .topbar .user-name { font-size: 0.85rem; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topbar .dropdown-arrow { color: var(--frame-text-dim); font-size: 0.7rem; }
+.topbar .user-avatar-icon { color: rgba(255,255,255,0.92); }
+.topbar .dropdown-arrow { color: rgba(255,255,255,0.7); font-size: 0.7rem; }
 
 /* 覆盖旧固定 navbar 留下的顶部留白 */
 .main-content { padding-top: var(--spacing-xl); }
@@ -9797,13 +9852,13 @@ input::placeholder, textarea::placeholder {
 
 /* ---- 次要按钮：毛玻璃白底 + 红字 ---- */
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.5) !important;
-    backdrop-filter: blur(8px);
+    background: #FFFFFF !important;
+    backdrop-filter: none !important;
     color: var(--primary-color) !important;
     border: 1px solid rgba(199, 0, 11, 0.25) !important;
 }
 .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.75) !important;
+    background: #F2F3F5 !important;
 }
 
 /* ---- 表格条纹 + 红色hover ---- */
@@ -9860,10 +9915,10 @@ table tbody tr:hover {
 
 /* ---- 模式切换按钮组（毛玻璃未选中态） ---- */
 .mode-switch button:not(.active) {
-    background: rgba(255, 255, 255, 0.45) !important;
-    backdrop-filter: blur(6px);
+    background: #FFFFFF !important;
+    backdrop-filter: none !important;
     color: var(--text-secondary) !important;
-    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 .mode-switch button.active {
     background: var(--primary-color) !important;
@@ -10007,10 +10062,10 @@ table tbody tr:hover {
 #page-dashboard .stat-card,
 #page-dashboard .dashboard-kpi-card,
 .dashboard-kpi-card {
-    background: rgba(255, 255, 255, 0.72) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    background: #FFFFFF !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
     color: #1D2129 !important;
 }
 #page-dashboard .stat-card-value,
@@ -10036,8 +10091,8 @@ table tbody tr:hover {
 #page-dashboard .dashboard-chart-card,
 .dashboard-chart-card {
     background: var(--bg-card) !important;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    backdrop-filter: none;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 #page-dashboard .dashboard-chart-card h3,
 .dashboard-chart-card .chart-header h3 {
@@ -10064,31 +10119,20 @@ table tbody tr:hover {
 
 /* ---- 产品图谱：节点毛玻璃 ---- */
 .product-node {
-    background: rgba(255, 255, 255, 0.65) !important;
-    backdrop-filter: blur(8px);
+    background: #FFFFFF !important;
+    backdrop-filter: none !important;
     border: 1px solid rgba(199, 0, 11, 0.15) !important;
     transition: all 0.3s ease !important;
 }
 .product-node:hover {
-    background: rgba(255, 255, 255, 0.85) !important;
+    background: #F7F8FA !important;
     box-shadow: 0 0 16px rgba(199, 0, 11, 0.15) !important;
     transform: scale(1.03);
 }
 
 /* ---- 历史记录：时间线风格 ---- */
 .history-item {
-    border-left: 2px solid rgba(199, 0, 11, 0.2) !important;
-    padding-left: 20px !important;
-    position: relative;
-}
-.history-item::before {
-    content: '';
-    position: absolute;
-    left: -6px; top: 18px;
-    width: 10px; height: 10px;
-    background: var(--primary-color);
-    border-radius: 50%;
-    box-shadow: 0 0 8px rgba(199, 0, 11, 0.3);
+    padding-left: 16px !important;
 }
 
 /* ---- 成就中心：渐变卡片 + 进度条 ---- */
@@ -10141,7 +10185,7 @@ table tbody tr:hover {
 
 /* ---- Toast/通知增强 ---- */
 #toast-container .toast {
-    backdrop-filter: blur(12px);
+    backdrop-filter: none;
     border-radius: 12px !important;
     animation: slideRight 0.3s ease both;
 }

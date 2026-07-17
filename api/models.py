@@ -6,6 +6,7 @@ class MatchRequest(BaseModel):
     mode: Optional[str] = Field(default="standard", description="匹配模式: standard/agent/wizard")
     is_quick_demo: bool = Field(default=False, description="是否来自快速体验/Demo，为true时不触发成就")
     customer_files: List[str] = Field(default_factory=list, description="用户上传的客户资料相对路径列表（如 customer_uploads/xxx.docx），由上传接口返回")
+    client_id: Optional[int] = Field(default=None, description="客户档案 ID；提供后 Agent 记忆按 用户:客户 维度隔离，避免多客户串味")
     
     class Config:
         json_schema_extra = {
@@ -15,6 +16,10 @@ class MatchRequest(BaseModel):
                 "customer_files": []
             }
         }
+
+class ClientCreateRequest(BaseModel):
+    name: str = Field(..., description="客户名称", min_length=1, max_length=100)
+    note: Optional[str] = Field(default=None, description="客户备注（可选）", max_length=500)
 
 class AnalyzeRequest(BaseModel):
     competitor: str = Field(..., description="竞争对手名称")
@@ -51,6 +56,8 @@ class KnowledgeStatsResponse(BaseModel):
     supported_industries: List[str] = Field(default_factory=list, description="支持的行业列表")
     industry_counts: Dict[str, int] = Field(default_factory=dict, description="各行业文档数量")
     accuracy: int = Field(default=50, description="方案覆盖度（百分比）")
+    total_solution_files: int = Field(default=0, description="解决方案文档总数（华为+竞品文件数）")
+    competitor_companies: List[str] = Field(default_factory=list, description="竞品厂商列表")
 
 class RebuildResponse(BaseModel):
     count: int = Field(..., description="重建的文档数量")
@@ -170,6 +177,7 @@ class DashboardStatsResponse(BaseModel):
     match_growth: Optional[float] = Field(default=None, description="方案匹配7日环比涨幅（百分比），None表示前一区间无数据（新增长）")
     analyze_growth: Optional[float] = Field(default=None, description="竞品分析7日环比涨幅（百分比），None表示前一区间无数据（新增长）")
     total_documents: int = Field(default=0, description="知识库文档总数")
+    competitor_companies: List[str] = Field(default_factory=list, description="竞品厂商列表")
     accuracy: int = Field(default=87, description="方案覆盖度（百分比）")
     system_uptime: str = Field(default="--", description="系统运行时间")
     last_update: str = Field(default="--", description="最后更新时间")

@@ -347,6 +347,7 @@ class KnowledgeBaseService:
                 "competitor_companies": competitor_companies,
                 "competitor_stats": competitor_stats,
                 "total_competitor_files": total_competitor_files,
+                "total_solution_files": total_files + total_competitor_files,
                 "accuracy": accuracy
             }
         except Exception as e:
@@ -357,6 +358,7 @@ class KnowledgeBaseService:
                 "total_documents": 0,
                 "supported_industries": [],
                 "industry_counts": {i: 0 for i in SUPPORTED_INDUSTRIES},
+                "total_solution_files": 0,
                 "accuracy": 50
             }
 

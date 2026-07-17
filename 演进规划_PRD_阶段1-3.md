@@ -25,14 +25,14 @@
 
 ### 2. 用户场景
 - 场景 A：销售在匹配页上传客户发来的 `客户需求.docx` / `招标.pdf` / `痛点照片.jpg`，对 AI 说"帮我把这份需求整理成方案"，AI 读文档（图片 OCR）→ 提取痛点 → 生成方案 → 存成 `方案_客户名.docx`。
-- 场景 B：AI 生成方案后，销售说"存到我的方案库"，AI 直接落盘到白名单目录，返回文件路径（并登记进"我的方案/收藏"供前端展示）。
+- ~~场景 B：AI 生成方案后，销售说"存到我的方案库"，AI 直接落盘到白名单目录，返回文件路径（并登记进"我的方案/收藏"供前端展示）。~~ **【已废弃 2026-07-17】** 方案需反复细磨，改为前端手动保存，不由 AI 落盘。
 - 场景 C：客户材料是 200 页 PDF，AI 仍逐块处理全覆盖，不丢埋在末尾的关键需求。
 
 ### 3. 功能需求
 | 编号 | 功能 | 优先级 | 说明 |
 |------|------|------|------|
 | FR-1.1 | 多格式读取客户文件 | P0 | 支持 `.docx`/`.xlsx`/`.pdf`/`.pptx`/`.txt`/`.csv` + 图片 `.png`/`.jpg`（OCR）。统一入口 `read_customer_file(path)`，内部按扩展名分发 |
-| FR-1.2 | 方案落盘 | P0 | 复用 `ReportGeneratorService` 生成 docx，写入白名单目录；同名自动加时间戳不覆盖 |
+| ~~FR-1.2~~ | ~~方案落盘~~ | ~~P0~~ | **【已废弃 2026-07-17】** 用户决策：方案需反复细磨，AI 每改一版就落盘会制造大量废文件，不合理。改为**前端手动保存**（用户满意后自己点导出/保存）。`save_solution_file` 工具不实现。 |
 | FR-1.3 | 目录列举 | P1 | 列出白名单目录下文件，供 Agent 选择 |
 | FR-1.4 | 路径安全校验 | P0 | 所有路径必须落在 `data/user_docs/{user_id}/` 内，越界拒绝 |
 | FR-1.5 | 三模式上传入口 | P0 | 标准/智能/向导三匹配页顶部均加「上传客户资料」控件；后端上传接口存 `customer_uploads/`，返回路径 |
@@ -51,7 +51,7 @@
 | 工具 | 实现函数 | 复用点 |
 |------|------|------|
 | `read_customer_file` | `_tool_read_customer_file(path)` | 解析层 `parsers/read_file.py` 按扩展名分发；文本喂 `analyze_demand` |
-| `save_solution_file` | `_tool_save_solution_file(solution_json, filename)` | 直接调 `ReportGeneratorService.generate_report_from_json(...)` 拿 `file_path`，复制到白名单 `generated_solutions/` |
+| ~~`save_solution_file`~~ | ~~`_tool_save_solution_file(...)`~~ | **【已废弃 2026-07-17】** 不实现，改前端手动保存 |
 | `list_dir` | `_tool_list_dir(dir)` | `os.listdir` + 白名单校验 |
 
 **解析层分发**（`app/agent/parsers/read_file.py`，新增）：

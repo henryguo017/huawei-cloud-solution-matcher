@@ -586,7 +586,7 @@ const SettingsManager = {
             State.settings = {
                 animations: true,
                 skeletons: true,
-                particles: true,
+                particles: false,
                 pageSize: 20,
                 autoSave: true,
                 showWelcome: true
@@ -653,7 +653,8 @@ if (typeof Chart !== 'undefined') {
 
 const State = {
     currentPage: 'solution',
-    matchMode: 'normal',  // 'normal' | 'agent' | 'wizard'
+    matchMode: 'agent',  // 'normal' | 'agent' | 'wizard'（默认主推 Agent 模式，与 index.html 默认 active 一致）
+    currentClientId: null,  // 当前选中的客户档案 ID（Agent 记忆隔离维度）；null = 全局记忆
     wizardData: {          // 向导模式收集的数据
         industry: null,
         scale: null,
@@ -675,7 +676,7 @@ const State = {
     settings: {
         animations: true,
         skeletons: true,
-        particles: true,
+        particles: false,
         pageSize: 20,
         autoSave: true,
         showWelcome: true
@@ -1018,7 +1019,7 @@ const API = {
         return await response.json();
     },
 
-    async agentMatchStream(demand, signal, onEvent, customerFiles = []) {
+    async agentMatchStream(demand, signal, onEvent, customerFiles = [], clientId = null) {
         const headers = { 'Content-Type': 'application/json' };
         if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
             headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
@@ -1026,7 +1027,7 @@ const API = {
         const response = await fetch(`${Config.API_BASE_URL}/agent/match/stream`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ demand, customer_files: customerFiles, is_quick_demo: State.isQuickDemo }),
+            body: JSON.stringify({ demand, customer_files: customerFiles, client_id: clientId, is_quick_demo: State.isQuickDemo }),
             signal
         });
 
@@ -2054,8 +2055,6 @@ const KnowledgeUI = {
             State.knowledgeStats = stats;
             SkeletonUI.clearSkeleton('knowledge-stats');
 
-            const accuracy = stats.accuracy || 50;
-
             // 安全写入DOM（元素可能不存在，如导航栏无accuracy显示位）
             const safeSet = (id, val) => { var el = document.getElementById(id); if (el) el.textContent = val; };
 
@@ -2065,7 +2064,7 @@ const KnowledgeUI = {
 
             safeSet('kb-total-docs', stats.total_documents || 0);
             safeSet('kb-total-industries', stats.supported_industries?.length || 0);
-            safeSet('kb-accuracy', `${accuracy}%`);
+            safeSet('kb-competitors', stats.competitor_companies?.length || 0);
 
             this.renderChart(stats.industry_counts || {});
         } catch (error) {
@@ -2472,8 +2471,8 @@ const DashboardUI = {
         animateValue(document.getElementById('dash-total-analyses'), stats.recent_analyses || 0);
         animateValue(document.getElementById('dash-total-docs'), stats.total_documents || 0);
 
-        const accEl = document.getElementById('dash-accuracy');
-        if (accEl) accEl.textContent = (stats.accuracy || 87) + '%';
+        const accEl = document.getElementById('dash-competitors');
+        if (accEl) accEl.textContent = stats.competitor_companies?.length || 0;
 
         // 涨幅显示（7日环比）
         const formatTrend = (val) => {
@@ -2985,8 +2984,10 @@ const HistoryUI = {
                     <div class="history-item-content">
                         <div class="history-item-header">
                             <span class="history-item-date">${dateStr}</span>
-                            ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
-                            ${this._statusBadges(item)}
+                            <span class="history-item-tags">
+                                ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
+                                ${this._statusBadges(item)}
+                            </span>
                         </div>
                         <div class="history-item-demand">${this.escapeHtml(demandPreview)}${item.demand_text && item.demand_text.length > 200 ? '...' : ''}</div>
                     </div>
@@ -3011,9 +3012,11 @@ const HistoryUI = {
                     <div class="history-item-content">
                         <div class="history-item-header">
                             <span class="history-item-date">${dateStr}</span>
-                            <span class="history-item-industry competitor-badge">${this.escapeHtml(item.competitor || '未知竞品')}</span>
-                            ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
-                            ${this._statusBadges(item)}
+                            <span class="history-item-tags">
+                                <span class="history-item-industry competitor-badge">${this.escapeHtml(item.competitor || '未知竞品')}</span>
+                                ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
+                                ${this._statusBadges(item)}
+                            </span>
                         </div>
                         <div class="history-item-demand" style="color: rgba(255,255,255,0.6);">分析报告已生成 · 点击查看详情</div>
                     </div>
@@ -3282,7 +3285,7 @@ const HistoryUI = {
             if (m.role === 'user') {
                 return `<div class="followup-msg user"><div class="followup-role">你</div><div class="followup-text">${this.escapeHtml(m.content || '')}</div></div>`;
             }
-            return `<div class="followup-msg assistant"><div class="followup-role">AI</div><div class="followup-text followup-ai-summary">✓ 已根据上方追问优化方案（更新于上方方案正文）</div></div>`;
+            return `<div class="followup-msg assistant"><div class="followup-role">AI</div><div class="followup-text followup-ai-summary">已根据上方追问优化方案（更新于上方方案正文）</div></div>`;
         }).join('');
     },
 
@@ -4620,6 +4623,65 @@ function initEventListeners() {
     const matchBtn = document.getElementById('match-btn');
     const matchBtnText = matchBtn?.querySelector('.btn-text');
 
+    // ===== 客户档案（方案B：Agent 记忆按客户隔离） =====
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+    function loadClients() {
+        const sel = document.getElementById('client-select');
+        if (!sel || !AuthManager.isLoggedIn()) return;  // 未登录不加载
+        const prev = State.currentClientId;
+        fetch(`${Config.API_BASE_URL}/clients`, {
+            headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` }
+        })
+            .then(r => r.ok ? r.json() : { clients: [] })
+            .then(data => {
+                const clients = (data.clients || []);
+                sel.innerHTML = '<option value="">（全局记忆 · 不限定客户）</option>' +
+                    clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+                if (prev) sel.value = String(prev);
+                State.currentClientId = sel.value ? Number(sel.value) : null;
+            })
+            .catch(() => {});
+    }
+    document.getElementById('client-new-btn')?.addEventListener('click', () => {
+        const name = prompt('请输入客户名称（如：某某制造企业）：');
+        if (!name || !name.trim()) return;
+        const note = prompt('客户备注（可选，可留空）：') || '';
+        fetch(`${Config.API_BASE_URL}/clients`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AuthManager.getToken()}` },
+            body: JSON.stringify({ name: name.trim(), note })
+        }).then(r => r.ok ? r.json() : Promise.reject(r))
+          .then(c => { UI.showToast(`已新建客户「${c.name}」`, 'success'); State.currentClientId = c.id; loadClients(); })
+          .catch(err => { err.json?.().then?.(e => UI.showToast(e.detail || '新建客户失败', 'error')); });
+    });
+    document.getElementById('client-del-btn')?.addEventListener('click', () => {
+        if (!State.currentClientId) { UI.showToast('当前为全局记忆，无需删除', 'info'); return; }
+        const sel = document.getElementById('client-select');
+        const name = sel?.selectedOptions?.[0]?.textContent || '该客户';
+        if (!confirm(`确定删除客户「${name}」？其 Agent 记忆将一并清除。`)) return;
+        fetch(`${Config.API_BASE_URL}/clients/${State.currentClientId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` }
+        }).then(r => {
+            if (r.ok) { UI.showToast(`已删除客户「${name}」`, 'success'); State.currentClientId = null; loadClients(); }
+            else UI.showToast('删除失败', 'error');
+        }).catch(() => UI.showToast('删除失败', 'error'));
+    });
+    document.getElementById('client-select')?.addEventListener('change', (e) => {
+        State.currentClientId = e.target.value ? Number(e.target.value) : null;
+    });
+    // 初始化：默认 Agent 模式 → 显示客户栏
+    if (State.matchMode === 'agent') {
+        const cb = document.getElementById('client-bar');
+        if (cb) cb.style.display = '';
+        // 登录态可能尚未就绪：本块在脚本顶层执行，早于 init() 中的 AuthManager.init()，
+        // 此时 isLoggedIn() 仍为 false，直接 loadClients() 会被跳过导致下拉永远为空。
+        // 延迟到登录态（含服务端校验）确认后再加载，参考 CustomerFileUploader 模式（行4449）。
+        setTimeout(() => { if (AuthManager.isLoggedIn()) loadClients(); }, 300);
+    }
+
     // ===== 匹配模式切换 =====
     const modeToggle = document.getElementById('mode-toggle');
     const modeHint = document.getElementById('mode-hint');
@@ -4628,6 +4690,7 @@ function initEventListeners() {
         if (!option) return;
         const newMode = option.dataset.mode;
         if (State.matchMode === newMode) return;
+        const prevMode = State.matchMode;   // 记录切换前的模式，用于判断布局是否变化
         State.matchMode = newMode;
         // 更新 UI
         modeToggle.querySelectorAll('.mode-option').forEach(el => el.classList.remove('active'));
@@ -4636,11 +4699,23 @@ function initEventListeners() {
         if (modeHint) {
             const hints = {
                 normal: '精准搜索 + LLM 生成',
-                agent: 'AI 理解需求 → 自动搜索 → 生成方案',
+                agent: 'AI 记忆上下文 → 精准检索 → 为你定制方案',
                 wizard: '像 BD 顾问一样，一步步挖掘客户需求'
             };
             modeHint.textContent = hints[newMode] || '';
         }
+
+        // 客户档案栏：仅 Agent 模式显示并加载
+        const clientBar = document.getElementById('client-bar');
+        if (clientBar) {
+            if (newMode === 'agent') {
+                clientBar.style.display = '';
+                loadClients();
+            } else {
+                clientBar.style.display = 'none';
+            }
+        }
+
         // 向导模式的显示/隐藏
         const demandInput = document.getElementById('demand-input');
         if (newMode === 'wizard') {
@@ -4648,6 +4723,24 @@ function initEventListeners() {
         } else {
             DemandWizard.hide();
             if (demandInput) demandInput.parentElement.style.display = '';
+        }
+
+        // 只有涉及向导模式的切换才会改变输入区高度（向导模式隐藏 textarea 并显示向导面板）。
+        // 文档高度骤变时浏览器会把 scrollY clamp 到新的最大值——在高视口下会被归 0，
+        // 表现为“切到 Agent 时页面弹到最顶端”。锚点补偿无法解决（目标滚动位置常超出可滚动范围），
+        // 故改为：切换后平滑滚动到新模式的主输入元素，给用户一个确定、自然的落点。
+        // Agent ↔ 标准 之间切换布局完全相同，无需滚动，保持当前视口。
+        const layoutChanged = newMode === 'wizard' || prevMode === 'wizard';
+        if (layoutChanged) {
+            requestAnimationFrame(() => {
+                const target = newMode === 'wizard'
+                    ? document.getElementById('demand-wizard')
+                    : document.getElementById('demand-input');
+                if (!target) return;
+                const headerOffset = 72;  // 顶部固定栏(56px) + 呼吸留白
+                const top = target.getBoundingClientRect().top + window.scrollY - headerOffset;
+                window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+            });
         }
     });
 
@@ -4725,6 +4818,14 @@ function initEventListeners() {
         }
         
         try {
+            // 智能匹配要求登录：匿名用户直接拦截并弹登录框，
+            // 既避免 401 报错，也彻底杜绝写入 user_id=0 的共享记忆池
+            if (isAgentMode && !AuthManager.isLoggedIn()) {
+                UI.showToast('请先登录后再使用智能匹配', 'warning');
+                AuthManager.showLoginModal();
+                MatchProgress.hide();
+                return;
+            }
             SkeletonUI.showMatchFormSkeleton();
             if (isAgentMode) MatchProgress.setSteps([
                 { icon: '<svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg>', label: '分析需求意图', desc: 'AI 理解模糊需求，提取关键信息' },
@@ -4786,9 +4887,9 @@ function initEventListeners() {
                     } else if (event.type === 'result') {
                         result = event.data;
                     } else if (event.type === 'error') {
-                        throw new Error(event.message);
-                    }
-                }, customerFiles);
+                    throw new Error(event.message);
+                }
+            }, customerFiles, State.currentClientId);
             } else {
                 result = await API.match(demand, controller.signal, State.matchMode, customerFiles);
             }
@@ -5606,7 +5707,7 @@ function init() {
                         const succEl = document.getElementById('reset-password-success');
                         if (errEl) errEl.style.display = 'none';
                         if (succEl) succEl.style.display = 'none';
-                        console.log('[Init] ✅ 重置密码弹窗已打开');
+                        console.log('[Init] 重置密码弹窗已打开');
                     }
                 }, 500);
             }
@@ -6097,8 +6198,8 @@ const ProductGraph = {
                 '<div class="sd-section"><div class="sd-section-title" style="color:var(--text-secondary)">关联产品</div>'+
                 '<div class="sd-chip-list" style="flex-wrap:wrap;gap:5px">'+relNames.map(function(n){return '<span class="sd-chip" style="background:rgba(199,0,11,0.07);color:#C7000B;font-size:0.72rem;padding:4px 9px;border-radius:7px">'+n+'</span>';}).join('')+'</div></div>' : '')+
             '<div class="sd-action-bar">'+
-                '<button class="sd-btn sd-btn-primary" onclick="ProductGraph._openFullDetail(\''+product.id+'\')">📋 完整详情</button>'+
-                '<button class="sd-btn sd-btn-outline" onclick="ProductGraph._resetPanel()">✕ 关闭面板</button>'+
+                '<button class="sd-btn sd-btn-primary" onclick="ProductGraph._openFullDetail(\''+product.id+'\')">完整详情</button>'+
+                '<button class="sd-btn sd-btn-outline" onclick="ProductGraph._resetPanel()">关闭面板</button>'+
             '</div>';
 
         // 切换三态：隐藏默认和预览，显示选中
@@ -6310,81 +6411,81 @@ const ProductGraph = {
 
 /* ===== 3D产品架构树形图 (ArchTree3D) 已于 v20260531w 移除 ===== */
 
-/* ===== Phase 3: 运行时 emoji→线性图标 助手（后端返回的 emoji 也能转图标） ===== */
+/* ===== Phase 3: 运行时图标转换助手（后端返回的符号也能转线性图标） ===== */
 window.EMOJI_SVG = {
-  '✨': '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>',
-  '🔍': '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>',
-  '⚔️': '<svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg>',
-  '📚': '<svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg>',
-  '🚀': '<svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg>',
-  '💡': '<svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg>',
-  '🎯': '<svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg>',
-  '✕': '<svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>',
-  '🏭': '<svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg>',
-  '🌾': '<svg class="icon" aria-hidden="true"><use href="#i-wheat"></use></svg>',
-  '🏢': '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>',
-  '☁️': '<svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>',
-  '🗺️': '<svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg>',
-  '📊': '<svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg>',
-  '📋': '<svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg>',
-  '🏆': '<svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg>',
-  '⚙️': '<svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg>',
-  '👤': '<svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>',
-  '🚪': '<svg class="icon" aria-hidden="true"><use href="#i-log-out"></use></svg>',
-  '☰': '<svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>',
-  '🌐': '<svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>',
-  '⚠️': '<svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg>',
-  '🧠': '<svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg>',
-  '💬': '<svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg>',
-  '📥': '<svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>',
-  '📘': '<svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg>',
-  '☆': '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>',
-  '↗': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-up-right"></use></svg>',
-  '↘': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg>',
-  '←': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg>',
-  '→': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"></use></svg>',
-  '🤖': '<svg class="icon" aria-hidden="true"><use href="#i-bot"></use></svg>',
-  '📡': '<svg class="icon" aria-hidden="true"><use href="#i-radio"></use></svg>',
-  '🛡️': '<svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg>',
-  '🎬': '<svg class="icon" aria-hidden="true"><use href="#i-film"></use></svg>',
-  '💼': '<svg class="icon" aria-hidden="true"><use href="#i-briefcase"></use></svg>',
-  '🔒': '<svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>',
-  '📧': '<svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg>',
-  '⚡': '<svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>',
-  '🎨': '<svg class="icon" aria-hidden="true"><use href="#i-palette"></use></svg>',
-  '🥉': '<svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg>',
-  '🥈': '<svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg>',
-  '🥇': '<svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg>',
-  '💎': '<svg class="icon" aria-hidden="true"><use href="#i-gem"></use></svg>',
-  '🎪': '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>',
-  '📂': '<svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>',
-  '📁': '<svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>',
-  '💾': '<svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg>',
-  '🗄️': '<svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg>',
-  '👆': '<svg class="icon" aria-hidden="true"><use href="#i-hand"></use></svg>',
-  '📄': '<svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>',
-  '🔄': '<svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg>',
-  '🗑️': '<svg class="icon" aria-hidden="true"><use href="#i-trash-2"></use></svg>',
-  '⏳': '<svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg>',
-  '⚖️': '<svg class="icon" aria-hidden="true"><use href="#i-scale"></use></svg>',
-  '⭐': '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>',
-  '💰': '<svg class="icon" aria-hidden="true"><use href="#i-banknote"></use></svg>',
-  '🚗': '<svg class="icon" aria-hidden="true"><use href="#i-car"></use></svg>',
-  '🏙️': '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>',
-  '🏥': '<svg class="icon" aria-hidden="true"><use href="#i-stethoscope"></use></svg>',
-  '🎭': '<svg class="icon" aria-hidden="true"><use href="#i-landmark"></use></svg>',
-  '📌': '<svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg>',
-  '🌡️': '<svg class="icon" aria-hidden="true"><use href="#i-thermometer"></use></svg>',
-  '📈': '<svg class="icon" aria-hidden="true"><use href="#i-trending-up"></use></svg>',
-  '🎉': '<svg class="icon" aria-hidden="true"><use href="#i-party-popper"></use></svg>',
-  '🔧': '<svg class="icon" aria-hidden="true"><use href="#i-wrench"></use></svg>',
-  '💭': '<svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg>',
-  '🏗️': '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>',
-  '✏️': '<svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>',
-  '✅': '<svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg>',
-  '✓': '<svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg>',
-  '🔴': '<span class="cat-dot huawei"></span>',
-  '🔵': '<span class="cat-dot competitor"></span>'
+  '\u{2728}': '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>',
+  '\u{1F50D}': '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>',
+  '\u{2694}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg>',
+  '\u{1F4DA}': '<svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg>',
+  '\u{1F680}': '<svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg>',
+  '\u{1F4A1}': '<svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg>',
+  '\u{1F3AF}': '<svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg>',
+  '\u{2715}': '<svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>',
+  '\u{1F3ED}': '<svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg>',
+  '\u{1F33E}': '<svg class="icon" aria-hidden="true"><use href="#i-wheat"></use></svg>',
+  '\u{1F3E2}': '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>',
+  '\u{2601}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>',
+  '\u{1F5FA}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg>',
+  '\u{1F4CA}': '<svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg>',
+  '\u{1F4CB}': '<svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg>',
+  '\u{1F3C6}': '<svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg>',
+  '\u{2699}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg>',
+  '\u{1F464}': '<svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>',
+  '\u{1F6AA}': '<svg class="icon" aria-hidden="true"><use href="#i-log-out"></use></svg>',
+  '\u{2630}': '<svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>',
+  '\u{1F310}': '<svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>',
+  '\u{26A0}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg>',
+  '\u{1F9E0}': '<svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg>',
+  '\u{1F4AC}': '<svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg>',
+  '\u{1F4E5}': '<svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg>',
+  '\u{1F4D8}': '<svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg>',
+  '\u{2606}': '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>',
+  '\u{2197}': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-up-right"></use></svg>',
+  '\u{2198}': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg>',
+  '\u{2190}': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg>',
+  '\u{2192}': '<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"></use></svg>',
+  '\u{1F916}': '<svg class="icon" aria-hidden="true"><use href="#i-bot"></use></svg>',
+  '\u{1F4E1}': '<svg class="icon" aria-hidden="true"><use href="#i-radio"></use></svg>',
+  '\u{1F6E1}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg>',
+  '\u{1F3AC}': '<svg class="icon" aria-hidden="true"><use href="#i-film"></use></svg>',
+  '\u{1F4BC}': '<svg class="icon" aria-hidden="true"><use href="#i-briefcase"></use></svg>',
+  '\u{1F512}': '<svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>',
+  '\u{1F4E7}': '<svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg>',
+  '\u{26A1}': '<svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>',
+  '\u{1F3A8}': '<svg class="icon" aria-hidden="true"><use href="#i-palette"></use></svg>',
+  '\u{1F949}': '<svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg>',
+  '\u{1F948}': '<svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg>',
+  '\u{1F947}': '<svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg>',
+  '\u{1F48E}': '<svg class="icon" aria-hidden="true"><use href="#i-gem"></use></svg>',
+  '\u{1F3AA}': '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>',
+  '\u{1F4C2}': '<svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>',
+  '\u{1F4C1}': '<svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>',
+  '\u{1F4BE}': '<svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg>',
+  '\u{1F5C4}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg>',
+  '\u{1F446}': '<svg class="icon" aria-hidden="true"><use href="#i-hand"></use></svg>',
+  '\u{1F4C4}': '<svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg>',
+  '\u{1F504}': '<svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg>',
+  '\u{1F5D1}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-trash-2"></use></svg>',
+  '\u{23F3}': '<svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg>',
+  '\u{2696}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-scale"></use></svg>',
+  '\u{2B50}': '<svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg>',
+  '\u{1F4B0}': '<svg class="icon" aria-hidden="true"><use href="#i-banknote"></use></svg>',
+  '\u{1F697}': '<svg class="icon" aria-hidden="true"><use href="#i-car"></use></svg>',
+  '\u{1F3D9}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>',
+  '\u{1F3E5}': '<svg class="icon" aria-hidden="true"><use href="#i-stethoscope"></use></svg>',
+  '\u{1F3AD}': '<svg class="icon" aria-hidden="true"><use href="#i-landmark"></use></svg>',
+  '\u{1F4CC}': '<svg class="icon" aria-hidden="true"><use href="#i-pin"></use></svg>',
+  '\u{1F321}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-thermometer"></use></svg>',
+  '\u{1F4C8}': '<svg class="icon" aria-hidden="true"><use href="#i-trending-up"></use></svg>',
+  '\u{1F389}': '<svg class="icon" aria-hidden="true"><use href="#i-party-popper"></use></svg>',
+  '\u{1F527}': '<svg class="icon" aria-hidden="true"><use href="#i-wrench"></use></svg>',
+  '\u{1F4AD}': '<svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg>',
+  '\u{1F3D7}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>',
+  '\u{270F}\u{FE0F}': '<svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>',
+  '\u{2705}': '<svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg>',
+  '\u{2713}': '<svg class="icon" aria-hidden="true"><use href="#i-check"></use></svg>',
+  '\u{1F534}': '<span class="cat-dot huawei"></span>',
+  '\u{1F535}': '<span class="cat-dot competitor"></span>',
 };
 window.emojiToSvg = function(e, fb) {
   if (!e) return fb ? window.EMOJI_SVG[fb] || '' : '';

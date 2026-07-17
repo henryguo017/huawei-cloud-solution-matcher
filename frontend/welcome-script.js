@@ -60,15 +60,14 @@ const WelcomeManager = {
             if (!resp.ok) throw new Error('stats api failed');
             const stats = await resp.json();
             return {
-                accuracy: stats.accuracy || 85,
-                // 效率提升固定展示 95（产品价值主张，不随知识库变化）
-                efficiency: 95,
-                industries: (stats.supported_industries || []).length || 0
+                solutionFiles: stats.total_solution_files || (stats.total_documents || 0),
+                industries: (stats.supported_industries || []).length || 0,
+                competitors: (stats.competitor_companies || []).length || 0
             };
         } catch (e) {
             // API 不可达时降级为与知识库规模相符的保守值
             console.warn('无法获取知识库统计，使用默认值', e);
-            return { accuracy: 85, efficiency: 95, industries: 7 };
+            return { solutionFiles: 170, industries: 10, competitors: 12 };
         }
     },
 
@@ -113,7 +112,6 @@ const WelcomeManager = {
             this.welcomePage.style.zIndex = '9999';
             this.welcomePage.style.pointerEvents = 'auto';
             this.startAnimations();
-            this.initParticleCanvas();
         }
     },
     
@@ -156,12 +154,12 @@ const WelcomeManager = {
             if (!numEl) return;
 
             let realTarget = parseInt(numEl.dataset.target); // 兜底保留原值
-            if (label.includes('覆盖度')) {
-                realTarget = stats.accuracy;
-            } else if (label.includes('效率')) {
-                realTarget = stats.efficiency;
+            if (label.includes('文档')) {
+                realTarget = stats.solutionFiles;
             } else if (label.includes('行业')) {
                 realTarget = stats.industries;
+            } else if (label.includes('厂商')) {
+                realTarget = stats.competitors;
             }
 
             // 同步更新 data-target 属性，使数值与知识库一致
@@ -206,7 +204,7 @@ const WelcomeManager = {
         canvas.height = window.innerHeight;
         
         const particles = [];
-        const particleCount = 50;
+        const particleCount = 14;
         
         for (let i = 0; i < particleCount; i++) {
             particles.push({
@@ -231,7 +229,7 @@ const WelcomeManager = {
                 if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
                 
                 ctx.beginPath();
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
                 ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
                 ctx.fill();
             });

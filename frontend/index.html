@@ -6,8 +6,8 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260715history">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260714ad">
+    <link rel="stylesheet" href="style.css?v=20260716h">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
     <!-- 密码重置链接检测（内联，不受外部JS缓存影响） -->
@@ -23,7 +23,7 @@
             // 标记今天已看过欢迎页（重置流程属于"已访问过"，跳转后不再弹）
             try {
                 localStorage.setItem('huawei-cloud-welcome-daily-date', new Date().toDateString());
-                console.log('[ResetLink] ✅ 已标记今天看过欢迎页');
+                console.log('[ResetLink] 已标记今天看过欢迎页');
             } catch (_) {}
 
             // 立即隐藏欢迎页（不依赖 welcome-script.js 缓存）
@@ -31,7 +31,7 @@
                 var wp = document.getElementById('welcome-page');
                 if (wp) {
                     wp.style.display = 'none';
-                    console.log('[ResetLink] ✅ 欢迎页已隐藏');
+                    console.log('[ResetLink] 欢迎页已隐藏');
                 }
             }
             // 尽早隐藏：DOM 解析到 welcome-page 元素后立刻隐藏
@@ -55,7 +55,7 @@
                 var el = document.getElementById('reset-password-modal-overlay');
                 if (el) {
                     el.style.display = '';
-                    console.log('[ResetLink] ✅ 重置密码弹窗已打开');
+                    console.log('[ResetLink] 重置密码弹窗已打开');
                     // 隐藏提示信息
                     var errEl = document.getElementById('reset-password-error');
                     var succEl = document.getElementById('reset-password-success');
@@ -78,7 +78,7 @@
         <canvas id="welcome-particle-canvas"></canvas>
         
         <div class="welcome-content">
-            <div class="welcome-badge"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg> AI 智能匹配系统</div>
+            <div class="welcome-badge">AI 智能匹配系统</div>
             
             <h1 class="welcome-title">
                 <span class="title-gradient">云解决方案</span>
@@ -93,16 +93,16 @@
             <div class="welcome-stats">
                 <!-- data-target 仅作初始兜底值，实际数值由 welcome-script.js 从后端 API 动态获取 -->
                 <div class="stat-box">
-                    <div class="stat-number" data-target="85">0</div>
-                    <div class="stat-label">方案覆盖度 %</div>
+                    <div class="stat-number" data-target="170">0</div>
+                    <div class="stat-label">解决方案文档</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-number" data-target="95">0</div>
-                    <div class="stat-label">效率提升 %</div>
+                    <div class="stat-number" data-target="10">0</div>
+                    <div class="stat-label">覆盖行业</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-number" data-target="7">0</div>
-                    <div class="stat-label">覆盖行业数</div>
+                    <div class="stat-number" data-target="12">0</div>
+                    <div class="stat-label">竞品厂商</div>
                 </div>
             </div>
             
@@ -123,8 +123,7 @@
             
             <div class="welcome-actions">
                 <button id="start-experience-btn" class="btn btn-primary btn-lg">
-                    <span class="btn-icon"><svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg></span>
-                    <span class="btn-text">立即体验</span>
+                    立即体验
                 </button>
                 <div class="skip-option">
                     <button id="skip-welcome-btn" class="btn btn-ghost">
@@ -152,7 +151,7 @@
                     <h3>选择 Demo 案例</h3>
                     <p>一键体验 AI 方案匹配全流程</p>
                 </div>
-                <button class="demo-close-btn" id="close-demo-modal">✕</button>
+                <button class="demo-close-btn" id="close-demo-modal"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
             </div>
             <!-- 场景卡片列表 -->
             <div class="demo-modal-body">
@@ -181,7 +180,7 @@
                 </div>
                 <!-- 底部引导 -->
                 <div class="demo-modal-footer">
-                    <p class="demo-tip">💡 选择案例后将自动填充需求并演示匹配过程</p>
+                    <p class="demo-tip">选择案例后将自动填充需求并演示匹配过程</p>
                 </div>
             </div>
         </div>
@@ -291,7 +290,7 @@
                     </div>
                 </div>
                 <div class="topbar-right">
-                    <button id="quick-demo-btn" class="topbar-icon-btn" title="快速体验 Demo" style="background: rgba(255,255,255,0.08); border-color: var(--frame-border);">
+                    <button id="quick-demo-btn" class="topbar-icon-btn" title="快速体验 Demo">
                         <span class="demo-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></span>
                         <span class="demo-text">体验</span>
                     </button>
@@ -353,27 +352,27 @@
 
             <!-- 快捷建议（首次打开显示） -->
             <div class="ai-quick-actions" id="ai-quick-actions">
-                <div class="ai-quick-title">✦ 你可以问我</div>
+                <div class="ai-quick-title">你可以问我</div>
                 <div class="ai-quick-grid">
                     <!-- 业务类 -->
                     <button class="ai-quick-card" data-q="华为云有哪些核心产品？适合中小企业的入门方案是什么？">
-                        <span class="aq-icon">🏢</span>中小企业入门方案
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>中小企业入门方案
                     </button>
                     <button class="ai-quick-card" data-q="华为云数据库产品有哪些？RDS和GaussDB有什么区别？">
-                        <span class="aq-icon">🗄️</span>数据库产品对比
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg></span>数据库产品对比
                     </button>
                     <button class="ai-quick-card" data-q="金融行业上华为云有什么合规要求？推荐什么架构方案？">
-                        <span class="aq-icon">🏦</span>金融行业合规方案
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-landmark"></use></svg></span>金融行业合规方案
                     </button>
                     <button class="ai-quick-card" data-q="智慧园区的典型架构是什么样的？涉及哪些华为云产品？">
-                        <span class="aq-icon">🏘️</span>智慧园区架构
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>智慧园区架构
                     </button>
                     <!-- 使用帮助类 -->
                     <button class="ai-quick-card" data-q="这个平台的方案匹配功能怎么用？三种模式有什么区别？">
-                        <span class="aq-icon">📋</span>方案匹配功能使用
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>方案匹配功能使用
                     </button>
                     <button class="ai-quick-card" data-q="知识库怎么管理？如何添加和索引文档？">
-                        <span class="aq-icon">📚</span>知识库文档管理
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>知识库文档管理
                     </button>
                 </div>
             </div>
@@ -517,17 +516,33 @@
                     <div class="mode-toggle-bar">
                         <span class="mode-label">匹配模式</span>
                         <div class="mode-toggle" id="mode-toggle">
-                            <span class="mode-option active" data-mode="normal">标准</span>
-                            <span class="mode-option" data-mode="agent">
-                                智能
-                                <span class="mode-badge">AI</span>
+                            <span class="mode-option" data-mode="normal">标准</span>
+                            <span class="mode-option active" data-mode="agent">
+                                Agent
+                                <span class="mode-badge">推荐</span>
                             </span>
                             <span class="mode-option" data-mode="wizard">
                                 向导
                                 <span class="mode-badge">对话</span>
                             </span>
                         </div>
-                        <span class="mode-hint" id="mode-hint">精准搜索 + LLM 生成</span>
+                        <span class="mode-hint" id="mode-hint">AI 记忆上下文 → 精准检索 → 为你定制方案</span>
+                    </div>
+
+                    <!-- ===== 客户档案栏（仅 Agent 模式显示，方案B：记忆按客户隔离） ===== -->
+                    <div class="form-group client-bar" id="client-bar" style="display: none;">
+                        <label class="form-label" for="client-select">
+                            <svg class="icon form-label-icon" aria-hidden="true"><use href="#i-building-2"></use></svg>
+                            当前客户档案
+                            <span class="client-hint">记忆按客户隔离，切换客户互不串味</span>
+                        </label>
+                        <div class="client-select-row">
+                            <select id="client-select" class="client-select">
+                                <option value="">（全局记忆 · 不限定客户）</option>
+                            </select>
+                            <button type="button" id="client-new-btn" class="btn-secondary client-new-btn">+ 新建</button>
+                            <button type="button" id="client-del-btn" class="btn-icon client-del-btn" title="删除当前选中的客户">×</button>
+                        </div>
                     </div>
 
                     <!-- ===== 对话式需求引导向导 ===== -->
@@ -668,7 +683,7 @@
                             <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></div>
                             <div class="step-info">
                                 <div class="step-label">生成解决方案</div>
-                                <div class="step-desc">AI 专家撰写定制化方案建议</div>
+                                <div class="step-desc">AI 生成定制化方案建议</div>
                             </div>
                             <div class="step-status waiting"></div>
                         </div>
@@ -954,9 +969,9 @@
 
                             <!-- 使用提示 -->
                             <div class="panel-tips">
-                                <div class="panel-tip-row"><span class="pt-icon">✦</span> 悬停节点预览摘要</div>
-                                <div class="panel-tip-row"><span class="pt-icon">✦</span> 点击查看完整详情弹窗</div>
-                                <div class="panel-tip-row"><span class="pt-icon">✦</span> 分类筛选快速定位</div>
+                                <div class="panel-tip-row">悬停节点预览摘要</div>
+                                <div class="panel-tip-row">点击查看完整详情弹窗</div>
+                                <div class="panel-tip-row">分类筛选快速定位</div>
                             </div>
                         </div>
 
@@ -1011,10 +1026,10 @@
                     <div class="dashboard-kpi-card">
                         <div class="kpi-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></div>
                         <div class="kpi-content">
-                            <div class="kpi-value" id="dash-accuracy">--%</div>
-                            <div class="kpi-label">方案覆盖度</div>
+                            <div class="kpi-value" id="dash-competitors">--</div>
+                            <div class="kpi-label">竞品厂商</div>
                         </div>
-                        <div class="kpi-trend static">AI驱动</div>
+                        <div class="kpi-trend static">实时</div>
                     </div>
                 </div>
                 
@@ -1119,8 +1134,8 @@
                         <div class="stat-card-label">覆盖行业数</div>
                     </div>
                     <div class="stat-card content-card">
-                        <div class="stat-card-value" id="kb-accuracy">--%</div>
-                        <div class="stat-card-label">方案覆盖度</div>
+                        <div class="stat-card-value" id="kb-competitors">--</div>
+                        <div class="stat-card-label">竞品厂商</div>
                     </div>
                 </div>
 
@@ -1300,16 +1315,6 @@
                             <div class="setting-info">
                                 <div class="setting-label">骨架屏加载</div>
                                 <div class="setting-desc">数据加载时显示骨架屏占位动画</div>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" checked>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="setting-item" id="setting-particle-toggle">
-                            <div class="setting-info">
-                                <div class="setting-label">粒子背景</div>
-                                <div class="setting-desc">显示动态粒子背景效果</div>
                             </div>
                             <label class="toggle-switch">
                                 <input type="checkbox" checked>
@@ -1555,13 +1560,13 @@
             <!-- ===== Hero Header：红渐变（与产品弹窗/Demo/仪表盘统一）====== -->
             <div class="profile-hero">
                 <!-- 关闭按钮：白底实心圆浮于右上角外侧 -->
-                <button class="profile-close-btn" id="close-profile">✕</button>
+                <button class="profile-close-btn" id="close-profile"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
                 <div class="profile-hero-body">
                     <div class="profile-avatar" id="profile-avatar">G</div>
                     <div class="profile-hero-text">
                         <div class="profile-username" id="profile-username"></div>
                         <div class="profile-role-badge" id="profile-role">普通用户</div>
-                        <div class="profile-welcome-sub">欢迎回来，今天也要加油哦 ✦</div>
+                        <div class="profile-welcome-sub">欢迎回来，今天也要加油哦</div>
                     </div>
                 </div>
             </div>
@@ -1823,9 +1828,9 @@
     </div><!-- /.app-shell -->
 
     <script src="js/chart.umd.min.js?v=20260714j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260715history"></script>
-    <script src="js/achievement-ui.js?v=20260714j"></script>
-    <script src="welcome-script.js?v=20260714j"></script>
+    <script src="script.js?v=20260717e"></script>
+    <script src="js/achievement-ui.js?v=20260716emoji"></script>
+    <script src="welcome-script.js?v=20260716c"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">
   <symbol id="i-arrow-down-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10" />
   <path d="M17 7v10H7" /></symbol>
