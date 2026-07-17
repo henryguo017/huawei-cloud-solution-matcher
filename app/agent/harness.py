@@ -195,10 +195,20 @@ class AgentHarness:
                 ans_lines.append(f"- {q}：{ans}")
             ans_text = "\n".join(ans_lines) or "（用户未提供补充信息）"
             saved_prompt = state.get("current_prompt", "") or ""
+            original_input = state.get("user_input", "") or ""
             current_prompt = saved_prompt + f"""
-Observation: 用户补充信息：
+Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
 {ans_text}
-请继续分析。如果信息足够，请输出 Final Answer。"""
+"""
+            # 根据轮次动态调整续跑指令——防止 LLM 拿到一个答案就急着 Final Answer
+            if self._clarify_round < 2:
+                input_short = len(original_input) < 20
+                hint = f"（注意：用户原始输入仅{len(original_input)}字「{original_input[:30]}」，信息仍可能严重不足）" if input_short else ""
+                current_prompt += f"""请继续分析。当前是第 {self._clarify_round} 轮澄清{hint}。
+【重要】如果用户原始需求描述很短且你目前仅有行业信息（缺场景/规模），请继续用 Clarify 追问一轮核心业务场景或目标，不要急于输出 Final Answer。
+仅当已同时具备 行业+场景/目标 时才走工具链→Final Answer。"""
+            else:
+                current_prompt += "请继续分析。若已收集到足够信息，请调用工具检索并输出 Final Answer。"
             self._log("system", f"ReAct 续跑（澄清轮次 {self._clarify_round}）answers={len(ans_lines)} prompt_len={len(current_prompt)}")
         else:
             # ── 首轮：清空短期记忆，记录用户输入，构建初始 Prompt ──

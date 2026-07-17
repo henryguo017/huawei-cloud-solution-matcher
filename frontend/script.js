@@ -2116,6 +2116,8 @@ const KnowledgeUI = {
     chart: null,
 
     async loadStats() {
+        // 未登录时静默跳过（/knowledge/stats 需要认证，避免 401 toast 干扰）
+        if (!AuthManager.isLoggedIn()) { return; }
         try {
             SkeletonUI.showKnowledgeSkeleton();
             console.log('[KnowledgeUI] 正在加载统计数据...');
