@@ -49,23 +49,34 @@ async def test_basic():
     print("[OK] 续跑得到 Final Answer, 未再次澄清")
 
 async def test_forced_final():
-    # 连续两次都返回 Clarify -> 第二次应被强制收尾（继续循环并最终出 Final）
-    h = AgentHarness(tools=FakeRegistry(), memory=FakeMemory(), max_steps=8)
+    # 连续三次都返回 Clarify -> 第三次应被强制收尾（继续循环并最终出 Final）
+    h = AgentHarness(tools=FakeRegistry(), memory=FakeMemory(), max_steps=10)
     h._call_llm = scripted(
         'Clarify: [{"question": "Q1？", "options": []}]',
-        'Clarify: [{"question": "Q2？", "options": []}]',  # 第二轮，应被强制收尾
+        'Clarify: [{"question": "Q2？", "options": []}]',   # 第2轮，仍允许暂停（<3）
+        'Clarify: [{"question": "Q3？", "options": []}]',   # 第3轮，应被强制收尾（>=3）
         "Final Answer: 强制收尾后的方案。",
     )
     events = []
     async def cb(e): events.append(e)
     r1 = await h.run("需求", session_id="t2", event_callback=cb)
     cid = r1["clarify_id"]
+    assert r1.get("paused") is True
+
+    # 续跑第2次：模型再次 Clarify，_clarify_round=2 < 3 → 仍允许暂停
     events2 = []
     r2 = await h.run("", session_id="t2", event_callback=lambda e: events2.append(e),
                      clarify_id=cid, answers=[{"question": "Q1？", "answer": "x"}])
-    assert r2.get("success") is True, f"forced final should succeed, got {r2}"
-    assert "强制收尾" in (r2.get("answer") or ""), r2
-    print("[OK] 第二轮澄清被强制收尾并产出方案")
+    assert r2.get("paused") is True, f"第2轮应仍可暂停, got {r2}"
+    cid2 = r2["clarify_id"]
+
+    # 续跑第3次：模型还想 Clarify，但 _clarify_round >= 3 → 强制收尾
+    events3 = []
+    r3 = await h.run("", session_id="t2", event_callback=lambda e: events3.append(e),
+                     clarify_id=cid2, answers=[{"question": "Q2？", "answer": "y"}])
+    assert r3.get("success") is True, f"第3轮应强制收尾出方案, got {r3}"
+    assert "强制收尾" in (r3.get("answer") or ""), r3
+    print("[OK] 第3轮澄清被强制收尾并产出方案")
 
 async def test_expired():
     h = AgentHarness(tools=FakeRegistry(), memory=FakeMemory())

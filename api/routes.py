@@ -683,6 +683,7 @@ async def agent_clarify(
             await queue.put(event)
 
         async def run_agent():
+            result_emitted = False
             try:
                 from app.agent.clarify_store import ClarifySessionStore
                 set_kb_user_context(user['id'])
@@ -692,6 +693,8 @@ async def agent_clarify(
                 state = ClarifySessionStore.get(request.clarify_id)
                 original_demand = state.get("user_input", "") if state else ""
 
+                logger.info(f"[Agent Clarify] 续跑开始 clarify_id={request.clarify_id} answers_count={len(request.answers or [])}")
+
                 result = await agent.run(
                     user_input="",
                     session_id=session_id,
@@ -700,16 +703,40 @@ async def agent_clarify(
                     answers=request.answers,
                 )
 
+                logger.info(f"[Agent Clarify] agent.run 返回 success={result.get('success')} paused={result.get('paused')} expired={result.get('expired')}")
+
                 if user and user.get('id'):
                     background_tasks.add_task(agent.update_user_profile, user['id'], session_id)
 
-                await _process_and_emit_agent_result(
-                    queue, result, user, original_demand, is_quick_demo=False, group_id=None,
-                )
+                # 安全包装：即使落库/成就检测失败，也保证发出 result 事件
+                try:
+                    await _process_and_emit_agent_result(
+                        queue, result, user, original_demand, is_quick_demo=False, group_id=None,
+                    )
+                    result_emitted = True
+                except Exception as proc_err:
+                    logger.warning(f"[Agent Clarify] 落库处理失败（仍下发结果）: {proc_err}")
+                    result["newly_unlocked"] = []
+                    result["history_id"] = None
+                    result["source_documents"] = []
+                    await queue.put({"type": "result", "data": result})
+                    result_emitted = True
+
+            except asyncio.CancelledError:
+                logger.warning("[Agent Clarify] 任务被取消")
+                await queue.put({"type": "error", "message": "请求被取消"})
+                result_emitted = True
             except Exception as e:
-                logger.error(f"[Agent Clarify] 执行失败: {e}")
+                logger.error(f"[Agent Clarify] 执行失败: {e}", exc_info=True)
                 await queue.put({"type": "error", "message": str(e)})
+                result_emitted = True
             finally:
+                if not result_emitted:
+                    logger.error("[Agent Clarify] 未发出任何结果事件！发送兜底错误")
+                    try:
+                        await queue.put({"type": "error", "message": "内部异常：未生成结果"})
+                    except Exception:
+                        pass
                 try:
                     await queue.put(None)
                 except Exception:

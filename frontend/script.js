@@ -5297,14 +5297,30 @@ function initEventListeners() {
 
         try {
             let result;
+            let eventCount = 0;
+            let lastEventType = '';
+            console.log('[Clarify Resume] 开始续跑 clarify_id=', clarifyId, 'answers=', answers);
             await API.agentClarify(clarifyId, answers, State.currentClientId, controller.signal, (event) => {
+                eventCount++;
+                lastEventType = event.type || '(no type)';
                 applyAgentProgressEvents(event);
                 if (event.type === 'result') {
                     result = event.data;
+                    console.log('[Clarify Resume] 收到 result 事件 paused=', result?.paused, 'expired=', result?.expired);
                 } else if (event.type === 'error') {
                     throw new Error(event.message);
                 }
             });
+            console.log('[Clarify Resume] SSE 流结束 eventCount=', eventCount, 'lastEvent=', lastEventType, 'result=', !!result);
+
+            // 兜底：流正常关闭但没收到 result → 后端未发出事件
+            if (!result) {
+                if (eventCount === 0) {
+                    throw new Error('服务器无响应（可能重启中或网络中断），请重试');
+                }
+                throw new Error('匹配过程异常结束，未返回结果（已收到 ' + eventCount + ' 个事件）');
+            }
+
             renderAgentResult(result, State.lastAgentDemand);
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -5312,7 +5328,7 @@ function initEventListeners() {
                 if (ts) ts.style.display = 'none';
                 return;
             }
-            console.error('澄清续跑失败:', error);
+            console.error('[Clarify Resume] 续跑失败:', error);
             MatchProgress.error('生成失败，请重试');
             UI.showToast(error.message || '生成失败，请重试', 'error');
         } finally {
