@@ -169,15 +169,185 @@
 
 ---
 
+## 2.5 阶段 2.5 · 交互式澄清（Agent 主动提问 / clarify）【本迭代优先】
+
+**文档版本**：v1.0（新建）  **优先级**：P1（高于阶段 3/4，ROI 极高、零新增安全风险）  **预估工作量**：2~3 天
+
+### 2.5.1 目标与定位
+让 Agent 在 ReAct 循环里**主动识别"前置信息不足"**，向用户抛出 1~2 个关键问题并**暂停**，等用户回答后以同一上下文**续跑**，最终产出方案。这是 ReAct 协议里的 **human-input 节点**，纯循环增强，**不需要命令沙箱 / 容器化**，可以早于阶段 3/4 独立交付。
+
+> 价值：当前 Agent 一旦拿到模糊需求就硬编（容易幻觉 / 偏题）。澄清节点让它"先问清楚再动手"，方案质量与用户信任立刻提升；且完全复用现有只读工具，无新攻击面。
+
+### 2.5.2 用户场景
+- 场景 A：用户说"帮我写个智慧园区的方案" → Agent 判断缺行业细分 / 规模 / 痛点 → 弹卡问："园区类型（产业园/科技园/物流园）？当前最大痛点（安防/能耗/招商）？"
+- 场景 B：用户给的需求自相矛盾 → Agent 问"你更看重成本还是性能？"避免硬猜。
+- 场景 C：用户上传了客户文件但没说要啥 → Agent 问"希望产出侧重投标技术方案，还是内部立项建议？"
+
+### 2.5.3 功能需求
+| 编号 | 功能 | 优先级 | 说明 |
+|------|------|------|------|
+| FR-2.5.1 | clarify 动作类型 | P0 | LLM 可在 ReAct 输出里发 `Clarify:` 触发提问（协议扩展） |
+| FR-2.5.2 | SSE `clarify` 事件 | P0 | 推送 `{type:"clarify", questions:[{id,text,options?}]}`，前端弹卡 |
+| FR-2.5.3 | 循环暂停 / 续跑 | P0 | 命中 clarify 即结束当前 SSE 流，状态存 session store（TTL 30min） |
+| FR-2.5.4 | 回答回注接口 | P0 | `POST /api/agent/clarify` 带 `session_id`+`answers` → 新 SSE 流用续跑状态接回 |
+| FR-2.5.5 | 触发策略护栏 | P0 | 仅当前置信息不足时触发；每轮 ≤ 1~2 问；最多连续澄清 2 轮，第 3 轮强制基于已有信息出 Final Answer |
+| FR-2.5.6 | 选项式提问 | P1 | 问题可带 `options`（候选按钮），降低用户输入成本；也支持自由文本 |
+| FR-2.5.7 | 前端提问卡 | P1 | 弹卡展示问题 + 选项/输入框 + "提交"；提交后自动发起续跑请求并衔接思考流 |
+
+### 2.5.4 技术方案
+
+**① harness 协议扩展**（`app/agent/harness.py`）
+- `_parse_react_output` 新增 `clarify` 类型：正则匹配 `Clarify\s*[:：]\s*(.*)`，解析为 JSON 数组 `[{text, options?}]`（options 可选）。
+- `run()` 主循环新增分支：
+  ```
+  elif parse_result["type"] == "clarify":
+      await self._emit(event_callback, {"type":"clarify","questions": parse_result["questions"],"session_id": session_id})
+      # 保存续跑状态到 session store，然后 RETURN（结束本次 SSE 流）
+      session_store.save(session_id, {
+          "current_prompt": current_prompt,        # 已累积的 prompt（含之前 Thought/Observation）
+          "tool_calls_log": tool_calls_log,
+          "step_count": self._step_count,
+          "pending": True,
+      })
+      return self._make_result("", tool_calls_log, success=False, paused=True)  # paused 标记
+  ```
+- 续跑入口：给 `run()` 增加可选参数 `resume_answers: List[str] = None`。当传入时，**不重新 clear 短期记忆、不重建 prompt**，而是从 session store 取出 `current_prompt`，把用户回答作为一条 Observation 追加：
+  ```
+  Observation: [用户回答] Q1: ... A1: ... 请根据以上补充信息继续分析。
+  ```
+  然后直接进入下一轮 LLM 调用（复用现有循环）。
+
+**② session store**（新增 `app/agent/session_store.py`）
+- 进程内 `dict` + TTL（30min 自动过期），key=`session_id`。
+- 单 uvicorn 进程足够；多实例场景（当前未用）后续可换 Redis。明确标注"非持久化，仅用于单次澄清续跑"。
+
+**③ 路由**（`api/routes.py`）
+- 现有 `/api/agent/match`（SSE）增加可选 query/body 字段 `session_id` + `answers`：
+  - 若带 `answers` → 调 `agent.run(..., resume_answers=answers)`（续跑）。
+  - 否则正常 `run()`（首轮）。
+- `session_id` 当前由 routes 生成并传进 harness（用于 memory）；澄清续跑复用同一 `session_id`。
+
+**④ 前端**（`frontend/script.js` + 提问卡组件）
+- SSE 收到 `type:"clarify"` → 渲染提问卡（问题列表 + 选项按钮 / 文本输入）。
+- 用户提交 → 用同一 `session_id` + `answers` 重新 `POST /api/agent/match` 并复用同一 SSE 渲染通道，衔接思考流。
+- 超时/放弃：30min 内未答则 session 过期，前端提示"请重新发起匹配"。
+
+**涉及文件**：`app/agent/harness.py`（+clarify 解析/分支/续跑参数）、`app/agent/session_store.py`（新增）、`api/routes.py`（SSE 路由 +answers 分支）、`frontend/script.js`（clarify 事件 + 提问卡）、`frontend/index.html`/`style.css`（提问卡样式）。
+
+### 2.5.5 安全设计
+- 复用现有只读工具，**无新增写/执行动作**，攻击面不变。
+- `session_id` 由服务端生成，用户不可伪造跨用户续跑（store 按 session_id 隔离，且续跑仅追加 Observation，不读他人数据）。
+- 连续澄清上限 2 轮，防"死循环提问"卡死用户。
+- 所有异常 `try/except` 回退 Final Answer，绝不静默中断。
+
+### 2.5.6 验收标准
+- [ ] 构造模糊需求，Agent 触发 `clarify` 事件，前端弹出提问卡（含问题 + 选项）。
+- [ ] 用户回答后，新 SSE 流接回原上下文，方案基于回答生成（非重头再来）。
+- [ ] 每轮问题 ≤ 2 个；连续澄清第 3 轮强制出 Final Answer。
+- [ ] 续跑后方案质量明显优于"不澄清硬编"的对照。
+- [ ] session 过期（>30min）前端正确提示重发，不报错崩溃。
+- [ ] 标准 / 向导模式不受任何影响（clarify 仅 Agent 模式）。
+
+---
+
+## 2.6 方案版本化管理（应用内自动持久化，不依赖每次下载）
+
+**文档版本**：v1.0（新建）  **优先级**：P1（与阶段 2.5 同批，解决"聊一次下载一次"痛点）  **预估工作量**：3~4 天
+
+### 2.6.1 目标与定位
+把"一次匹配 = 一条历史"升级为"**一个方案可有多份版本（v1/v2/v3…）**"：每次细化 / 重新生成都存为新版本，**不再逼迫用户每次下载到本地**；只有定稿要发给客户时才一次性导出 Word。版本可对比、可回滚。
+
+> 现状基础（已具备，可直接复用）：`match_history` 表已有 `user_id`（隔离）、`downloaded`/`archived` 标记、`conversation`（追问记录 JSON）列；后端已有 `/history/list`、`/history/{id}`、`/history/compare`、`/history/{id}/solution`（PATCH 改方案）、`/history/{id}/archive`、`/history/{id}/download`、导出 Word（`/api/export/report`）。版本化是在这套之上**加分组 + 版本号 + 定稿**，不推翻重来。
+
+### 2.6.2 用户流程（已与用户确认）
+```
+你提需求 → 系统自动存 v1（落库，不弹下载）
+   ↓ 你让 Agent 细化 / 自己改 / 重新生成
+系统自动存 v2（仍不弹下载）
+   ↓ 反复打磨 ……
+系统自动存 v3 …
+   ↓ 你点"定稿"
+标记 is_final=1（同组其他版本取消定稿）
+   ↓ 你点"导出 Word"
+仅这一次调用 /api/export/report 落盘下载
+```
+邮件发送 / 生成分享链接：**本期不做**，后续再说。
+
+### 2.6.3 数据模型（扩展 `match_history`，部署安全）
+在 `app/services/usage_logger.py` 的 `_init_db()` 追加**幂等 ALTER**（沿用现有 `try/except pass` 模式，旧库自动迁移，不碰已有数据）：
+```sql
+ALTER TABLE match_history ADD COLUMN group_id INTEGER;   -- 同组方案的版本簇，首版=自身 id
+ALTER TABLE match_history ADD COLUMN version   INTEGER DEFAULT 1;
+ALTER TABLE match_history ADD COLUMN is_final  INTEGER DEFAULT 0;
+ALTER TABLE match_history ADD COLUMN title     TEXT;       -- 方案名，如"XX客户智慧园区方案"
+```
+- **首版**：`save_match_history` 写入后，把该行 `id` 回填为 `group_id`（同组根），`version=1`。
+- **派生版（fork）**：复制 `group_id` + `demand_text`，`version = 同组最大 version + 1`，新 `solution`。
+- `user_id` 隔离沿用现有逻辑；`compare`/`detail` 路由已按 `user_id` 过滤。
+
+### 2.6.4 功能需求
+| 编号 | 功能 | 优先级 | 说明 |
+|------|------|------|------|
+| FR-2.6.1 | 自动版本化 | P0 | 首版 version=1；用户"另存为新版本 / 重新生成"→ fork 出 v2/v3，全部落库 |
+| FR-2.6.2 | 工作态编辑不新建版本 | P0 | 编辑器里改错别字等 → 复用现有 `PATCH /history/{id}/solution` 原地改当前版 |
+| FR-2.6.3 | 版本列表 / 簇 | P0 | 历史页按 `group_id` 聚合展示版本徽标 v1/v2/v3，可切换查看 |
+| FR-2.6.4 | 版本对比 | P1 | 复用 `/history/compare`，支持同组跨版本对比（diff 高亮） |
+| FR-2.6.5 | 回滚 | P1 | 把某历史版本复制为新的最新版（fork），原版本保留，不破坏链 |
+| FR-2.6.6 | 定稿 | P0 | `POST /history/{id}/finalize` → 该组 `is_final` 仅此条=1，其余=0 |
+| FR-2.6.7 | 定稿一次性导出 | P0 | 定稿版详情页"导出 Word"按钮 → 调 `/api/export/report`，标记 `downloaded=1` |
+| FR-2.6.8 | 版本命名 | P2 | 用户可编辑 `title`；默认取首行 / 行业 + 需求摘要 |
+
+### 2.6.5 技术方案
+**后端**（`app/services/usage_logger.py` + `api/routes.py`）
+- `save_match_history` 改造：插入后 `UPDATE match_history SET group_id=id WHERE id=?`（首版自引用）；返回 `history_id`。
+- 新增 `create_version(parent_id, solution, user_id)`：查父版取 `group_id`/`demand_text`，算 `max(version)+1`，插新行返回新 id。
+- 新增 `finalize_version(history_id, user_id)`：`UPDATE ... SET is_final=0 WHERE group_id=? AND user_id=?` 再 `SET is_final=1 WHERE id=?`。
+- 新增/扩展路由：
+  - `POST /api/history/{id}/version` → 基于现有方案 fork 新版本（请求体可带新 solution，或留空表示"复制当前为 vN+1 草稿"）。
+  - `GET  /api/history/group/{group_id}` → 返回同组所有版本（轻量列表：id/version/title/is_final/created_at）。
+  - `POST /api/history/{id}/finalize` → 定稿。
+  - 现有 `/history/compare` 已支持两 id 对比，无需改；前端传入同组两版本 id 即可。
+- **部署铁律遵守**：所有新列走 `_init_db()` 里的 `ALTER ... try/except pass`，**绝不手动改生产库**。
+
+**前端**（`frontend/script.js` + 历史页 + 方案详情页）
+- 历史列表：同 `group_id` 折叠为一行，展开见 v1/v2/v3 徽标；点击进详情。
+- 方案详情页：顶部显示"当前 vN / 共 M 版" + 版本下拉；按钮：「保存为新版本」「设为定稿」「导出 Word（定稿后高亮）」「与某版本对比」。
+- 编辑器保存（小改）→ 原地更新当前版（`PATCH /history/{id}/solution`）；「保存为新版本」→ `POST /version` 生成 vN+1。
+- Agent 模式衔接：用户用"追问细化"得到的改进方案，可在结果区一键「存为新版本 vN+1」，而非每次下载。
+
+**涉及文件**：`app/services/usage_logger.py`（ALTER + 3 个新方法）、`api/routes.py`（3 个新路由 + 改造 save 回填 group_id）、`api/models.py`（请求/响应模型）、`frontend/script.js`（历史聚合渲染 + 版本操作）、`frontend/index.html`/`style.css`（版本徽标/下拉样式）。
+
+### 2.6.6 与现有能力衔接（避免重复造轮子）
+- **对比**：直接复用 `/history/compare` + `/history/ai-summary`，不新建。
+- **导出**：复用 `/api/export/report`（前轮已验证 status:completed + 合法 docx）。
+- **追问对话**：现有 `conversation` 列记录追问；版本化不冲突——追问是"当前版内的对话流"，版本是"固化快照"。建议：追问产生的实质性新方案 → 提示「存为新版本」。
+- **归档 / 下载标记**：`archived`/`downloaded` 列保留，`downloaded` 仅在定稿导出时置 1。
+
+### 2.6.7 验收标准
+- [ ] 首次匹配自动落库为 v1（无强制下载弹窗）。
+- [ ] 点击「保存为新版本」→ 生成 v2，历史页同组显示 v1/v2 徽标。
+- [ ] 编辑器小改 → 原地更新当前版，不新增版本。
+- [ ] 「设为定稿」→ 该组仅一条 is_final=1，其余为 0。
+- [ ] 定稿后「导出 Word」→ 生成 docx 且 `downloaded=1`；非定稿版导出按钮置灰/提示先定稿。
+- [ ] 同组两版本 `/history/compare` 返回 diff，不串用户（user_id 隔离）。
+- [ ] 老数据（无 group_id）兼容：视为独立单版本方案（group_id=自身 id 的兜底在查询时处理）。
+
+---
+
 ## 3. 阶段依赖与节奏总览
 ```
 阶段1（文件读写/OCR/上传）✅        阶段2（记忆落库/画像/成就）✅
         │                                  │
+        ├──► 阶段2.5（Agent主动提问 clarify）  P1, 2~3天   ← 本迭代批，纯ReAct增强，无新风险
+        ├──► 方案版本化（v1/v2/v3·定稿导出）   P1, 3~4天   ← 本迭代批，解决"聊一次下载一次"
+        │
         └──────────► 阶段3（命令沙箱·手）──────► 阶段4（自治闭环·脑 + 容器化）
                      P2, 1~1.5周                P3, 3~4周
                      安全：命令白名单+HITL       安全：容器化+分级HITL+Reflector
 ```
-**建议节奏**：阶段 3 先上（演示价值高、风险可控，给 Agent "手"）；阶段 4 在容器化基座稳固后做（给 Agent "自治闭环"）。
+**建议节奏**：
+- **本迭代先做阶段 2.5 + 方案版本化**（P1，ROI 极高、零/低新增风险、直接提升日常可用性，且都不依赖命令沙箱/容器化）。
+- 阶段 3 随后上（演示价值高、风险可控，给 Agent "手"）；阶段 4 在容器化基座稳固后做（给 Agent "自治闭环"）。
 **全局安全红线（三四共同）**：
 - 所有执行 / 写操作必须落在白名单根 `data/user_docs/{user_id}/` 内
 - 写 / 外发需 HITL 确认
@@ -188,5 +358,6 @@
 
 ## 4. 一句话定位
 - **现在**：聪明的只读助手（agentic workflow）。
+- **阶段 2.5 + 版本化后**：会先问清楚再动手、方案自动存多版可对比回滚、定稿才导出（日常可用性跃升，仍零执行风险）。
 - **阶段 3 后**：能动手的助手（可跑脚本、产图表 / 报告）。
 - **阶段 4 后**：半自治的数字员工（能规划多步任务、组合工具、自我验证、长程交付，安全隔离）。
