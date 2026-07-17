@@ -2243,7 +2243,7 @@ Object.assign(KnowledgeUI, {
         }
         try {
             if (listEl) listEl.innerHTML = '<div class="kb-doc-skeleton">加载中...</div>';
-            const data = await API.get('/api/knowledge/documents');
+            const data = await API.get('/knowledge/documents');
             this.docList = data.documents || [];
             this.renderDocList();
         } catch (e) {
@@ -2322,7 +2322,7 @@ Object.assign(KnowledgeUI, {
             return;
         }
         try {
-            const doc = await API.get(`/api/knowledge/documents/${encodeURIComponent(docId)}`);
+            const doc = await API.get(`/knowledge/documents/${encodeURIComponent(docId)}`);
             this.editingDocId = docId;
             // 打开编辑弹窗
             document.getElementById('kb-editor-title-text').textContent = '编辑文档';
@@ -2348,7 +2348,7 @@ Object.assign(KnowledgeUI, {
         }
         try {
             UI.showToast('正在重新索引...', 'info');
-            await API.post(`/api/knowledge/documents/${encodeURIComponent(docId)}/reindex`);
+            await API.post(`/knowledge/documents/${encodeURIComponent(docId)}/reindex`);
             UI.showToast('重新索引完成', 'success');
         } catch (e) {
             UI.showToast('重新索引失败: ' + e.message, 'error');
@@ -2364,7 +2364,7 @@ Object.assign(KnowledgeUI, {
         const doc = this.docList.find(d => d.id === docId);
         if (!confirm(`确定要删除「${doc?.title || docId}」吗？此操作不可撤销。`)) return;
         try {
-            await API.delete(`/api/knowledge/documents/${encodeURIComponent(docId)}`);
+            await API.delete(`/knowledge/documents/${encodeURIComponent(docId)}`);
             UI.showToast('文档已删除', 'success');
             await this.loadDocList();
             await this.loadStats();
@@ -2414,11 +2414,11 @@ Object.assign(KnowledgeUI, {
             statusEl.textContent = '保存中...';
             if (this.editingDocId) {
                 // 更新
-                await API.put(`/api/knowledge/documents/${encodeURIComponent(this.editingDocId)}`, { content });
+                await API.put(`/knowledge/documents/${encodeURIComponent(this.editingDocId)}`, { content });
                 UI.showToast('文档已更新', 'success');
             } else {
                 // 新建
-                await API.post('/api/knowledge/documents', { category, industry, title, content });
+                await API.post('/knowledge/documents', { category, industry, title, content });
                 UI.showToast('文档已创建', 'success');
             }
             this._hideEditor();
