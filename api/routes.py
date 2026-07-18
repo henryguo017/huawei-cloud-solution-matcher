@@ -4,7 +4,8 @@ from fastapi import UploadFile, File, BackgroundTasks
 from api.models import (
     MatchRequest, MatchResponse,
     AnalyzeRequest, AnalyzeResponse,
-    KnowledgeStatsResponse, RebuildResponse, ClearResponse, SyncMineResponse,
+    KnowledgeStatsResponse, ClearResponse,
+    TaskStatusResponse,
     HealthResponse, SourceDocument,
     DashboardStatsResponse,
     MatchHistoryListResponse, MatchHistoryItem, MatchHistoryDetail, CompareRequest, CompareResponse,
@@ -40,7 +41,7 @@ from app.services.usage_logger import UsageLoggerService
 from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY, COMPETITOR_DIRECTORY
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
 from app.agent.parsers.read_file import ALLOWED_EXT
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime, date
 import os
 import json
@@ -48,8 +49,11 @@ import asyncio
 import time
 import logging
 import shutil
+import threading
+import uuid
 
 from api.auth_dependencies import get_current_user, get_current_user_optional, require_login
+import api.dependencies as _kb_deps  # 用于后台重建后刷新全局 KB 缓存（_global_kb）
 
 # Agent 模块导入
 from app.agent import get_agent
@@ -973,33 +977,142 @@ async def get_knowledge_stats(
             detail=f"获取统计失败: {str(e)}"
         )
 
-@router.post("/knowledge/rebuild", response_model=RebuildResponse, tags=["知识库管理"])
+
+# ===== 后台任务（知识库重建/同步异步化） =====
+# 单 uvicorn worker 下，同步重建会占满 worker 导致全站 60s 超时（之前"点重构卡死全站"的根因）。
+# 改为后台线程执行重活，端点立即返回 task_id（202），前端轮询进度；多用户并发互不阻塞。
+# 注意：任务记录存于进程内存，服务重启后任务会丢失（前端轮询拿到 404 即提示用户重试）。
+_task_store: Dict[str, dict] = {}
+_task_store_lock = threading.Lock()
+# 全局并发信号量：最多同时跑 2 个重嵌任务（CPU 密集），其余排队，避免把 CPU 抢爆
+_rebuild_semaphore = threading.Semaphore(2)
+# 每用户锁：同一用户不允许并发发起自己的同步
+_user_sync_locks: Dict[int, threading.Lock] = {}
+_user_sync_locks_guard = threading.Lock()
+
+def _get_user_sync_lock(user_id: int) -> threading.Lock:
+    with _user_sync_locks_guard:
+        if user_id not in _user_sync_locks:
+            _user_sync_locks[user_id] = threading.Lock()
+        return _user_sync_locks[user_id]
+
+def _update_task(task_id: str, **fields):
+    with _task_store_lock:
+        t = _task_store.get(task_id)
+        if t:
+            t.update(fields)
+
+def _run_rebuild_task(task_id: str):
+    """后台线程：重建全局知识库（user_id=0）。"""
+    try:
+        _update_task(task_id, status="queued", progress=0, message="任务已提交，正在等待空闲资源...")
+        acquired = _rebuild_semaphore.acquire(timeout=3600)
+        if not acquired:
+            _update_task(task_id, status="failed", progress=0, message="任务排队超时，请稍后重试")
+            return
+        try:
+            _update_task(task_id, status="running", progress=10, message="正在重建全局知识库（加载文档）...")
+            svc = KnowledgeBaseService(user_id=0)
+
+            def on_progress(done, total, stage):
+                _update_task(task_id, status="running",
+                             progress=10 + int(85 * done / max(total, 1)), message=stage)
+
+            count = svc.build_from_directory(use_default_dirs=True, on_progress=on_progress)
+            if count <= 0:
+                _update_task(task_id, status="failed", progress=0,
+                             message="重建未添加任何文档片段，可能文档目录为空或加载失败，请检查服务器日志")
+                return
+            # 刷新全局缓存实例，使后续请求（含匿名标准匹配）使用新向量库
+            _kb_deps._global_kb = None
+            _update_task(task_id, status="success", progress=100,
+                         message=f"知识库重建完成，共 {count} 个文档片段",
+                         result={"count": count})
+        finally:
+            _rebuild_semaphore.release()
+    except Exception as e:
+        logger.error(f"[后台重建] 失败: {e}")
+        _update_task(task_id, status="failed", progress=0, message=f"重建失败: {str(e)}")
+
+def _run_sync_task(task_id: str, user_id: int):
+    """后台线程：把默认库增量同步进用户库（方案B：保留用户自定义内容）。"""
+    user_lock = _get_user_sync_lock(user_id)
+    if not user_lock.acquire(blocking=False):
+        _update_task(task_id, status="failed", progress=0,
+                     message="你已有一个同步任务在进行中，请稍后再试")
+        return
+    try:
+        _update_task(task_id, status="queued", progress=0, message="任务已提交，正在等待空闲资源...")
+        acquired = _rebuild_semaphore.acquire(timeout=3600)
+        if not acquired:
+            _update_task(task_id, status="failed", progress=0, message="任务排队超时，请稍后重试")
+            return
+        try:
+            _update_task(task_id, status="running", progress=5,
+                         message="正在合并官方最新方案到你的知识库...")
+            # 清掉内存缓存，避免后续请求仍用旧实例
+            _user_kb_cache.pop(user_id, None)
+
+            user_base = os.path.join(USER_DOCS_BASE_DIR, str(user_id))
+            user_huawei = os.path.join(user_base, "sample_solutions")
+            user_competitor = os.path.join(user_base, "competitors")
+            os.makedirs(user_base, exist_ok=True)
+
+            if os.path.exists(KNOWLEDGE_BASE_DIRECTORY):
+                shutil.copytree(KNOWLEDGE_BASE_DIRECTORY, user_huawei, dirs_exist_ok=True)
+            if os.path.exists(COMPETITOR_DIRECTORY):
+                shutil.copytree(COMPETITOR_DIRECTORY, user_competitor, dirs_exist_ok=True)
+
+            kb_service = get_user_knowledge_base(user_id)
+
+            def on_progress(done, total, stage):
+                _update_task(task_id, status="running",
+                             progress=10 + int(85 * done / max(total, 1)), message=stage)
+
+            total = kb_service.build_from_directory(on_progress=on_progress)
+            if total <= 0:
+                _update_task(task_id, status="failed", progress=0,
+                             message="同步后未生成任何文档片段，可能文档目录为空或加载失败，请检查服务器日志")
+                return
+            _update_task(task_id, status="success", progress=100,
+                         message=f"已同步最新官方方案，并保留你的自定义文档，共 {total} 个文档片段",
+                         result={"total_documents": total})
+        finally:
+            _rebuild_semaphore.release()
+    except Exception as e:
+        logger.error(f"[后台同步] 用户 {user_id} 失败: {e}")
+        _update_task(task_id, status="failed", progress=0, message=f"同步失败: {str(e)}")
+    finally:
+        user_lock.release()
+
+
+@router.post("/knowledge/rebuild", response_model=TaskStatusResponse, status_code=202, tags=["知识库管理"])
 async def rebuild_knowledge(
-    current_user: dict = Depends(get_current_user),
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    重建全局知识库（需登录）
-    
-    从 data/sample_solutions/ 目录重新加载所有文档
+    后台重建全局知识库（需登录）
+
+    端点立即返回 task_id，重活在后台线程执行；前端轮询 /api/knowledge/task/{task_id} 获取进度。
+    这样不会阻塞单 worker，多用户并发互不卡死。
     """
-    try:
-        logger.info(f"用户 {current_user['id']} 开始重建全局知识库")
-        
-        count = kb_service.build_from_directory()
-        
-        logger.info(f"知识库重建完成，共 {count} 个文档片段")
-        
-        return RebuildResponse(
-            count=count,
-            message=f"知识库重建成功，共添加 {count} 个文档片段"
-        )
-    except Exception as e:
-        logger.error(f"重建知识库失败: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"重建失败: {str(e)}"
-        )
+    task_id = str(uuid.uuid4())
+    with _task_store_lock:
+        _task_store[task_id] = {
+            "task_id": task_id,
+            "status": "pending",
+            "progress": 0,
+            "message": "任务已创建，等待执行...",
+            "result": None,
+        }
+    threading.Thread(target=_run_rebuild_task, args=(task_id,), daemon=True).start()
+    logger.info(f"用户 {current_user['id']} 提交后台重建任务 {task_id}")
+    return TaskStatusResponse(
+        task_id=task_id,
+        status="pending",
+        progress=0,
+        message="重建任务已提交，正在后台运行（可在本页面查看进度）"
+    )
 
 @router.post("/knowledge/clear", response_model=ClearResponse, tags=["知识库管理"])
 async def clear_knowledge(
@@ -1029,13 +1142,14 @@ async def clear_knowledge(
             detail=f"清空失败: {str(e)}"
         )
 
-@router.post("/knowledge/sync-mine", response_model=SyncMineResponse, tags=["知识库管理"])
+@router.post("/knowledge/sync-mine", response_model=TaskStatusResponse, status_code=202, tags=["知识库管理"])
 async def sync_my_knowledge_base(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    增量同步当前用户知识库（方案B：保留用户自定义内容）。
+    后台增量同步当前用户知识库（方案B：保留用户自定义内容）。
 
+    端点立即返回 task_id，重活在后台线程执行；前端轮询 /api/knowledge/task/{task_id} 获取进度。
     把全局默认库(user_id=0)的最新官方方案合并进用户库：
     - 默认库新增/更新的文档 → 复制进用户库（覆盖同名默认文档）
     - 用户自己添加/修改的文档 → 原样保留（不会被删除）
@@ -1046,45 +1160,43 @@ async def sync_my_knowledge_base(
     if user_id <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的用户身份")
 
-    try:
-        logger.info(f"用户 {user_id} 开始把默认库增量同步进自己的知识库（保留自定义内容）")
+    task_id = str(uuid.uuid4())
+    with _task_store_lock:
+        _task_store[task_id] = {
+            "task_id": task_id,
+            "status": "pending",
+            "progress": 0,
+            "message": "任务已创建，等待执行...",
+            "result": None,
+        }
+    threading.Thread(target=_run_sync_task, args=(task_id, user_id), daemon=True).start()
+    logger.info(f"用户 {user_id} 提交后台同步任务 {task_id}")
+    return TaskStatusResponse(
+        task_id=task_id,
+        status="pending",
+        progress=0,
+        message="同步任务已提交，正在后台运行（可在本页面查看进度）"
+    )
 
-        # 1. 清掉内存缓存，避免后续请求仍用旧实例
-        _user_kb_cache.pop(user_id, None)
+# ===== 后台任务进度查询 =====
 
-        # 2. 把默认库的华为方案/竞品方案合并进用户库（只覆盖同名默认文档，保留用户自定义文档）
-        user_base = os.path.join(USER_DOCS_BASE_DIR, str(user_id))
-        user_huawei = os.path.join(user_base, "sample_solutions")
-        user_competitor = os.path.join(user_base, "competitors")
-        os.makedirs(user_base, exist_ok=True)
-
-        if os.path.exists(KNOWLEDGE_BASE_DIRECTORY):
-            shutil.copytree(KNOWLEDGE_BASE_DIRECTORY, user_huawei, dirs_exist_ok=True)
-            logger.info(f"用户 {user_id} 已合并默认华为方案到: {user_huawei}")
-        if os.path.exists(COMPETITOR_DIRECTORY):
-            shutil.copytree(COMPETITOR_DIRECTORY, user_competitor, dirs_exist_ok=True)
-            logger.info(f"用户 {user_id} 已合并默认竞品方案到: {user_competitor}")
-
-        # 3. 用合并后的文件重建用户向量库（默认最新 + 用户自定义都进入检索）
-        kb_service = get_user_knowledge_base(user_id)
-        kb_service.build_from_directory()
-        stats = kb_service.get_stats()
-        total = stats.get("total_documents", 0)
-
-        logger.info(f"用户 {user_id} 知识库同步完成，共 {total} 个文档片段")
-        return SyncMineResponse(
-            success=True,
-            message=f"已同步最新官方方案，并保留你的自定义文档，共 {total} 个文档片段",
-            total_documents=total
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"同步用户 {user_id} 知识库失败: {e}")
+@router.get("/knowledge/task/{task_id}", response_model=TaskStatusResponse, tags=["知识库管理"])
+async def get_knowledge_task_status(task_id: str):
+    """查询后台知识库任务（重建/同步）的进度与结果。"""
+    with _task_store_lock:
+        task = _task_store.get(task_id)
+    if not task:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"同步失败: {str(e)}"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="任务不存在或已过期（服务重启后任务记录会清空，请重新发起操作）"
         )
+    return TaskStatusResponse(
+        task_id=task["task_id"],
+        status=task["status"],
+        progress=task["progress"],
+        message=task["message"],
+        result=task.get("result")
+    )
 
 # ===== 知识库文档管理 CRUD =====
 

@@ -78,6 +78,14 @@ class SyncMineResponse(BaseModel):
     message: str = Field(default="知识库已同步为最新官方方案", description="操作消息")
     total_documents: int = Field(default=0, description="同步后用户知识库的文档片段数")
 
+class TaskStatusResponse(BaseModel):
+    """后台异步任务状态（知识库重建/同步返回 task_id，前端轮询此端点）"""
+    task_id: str = Field(..., description="后台任务ID")
+    status: str = Field(..., description="任务状态：pending / queued / running / success / failed")
+    progress: int = Field(default=0, description="进度百分比 0-100")
+    message: str = Field(default="", description="状态描述信息")
+    result: Optional[dict] = Field(default=None, description="任务成功时的结果数据（如 count / total_documents）")
+
 # ===== 知识库文档管理模型 =====
 class KBDocumentItem(BaseModel):
     id: str = Field(..., description="文档唯一ID")

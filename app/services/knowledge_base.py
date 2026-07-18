@@ -8,6 +8,7 @@ import shutil
 import contextvars
 import re
 from urllib.parse import quote, unquote
+from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -89,12 +90,14 @@ class KnowledgeBaseService:
 
         return docs
 
-    def build_from_directory(self, use_default_dirs: bool = False):
+    def build_from_directory(self, use_default_dirs: bool = False,
+                              on_progress: Optional[Callable[[int, int, str], None]] = None):
         """
         从目录重建知识库（含华为方案和竞品方案）
 
         Args:
             use_default_dirs: 如果为 True，强制使用全局默认目录（管理员重建全局KB时）
+            on_progress: 可选进度回调，签名 (done, total, stage_text)，用于后台任务实时上报进度
         """
         try:
             huawei_dir = os.path.abspath(KNOWLEDGE_BASE_DIRECTORY) if use_default_dirs else self._huawei_dir
@@ -129,16 +132,27 @@ class KnowledgeBaseService:
                 return 0
 
             print(f"[重建] 总计 {len(all_documents)} 个文档片段（华为 {len(huawei_docs)} + 竞品 {len(competitor_docs)}）")
-            print("[重建] 正在写入向量库...")
-            self.vector_db.add_documents(all_documents)
-            print(f"[重建] [OK] 知识库重建完成！共 {len(all_documents)} 个文档片段")
+
+            # 分批写入向量库并上报进度（CPU 嵌入耗时较长，分批让前端能看到进度）
+            total = len(all_documents)
+            batch_size = 50
+            if on_progress:
+                on_progress(0, total, f"正在生成向量嵌入（共 {total} 个片段）...")
+            for i in range(0, total, batch_size):
+                chunk = all_documents[i:i + batch_size]
+                self.vector_db.add_documents(chunk)
+                if on_progress:
+                    done = min(i + batch_size, total)
+                    on_progress(done, total, f"正在生成向量嵌入（{done}/{total}）...")
+
+            print(f"[重建] [OK] 知识库重建完成！共 {total} 个文档片段")
 
             # 重建 retriever
             self.retriever = self.vector_db.as_retriever(
                 search_kwargs={"k": VECTOR_SEARCH_TOP_K}
             )
 
-            return len(all_documents)
+            return total
 
         except ImportError as e:
             print(f"[重建] [ERR] 导入失败: {e}")

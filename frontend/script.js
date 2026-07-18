@@ -1266,6 +1266,18 @@ const API = {
         return await response.json();
     },
 
+    async getTaskStatus(taskId) {
+        const headers = {};
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const resp = await fetch(`${Config.API_BASE_URL}/knowledge/task/${encodeURIComponent(taskId)}`, { headers });
+        if (!resp.ok) {
+            let msg = `查询失败: ${resp.statusText}`;
+            try { const e = await resp.json(); if (e && e.detail) msg = e.detail; } catch (e) { /* ignore */ }
+            throw new Error(msg);
+        }
+        return await resp.json();
+    },
+
     // 通用 HTTP 方法
     async get(url) {
         const headers = {};
@@ -1698,6 +1710,30 @@ class ProgressManager {
         clearInterval(this.timer);
         if (this.panel) this.panel.style.display = 'none';
     }
+}
+
+// 轮询后台知识库任务（重建/同步）直到完成或失败
+// 每 1.5s 查询一次 /knowledge/task/{task_id}，回调 onTick(status) 用于更新进度条与文案
+// 返回最终 TaskStatusResponse（success）；失败时 reject（含 404=服务重启导致任务丢失）
+function pollKbTask(taskId, onTick) {
+    return new Promise((resolve, reject) => {
+        const timer = setInterval(async () => {
+            try {
+                const st = await API.getTaskStatus(taskId);
+                if (onTick) onTick(st);
+                if (st.status === 'success') {
+                    clearInterval(timer);
+                    resolve(st);
+                } else if (st.status === 'failed') {
+                    clearInterval(timer);
+                    reject(new Error(st.message || '任务失败'));
+                }
+            } catch (e) {
+                clearInterval(timer);
+                reject(new Error(e.message || '无法获取任务状态（可能服务已重启，请重试）'));
+            }
+        }, 1500);
+    });
 }
 
 // 对话式需求引导向导
@@ -5642,71 +5678,42 @@ function initEventListeners() {
             return;
         }
         UI.setButtonLoading(rebuildBtn, true);
-        
+        UI.setButtonLoading(syncMineBtn, true); // 同一进度面板，禁用同步避免冲突
+
         // 显示重建进度面板
         if (rebuildProgressPanel) {
             rebuildProgressPanel.style.display = 'block';
             rebuildProgressPanel.classList.remove('success', 'fade-out');
         }
-        if (rebuildStatusText) rebuildStatusText.textContent = '正在读取文档目录...';
-        
-        // 模拟状态更新
-        const statusMessages = [
-            { delay: 1500, text: '正在加载华为云方案文档...' },
-            { delay: 3000, text: '正在加载竞品方案文档...' },
-            { delay: 5000, text: '正在分割文档为片段...' },
-            { delay: 7000, text: '正在生成向量嵌入（这可能需要一些时间）...' },
-            { delay: 10000, text: '正在写入向量数据库...' }
-        ];
-        
-        const statusTimers = statusMessages.map(msg => 
-            setTimeout(() => {
-                if (rebuildStatusText) rebuildStatusText.textContent = msg.text;
-            }, msg.delay)
-        );
-        
+        const titleEl = rebuildProgressPanel?.querySelector('.progress-title');
+        if (titleEl) titleEl.textContent = '正在重建知识库（后台运行）...';
+        if (rebuildStatusText) rebuildStatusText.textContent = '任务已提交，正在排队...';
+        RebuildProgress.start();
+
         try {
-            const result = await API.rebuildKnowledge();
-            
-            // 清除所有定时器
-            statusTimers.forEach(t => clearTimeout(t));
-            
-            // 显示成功状态
-            if (rebuildProgressPanel) {
-                rebuildProgressPanel.classList.add('success');
-                const title = rebuildProgressPanel.querySelector('.progress-title');
-                if (title) title.textContent = '知识库重建完成！';
-            }
-            if (rebuildStatusText) {
-                rebuildStatusText.textContent = `成功添加 ${result.count || 0} 个文档片段到知识库`;
-            }
-            
-            UI.showToast(`知识库重建完成！共添加 ${result.count || 0} 个文档片段`, 'success');
+            const task = await API.rebuildKnowledge(); // { task_id, status, message }
+            if (rebuildStatusText) rebuildStatusText.textContent = task.message || '任务已提交，正在排队...';
+
+            // 轮询后台任务进度，直到 success / failed
+            const final = await pollKbTask(task.task_id, (st) => {
+                RebuildProgress.setProgress(st.progress);
+                if (rebuildStatusText && st.message) rebuildStatusText.textContent = st.message;
+            });
+
+            RebuildProgress.success('知识库重建完成！');
+            const count = (final.result && final.result.count) || 0;
+            if (rebuildStatusText) rebuildStatusText.textContent = `成功添加 ${count} 个文档片段到知识库`;
+            UI.showToast(`知识库重建完成！共添加 ${count} 个文档片段`, 'success');
             await KnowledgeUI.loadStats();
             await KnowledgeUI.loadDocList();
-            setTimeout(() => {
-                if (rebuildProgressPanel) {
-                    rebuildProgressPanel.classList.add('fade-out');
-                    setTimeout(() => {
-                        rebuildProgressPanel.style.display = 'none';
-                        rebuildProgressPanel.classList.remove('success', 'fade-out');
-                    }, 500);
-                }
-            }, 3000);
         } catch (error) {
-            // 清除所有定时器
-            statusTimers.forEach(t => clearTimeout(t));
-            
             console.error('重建失败:', error);
-            if (rebuildProgressPanel) {
-                rebuildProgressPanel.classList.remove('success');
-                const title = rebuildProgressPanel.querySelector('.progress-title');
-                if (title) title.textContent = '重建失败';
-            }
+            RebuildProgress.error('重建失败');
             if (rebuildStatusText) rebuildStatusText.textContent = error.message || '重建失败，请重试';
             UI.showToast(error.message || '重建失败，请重试', 'error');
         } finally {
             UI.setButtonLoading(rebuildBtn, false);
+            UI.setButtonLoading(syncMineBtn, false);
         }
     });
     
@@ -5752,17 +5759,43 @@ function initEventListeners() {
             return;
         }
         if (!confirm('将把管理员最新扩充的官方方案合并进你的知识库，你自己的文档会保留。确定同步吗？')) return;
+
+        UI.setButtonLoading(syncMineBtn, true);
+        UI.setButtonLoading(rebuildBtn, true); // 同一进度面板，禁用重建避免冲突
+
+        // 显示进度面板（复用重建面板）
+        if (rebuildProgressPanel) {
+            rebuildProgressPanel.style.display = 'block';
+            rebuildProgressPanel.classList.remove('success', 'fade-out');
+        }
+        const titleEl = rebuildProgressPanel?.querySelector('.progress-title');
+        if (titleEl) titleEl.textContent = '正在同步你的知识库（后台运行）...';
+        if (rebuildStatusText) rebuildStatusText.textContent = '任务已提交，正在排队...';
+        RebuildProgress.start();
+
         try {
-            UI.setButtonLoading(syncMineBtn, true);
-            const result = await API.syncMyKnowledge();
-            UI.showToast(result.message || '已同步最新官方方案', 'success');
+            const task = await API.syncMyKnowledge(); // { task_id, status, message }
+            if (rebuildStatusText) rebuildStatusText.textContent = task.message || '任务已提交，正在排队...';
+
+            const final = await pollKbTask(task.task_id, (st) => {
+                RebuildProgress.setProgress(st.progress);
+                if (rebuildStatusText && st.message) rebuildStatusText.textContent = st.message;
+            });
+
+            RebuildProgress.success('知识库同步完成！');
+            const total = (final.result && final.result.total_documents) || 0;
+            if (rebuildStatusText) rebuildStatusText.textContent = `已同步最新官方方案，共 ${total} 个文档片段（你的自定义内容已保留）`;
+            UI.showToast(`已同步最新官方方案，共 ${total} 个文档片段`, 'success');
             await KnowledgeUI.loadStats();
             await KnowledgeUI.loadDocList();
         } catch (error) {
             console.error('同步失败:', error);
+            RebuildProgress.error('同步失败');
+            if (rebuildStatusText) rebuildStatusText.textContent = error.message || '同步失败，请重试';
             UI.showToast(error.message || '同步失败，请重试', 'error');
         } finally {
             UI.setButtonLoading(syncMineBtn, false);
+            UI.setButtonLoading(rebuildBtn, false);
         }
     });
 }
