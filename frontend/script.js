@@ -172,9 +172,18 @@ const AuthManager = {
         return State.authToken;
     },
 
-    // 检查是否登录
+    // 检查是否登录（含过期时间校验，避免"前端认为已登录但后端token已失效"的矛盾）
     isLoggedIn() {
-        return !!State.authToken && !!State.user;
+        if (!State.authToken || !State.user) return false;
+        try {
+            const saved = localStorage.getItem(this.STORAGE_KEY);
+            if (saved) {
+                const data = JSON.parse(saved);
+                // expiresAt 存在且已过期 → 判为未登录
+                if (data.expiresAt && Date.now() >= data.expiresAt) return false;
+            }
+        } catch(e) { /* 解析失败按已登录处理，让后端最终裁决 */ }
+        return true;
     },
 
     // === 内部方法 ===
@@ -5146,9 +5155,21 @@ function initEventListeners() {
                 if (ts) ts.style.display = 'none';
                 return;
             }
-            console.error('匹配失败:', error);
-            MatchProgress.error('匹配失败，请重试');
-            UI.showToast(error.message || '匹配失败，请重试', 'error');
+            // 鉴权错误（token 过期/失效）：前端以为已登录但后端拒绝了
+            // 自动清掉过期状态并引导重新登录，而不是显示莫名其妙的"匹配失败"
+            const msg = error.message || '';
+            if (msg.includes('登录') || msg.includes('认证') || msg.includes('unauthorized') || msg.includes('401')) {
+                console.warn('匹配鉴权失败:', msg);
+                AuthManager._clearAuth();
+                AuthManager._updateUI();
+                MatchProgress.hide();
+                UI.showToast('登录已过期，请重新登录', 'warning');
+                AuthManager.showLoginModal();
+            } else {
+                console.error('匹配失败:', error);
+                MatchProgress.error('匹配失败，请重试');
+                UI.showToast(msg || '匹配失败，请重试', 'error');
+            }
         } finally {
             State.loadingStates.match = false;
             State.isQuickDemo = false;
