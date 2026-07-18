@@ -37,12 +37,14 @@ from app.models.llm import get_llm_response
 from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context
 from app.services.usage_logger import UsageLoggerService
 from app.config import APP_VERSION, USER_DOCS_BASE_DIR
+from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
 from app.agent.parsers.read_file import ALLOWED_EXT
 from typing import Optional
 from datetime import datetime, date
 import os
 import json
 import asyncio
+import time
 import logging
 
 from api.auth_dependencies import get_current_user, get_current_user_optional, require_login
@@ -633,9 +635,22 @@ async def agent_match_stream(
 
         task = asyncio.ensure_future(run_agent())
 
+        start_time = time.time()
         try:
             while True:
-                event = await queue.get()
+                if SSE_HEARTBEAT_ENABLED:
+                    # 受控路径：心跳保活 + 超时主动结束（防止悬挂连接拖垮 worker）
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_INTERVAL)
+                    except asyncio.TimeoutError:
+                        if time.time() - start_time > SSE_TIMEOUT:
+                            logger.info("[Agent SSE] 流式超过超时上限,主动结束")
+                            break
+                        yield ": ping\n\n"  # SSE 注释行,客户端忽略,仅保活
+                        continue
+                else:
+                    # 默认路径：与原行为完全一致
+                    event = await queue.get()
                 if event is None:
                     break
                 event_type = event.get("type", "message")
@@ -746,9 +761,22 @@ async def agent_clarify(
 
         task = asyncio.ensure_future(run_agent())
 
+        start_time = time.time()
         try:
             while True:
-                event = await queue.get()
+                if SSE_HEARTBEAT_ENABLED:
+                    # 受控路径：心跳保活 + 超时主动结束（防止悬挂连接拖垮 worker）
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_INTERVAL)
+                    except asyncio.TimeoutError:
+                        if time.time() - start_time > SSE_TIMEOUT:
+                            logger.info("[Agent Clarify] 流式超过超时上限,主动结束")
+                            break
+                        yield ": ping\n\n"  # SSE 注释行,客户端忽略,仅保活
+                        continue
+                else:
+                    # 默认路径：与原行为完全一致
+                    event = await queue.get()
                 if event is None:
                     break
                 event_type = event.get("type", "message")

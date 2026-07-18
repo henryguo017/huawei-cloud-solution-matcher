@@ -1,13 +1,18 @@
 from app.models.llm import get_embeddings
 from app.models.vector_db import get_vector_db
 from app.config import *
+from langchain_core.documents import Document
 import os
 import logging
 import shutil
 import contextvars
+import re
 from urllib.parse import quote, unquote
 
 logger = logging.getLogger(__name__)
+
+# 可插拔重排器注册表（默认空 = no-op；接入 bge-reranker 等时在此注册 "default" 实现）
+RERANKER_REGISTRY = {}
 
 # ===== 用户上下文：在线程中传递当前 user_id，供 Agent 工具等无参接口使用 =====
 _kb_current_user_id: contextvars.ContextVar[int] = contextvars.ContextVar('kb_user_id', default=0)
@@ -226,10 +231,108 @@ class KnowledgeBaseService:
     def _similarity_pool(self, query, pool_size=15):
         """取一个较大的候选池，供后续按华为/竞品拆分"""
         try:
+            if ENABLE_HYBRID_RETRIEVAL:
+                return self._hybrid_pool(query, pool_size)
             return self.vector_db.similarity_search(query, k=pool_size)
         except Exception as e:
             logger.warning(f"向量检索异常: {e}")
             return []
+
+    # ===================== RAG 三段式（ruoyi-ai 学习项 #1，默认关闭）====================
+    def _keyword_recall(self, query, top_n=40):
+        """关键词全文召回：扫描全库文档，按查询词重叠度打分排序（无新依赖）。
+
+        返回 [(Document, score), ...] 按 score 降序。
+        """
+        try:
+            data = self.vector_db.get()
+        except Exception as e:
+            logger.warning(f"关键词召回获取全库失败: {e}")
+            return []
+        docs = data.get("documents") or []
+        metas = data.get("metadatas") or []
+        if not docs:
+            return []
+
+        # 查询词：按非汉字/字母/数字边界切分，并保留原句做子串匹配
+        import re
+        tokens = [t for t in re.split(r"[\s,，。、；;:：!！?？()（）\"'\"'<>《》/]+", query) if t]
+        tokens = [t for t in tokens if len(t) >= 2]  # 过短词噪音大
+        if not tokens:
+            return []
+
+        scored = []
+        for text, meta in zip(docs, metas):
+            if not text:
+                continue
+            hit = sum(1 for t in tokens if t in text)
+            if hit == 0:
+                continue
+            score = hit / len(tokens)
+            # 复用 metadatas（可能为 None）
+            md = dict(meta) if isinstance(meta, dict) else {}
+            from langchain_core.documents import Document
+            scored.append((Document(page_content=text, metadata=md), score))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:top_n]
+
+    def _rrf_fuse(self, vector_ranked, keyword_ranked, alpha=RAG_RRF_ALPHA, k=RAG_RRF_K):
+        """RRF 倒数排名融合：fused = alpha * RRF(vector) + (1-alpha) * RRF(keyword)。
+
+        vector_ranked / keyword_ranked: [(Document, score), ...]（顺序即排名）。
+        返回按融合分降序的 Document 列表，并在 metadata 写入 _score。
+        """
+        fused = {}
+        for ranked, weight in ((vector_ranked, alpha), (keyword_ranked, 1 - alpha)):
+            for rank, (doc, _s) in enumerate(ranked, start=1):
+                key = (doc.page_content, doc.metadata.get("source"), doc.metadata.get("industry"))
+                fused.setdefault(key, {"doc": doc, "score": 0.0})
+                fused[key]["score"] += weight / (rank + k)
+        items = sorted(fused.values(), key=lambda x: x["score"], reverse=True)
+        result = []
+        for it in items:
+            doc = it["doc"]
+            doc.metadata = dict(doc.metadata)
+            doc.metadata["_score"] = round(it["score"], 6)
+            result.append(doc)
+        return result
+
+    def _rerank(self, query, docs):
+        """可插拔重排钩子（默认 no-op）。
+
+        当前未接入重排后端（如 bge-reranker）。开启 ENABLE_RERANK 但无后端时安全透传，
+        仅告警，不改变顺序/内容；接入时在 RERANKER_REGISTRY 注册实现即可。
+        """
+        if not ENABLE_RERANK:
+            return docs
+        reranker = RERANKER_REGISTRY.get("default")
+        if reranker is None:
+            logger.warning("ENABLE_RERANK=true 但未配置重排后端,安全透传(顺序不变)")
+            return docs
+        try:
+            return reranker(query, docs)
+        except Exception as e:
+            logger.warning(f"重排失败,回退透传: {e}")
+            return docs
+
+    def _hybrid_pool(self, query, pool_size=15):
+        """混合召回候选池：向量召回 + 关键词全文召回 → RRF 融合 → 重排 → 阈值过滤。"""
+        # 1) 向量召回（带分数）
+        try:
+            vector_res = self.vector_db.similarity_search_with_score(query, k=pool_size)
+        except Exception as e:
+            logger.warning(f"向量召回失败,降级为纯关键词: {e}")
+            vector_res = []
+        # 2) 关键词全文召回
+        keyword_res = self._keyword_recall(query, top_n=max(pool_size * 3, 40))
+        # 3) RRF 融合
+        fused = self._rrf_fuse(vector_res, keyword_res)
+        # 4) 重排（可插拔，默认 no-op）
+        fused = self._rerank(query, fused)
+        # 5) 阈值过滤
+        if RAG_THRESHOLD > 0:
+            fused = [d for d in fused if (d.metadata or {}).get("_score", 1.0) >= RAG_THRESHOLD]
+        return fused[:pool_size]
 
     def search_huawei(self, query, k=4):
         """只召回华为云方案文档（主方案落地用）——直接在华为子集上检索，避免被竞品挤出前排"""
