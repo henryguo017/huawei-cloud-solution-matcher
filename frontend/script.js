@@ -8,7 +8,10 @@ const Config = {
     },
     INDUSTRIES: [
         '智慧农业', '工业互联网', '智慧园区', '智慧城市', '智慧医疗',
-        '智慧金融', '智慧能源', '智慧交通', '智慧教育', '智慧文旅'
+        '智慧金融', '智慧能源', '智慧交通', '智慧教育', '智慧文旅',
+        '制造', '政务', '零售', '汽车', '矿山',
+        '钢铁冶金', '化工', '智慧物流', '传媒文娱', '应急管理',
+        '智慧水利', '国资云', '互联网', '游戏', '生物医药'
     ],
     COMPETITORS: [
         // 国内主流云服务商
@@ -1754,6 +1757,21 @@ const DemandWizard = {
         { name: '智慧交通', icon: '<svg class="icon" aria-hidden="true"><use href="#i-car"></use></svg>' },
         { name: '智慧教育', icon: '<svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg>' },
         { name: '智慧文旅', icon: '<svg class="icon" aria-hidden="true"><use href="#i-landmark"></use></svg>' },
+        { name: '制造', icon: '<svg class="icon" aria-hidden="true"><use href="#i-cpu"></use></svg>' },
+        { name: '政务', icon: '<svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg>' },
+        { name: '零售', icon: '<svg class="icon" aria-hidden="true"><use href="#i-shopping-cart"></use></svg>' },
+        { name: '汽车', icon: '<svg class="icon" aria-hidden="true"><use href="#i-car"></use></svg>' },
+        { name: '矿山', icon: '<svg class="icon" aria-hidden="true"><use href="#i-hard-hat"></use></svg>' },
+        { name: '钢铁冶金', icon: '<svg class="icon" aria-hidden="true"><use href="#i-flame"></use></svg>' },
+        { name: '化工', icon: '<svg class="icon" aria-hidden="true"><use href="#i-flask-conical"></use></svg>' },
+        { name: '智慧物流', icon: '<svg class="icon" aria-hidden="true"><use href="#i-truck"></use></svg>' },
+        { name: '传媒文娱', icon: '<svg class="icon" aria-hidden="true"><use href="#i-tv"></use></svg>' },
+        { name: '应急管理', icon: '<svg class="icon" aria-hidden="true"><use href="#i-alert-triangle"></use></svg>' },
+        { name: '智慧水利', icon: '<svg class="icon" aria-hidden="true"><use href="#i-droplets"></use></svg>' },
+        { name: '国资云', icon: '<svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg>' },
+        { name: '互联网', icon: '<svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>' },
+        { name: '游戏', icon: '<svg class="icon" aria-hidden="true"><use href="#i-gamepad-2"></use></svg>' },
+        { name: '生物医药', icon: '<svg class="icon" aria-hidden="true"><use href="#i-heart-pulse"></use></svg>' },
     ],
 
     // 痛点标签
@@ -2531,6 +2549,21 @@ Object.assign(KnowledgeUI, {
                     <option value="智慧交通">智慧交通</option>
                     <option value="智慧教育">智慧教育</option>
                     <option value="智慧文旅">智慧文旅</option>
+                    <option value="制造">制造</option>
+                    <option value="政务">政务</option>
+                    <option value="零售">零售</option>
+                    <option value="汽车">汽车</option>
+                    <option value="矿山">矿山</option>
+                    <option value="钢铁冶金">钢铁冶金</option>
+                    <option value="化工">化工</option>
+                    <option value="智慧物流">智慧物流</option>
+                    <option value="传媒文娱">传媒文娱</option>
+                    <option value="应急管理">应急管理</option>
+                    <option value="智慧水利">智慧水利</option>
+                    <option value="国资云">国资云</option>
+                    <option value="互联网">互联网</option>
+                    <option value="游戏">游戏</option>
+                    <option value="生物医药">生物医药</option>
                 `;
             }
         });
