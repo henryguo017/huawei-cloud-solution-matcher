@@ -1,44 +1,23 @@
 import os
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from app.config import CHUNK_SIZE, CHUNK_OVERLAP
+from app.knowledge.loaders import get_loader
+from app.knowledge.splitters import get_splitter
 
 class DocumentLoader:
-    """文档加载工具类，支持PDF和TXT格式"""
+    """文档加载工具类（委托给 app.knowledge 策略族，对外接口不变）
+
+    支持格式由 loaders 注册表决定：当前 .pdf / .txt / .md。
+    """
     
     def __init__(self):
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=CHUNK_SIZE,
-            chunk_overlap=CHUNK_OVERLAP,
-            length_function=len,
-            is_separator_regex=False
-        )
+        # 默认切分器：recursive，参数与历史一致（CHUNK_SIZE / CHUNK_OVERLAP）
+        self.text_splitter = get_splitter("recursive")
     
     def load_single_file(self, file_path):
         """加载单个文件"""
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
-        
-        file_ext = os.path.splitext(file_path)[1].lower()
-        
-        if file_ext == ".pdf":
-            loader = PyPDFLoader(file_path)
-            documents = loader.load()
-        elif file_ext == ".txt":
-            loader = TextLoader(file_path, encoding="utf-8")
-            documents = loader.load()
-        else:
-            raise ValueError(f"不支持的文件格式: {file_ext}")
-        
-        # 添加元数据
-        file_name = os.path.basename(file_path)
-        industry = os.path.basename(os.path.dirname(file_path))
-        
-        for doc in documents:
-            doc.metadata["source"] = file_name
-            doc.metadata["industry"] = industry
-        
-        return documents
+        # 委托给策略族加载器（内部已补 source/industry 元数据）
+        return get_loader(file_path).load(file_path)
     
     def load_directory(self, directory_path):
         """加载整个目录下的所有支持的文件"""
@@ -52,7 +31,7 @@ class DocumentLoader:
                 file_path = os.path.join(root, file_name)
                 file_ext = os.path.splitext(file_name)[1].lower()
                 
-                if file_ext in [".pdf", ".txt"]:
+                if file_ext in [".pdf", ".txt", ".md"]:
                     try:
                         documents = self.load_single_file(file_path)
                         all_documents.extend(documents)
@@ -64,7 +43,7 @@ class DocumentLoader:
     
     def split_documents(self, documents):
         """分割文档为小块"""
-        return self.text_splitter.split_documents(documents)
+        return self.text_splitter.split(documents)
 
 
 def load_documents_from_directory(directory, chunk_size=1000, chunk_overlap=200):
@@ -74,13 +53,7 @@ def load_documents_from_directory(directory, chunk_size=1000, chunk_overlap=200)
 
     loader = DocumentLoader()
     # 按传入参数重建 splitter（覆盖类构造函数中的默认值）
-    from langchain.text_splitter import RecursiveCharacterTextSplitter
-    loader.text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        length_function=len,
-        is_separator_regex=False
-    )
+    loader.text_splitter = get_splitter("recursive", chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     raw_docs = loader.load_directory(directory)
     if not raw_docs:
