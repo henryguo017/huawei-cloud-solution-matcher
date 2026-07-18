@@ -66,6 +66,22 @@ MAX_RETRIES = int(os.getenv("MAX_RETRIES", "2"))
 RETRY_INTERVAL = int(os.getenv("RETRY_INTERVAL", "2"))
 DETECTION_TIMEOUT = int(os.getenv("DETECTION_TIMEOUT", "5"))
 
+# ==================== 检索增强 & 流式治理开关（ruoyi-ai 学习项）====================
+# 全部默认关闭/保守值，保证不开启时行为与现状 100% 一致。
+# 开启示例：在 .env 设置 ENABLE_HYBRID_RETRIEVAL=true 等后重启服务。
+
+# RAG 三段式：向量召回 + 关键词全文召回 → RRF 融合 → 重排 → 阈值
+ENABLE_HYBRID_RETRIEVAL = os.getenv("ENABLE_HYBRID_RETRIEVAL", "false").lower() == "true"
+ENABLE_RERANK = os.getenv("ENABLE_RERANK", "false").lower() == "true"
+RAG_RRF_ALPHA = float(os.getenv("RAG_RRF_ALPHA", "0.5"))   # 向量召回在 RRF 中的权重（1-alpha 给关键词召回）
+RAG_RRF_K = int(os.getenv("RAG_RRF_K", "60"))               # RRF 常数，避免并列时除零
+RAG_THRESHOLD = float(os.getenv("RAG_THRESHOLD", "0.0"))    # 融合后低于该分的片段过滤掉（0=不过滤）
+
+# SSE 流式连接治理
+SSE_HEARTBEAT_ENABLED = os.getenv("SSE_HEARTBEAT_ENABLED", "false").lower() == "true"  # 开启后发心跳+超时清理
+SSE_HEARTBEAT_INTERVAL = int(os.getenv("SSE_HEARTBEAT_INTERVAL", "30"))  # 心跳间隔（秒）
+SSE_TIMEOUT = int(os.getenv("SSE_TIMEOUT", "300"))          # 单次流式最长时长（秒），超时主动结束
+
 # ==================== 知识库配置 ====================
 KNOWLEDGE_BASE_DIRECTORY = _resolve_data_path(os.getenv("KNOWLEDGE_BASE_DIRECTORY", os.path.join(BASE_DIR, "data", "sample_solutions")))
 COMPETITOR_DIRECTORY = _resolve_data_path(os.getenv("COMPETITOR_DIRECTORY", os.path.join(BASE_DIR, "data", "competitors")))
