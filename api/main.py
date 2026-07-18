@@ -14,6 +14,7 @@ from api.export_routes import router as export_router
 from api.auth_routes import router as auth_router
 from api.achievement_routes import router as achievement_router
 from app.config import APP_NAME, APP_VERSION
+from app.core.errors import AppError, app_error_handler
 import logging
 import time
 
@@ -98,6 +99,9 @@ async def global_exception_handler(request: Request, exc: Exception):
             "error": str(exc)
         }
     )
+
+# 统一结构化错误（ruoyi-ai 学习项 #5）：仅作用于 AppError，不影响现有 HTTPException/422 形态
+app.add_exception_handler(AppError, app_error_handler)
 
 app.include_router(router, prefix="/api")
 app.include_router(export_router, prefix="/api")
