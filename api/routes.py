@@ -1036,7 +1036,10 @@ async def reset_my_knowledge_base(
     """
     重置当前用户自己的知识库：从全局默认库(user_id=0)重新复制，使老用户能自助获取最新默认文档。
 
-    注意：会清空该用户在自己库里自定义添加/修改的文档（重新变成与默认库一致）。
+    注意：
+    - 会清空该用户在自己知识库里自定义添加/修改的文档（重新变成与默认库一致）。
+    - 仅清除知识库相关子目录（sample_solutions/competitors/vector_db），
+      保留客户档案等其它用户私有数据（customer_uploads/ 等），避免误删。
     """
     user_id = current_user["id"]
     if user_id <= 0:
@@ -1048,11 +1051,14 @@ async def reset_my_knowledge_base(
         # 1. 清掉内存缓存，避免后续请求仍用旧实例
         _user_kb_cache.pop(user_id, None)
 
-        # 2. 删除该用户现有知识库目录（含旧向量库），下一步整体重新复制
+        # 2. 仅清除知识库相关子目录（保留客户档案等其它用户数据）
         user_base = os.path.join(USER_DOCS_BASE_DIR, str(user_id))
-        if os.path.exists(user_base):
-            shutil.rmtree(user_base)
-            logger.info(f"用户 {user_id} 旧知识库目录已清除: {user_base}")
+        _kb_subdirs = ("sample_solutions", "competitors", "vector_db")
+        for sub in _kb_subdirs:
+            sub_path = os.path.join(user_base, sub)
+            if os.path.exists(sub_path):
+                shutil.rmtree(sub_path)
+                logger.info(f"用户 {user_id} 旧知识库子目录已清除: {sub_path}")
 
         # 3. 从默认库重新复制（文件 + 向量库）
         ok = KnowledgeBaseService.copy_from_default(user_id)
