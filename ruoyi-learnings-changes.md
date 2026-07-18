@@ -2,7 +2,7 @@
 
 > 目标：把 ruoyi-ai 里值得借鉴的工程模式落到 cloudsol.cn，**全程不破坏现有生产行为**。
 > 所有新能力均经 feature toggle 默认关闭，未开启时代码路径与现状逐字一致。
-> 状态：**仅落地在 `feature/ruoyi-learnings` 分支，未合并 main、未部署生产。** 生产仍跑 main，正常使用不受影响。
+> 状态：**已合并 main（commit `97a408b`）并推送到 GitHub，本地冒烟 73 路由通过。生产默认开启 `ENABLE_HYBRID_RETRIEVAL` 与 `SSE_HEARTBEAT_ENABLED`；待按标准流程部署到阿里云即上线。**
 
 ## 一、6 项改动总览
 
@@ -19,12 +19,12 @@
 
 | 开关 | 默认 | 作用 | 开启效果 |
 |---|---|---|---|
-| `ENABLE_HYBRID_RETRIEVAL` | false | 开启 RAG 三段式混合召回 | 检索从单路向量升级为「向量+关键词→RRF融合→重排→阈值」 |
+| `ENABLE_HYBRID_RETRIEVAL` | true（生产默认开） | 开启 RAG 三段式混合召回 | 检索从单路向量升级为「向量+关键词→RRF融合→重排→阈值」 |
 | `ENABLE_RERANK` | false | 开启重排钩子 | 接入重排后端时生效；未配置后端则安全透传（仅告警） |
 | `RAG_RRF_ALPHA` | 0.5 | 向量召回在 RRF 中的权重 | 1-alpha 给关键词召回 |
 | `RAG_RRF_K` | 60 | RRF 常数 | 避免并列除零 |
 | `RAG_THRESHOLD` | 0.0 | 融合后最低分阈值 | >0 时过滤低分片段 |
-| `SSE_HEARTBEAT_ENABLED` | false | 开启 SSE 心跳+超时 | 发 SSE 注释心跳(: ping)防连接僵死，超 `SSE_TIMEOUT` 主动结束 |
+| `SSE_HEARTBEAT_ENABLED` | true（生产默认开） | 开启 SSE 心跳+超时 | 发 SSE 注释心跳(: ping)防连接僵死，超 `SSE_TIMEOUT` 主动结束 |
 | `SSE_HEARTBEAT_INTERVAL` | 30 | 心跳间隔(秒) | — |
 | `SSE_TIMEOUT` | 300 | 单次流式最长(秒) | — |
 
@@ -84,9 +84,12 @@ git checkout main && git branch -D feature/ruoyi-learnings
 
 ## 六、部署说明（重要）
 
-- **当前未部署**：生产仍运行 `main` 分支，本分支改动不影响你正在用的 cloudsol.cn。
-- 若日后要上线某能力：在 `.env` 设对应开关 → 按标准流程部署（`cp -r` 覆盖 + `systemctl restart huawei-cloud-api`）→ 观察 journalctl 无报错。
-- 建议先只开低风险项（`ENABLE_HYBRID_RETRIEVAL`）做 A/B，确认匹配质量提升且无回归后再考虑其它。
+- **已合并 main 并推送 GitHub（commit `97a408b`），本地冒烟 73 路由通过。**
+- 上线步骤（在阿里云服务器 root 执行，详见对话中「服务器操作清单」）：
+  1. 拉取最新 main 压缩包并覆盖代码（`cp -r`，不动 venv/data）
+  2. `systemctl restart huawei-cloud-api`
+  3. 按下方 nginx 片段屏蔽 `/docs` 等
+- **回退最快方式**（无需重新部署）：在服务器 `.env` 追加 `ENABLE_HYBRID_RETRIEVAL=false` 与 `SSE_HEARTBEAT_ENABLED=false` 后 `systemctl restart huawei-cloud-api`。
 
 ## 七、验证记录（对应避坑点 #8 实测不盲信）
 
