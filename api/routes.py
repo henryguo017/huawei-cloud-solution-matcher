@@ -119,6 +119,9 @@ async def match_solution(
         # 使用用户独立知识库（登录用户）；匿名用户使用全局知识库
         user_id = user.get('id') if user else 0
         matcher = get_solution_matcher_for_user(user_id) if user_id > 0 else get_solution_matcher()
+        # 匿名用户不进入下方 user 分支，_version_meta 不会被赋值；这里预置空 dict，
+        # 避免响应构造时引用未定义变量（历史遗留：匿名 POST /api/match 会 500）
+        _version_meta: dict = {}
 
         # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
         original_demand = request.demand
