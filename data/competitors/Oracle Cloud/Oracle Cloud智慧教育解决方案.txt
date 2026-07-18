@@ -1,21 +1,40 @@
 # Oracle Cloud智慧教育解决方案
 
 ## 公司概况
-Oracle在教育领域主要提供研究计算和大学管理系统。
+Oracle在教育领域以"慈善性质的免费教育计划 + 企业级云与数据库教学 + 高校科研计算"为主线，而非提供完整的智慧校园SaaS。其核心载体是Oracle Academy（面向教育工作者的免费计算机科学教育计划）与Oracle for Research（科研云计算），并依托OCI Free Tier、Autonomous Database、APEX等支撑高校教学与科研。Oracle Academy已覆盖全球120多个国家、数百万学生。
 
 ## 智慧教育核心方案
 
-### 1. Oracle for Research
-- 科研云计算和HPC
-- 科研数据管理
+### 1. Oracle Academy（免费计算机教育计划）
+- 面向教育机构会员与学生的免费慈善教育项目，提供Java、Database、云、项目管理与企业资源计划（ERP）等课程、软件与云技术
+- 包含带测验与考试的课程、短期学习模块、软件、云技术与动手实验环境，全部在线免费获取
+- 持续为教育者提供专业发展培训，部分课程可获得继续教育（CPD）学分
 
-### 2. Oracle Student Cloud
-- 大学学生信息系统（SIS）
-- 招生、教务、学籍管理
+### 2. Oracle Academy Cloud Program（云教学实践）
+- 教育机构一次配置后，师生可随时免费访问Oracle Cloud Free Tier、Oracle Autonomous Database、计算虚拟机（VM）、对象存储与开发者工具
+- 免费资源含AMD/ARM计算虚拟机、块存储与对象存储、Autonomous Transaction Processing/Data Warehouse/JSON Database或APEX Application Development
+- 让学生无需自有基础设施即可在云端学习、构建与探索应用
+
+### 3. Oracle for Research（科研云计算）
+- 为高校与科研机构提供OCI上的高性能计算（HPC）、科研数据管理与协作环境
+- 支持大规模数据处理、模型训练与跨机构科研协作
+
+### 4. 高校管理与数据库教学
+- Oracle APEX低代码平台用于教学与科研应用快速开发；Oracle Database 23ai等前沿特性进入课堂
+- 与多所高校（如都柏林圣三一学院等）在数据库、AI、多云与主权云方向开展Higher Education合作
 
 ## 竞争优势
-- 高校管理系统积累
-- 数据库技术
+- Oracle Academy免费、覆盖广，在发展中国家与高校计算机教育中具有普惠价值
+- 数据库与自治技术领先，APEX/Autonomous Database适合教学实验与科研原型
+- 与Oracle企业生态衔接，学生可习得市场所需的云与数据库技能
+
+## 主要客户案例
+- Oracle Academy会员覆盖全球120+国家，与众多高校合作培养数据库、Java与云人才（具体院校多以成员国/地区形式披露）
+- Design Tech High School（美国加州公立特许高中）由Oracle深度支持办学
+- 罗马尼亚Oracle Academy俱乐部等高校社团长期开展数据库、Java与运维培训
 
 ## 核心劣势（中国市场）
-- 中国高校信息化由本土厂商主导
+- 并非"智慧校园/智慧教育"整体方案商，缺乏教务、学工、迎新、一卡通等本土刚需系统
+- 中国高校信息化由金智、正方、联奕等本土厂商及华为/阿里等云厂商主导，Oracle渗透有限
+- Oracle Academy以英文课程与全球认证为主，中文本地化教学资源与本土课程标准适配不足
+- OCI在中国大陆无合规本地数据中心，科研数据出境受监管约束，难以承接核心教学科研数据

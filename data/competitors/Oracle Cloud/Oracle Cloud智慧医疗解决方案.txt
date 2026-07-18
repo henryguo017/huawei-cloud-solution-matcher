@@ -1,23 +1,41 @@
 # Oracle Cloud智慧医疗解决方案
 
 ## 公司概况
-Oracle通过收购Cerner（283亿美元）成为医疗IT巨头。
+Oracle于2022年6月以约283亿美元收购电子病历巨头Cerner，成立Oracle Health，将Cerner的临床积累与Oracle的企业级云、数据库、AI与分析能力融合。Oracle Health定位为覆盖医疗机构、支付方、患者与生命科学组织的开放式医疗健康平台，核心是将传统病历系统升级为AI驱动的智能系统。
 
 ## 智慧医疗核心方案
 
-### 1. Oracle Health (前Cerner)
-- 全球最大的EHR（电子健康记录）系统之一
-- 医院信息化整体方案
-- 临床决策支持
+### 1. Oracle Health 新一代EHR（电子健康记录）
+- 自底向上基于OCI（Oracle云基础设施）构建的AI原生电子病历，区别于沿用Cerner Millennium架构的旧系统
+- 2025年10月，Oracle Health EHR v25通过美国ONC Health IT认证，并满足DEA电子处方药（EPCS）合规要求
+- 内嵌语音命令、对话式检索与临床文档自动生成，减少医生录入负担
+- 基于Oracle知识图谱（Knowledge Graph）的语义数据库，可理解"心肌梗塞"与"心脏病发作"等临床概念的等价关系
 
-### 2. Oracle Cloud for Healthcare
-- 医疗数据管理和分析
-- AI辅助诊疗
+### 2. Oracle Health Clinical AI Agent
+- 语音+屏幕双模态的临床助手，已覆盖心内科、肺科、肾科、行为健康等30余个专科
+- 结合生成式AI与语音识别，自动起草病历、建议随访与编码，可将医生文书时间减少约30%
+- 运行于OCI，支持多模态交互，深度嵌入医生工作流
+
+### 3. Oracle Health Data Intelligence（原Cerner HealtheIntent）
+- 人群健康与数据分析平台，整合来自数千个来源的患者数据，构建单一可信数据源
+- 支持临床互操作、慢病管理与价值医疗（value-based care）分析
+
+### 4. Oracle Fusion Cloud与收入周期管理
+- 依托原Cerner RevWorks与Oracle Fusion Cloud Applications，打通临床前台与财务、供应链等后台运营
+- 提供索赔处理、计费优化、供应链与库存管理，降低行政成本并提升可预测性
 
 ## 竞争优势
-- Cerner在全球医疗机构的市场份额
-- 端到端医疗IT方案
+- 通过Cerner继承全球庞大的医院与诊所EHR装机量，尤其在大型与联邦医疗机构基础深厚
+- 新一代EHR为AI原生重构，而非在旧系统上"外挂"AI，技术架构差异化明显
+- OCI云规模与安全能力，结合数十年处理受监管敏感数据的经验
+
+## 主要客户案例
+- 美国退伍军人事务部（VA）：采用Cerner Millennium电子病历系统（Oracle Health前身遗产系统），为全美最大规模的EHR部署之一
+- 美国多家大型卫生系统与门诊诊所正基于ONC认证的新一代Oracle Health EHR开展早期采纳，用于门诊场景的AI辅助诊疗
+- Oracle Health在2025年EHR厂商对比中仍服务美国大量医院与联邦/政府医疗机构（如VA）
 
 ## 核心劣势（中国市场）
-- Cerner在中国几乎没有市场份额
-- 中国医院信息系统由本土厂商主导
+- Cerner/Oracle Health在中国几乎无市场份额，中国医院信息系统由卫宁健康、创业慧康、东软等本土厂商主导
+- 数据出境与本地化合规要求严格，OCI在中国大陆缺乏本地合规数据中心，难以承接核心医疗数据
+- 美国VA等大型项目在实施进度与用户满意度上曾出现波折，落地复杂度与交付风险被市场关注
+- 在中国医疗信创与国产化替代背景下，核心HIS/EMR系统被本土方案替代的趋势明显

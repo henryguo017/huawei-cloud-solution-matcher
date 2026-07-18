@@ -1,26 +1,40 @@
 # AWS智慧交通解决方案
 
 ## 公司概况
-AWS在智慧交通领域主要服务全球车企和出行平台。
+AWS for Automotive拥有超过17年汽车行业经验，服务整车厂、供应商与出行平台。方案覆盖六大领域：软件定义汽车(SDV)、自动驾驶(Autonomous Mobility)、联网移动(Connected Mobility)、数字客户互动、智能制造、工程与设计。在出行与交通物流领域，AWS支撑全球车企车联网、自动驾驶数据湖与出行平台运营。
 
 ## 智慧交通核心方案
 
-### 1. AWS for Automotive
-- 车联网平台（连接数百万车辆）
-- 自动驾驶数据湖和训练平台
-- OTA（空中升级）方案
+### 1. 联网移动 Connected Mobility
+- "AWS上的联网移动解决方案"：借助专用、部署就绪的加速器与汽车云开发门户(ACDP, Automotive Cloud Development Portal)加速车联网资产开发部署
+- AWS IoT FleetWise：大规模采集、编排车辆数据，支撑数字孪生与预测性维护
+- 以极低成本的持久化存储海量车辆遥测数据，结合Amazon ML实现实时预测与洞察
 
-### 2. 智慧出行
-- Uber、Lyft等出行平台的云基础设施
-- 实时调度和路径优化
+### 2. 自动驾驶与数据湖
+- Toyota Connected Data Lake：基于Amazon S3、Kinesis、Lambda、EMR的Serverless数据湖，每日处理PB级车辆遥测，支撑实时安全洞察与客户服务
+- 利用SageMaker、Amazon EMR进行自动驾驶感知算法训练与海量场景数据挖掘（如Continental、Rivian、Zoox案例）
+- 与HERE、Valeo等合作，结合Amazon Bedrock进行高精地图与仿真测试
 
-### 3. 交通物流
-- Amazon Logistics的技术积累
-- 供应链和物流优化方案
+### 3. 出行与交通物流
+- Lyft：使用AWS运行数百万次仿真提升自动驾驶安全，并以对话式AI客服将解决时间缩短至分钟级、超半数交互无需人工
+- 支持实时调度、路径优化与车队管理；Amazon Connect、Amazon Lex支撑智能出行客服
+
+### 4. Agentic AI 客户与运营
+- 基于Amazon Bedrock AgentCore与Amazon Nova，构建经销商助手、营销生成与运维智能体（如Toyota RAG经销商助手、Audi四类运维Agent）
 
 ## 竞争优势
-- 全球车企（Toyota、BMW等）的合作关系
-- 大规模车联网运营经验
+- 全球车企合作最广（BMW、Toyota、Volkswagen、Audi、Honda、Ferrari、Nissan、Rivian等）
+- 车联网运营规模领先：BMW全球超2450万辆联网车接入AWS，日处理超166亿次请求、系统可靠性99.95%
+- 数据、AI与边缘能力完整，覆盖研发—制造—营销—售后全价值链
+
+## 主要客户案例
+- BMW：联网车辆云端现代化，新功能上市提速60%、基础设施成本降20%
+- Toyota / Toyota Connected：构建PB级联网数据湖，支撑安全与用车服务
+- Volkswagen Group：构建Volkswagen Industrial Cloud与CARIAD云端分析平台
+- Lyft、Rivian、Continental、Honda、Formula 1等均以AWS支撑研发与运营
 
 ## 核心劣势（中国市场）
-- 中国车联网/智慧交通由本土企业主导
+- 中国车联网与智慧交通由本土企业（车企自有云、百度、阿里、华为等）主导，AWS难以进入核心车云与车路协同
+- 中国区（北京/宁夏）服务目录有限，车联网、IoT FleetWise等服务的境内可用性与合规适配弱
+- 数据出境与汽车数据安全管理规定限制，车辆数据难以回传全球区域处理
+- 缺乏本地OT/车载硬件与现场交付团队，自动驾驶等高监管场景受地缘与合规约束

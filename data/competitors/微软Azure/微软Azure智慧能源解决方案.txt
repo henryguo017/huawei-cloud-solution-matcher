@@ -1,27 +1,38 @@
 # 微软Azure智慧能源解决方案
 
 ## 公司概况
-Azure在能源行业服务全球大型能源公司，在碳管理领域领先。
+微软以 Microsoft Cloud for Sustainability（微软可持续发展云）为核心，提供碳排放核算、ESG 数据管理与减碳分析能力，并依托 Azure IoT、Azure Data Manager for Agriculture 与 Azure Maps 支撑能源与资源管理。微软自身承诺 2030 年碳负排放、2025 年 100% 可再生能源供电，相较传统企业数据中心能效最高可提升 93%，具示范效应。
 
 ## 智慧能源核心方案
 
-### 1. Microsoft Cloud for Sustainability
-- 碳排放监测与管理（Microsoft Sustainability Manager）
-- 覆盖范围1/2/3碳排放核算
-- 减排目标和进度跟踪
+### 1. Microsoft Cloud for Sustainability / Microsoft Sustainability Manager
+- 碳排放监测与管理：覆盖范围 1/2/3 排放的核算、目标设定与进度跟踪。
+- ESG 数据中枢：自动采集运营与价值链数据，统一数据模型，生成审计轨迹。
+- CSRD 报告：通过 Microsoft Purview Compliance Manager 的 CSRD 模板与 Copilot 加速可持续报告编制。
 
-### 2. 能源数据平台
-- Azure IoT for Energy
-- 电网和可再生能源管理
+### 2. 可持续发展数据与 AI
+- Sustainability data solutions in Microsoft Fabric：构建统一 ESG 数据资产，提升数据准确性与可视化。
+- Emissions Impact Dashboard：基于 Power BI 估算 Azure 与 Microsoft 365 云使用的碳足迹（经第三方验证，符合 GHG Protocol）。
+- Environmental Credit Service（预览）：追踪与标准化碳信用等环境资产来源。
 
-### 3. AI能源优化
-- 数据中心能源优化（微软自身经验）
-- AI辅助电网调度
+### 3. 能源与资源管理
+- Azure IoT for Energy / 智能建筑与设备资源管理，分布式能源（DER）管理。
+- Azure Data Manager for Agriculture：农业数据连接器与 AI Copilot，支撑农业减碳与供应链。
+- 数据中心能源优化：微软自建液冷、PUE 优化与可再生能源采购经验对外赋能。
 
 ## 竞争优势
-- 微软碳管理平台领先行业
-- 微软自身碳中和承诺的示范效应
-- AI技术积累（Azure OpenAI）
+- 微软碳管理平台（Sustainability Manager）在跨行业 ESG 数据治理领域领先。
+- 自身碳中和承诺与更高能效（相较传统企业数据中心）的示范效应。
+- Azure 全球基础设施 + Fabric + Copilot 一体化数据智能能力。
+
+## 主要客户案例
+- Telstra（澳洲电信）：与微软合作利用 Cloud for Sustainability 帮助客户达成气候目标。
+- Kingfisher：以 Microsoft Sustainability Manager 收集、记录与计算多源环境数据。
+- King Steel：借助 Cloud for Sustainability 推动鞋业供应链绿色透明转型。
+- Allegiant Stadium：通过趋势分析实现更节能、舒适的场馆运营。
 
 ## 核心劣势（中国市场）
-- 无法涉足中国能源央企项目
+- 中国能源与电网央企受国产化与数据安全要求约束，Azure 难以进入核心生产系统。
+- 缺乏本地电力物联、SCADA、工控 OT 与端侧硬件能力，方案偏数据与管理层。
+- 中国碳市场（全国碳排放权交易体系）有本土合规口径，微软模板需大量本地化改造。
+- 中国大陆由世纪互联运营，国际版可持续数据服务可用性受限。

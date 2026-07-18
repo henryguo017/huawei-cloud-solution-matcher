@@ -1,33 +1,46 @@
 # AWS智慧医疗解决方案
 
 ## 公司概况
-AWS在医疗健康领域有完整产品线，符合HIPAA等国际医疗合规要求。
+AWS for Healthcare & Life Sciences为医疗、生命科学、学术医学与保险支付方提供端到端云能力。AWS披露：全球前20大药企中19家使用AWS进行生成式AI与机器学习，前5大基因测序公司中4家、前10大医疗器械公司中10家使用AWS；拥有6项专为医疗生命科学构建的服务，超过任何其它云厂商，并通过1000+第三方合规要求验证。
 
 ## 智慧医疗核心方案
 
 ### 1. AWS HealthLake
-- 符合FHIR标准的医疗数据湖
-- 临床数据结构化和分析
-- 支持基因组学、影像学数据
+- 符合FHIR R4标准、具备HIPAA资格的医疗数据湖，安全存储、转换、查询与分析健康数据
+- 内置医疗NLP，从非结构化临床文本中提取实体、关系与受保护健康信息(PHI)
+- 支持与AWS HealthImaging、AWS HealthOmics多模态联动，支撑精准医学
 
-### 2. Amazon HealthLake Imaging
-- 医学影像云存储和分析
-- DICOM格式支持
+### 2. AWS HealthImaging
+- PB级医学影像云端存储、转换与分析，亚秒级访问海量DICOM影像
+- 支撑现代影像应用与跨机构影像共享，降低本地PACS成本
 
-### 3. Amazon Comprehend Medical
-- 医疗NLP服务
-- 病历文本结构化、ICD-10编码提取
+### 3. AWS HealthOmics
+- 面向基因组、转录组等组学数据的规模化托管工作流与存储，加速生物信息与药物发现
 
-### 4. 远程医疗
-- Amazon Chime SDK用于远程医疗通信
-- 远程患者监护方案
+### 4. Amazon Comprehend Medical
+- 医疗NLP服务，从病历、报告快速准确提取症状、药物、剂量等洞察，辅助ICD编码
+
+### 5. AWS HealthScribe 与智能客服
+- AWS HealthScribe：结合语音识别与生成式AI，从医患对话自动生成临床记录
+- Amazon Connect Health / Amazon Connect Health Experience：面向医疗的Agentic AI联络中心，提升患者互动体验
+
+### 6. 科研与协作
+- AWS Clean Rooms：在不共享底层数据的前提下，安全联合分析多机构数据集，支撑临床研究协作
 
 ## 竞争优势
-- 全球医疗合规（HIPAA、GDPR）
-- 丰富的医疗AI/ML服务
-- 全球药企和医疗机构信赖
+- 全球医疗合规体系最完整（HIPAA、GDPR及1000+合规项）
+- 行业专属AI服务最丰富（HealthLake/HealthImaging/HealthOmics/HealthScribe/Comprehend Medical）
+- 头部药企、医疗器械、基因组与学术机构高度信赖
+
+## 主要客户案例
+- Philips：与AWS扩展战略合作，推进HealthSuite云服务与生成式AI工作流
+- AstraZeneca：利用Amazon Bedrock加速临床试验
+- Johnson & Johnson：在AWS上以生成式AI加速创新
+- Greenway Health：采用AWS HealthLake驱动EHR创新
+- 哥伦比亚大学、约翰霍普金斯大学等依托AWS开展医学与基因组研究
 
 ## 核心劣势（中国市场）
-- 医疗数据跨境合规问题
-- 中国医院和卫健系统几乎不使用AWS
-- 远程医疗受国内政策限制
+- 医疗数据跨境合规严格，HIPAA等国际认证无法直接满足中国《数据安全法》《个人信息保护法》及卫健、医保监管要求
+- 中国医院、卫健系统与医保平台几乎不使用AWS，主要由本土云与行业云承载
+- 中国区（北京/宁夏）服务目录有限，上述医疗专属AI服务多数仅在海外区域提供，境内落地能力弱
+- 缺乏面向中国医院HIS/LIS/PACS的本地化集成与信创适配
