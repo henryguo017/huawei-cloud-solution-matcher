@@ -3,6 +3,9 @@ from app.services.solution_matcher import SolutionMatcherService
 from app.services.competitor_analyzer import CompetitorAnalyzerService
 from app.services.knowledge_base import KnowledgeBaseService
 from app.services.usage_logger import UsageLoggerService, get_usage_logger as _get_usage_logger
+# re-export：供其它路由 `from api.dependencies import get_current_user[_optional]` 使用
+# 注意：这两个名字在本文件内看似未使用，但被 achievement_routes 等模块引用，autoflake 勿删
+from api.auth_dependencies import get_current_user, get_current_user_optional  # noqa: F401
 
 # ===== 全局知识库单例（仅用于健康检查、管理员全局重建等系统级操作） =====
 _global_kb: KnowledgeBaseService = None
