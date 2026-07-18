@@ -73,10 +73,10 @@ class ClearResponse(BaseModel):
     success: bool = Field(..., description="操作是否成功")
     message: str = Field(default="知识库已清空", description="操作消息")
 
-class ResetMineResponse(BaseModel):
+class SyncMineResponse(BaseModel):
     success: bool = Field(..., description="操作是否成功")
-    message: str = Field(default="知识库已重置为最新默认库", description="操作消息")
-    total_documents: int = Field(default=0, description="重置后用户知识库的文档片段数")
+    message: str = Field(default="知识库已同步为最新官方方案", description="操作消息")
+    total_documents: int = Field(default=0, description="同步后用户知识库的文档片段数")
 
 # ===== 知识库文档管理模型 =====
 class KBDocumentItem(BaseModel):

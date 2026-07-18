@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260718f">
+    <link rel="stylesheet" href="style.css?v=20260718g">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -473,25 +473,6 @@
         </div>
     </div>
 
-    <!-- 重置我的知识库确认弹窗 -->
-    <div id="confirm-reset-overlay" class="confirm-overlay" style="display:none;">
-        <div class="confirm-modal">
-            <div class="confirm-header">
-                <h3><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 重置知识库</h3>
-                <button class="confirm-close" id="cancel-reset-btn">×</button>
-            </div>
-            <div class="confirm-body">
-                <p>此操作将把<strong style="color:#f56c6c;">你自己的知识库整体覆盖为最新默认库</strong>。</p>
-                <p>你将获得管理员最新扩充的官方方案，但<strong style="color:#f56c6c;">你自己添加/修改过的知识库文档会被清除</strong>，且不可恢复。</p>
-                <p>客户档案等其它数据不受影响，仅知识库文档被重置。</p>
-                <p>确定要重置为最新默认库吗？</p>
-            </div>
-            <div class="confirm-actions">
-                <button class="btn btn-ghost" id="confirm-reset-cancel-btn">取消</button>
-                <button class="btn btn-primary" id="confirm-reset-btn">确认重置</button>
-            </div>
-        </div>
-    </div>
     
     <!-- 主内容区域 -->
     <main class="main-content">
@@ -1232,12 +1213,8 @@
                             <span class="btn-text"><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 同步最新官方方案（保留我的内容）</span>
                             <span class="btn-loader"></span>
                         </button>
-                        <button class="btn btn-secondary" id="reset-mine-btn">
-                            <span class="btn-text"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 重置为默认库（清空我的内容）</span>
-                            <span class="btn-loader"></span>
-                        </button>
                     </div>
-                    <p class="kb-reset-hint"><strong>同步</strong>：把管理员最新扩充的官方方案合并进你的知识库，<strong>你自己的文档会保留</strong>。如需彻底还原成纯官方库，用「重置」（会清空你的自定义内容，但客户档案不受影响）。</p>
+                    <p class="kb-reset-hint"><strong>同步</strong>：把管理员最新扩充的官方方案合并进你的知识库，<strong>你自己的文档会保留</strong>（客户档案等其它数据也不受影响）。</p>
 
                     <!-- 知识库重建进度面板 -->
                     <div id="rebuild-progress-panel" class="progress-panel" style="display: none; margin-top: 20px;">
@@ -1866,7 +1843,7 @@
     </div><!-- /.app-shell -->
 
     <script src="js/chart.umd.min.js?v=20260714j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260718f"></script>
+    <script src="script.js?v=20260718g"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260716c"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">

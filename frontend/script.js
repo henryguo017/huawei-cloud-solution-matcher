@@ -1246,26 +1246,6 @@ const API = {
         return await response.json();
     },
 
-    async resetMyKnowledge() {
-        const headers = {};
-        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
-        const response = await fetch(`${Config.API_BASE_URL}/knowledge/reset-mine`, {
-            method: 'POST',
-            headers
-        });
-
-        if (!response.ok) {
-            let msg = `重置失败: ${response.statusText}`;
-            try {
-                const err = await response.json();
-                if (err && err.detail) msg = err.detail;
-            } catch (e) { /* ignore */ }
-            throw new Error(msg);
-        }
-
-        return await response.json();
-    },
-
     async syncMyKnowledge() {
         const headers = {};
         if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
@@ -5760,43 +5740,6 @@ function initEventListeners() {
         } catch (error) {
             console.error('清空失败:', error);
             UI.showToast(error.message || '清空失败，请重试', 'error');
-        }
-    });
-
-    // ===== 重置我的知识库（老用户自助同步最新默认库）=====
-    const resetMineBtn = document.getElementById('reset-mine-btn');
-    const resetOverlay = document.getElementById('confirm-reset-overlay');
-    const confirmResetBtn = document.getElementById('confirm-reset-btn');
-    const confirmResetCancelBtn = document.getElementById('confirm-reset-cancel-btn');
-    const cancelResetBtn = document.getElementById('cancel-reset-btn');
-
-    const closeResetConfirm = () => { resetOverlay.style.display = 'none'; };
-
-    resetMineBtn?.addEventListener('click', () => {
-        if (!AuthManager.isLoggedIn()) {
-            UI.showToast('请先登录后再操作', 'warning');
-            AuthManager.showLoginModal();
-            return;
-        }
-        resetOverlay.style.display = 'flex';
-    });
-    resetOverlay?.addEventListener('click', (e) => { if (e.target === resetOverlay) closeResetConfirm(); });
-    confirmResetCancelBtn?.addEventListener('click', closeResetConfirm);
-    cancelResetBtn?.addEventListener('click', closeResetConfirm);
-
-    confirmResetBtn?.addEventListener('click', async () => {
-        try {
-            UI.setButtonLoading(resetMineBtn, true);
-            const result = await API.resetMyKnowledge();
-            UI.showToast(result.message || '知识库已重置为最新默认库', 'success');
-            closeResetConfirm();
-            await KnowledgeUI.loadStats();
-            await KnowledgeUI.loadDocList();
-        } catch (error) {
-            console.error('重置失败:', error);
-            UI.showToast(error.message || '重置失败，请重试', 'error');
-        } finally {
-            UI.setButtonLoading(resetMineBtn, false);
         }
     });
 
