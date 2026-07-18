@@ -5156,14 +5156,46 @@ function initEventListeners() {
                 return;
             }
             // 鉴权错误（token 过期/失效）：前端以为已登录但后端拒绝了
-            // 自动清掉过期状态并引导重新登录，而不是显示莫名其妙的"匹配失败"
+            // ★ 改进：不再盲目清掉登录态，先判断 token 客户端是否真的过期，
+            //   避免因一次性网络抖动/token_version竞态/端点特定错误而误判为"过期"
             const msg = error.message || '';
             if (msg.includes('登录') || msg.includes('认证') || msg.includes('unauthorized') || msg.includes('401')) {
-                console.warn('匹配鉴权失败:', msg);
-                AuthManager._clearAuth();
-                AuthManager._updateUI();
+                console.warn('[Match] 鉴权失败(原始):', msg);
+
+                // 先读 localStorage 判断客户端视角的 token 是否真的过期
+                let clientTokenActuallyExpired = false;
+                try {
+                    const saved = localStorage.getItem(AuthManager.STORAGE_KEY);
+                    if (saved) {
+                        const authData = JSON.parse(saved);
+                        if (authData.expiresAt && Date.now() >= authData.expiresAt) {
+                            clientTokenActuallyExpired = true;  // 客户端也确认过期 → 真过期
+                            console.warn('[Match] 确认:客户端 expiresAt 已过(', new Date(authData.expiresAt).toISOString(), ')');
+                        } else if (authData.expiresAt) {
+                            // 客户端认为还没过期但后端拒了 → 可能是 token_version 被踢/服务端重启/网络中间层问题
+                            console.warn('[Match] 异常:客户端认为 token 未过期(至', new Date(authData.expiresAt).toISOString(), ')，但后端返回 401。尝试静默重新验证…');
+                        } else {
+                            console.warn('[Match] 异常:localStorage 中无 expiresAt 字段（旧格式或脏数据）');
+                        }
+                    } else {
+                        clientTokenActuallyExpired = true;  // 连 localStorage 都没了 → 确实没登录
+                    }
+                } catch(e) { clientTokenActuallyExpired = true; }
+
                 MatchProgress.hide();
-                UI.showToast('登录已过期，请重新登录', 'warning');
+
+                if (clientTokenActuallyExpired) {
+                    // ✅ 真过期：清除 + 引导重新登录（原有逻辑）
+                    AuthManager._clearAuth();
+                    AuthManager._updateUI();
+                    UI.showToast('登录已过期，请重新登录', 'warning');
+                } else {
+                    // ⚠️ 假阳性：客户端认为 token 有效但后端拒绝
+                    // → 不清登录态（避免刚登录就被踢出的"重大 bug"体验）
+                    // → 提示用户刷新页面试试（刷新会触发 init→_verifyToken 重新确认）
+                    UI.showToast('身份验证异常，请刷新页面后重试', 'warning');
+                    console.warn('[Match] 未清除登录态(token 可能仍有效)，建议用户 Ctrl+Shift+R 刷新');
+                }
                 AuthManager._openModal();
             } else {
                 console.error('匹配失败:', error);
