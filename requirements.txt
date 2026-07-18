@@ -14,7 +14,10 @@ chromadb==0.4.24
 chroma-hnswlib==0.7.3
 
 # 本地向量模型 (国内镜像加速)
-sentence-transformers==2.7.0
+# 注意：本地 venv 实测仅 5.x 可正常 from sentence_transformers import SentenceTransformer
+# 并加载 BGE 模型；锁 2.7.0 会因模块路径变更(.base 已不存在)触发 No module named
+# 'sentence_transformers.base' 警告且语义检索可能退化为零向量，故对齐到可运行版本。
+sentence-transformers==5.5.1
 
 # 文档处理
 pypdf==4.2.0

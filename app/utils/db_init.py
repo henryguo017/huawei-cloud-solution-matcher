@@ -1,6 +1,5 @@
 import sqlite3
 import os
-from datetime import datetime
 from app.utils.auth_utils import hash_password
 
 def get_db_connection():

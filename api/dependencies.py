@@ -72,4 +72,3 @@ def get_achievement_service_dep():
     return get_achievement_service()
 
 
-from api.auth_dependencies import get_current_user, get_current_user_optional

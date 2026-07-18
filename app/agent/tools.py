@@ -205,7 +205,7 @@ async def _tool_search_competitor(competitor: str, industry: str = "") -> str:
             }, ensure_ascii=False)
 
         # 先检索华为方案
-        hw_query = f"华为云" + (f"在{industry}行业的解决方案 竞争优势" if industry else "解决方案")
+        hw_query = "华为云" + (f"在{industry}行业的解决方案 竞争优势" if industry else "解决方案")
         hw_docs = await asyncio.to_thread(kb.search_huawei, hw_query, 4)
 
         # 再检索竞品方案

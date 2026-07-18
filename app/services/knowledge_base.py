@@ -3,7 +3,6 @@ from app.models.vector_db import get_vector_db
 from app.config import *
 import os
 import logging
-import hashlib
 import shutil
 import contextvars
 from urllib.parse import quote, unquote
@@ -104,7 +103,7 @@ class KnowledgeBaseService:
                     print(f"[重建] 清除旧数据 ({len(existing_ids)} 条)...")
                     self.vector_db.delete(ids=existing_ids)
                 else:
-                    print(f"[重建] 知识库为空，无需清除")
+                    print("[重建] 知识库为空，无需清除")
             except Exception as clear_err:
                 print(f"[重建] [WARN] 清除旧数据时出现异常（可忽略）: {clear_err}")
 
@@ -121,11 +120,11 @@ class KnowledgeBaseService:
             all_documents = huawei_docs + competitor_docs
 
             if not all_documents:
-                print(f"[重建] [ERR] 未加载到任何文档！请检查目录结构")
+                print("[重建] [ERR] 未加载到任何文档！请检查目录结构")
                 return 0
 
             print(f"[重建] 总计 {len(all_documents)} 个文档片段（华为 {len(huawei_docs)} + 竞品 {len(competitor_docs)}）")
-            print(f"[重建] 正在写入向量库...")
+            print("[重建] 正在写入向量库...")
             self.vector_db.add_documents(all_documents)
             print(f"[重建] [OK] 知识库重建完成！共 {len(all_documents)} 个文档片段")
 

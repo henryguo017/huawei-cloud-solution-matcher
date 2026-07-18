@@ -1,6 +1,5 @@
 import asyncio
 from app.models.llm import get_llm_response
-from typing import Optional
 
 
 class CompetitorAnalyzerService:

@@ -1,5 +1,3 @@
-import os
-import re
 import time
 from datetime import datetime
 from typing import Dict, Any, List
@@ -7,10 +5,9 @@ from pathlib import Path
 
 from app.models.export_models import (
     ExportFormat, TaskStatus, ReportType, 
-    ExportTask, ExportResult, ReportContent
+    ExportTask
 )
 from app.utils.word_generator import WordGenerator
-from app.config import APP_NAME
 
 
 class ReportGeneratorService:
@@ -104,7 +101,7 @@ class ReportGeneratorService:
                 file_name = f"{file_prefix}_{timestamp}.docx"
                 file_path = self.export_dir / file_name
                 generator = WordGenerator()
-                doc = generator.generate_report(report_data)
+                generator.generate_report(report_data)
                 generator.save(str(file_path))
             else:
                 file_name = f"{file_prefix}_{timestamp}.pdf"
@@ -112,7 +109,6 @@ class ReportGeneratorService:
                 self._generate_pdf(report_data, str(file_path))
 
             file_size = file_path.stat().st_size
-            generation_time = int((time.time() - start_time) * 1000)
 
             task.status = TaskStatus.COMPLETED
             task.complete_time = datetime.now()

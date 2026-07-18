@@ -3,9 +3,8 @@
 """
 import sqlite3
 import os
-import json
 import logging
-from datetime import datetime, time
+from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 from threading import Lock
 
@@ -565,14 +564,6 @@ class AchievementService:
             _unlock("kb_docs_10")
         return newly
 
-    def check_kb_doc_count(self, user_id: int, total_docs: int) -> List[Dict]:
-        """[已废弃] kb_docs_10 已合并到 check_after_kb_add 中统一检测"""
-        self._ensure_backfill(user_id)
-        newly = []
-        _unlock = lambda aid: self._do_unlock(user_id, aid, newly)
-        if total_docs >= 10: _unlock("kb_docs_10")
-        return newly
-
     def check_after_reindex(self, user_id: int) -> List[Dict]:
         """重建索引后调用（内部自动累计次数）"""
         self._ensure_backfill(user_id)
@@ -598,22 +589,6 @@ class AchievementService:
             """, (user_id, key, str(new_val)))
             conn.commit()
             return new_val
-
-    def check_konami(self, user_id: int) -> List[Dict]:
-        """[已废弃] easter_konami 已改为匹配时输入「上上下下左右左右BA」触发（见 check_after_match）"""
-        self._ensure_backfill(user_id)
-        newly = []
-        _unlock = lambda aid: self._do_unlock(user_id, aid, newly)
-        _unlock("easter_konami")
-        return newly
-
-    def check_404_wait(self, user_id: int) -> List[Dict]:
-        """[已废弃] easter_404_wait 已改为匹配时输入「404」触发（见 check_after_match）"""
-        self._ensure_backfill(user_id)
-        newly = []
-        _unlock = lambda aid: self._do_unlock(user_id, aid, newly)
-        _unlock("easter_404_wait")
-        return newly
 
     # ── 内部统计工具 ──────────────────────────────────────────────
 

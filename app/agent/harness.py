@@ -20,7 +20,7 @@ import time
 import asyncio
 import uuid
 import logging
-from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from app.agent.tools import ToolRegistry
 from app.agent.memory import ConversationMemory
@@ -371,7 +371,7 @@ Observation: {observation}
                 else:
                     # 解析失败。如果已有工具调用结果，直接把 LLM 输出当最终答案
                     if tool_calls_log:
-                        self._log("warn", f"LLM 格式不对但已有数据，统一增强管线重写")
+                        self._log("warn", "LLM 格式不对但已有数据，统一增强管线重写")
                         final_answer = await self._finalize_answer(user_input, llm_response, tool_calls_log)
                         self.memory.add_agent_response(session_id, final_answer)
                         await self._emit(event_callback, {

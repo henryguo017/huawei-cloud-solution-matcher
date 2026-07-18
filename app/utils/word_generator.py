@@ -1,5 +1,5 @@
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
+from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
 from docx.oxml.ns import qn
@@ -7,7 +7,7 @@ from docx.oxml import OxmlElement
 import os
 import re
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 
 class WordGenerator:
@@ -256,7 +256,7 @@ class WordGenerator:
     # ---------------------------------------------------------------
     def generate_chapter(self, title: str, content: str, level: int = 1):
         """生成章节内容（content 为 Markdown，内部转换为 Word 格式）"""
-        heading = self.doc.add_heading(title, level=level)
+        self.doc.add_heading(title, level=level)
         self._render_markdown(content)
 
     def generate_report(self, report_data: Dict[str, Any]) -> Document:

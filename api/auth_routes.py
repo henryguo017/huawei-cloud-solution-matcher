@@ -1,14 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.models.user_models import (
-    UserCreate, UserLogin, UserResponse, Token,
-    HistoryCreate, HistoryResponse,
-    FavoriteCreate, FavoriteResponse,
+    UserCreate, UserLogin, HistoryCreate, FavoriteCreate,
     ProfileUpdate, PasswordChange,
     ForgotPassword, ResetPassword
 )
 from app.services.auth_service import AuthService
 from app.utils.captcha_utils import generate_captcha
-from api.auth_dependencies import get_current_user, get_current_user_optional
+from api.auth_dependencies import get_current_user
 from api.dependencies import get_achievement_service_dep
 from typing import Optional
 

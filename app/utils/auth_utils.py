@@ -36,9 +36,7 @@ def create_access_token(
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    expire_timestamp = int(expire.timestamp())
-    
+
     payload = {
         "user_id": user_id,
         "username": username,

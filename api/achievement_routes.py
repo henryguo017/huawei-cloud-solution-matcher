@@ -4,7 +4,7 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel
 
@@ -12,7 +12,7 @@ from api.models import (
     AchievementListResponse, AchievementUnlockNotification,
 )
 from app.services.achievement_service import get_achievement_service
-from api.dependencies import get_current_user_optional, get_current_user
+from api.dependencies import get_current_user_optional
 from api.auth_dependencies import get_current_user as get_current_user_auth
 
 logger = logging.getLogger(__name__)

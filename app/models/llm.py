@@ -5,7 +5,7 @@ import time
 import os
 import warnings
 from abc import ABC, abstractmethod
-from typing import Optional, Callable, AsyncGenerator
+from typing import Optional, Callable
 warnings.filterwarnings('ignore')
 
 from app.config import *
@@ -21,7 +21,6 @@ class LLMProvider(ABC):
     @abstractmethod
     async def chat(self, prompt: str, temperature: Optional[float] = None) -> str:
         """发送对话请求"""
-        pass
 
     async def chat_stream(self, prompt: str, temperature: Optional[float] = None):
         """流式对话请求，yield 每个 token 字符串（默认实现：非流式降级）"""
@@ -31,7 +30,6 @@ class LLMProvider(ABC):
     @abstractmethod
     async def test_connection(self) -> bool:
         """测试连接是否正常"""
-        pass
 
     async def _retry_request(self, func: Callable, max_retries: int = None, interval: int = None) -> any:
         """重试机制包装器（异步版）"""

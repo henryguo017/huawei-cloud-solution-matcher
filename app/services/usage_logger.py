@@ -743,31 +743,6 @@ class UsageLoggerService:
             logger.error(f"追加历史追问对话失败(id={record_id}): {e}")
             return None
 
-    def _trim_match_history(self, conn):
-        """
-        清理超限的历史记录（保留最新的 MAX_MATCH_HISTORY 条）
-        在 save_match_history 的同一事务中调用，自动提交
-        """
-        try:
-            cursor = conn.execute("SELECT COUNT(*) AS cnt FROM match_history")
-            row = cursor.fetchone()
-            if row is None:
-                return
-            count = row["cnt"]
-            if count > MAX_MATCH_HISTORY:
-                # 删除最老的（保留最新 MAX_MATCH_HISTORY 条）
-                conn.execute("""
-                    DELETE FROM match_history
-                    WHERE id NOT IN (
-                        SELECT id FROM match_history
-                        ORDER BY created_at DESC
-                        LIMIT ?
-                    )
-                """, (MAX_MATCH_HISTORY,))
-                logger.info(f"历史记录自动清理：{count} → {MAX_MATCH_HISTORY} 条")
-        except Exception as e:
-            logger.warning(f"历史记录清理失败（不影响保存）: {e}")
-
     def get_match_history_count(self, user_id: Optional[int] = None) -> int:
         """获取匹配历史记录总数"""
         try:

@@ -13,7 +13,7 @@
 
 import time
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)

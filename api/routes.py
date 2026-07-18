@@ -13,13 +13,13 @@ from api.models import (
     UpdateSolutionRequest, UpdateSolutionResponse,
     RefineCompetitorRequest, RefineCompetitorResponse,
     CompetitorHistoryListResponse, CompetitorHistoryItem, CompetitorHistoryDetail,
-    KBDocumentListResponse, KBDocumentContentResponse,
-    KBDocumentCreateRequest, KBDocumentCreateResponse,
-    KBDocumentUpdateRequest, KBDocumentUpdateResponse,
-    KBDocumentDeleteResponse, KBDocumentReindexResponse,
-    HistoryFlagResponse, HistoryFollowUpRequest, HistoryFollowUpResponse,
-    ClientCreateRequest,
-    ClarifyRequest, HistoryGroupResponse, FinalizeResponse, RollbackResponse,
+    KBDocumentListResponse, KBDocumentCreateRequest,
+    KBDocumentCreateResponse, KBDocumentUpdateRequest,
+    KBDocumentUpdateResponse, KBDocumentDeleteResponse,
+    KBDocumentReindexResponse, HistoryFlagResponse,
+    HistoryFollowUpRequest, HistoryFollowUpResponse, ClientCreateRequest,
+    ClarifyRequest,
+    HistoryGroupResponse, FinalizeResponse, RollbackResponse,
 )
 from api.platform_knowledge import PLATFORM_GUIDE, PLATFORM_BRIEF
 from app.services.report_generator import ReportGeneratorService, ReportType, ExportFormat
@@ -34,11 +34,9 @@ from api.dependencies import (
     get_competitor_analyzer_for_user,
 )
 from app.models.llm import get_llm_response
-from app.services.solution_matcher import SolutionMatcherService
-from app.services.competitor_analyzer import CompetitorAnalyzerService
 from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context
 from app.services.usage_logger import UsageLoggerService
-from app.config import APP_NAME, APP_VERSION, USER_DOCS_BASE_DIR
+from app.config import APP_VERSION, USER_DOCS_BASE_DIR
 from app.agent.parsers.read_file import ALLOWED_EXT
 from typing import Optional
 from datetime import datetime, date
@@ -50,7 +48,7 @@ import logging
 from api.auth_dependencies import get_current_user, get_current_user_optional, require_login
 
 # Agent 模块导入
-from app.agent import SolutionAgent, get_agent
+from app.agent import get_agent
 
 logger = logging.getLogger(__name__)
 
@@ -1137,7 +1135,7 @@ async def get_dashboard_stats(
     """
     try:
         import os
-        from datetime import datetime, timedelta
+        from datetime import datetime
         from app.config import APP_VERSION
 
         # 获取用户独立知识库统计

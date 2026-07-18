@@ -7,9 +7,7 @@ from app.utils.db_init import get_db_connection
 from app.utils.auth_utils import hash_password, verify_password, create_access_token
 from app.utils.captcha_utils import verify_captcha
 from app.models.user_models import (
-    UserCreate, UserLogin, UserResponse, Token,
-    HistoryCreate, HistoryResponse,
-    FavoriteCreate, FavoriteResponse
+    UserCreate, UserLogin, HistoryCreate, FavoriteCreate
 )
 from app.config import (
     MAX_LOGIN_ATTEMPTS, 
