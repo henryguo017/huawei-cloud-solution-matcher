@@ -5093,7 +5093,7 @@ function initEventListeners() {
             // 既避免 401 报错，也彻底杜绝写入 user_id=0 的共享记忆池
             if (isAgentMode && !AuthManager.isLoggedIn()) {
                 UI.showToast('请先登录后再使用智能匹配', 'warning');
-                AuthManager.showLoginModal();
+                AuthManager._openModal();
                 MatchProgress.hide();
                 return;
             }
@@ -5164,7 +5164,7 @@ function initEventListeners() {
                 AuthManager._updateUI();
                 MatchProgress.hide();
                 UI.showToast('登录已过期，请重新登录', 'warning');
-                AuthManager.showLoginModal();
+                AuthManager._openModal();
             } else {
                 console.error('匹配失败:', error);
                 MatchProgress.error('匹配失败，请重试');
@@ -5728,7 +5728,7 @@ function initEventListeners() {
     rebuildBtn?.addEventListener('click', async () => {
         if (!AuthManager.isLoggedIn()) {
             UI.showToast('请先登录后再操作', 'warning');
-            AuthManager.showLoginModal();
+            AuthManager._openModal();
             return;
         }
         UI.setButtonLoading(rebuildBtn, true);
@@ -5782,7 +5782,7 @@ function initEventListeners() {
     clearKbBtn?.addEventListener('click', () => {
         if (!AuthManager.isLoggedIn()) {
             UI.showToast('请先登录后再操作', 'warning');
-            AuthManager.showLoginModal();
+            AuthManager._openModal();
             return;
         }
         confirmOverlay.style.display = 'flex';
@@ -5809,7 +5809,7 @@ function initEventListeners() {
     syncMineBtn?.addEventListener('click', async () => {
         if (!AuthManager.isLoggedIn()) {
             UI.showToast('请先登录后再操作', 'warning');
-            AuthManager.showLoginModal();
+            AuthManager._openModal();
             return;
         }
         if (!confirm('将把管理员最新扩充的官方方案合并进你的知识库，你自己的文档会保留。确定同步吗？')) return;
