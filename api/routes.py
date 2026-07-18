@@ -4,7 +4,7 @@ from fastapi import UploadFile, File, BackgroundTasks
 from api.models import (
     MatchRequest, MatchResponse,
     AnalyzeRequest, AnalyzeResponse,
-    KnowledgeStatsResponse, RebuildResponse, ClearResponse,
+    KnowledgeStatsResponse, RebuildResponse, ClearResponse, ResetMineResponse,
     HealthResponse, SourceDocument,
     DashboardStatsResponse,
     MatchHistoryListResponse, MatchHistoryItem, MatchHistoryDetail, CompareRequest, CompareResponse,
@@ -32,6 +32,7 @@ from api.dependencies import (
     get_user_knowledge_base,
     get_solution_matcher_for_user,
     get_competitor_analyzer_for_user,
+    _user_kb_cache,
 )
 from app.models.llm import get_llm_response
 from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context
@@ -46,6 +47,7 @@ import json
 import asyncio
 import time
 import logging
+import shutil
 
 from api.auth_dependencies import get_current_user, get_current_user_optional, require_login
 
@@ -1025,6 +1027,59 @@ async def clear_knowledge(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"清空失败: {str(e)}"
+        )
+
+@router.post("/knowledge/reset-mine", response_model=ResetMineResponse, tags=["知识库管理"])
+async def reset_my_knowledge_base(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    重置当前用户自己的知识库：从全局默认库(user_id=0)重新复制，使老用户能自助获取最新默认文档。
+
+    注意：会清空该用户在自己库里自定义添加/修改的文档（重新变成与默认库一致）。
+    """
+    user_id = current_user["id"]
+    if user_id <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的用户身份")
+
+    try:
+        logger.info(f"用户 {user_id} 开始重置自己的知识库为最新默认库")
+
+        # 1. 清掉内存缓存，避免后续请求仍用旧实例
+        _user_kb_cache.pop(user_id, None)
+
+        # 2. 删除该用户现有知识库目录（含旧向量库），下一步整体重新复制
+        user_base = os.path.join(USER_DOCS_BASE_DIR, str(user_id))
+        if os.path.exists(user_base):
+            shutil.rmtree(user_base)
+            logger.info(f"用户 {user_id} 旧知识库目录已清除: {user_base}")
+
+        # 3. 从默认库重新复制（文件 + 向量库）
+        ok = KnowledgeBaseService.copy_from_default(user_id)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="重置失败：复制默认知识库出错"
+            )
+
+        # 4. 重新实例化并取统计，确认成功
+        kb_service = get_user_knowledge_base(user_id)
+        stats = kb_service.get_stats()
+        total = stats.get("total_documents", 0)
+
+        logger.info(f"用户 {user_id} 知识库重置完成，共 {total} 个文档片段")
+        return ResetMineResponse(
+            success=True,
+            message=f"知识库已重置为最新默认库，共 {total} 个文档片段",
+            total_documents=total
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"重置用户 {user_id} 知识库失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"重置失败: {str(e)}"
         )
 
 # ===== 知识库文档管理 CRUD =====
