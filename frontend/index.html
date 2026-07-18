@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260718e">
+    <link rel="stylesheet" href="style.css?v=20260718f">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -1228,12 +1228,16 @@
                     </div>
 
                     <div class="button-row" style="margin-top:12px;">
+                        <button class="btn btn-primary" id="sync-mine-btn">
+                            <span class="btn-text"><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 同步最新官方方案（保留我的内容）</span>
+                            <span class="btn-loader"></span>
+                        </button>
                         <button class="btn btn-secondary" id="reset-mine-btn">
-                            <span class="btn-text"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 重置为最新默认库</span>
+                            <span class="btn-text"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 重置为默认库（清空我的内容）</span>
                             <span class="btn-loader"></span>
                         </button>
                     </div>
-                    <p class="kb-reset-hint">管理员扩充官方方案后，点此一键把<strong>你自己的知识库</strong>同步为最新默认库（会覆盖你自定义的文档）。</p>
+                    <p class="kb-reset-hint"><strong>同步</strong>：把管理员最新扩充的官方方案合并进你的知识库，<strong>你自己的文档会保留</strong>。如需彻底还原成纯官方库，用「重置」（会清空你的自定义内容，但客户档案不受影响）。</p>
 
                     <!-- 知识库重建进度面板 -->
                     <div id="rebuild-progress-panel" class="progress-panel" style="display: none; margin-top: 20px;">
@@ -1862,7 +1866,7 @@
     </div><!-- /.app-shell -->
 
     <script src="js/chart.umd.min.js?v=20260714j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260718e"></script>
+    <script src="script.js?v=20260718f"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260716c"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">

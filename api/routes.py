@@ -37,7 +37,7 @@ from api.dependencies import (
 from app.models.llm import get_llm_response
 from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context
 from app.services.usage_logger import UsageLoggerService
-from app.config import APP_VERSION, USER_DOCS_BASE_DIR
+from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY, COMPETITOR_DIRECTORY
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
 from app.agent.parsers.read_file import ALLOWED_EXT
 from typing import Optional
@@ -1086,6 +1086,63 @@ async def reset_my_knowledge_base(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"重置失败: {str(e)}"
+        )
+
+@router.post("/knowledge/sync-mine", response_model=ResetMineResponse, tags=["知识库管理"])
+async def sync_my_knowledge_base(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    增量同步当前用户知识库（方案B：保留用户自定义内容）。
+
+    把全局默认库(user_id=0)的最新官方方案合并进用户库：
+    - 默认库新增/更新的文档 → 复制进用户库（覆盖同名默认文档）
+    - 用户自己添加/修改的文档 → 原样保留（不会被删除）
+    - 客户档案等其它用户私有数据 → 不受影响
+    最后重建用户向量库，使最新官方方案+用户自定义内容都可被检索。
+    """
+    user_id = current_user["id"]
+    if user_id <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的用户身份")
+
+    try:
+        logger.info(f"用户 {user_id} 开始把默认库增量同步进自己的知识库（保留自定义内容）")
+
+        # 1. 清掉内存缓存，避免后续请求仍用旧实例
+        _user_kb_cache.pop(user_id, None)
+
+        # 2. 把默认库的华为方案/竞品方案合并进用户库（只覆盖同名默认文档，保留用户自定义文档）
+        user_base = os.path.join(USER_DOCS_BASE_DIR, str(user_id))
+        user_huawei = os.path.join(user_base, "sample_solutions")
+        user_competitor = os.path.join(user_base, "competitors")
+        os.makedirs(user_base, exist_ok=True)
+
+        if os.path.exists(KNOWLEDGE_BASE_DIRECTORY):
+            shutil.copytree(KNOWLEDGE_BASE_DIRECTORY, user_huawei, dirs_exist_ok=True)
+            logger.info(f"用户 {user_id} 已合并默认华为方案到: {user_huawei}")
+        if os.path.exists(COMPETITOR_DIRECTORY):
+            shutil.copytree(COMPETITOR_DIRECTORY, user_competitor, dirs_exist_ok=True)
+            logger.info(f"用户 {user_id} 已合并默认竞品方案到: {user_competitor}")
+
+        # 3. 用合并后的文件重建用户向量库（默认最新 + 用户自定义都进入检索）
+        kb_service = get_user_knowledge_base(user_id)
+        kb_service.build_from_directory()
+        stats = kb_service.get_stats()
+        total = stats.get("total_documents", 0)
+
+        logger.info(f"用户 {user_id} 知识库同步完成，共 {total} 个文档片段")
+        return ResetMineResponse(
+            success=True,
+            message=f"已同步最新官方方案，并保留你的自定义文档，共 {total} 个文档片段",
+            total_documents=total
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"同步用户 {user_id} 知识库失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"同步失败: {str(e)}"
         )
 
 # ===== 知识库文档管理 CRUD =====

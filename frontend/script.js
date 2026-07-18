@@ -1266,6 +1266,26 @@ const API = {
         return await response.json();
     },
 
+    async syncMyKnowledge() {
+        const headers = {};
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const response = await fetch(`${Config.API_BASE_URL}/knowledge/sync-mine`, {
+            method: 'POST',
+            headers
+        });
+
+        if (!response.ok) {
+            let msg = `同步失败: ${response.statusText}`;
+            try {
+                const err = await response.json();
+                if (err && err.detail) msg = err.detail;
+            } catch (e) { /* ignore */ }
+            throw new Error(msg);
+        }
+
+        return await response.json();
+    },
+
     // 通用 HTTP 方法
     async get(url) {
         const headers = {};
@@ -5777,6 +5797,29 @@ function initEventListeners() {
             UI.showToast(error.message || '重置失败，请重试', 'error');
         } finally {
             UI.setButtonLoading(resetMineBtn, false);
+        }
+    });
+
+    // ===== 同步最新官方方案（方案B：保留用户自定义内容）=====
+    const syncMineBtn = document.getElementById('sync-mine-btn');
+    syncMineBtn?.addEventListener('click', async () => {
+        if (!AuthManager.isLoggedIn()) {
+            UI.showToast('请先登录后再操作', 'warning');
+            AuthManager.showLoginModal();
+            return;
+        }
+        if (!confirm('将把管理员最新扩充的官方方案合并进你的知识库，你自己的文档会保留。确定同步吗？')) return;
+        try {
+            UI.setButtonLoading(syncMineBtn, true);
+            const result = await API.syncMyKnowledge();
+            UI.showToast(result.message || '已同步最新官方方案', 'success');
+            await KnowledgeUI.loadStats();
+            await KnowledgeUI.loadDocList();
+        } catch (error) {
+            console.error('同步失败:', error);
+            UI.showToast(error.message || '同步失败，请重试', 'error');
+        } finally {
+            UI.setButtonLoading(syncMineBtn, false);
         }
     });
 }
