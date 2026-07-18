@@ -1,0 +1,28 @@
+# Google Cloud 智能制造解决方案
+
+## 公司概况
+Google Cloud 以"数据底座 + AI/ML"切入制造业，定位为工业数据平台与工业智能（Industrial AI）赋能方，通过边缘连接、工厂数据平台与 Vertex AI/Gemini 把 PLC/SCADA/MES 中的 OT 数据治理为可用数据，叠加预测性维护、视觉质检、能源优化等 AI 用例。其不提供 OT 硬件、不主打 MES 替代，强调"增强而非取代"现有系统。
+
+## 核心方案
+
+### 1. 边缘连接 Manufacturing Connect
+与 Litmus Automation 联合开发，内置 250+ 工业协议（OPC UA、Modbus 等）接入任意设备/产线。MCe 部署工厂侧，支持容器化应用与边缘 ML 推理；云侧控制台纳管边缘节点并直连 MDE。
+
+### 2. 工厂数据引擎 MDE
+基于 Cortex Framework，对工厂数据摄取、标准化、情境化与存储，支持 ISA-95、OPC-UA、AAS、DTDL 等语义标准，输出至 BigQuery/Bigtable/Cloud Storage/Pub/Sub，形成统一数据湖仓。
+
+### 3. 分析与工业 AI
+Looker 提供 OEE、产线 KPI 与设备级传感器看板；Time Series Insights API 做机器级实时异常检测。Vertex AI 训练预测性维护与质量模型，Visual Inspection AI 做产线质检，Gemini 支撑自然语言查询 KPI、引导式根因分析与一线智能助手。
+
+## 竞争优势
+- AI/ML 与大数据能力行业领先，Gemini 带来自然语言交互与根因分析新范式。
+- MDE + MC + BigQuery + Vertex AI 形成产品化端到端链路，降低 PoC 到多厂部署成本。
+- 开放生态（Intel、Splunk、Litmus、Cognizant 等伙伴）。
+
+## 主要客户案例
+制造业公开可核实的终端客户较少。可核实伙伴实践：Litmus 客户 Saint-Gobain、Jaguar Land Rover 基于该工业数据栈构建工业 AI；Honeywell 与 Google Cloud 在工业 AI 领域有公开合作。具体成效指标以官方案例为准，本文不杜撰。
+
+## 核心劣势
+- 在中国大陆无本地公有云运营，无法服务中国制造业客户，政企合规与信创适配几乎空白。
+- 不含 OT 硬件，需依赖 Litmus 等第三方，整栈交付弱于传统工业自动化厂商。
+- ToB 行业交付与本地化服务能力弱，不做 MES/SCADA 替代，难以独立支撑整厂数字化项目。

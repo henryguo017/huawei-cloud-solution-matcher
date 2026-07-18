@@ -1,0 +1,45 @@
+# 施耐德电气智能制造解决方案
+
+## 公司概况
+施耐德电气以 EcoStruxure 架构（互联互通的产品、边缘控制、应用分析与服务三层）为核心，为离散制造与流程制造提供工业物联网（IIoT）驱动的智能制造方案。其优势在于 OT 层（配电、自动化、能效）与工业软件（AVEVA）的深度融合，帮助制造企业实现设备联网、生产可视、能耗优化与可持续发展，而非提供公有云或上层 ERP/业务云。
+
+## 核心方案
+
+### 1. EcoStruxure Machine 智能机器方案
+- 面向设备制造商（OEM）与产线，覆盖从 PLC、变频伺服到工业软件的端到端方案
+- 边缘控制：Modicon 系列 PLC/PAC（M580、M241、M218、M200 等）、Magelis HMI、Lexium 伺服、Altivar 变频驱动
+- 软件：EcoStruxure Machine Expert（编程调试）、EcoStruxure Machine SCADA Expert（HMI/SCADA/OEE）
+- 价值：缩短工程与调试时间约 30%，减少维护时间约 50%，提升生产效率约 5%，降低能耗约 30%
+
+### 2. EcoStruxure Machine Advisor 云端机器顾问
+- 面向机器制造商的云服务平台，可全球追踪在运设备、远程监控性能数据、预警并远程处置异常事件
+- 提供分析中心功能，自动调整设备参数以提升良率
+- 支持 Machine Advisor Pocket Service、Augmented Operator Advisor（增强现实运维）、Secure Connect Advisor（安全远程接入）
+
+### 3. EcoStruxure Plant 与 AVEVA 工业软件
+- EcoStruxure Plant 面向规模化流程与混合工厂，内置端到端网络安全
+- AVEVA System Platform：构建定制化 SCADA/MES/IIoT 信息系统，覆盖订单管理、排程、仓储与质检
+- AVEVA MES：2022 年 Gartner 制造执行系统魔力象限领导者，支撑多站点运营绩效与质量合规
+- EcoStruxure Automation Expert：以软件为中心的工业自动化系统，覆盖完整运营生命周期
+
+### 4. 能源与资产绩效管理
+- EcoStruxure Power Monitoring Expert：电力监控，提升高耗能设施可用性与能效
+- EcoStruxure Asset Advisor / Plant Advisor：关键资产监测、预测性维护与运维优化
+- EcoStruxure Resource Advisor：跨企业能源与可持续发展数据统一云平台
+- 微电网（Microgrid Operation / Microgrid Advisor）：整合光伏、储能与负荷，优化现场能源
+
+## 竞争优势
+- OT 与能效根基深厚，从配电设备、变频驱动到工业控制全自主产品链，系统可靠性强
+- 与 AVEVA 工业软件深度整合，提供从设备层到信息系统的无缝数据流与数字孪生能力
+- 在食品饮料、水与废水、矿冶、能源化工及机器控制等行业积累大量可复制方案
+- 全球工业物联网与数据分析经验丰富，强调可持续与减碳，契合制造业 ESG 趋势
+
+## 主要客户案例
+- 中国 ROSO Automation（机器制造商）：部署 EcoStruxure Machine 与 AVEVA 系统平台，实现染色装备从订单到生产的自动化、无人化，能耗降低约 20%，生产效率提升约 10–20%，原料库存优化
+- 典型行业实践：食品饮料与快消包装企业借助 EcoStruxure Machine 实现高柔性产线与机器人协同，OEE 与能源效率显著提升（具体指标以官方白皮书为准）
+
+## 核心劣势
+- 非云原生厂商，缺乏公有云（IaaS/PaaS）与大规模 IT 基础设施能力，制造数字化多依赖本地部署与伙伴云
+- 在制造上层业务系统（ERP、PLM、供应链协同云）及 AI 大模型平台方面布局有限，弱于综合云与 IT 厂商
+- 中国本土厂商（如华为、汇川、工业富联等）在智能制造顶层平台与国产替代上攻势强劲，外资品牌面临信创与本地化压力
+- 与华为云、阿里云等"云+AI+制造"一体化方案相比，施耐德更偏 OT/能效，IT 与云纵深不足

@@ -1,0 +1,28 @@
+# Google Cloud 智慧零售解决方案
+
+## 公司概况
+Google Cloud 零售方案以"Google 级搜索与推荐能力 + 生成式 AI"为核心，帮助零售商提升电商转化、个性化与运营效率。差异化来自 Google 搜索、知识图谱与购物信号的能力外溢，而非自建零售中台。定位为数字化零售的 AI 能力增强层。
+
+## 核心方案
+
+### 1. 搜索与推荐 Vertex AI Search for commerce
+原 Recommendations AI 升级整合的统一托管服务，提供 Google 品质的商品搜索、浏览与个性化推荐。基于电商调优 LLM 与 Google 网络信号理解意图，提升长尾搜索转化、降低"无结果"率，支持按转化率/点击率/客单价优化排序。
+
+### 2. 对话式商务与视觉搜索
+Conversational Commerce agent 基于 Gemini 支持多轮自然语言交互、从意图到下单全程引导（已落地 Albertsons Ask AI）。Cloud Vision Product Search 支持以图搜图，结合 Google Shopping 爬虫与 Vision AI 补全商品属性与分类。
+
+### 3. 智能运营与营销
+BigQuery + Vertex AI 做需求预测、库存与供应链分析；Optimization AI 解大规模排程/路径优化；与 Google Marketing Platform 结合做营销分析。Gemini Enterprise 支撑客服与履约智能体（如 Home Depot Magic Apron、路线智能）。
+
+## 竞争优势
+- 搜索与推荐算法源自 Google 搜索与购物基因，长尾查询与个性化领先。
+- 完全托管、无需训练模型与运维，快速接入 Merchant Center、Analytics 360、BigQuery。
+- Gemini 生成式 AI 带来对话式购物与智能体新体验。
+
+## 主要客户案例
+可核实案例：The Home Depot 自 2015 年合作，用 BigQuery、Vertex AI 及 Gemini 构建库存管理、Magic Apron 导购与履约路线智能；Walmart 在 NRF 2026 深化智能体合作；Lowe's 用 Vertex AI Search for commerce 提升长尾搜索转化、降低无结果率；Albertsons 上线 Ask AI 对话导购。
+
+## 核心劣势
+- 在中国大陆无本地云与合规，无法服务中国本土零售商，覆盖空白。
+- 不提供完整零售业务系统（POS、OMS、会员中台），需与现有系统大量集成。
+- 数据驻留与跨境合规限制，且缺乏本地零售生态、实施伙伴与信创适配。
