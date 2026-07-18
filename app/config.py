@@ -58,6 +58,10 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-zh-v1.5")
 EMBEDDING_MODEL_LOCAL_PATH = _resolve_data_path(os.getenv("EMBEDDING_MODEL_LOCAL_PATH", os.path.join(BASE_DIR, "data", "embedding_model")))
 HF_ENDPOINT = os.getenv("HF_ENDPOINT", "https://hf-mirror.com")
+# 批量嵌入 batch_size：批量编码知识库时一次推理多少条（越大越快但越吃内存，CPU 环境 32 较稳）
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "32"))
+# 知识库重建/同步的全局并发上限（CPU 密集，受限机器建议 1-2，避免多任务抢核拖慢）
+KB_REBUILD_CONCURRENCY = int(os.getenv("KB_REBUILD_CONCURRENCY", "2"))
 
 # 网络环境配置
 OFFLINE_MODE = os.getenv("OFFLINE_MODE", "false").lower() == "true"

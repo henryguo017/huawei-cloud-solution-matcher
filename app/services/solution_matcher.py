@@ -182,7 +182,10 @@ class SolutionMatcherService:
         标准模式匹配。
         - industry: 可选，由调用方传入（如向导模式采集的行业）；为空则内部复用 analyze_demand 推断。
         """
-        # 1. 知识库检索
+        # 1+2. 知识库检索 与 需求结构化(analyze_demand) 互相独立，并行发起省时。
+        #      analyze_demand 是一次 LLM 调用(~2-4s)，检索仅 ~0.5s；并行后 analyze_demand
+        #      的耗时被检索时间掩盖一部分，总耗时从"检索+分析"降为"max(检索, 分析)"。
+        #      仅当未显式传入行业时才需要 analyze_demand（向导模式已带行业则跳过，省整次 LLM 调用）。
         try:
             stats = self.kb_service.get_stats()
             kb_empty = (stats.get("total_documents", 0) == 0)
@@ -190,6 +193,11 @@ class SolutionMatcherService:
         except Exception:
             kb_empty = True
             competitor_companies = set()
+
+        # 提前发起需求结构化（不 await，让它与检索并行跑）
+        demand_task = None
+        if not industry:
+            demand_task = asyncio.ensure_future(self._analyze_demand(customer_demand))
 
         if kb_empty:
             docs = []
@@ -207,10 +215,10 @@ class SolutionMatcherService:
                 docs = []
             context_content = self._build_context(docs, competitor_companies)
 
-        # 2. 需求结构化（增强针对性）—— 若未显式传入行业
+        # 回收并行的需求结构化结果
         demand_analysis: Dict[str, Any] = {}
-        if not industry:
-            demand_analysis = await self._analyze_demand(customer_demand)
+        if demand_task is not None:
+            demand_analysis = await demand_task
             industry = demand_analysis.get("industry")
         playbook_text = self._playbook_text(industry or "")
 

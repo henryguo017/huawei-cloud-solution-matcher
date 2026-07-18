@@ -340,7 +340,7 @@ def _load_embedding_model():
 
 
 def get_embedding_vector(text: str) -> list:
-    """本地生成向量，无需API"""
+    """本地生成单条向量，无需API"""
     global _local_embedding_model
 
     if _local_embedding_model is None:
@@ -352,11 +352,39 @@ def get_embedding_vector(text: str) -> list:
     return _local_embedding_model.encode(text, convert_to_numpy=False).tolist()
 
 
+def get_embedding_vectors(texts: list, batch_size: int = EMBEDDING_BATCH_SIZE) -> list:
+    """本地批量生成向量。
+
+    相比逐条 encode，批量编码让底层矩阵运算跑满、省掉大量 Python/框架调用开销，
+    在 CPU 上通常有 3-5 倍提速。用于知识库重建/同步等大批量嵌入场景。
+    """
+    global _local_embedding_model
+
+    if not texts:
+        return []
+
+    if _local_embedding_model is None:
+        _local_embedding_model = _load_embedding_model()
+
+    if _local_embedding_model is None:
+        return [[0] * 384 for _ in texts]
+
+    # sentence-transformers 原生批量编码：一次传整批，内部按 batch_size 分批推理
+    embeddings = _local_embedding_model.encode(
+        texts,
+        batch_size=batch_size,
+        convert_to_numpy=True,
+        show_progress_bar=False,
+    )
+    return embeddings.tolist()
+
+
 class LocalEmbeddings:
     """兼容Chroma向量库接口"""
 
     def embed_documents(self, texts: list) -> list:
-        return [get_embedding_vector(text) for text in texts]
+        # 批量编码（性能关键路径）：整批一次性算，替代逐条 encode
+        return get_embedding_vectors(texts)
 
     def embed_query(self, text: str) -> list:
         return get_embedding_vector(text)

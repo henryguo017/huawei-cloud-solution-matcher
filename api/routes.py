@@ -40,6 +40,7 @@ from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_contex
 from app.services.usage_logger import UsageLoggerService
 from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY, COMPETITOR_DIRECTORY
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
+from app.config import KB_REBUILD_CONCURRENCY
 from app.agent.parsers.read_file import ALLOWED_EXT
 from typing import Optional, Dict
 from datetime import datetime, date
@@ -984,8 +985,15 @@ async def get_knowledge_stats(
 # 注意：任务记录存于进程内存，服务重启后任务会丢失（前端轮询拿到 404 即提示用户重试）。
 _task_store: Dict[str, dict] = {}
 _task_store_lock = threading.Lock()
-# 全局并发信号量：最多同时跑 2 个重嵌任务（CPU 密集），其余排队，避免把 CPU 抢爆
-_rebuild_semaphore = threading.Semaphore(2)
+# 全局并发信号量：最多同时跑 N 个重嵌任务（CPU 密集），其余排队，避免把 CPU 抢爆。
+# N 由 env KB_REBUILD_CONCURRENCY 决定（默认 2）。CPU 受限的机器可设为 1，重嵌基本串行最稳。
+# 说明：允许任意多用户"同时发起"（各自立即拿到 task_id），但真正跑嵌入的最多 N 路，
+# 其余在此排队，前端显示"前面还有 N 个任务"。这是 CPU 受限下支撑 10+ 人的正解——
+# 排队而非真并行，避免多任务抢核互相拖慢甚至内存爆掉。
+_rebuild_semaphore = threading.Semaphore(KB_REBUILD_CONCURRENCY)
+# 正在排队等待槽位的任务数（用于给前端反馈"前面还有几个"）
+_kb_waiting = 0
+_kb_waiting_lock = threading.Lock()
 # 每用户锁：同一用户不允许并发发起自己的同步
 _user_sync_locks: Dict[int, threading.Lock] = {}
 _user_sync_locks_guard = threading.Lock()
@@ -1002,11 +1010,39 @@ def _update_task(task_id: str, **fields):
         if t:
             t.update(fields)
 
+def _acquire_slot_with_feedback(task_id: str, overall_timeout: int = 3600) -> bool:
+    """带排队反馈地获取全局重嵌槽位。
+
+    循环短超时 acquire，等待期间周期性把"前面还有 N 个任务"写进任务状态，
+    让 10 人同时发起时排队者能看到进度而不是干等。返回 True=拿到槽位，False=超时。
+    """
+    global _kb_waiting
+    with _kb_waiting_lock:
+        _kb_waiting += 1
+    waited = 0
+    try:
+        while True:
+            if _rebuild_semaphore.acquire(timeout=2):
+                return True
+            waited += 2
+            if waited >= overall_timeout:
+                return False
+            with _kb_waiting_lock:
+                ahead = max(_kb_waiting - 1, 0)
+            if ahead > 0:
+                msg = f"排队中，前面还有 {ahead} 个任务，请稍候..."
+            else:
+                msg = "排队中，正在等待空闲计算资源..."
+            _update_task(task_id, status="queued", progress=0, message=msg)
+    finally:
+        with _kb_waiting_lock:
+            _kb_waiting -= 1
+
 def _run_rebuild_task(task_id: str):
     """后台线程：重建全局知识库（user_id=0）。"""
     try:
         _update_task(task_id, status="queued", progress=0, message="任务已提交，正在等待空闲资源...")
-        acquired = _rebuild_semaphore.acquire(timeout=3600)
+        acquired = _acquire_slot_with_feedback(task_id)
         if not acquired:
             _update_task(task_id, status="failed", progress=0, message="任务排队超时，请稍后重试")
             return
@@ -1043,7 +1079,7 @@ def _run_sync_task(task_id: str, user_id: int):
         return
     try:
         _update_task(task_id, status="queued", progress=0, message="任务已提交，正在等待空闲资源...")
-        acquired = _rebuild_semaphore.acquire(timeout=3600)
+        acquired = _acquire_slot_with_feedback(task_id)
         if not acquired:
             _update_task(task_id, status="failed", progress=0, message="任务排队超时，请稍后重试")
             return
