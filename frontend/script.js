@@ -1784,22 +1784,22 @@ const DemandWizard = {
     totalSteps: 4,
     _transitioning: false,   // 防止自动跳转期间的重复触发
 
-    // 行业列表
+    // 行业列表（每个行业使用独立图标，无重复）
     industries: [
         { name: '智慧农业', icon: '<svg class="icon" aria-hidden="true"><use href="#i-wheat"></use></svg>' },
         { name: '工业互联网', icon: '<svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg>' },
         { name: '智慧园区', icon: '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>' },
-        { name: '智慧城市', icon: '<svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg>' },
+        { name: '智慧城市', icon: '<svg class="icon" aria-hidden="true"><use href="#i-city"></use></svg>' },
         { name: '智慧医疗', icon: '<svg class="icon" aria-hidden="true"><use href="#i-stethoscope"></use></svg>' },
         { name: '智慧金融', icon: '<svg class="icon" aria-hidden="true"><use href="#i-banknote"></use></svg>' },
         { name: '智慧能源', icon: '<svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>' },
         { name: '智慧交通', icon: '<svg class="icon" aria-hidden="true"><use href="#i-car"></use></svg>' },
         { name: '智慧教育', icon: '<svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg>' },
         { name: '智慧文旅', icon: '<svg class="icon" aria-hidden="true"><use href="#i-landmark"></use></svg>' },
-        { name: '制造', icon: '<svg class="icon" aria-hidden="true"><use href="#i-cpu"></use></svg>' },
+        { name: '制造', icon: '<svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg>' },
         { name: '政务', icon: '<svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg>' },
         { name: '零售', icon: '<svg class="icon" aria-hidden="true"><use href="#i-shopping-cart"></use></svg>' },
-        { name: '汽车', icon: '<svg class="icon" aria-hidden="true"><use href="#i-car"></use></svg>' },
+        { name: '汽车', icon: '<svg class="icon" aria-hidden="true"><use href="#i-route"></use></svg>' },
         { name: '矿山', icon: '<svg class="icon" aria-hidden="true"><use href="#i-hard-hat"></use></svg>' },
         { name: '钢铁冶金', icon: '<svg class="icon" aria-hidden="true"><use href="#i-flame"></use></svg>' },
         { name: '化工', icon: '<svg class="icon" aria-hidden="true"><use href="#i-flask-conical"></use></svg>' },
@@ -2249,6 +2249,12 @@ const KnowledgeUI = {
             safeSet('kb-total-docs', stats.total_documents || 0);
             safeSet('kb-total-industries', stats.supported_industries?.length || 0);
             safeSet('kb-competitors', stats.competitor_companies?.length || 0);
+
+            // 动态更新标准模式进度面板的文档片段数
+            const fragEl = document.getElementById('kb-fragment-count');
+            if (fragEl && stats.total_documents) {
+                fragEl.textContent = `从 ${stats.total_documents} 个文档片段中匹配相关方案`;
+            }
 
             this.renderChart(stats.industry_counts || {});
         } catch (error) {
