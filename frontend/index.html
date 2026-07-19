@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260718g">
+    <link rel="stylesheet" href="style.css?v=20260719h">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -727,6 +727,12 @@
                 <div id="solution-result" class="result-container" style="display: none;">
                     <div class="result-header">
                         <span class="result-badge success"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 匹配完成</span>
+                    </div>
+                    <!-- 快速体验引导条：仅免登录体验结果展示（script.js 按 State.isQuickDemo 控制显隐） -->
+                    <div id="quick-demo-banner" class="quick-demo-banner" style="display: none;">
+                        <svg class="icon qd-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
+                        <span class="qd-text">这是快速体验结果，登录后可<b>保存方案</b> / <b>查看历史</b> / 使用<b>向导和 Agent</b> 深度匹配</span>
+                        <button class="btn btn-primary btn-sm qd-login-btn" id="qd-login-btn">登录 / 注册</button>
                     </div>
                     <div class="result-content content-card" id="solution-content"></div>
                     <!-- 方案追问优化区域 -->
@@ -1873,7 +1879,7 @@
     </div><!-- /.app-shell -->
 
     <script src="js/chart.umd.min.js?v=20260714j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260719j"></script>
+    <script src="script.js?v=20260719k"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260716c"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">

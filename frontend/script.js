@@ -5305,6 +5305,20 @@ function initEventListeners() {
         resultContainer.style.display = 'block';
         resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+        // 快速体验引导条：仅免登录体验结果展示（正式三模式登录后不显示）
+        const qdBanner = document.getElementById('quick-demo-banner');
+        if (qdBanner) {
+            if (State.isQuickDemo) {
+                qdBanner.style.display = 'flex';
+                const qdLoginBtn = document.getElementById('qd-login-btn');
+                if (qdLoginBtn) qdLoginBtn.onclick = () => {
+                    if (window.AuthManager && AuthManager._openModal) AuthManager._openModal();
+                };
+            } else {
+                qdBanner.style.display = 'none';
+            }
+        }
+
         // 隐藏思考流面板
         const ts = document.getElementById('thinking-stream');
         if (ts) ts.style.display = 'none';

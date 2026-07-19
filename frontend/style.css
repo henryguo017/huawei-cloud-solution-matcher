@@ -1661,6 +1661,47 @@ body::after {
     margin-bottom: var(--spacing-lg);
 }
 
+/* 快速体验引导条：免登录体验结果顶部，引导注册 */
+.quick-demo-banner {
+    display: none; /* 默认隐藏，script.js 按 State.isQuickDemo 显隐 */
+    align-items: center;
+    gap: 12px;
+    margin-bottom: var(--spacing-lg);
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, rgba(22, 119, 255, 0.08), rgba(114, 46, 209, 0.08));
+    border: 1px solid rgba(22, 119, 255, 0.25);
+    flex-wrap: wrap;
+}
+.quick-demo-banner .qd-icon {
+    color: var(--primary, #1677ff);
+    flex-shrink: 0;
+}
+.quick-demo-banner .qd-text {
+    flex: 1 1 auto;
+    min-width: 200px;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+.quick-demo-banner .qd-text b {
+    color: var(--primary, #1677ff);
+    font-weight: 600;
+}
+.quick-demo-banner .qd-login-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+@media (max-width: 640px) {
+    .quick-demo-banner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .quick-demo-banner .qd-login-btn {
+        align-self: stretch;
+    }
+}
+
 .result-badge {
     display: inline-block;
     padding: 8px 16px;
