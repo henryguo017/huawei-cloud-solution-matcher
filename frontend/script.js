@@ -365,17 +365,26 @@ const AuthManager = {
 
     async _verifyToken() {
         try {
+            // ★ 关键修复：从 localStorage（持久化真相来源）读 token，而非易失的 State.authToken
+            const saved = localStorage.getItem(this.STORAGE_KEY);
+            const token = saved ? JSON.parse(saved).token : null;
+            if (!token) return;  // 无 token 时直接返回，不做任何清除
+
             const resp = await fetch(`${Config.API_BASE_URL}/auth/me`, {
-                headers: { 'Authorization': `Bearer ${State.authToken}` }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!resp.ok) {
-                this._clearAuth();
-                this._updateUI();
+                // ★ 不再调用 _clearAuth() 清空 localStorage！
+                // 旧逻辑：/auth/me 一旦 401（可能因网络抖动/竞态）就清空 localStorage，
+                //   导致后续匹配请求从 localStorage 读 token 得到 null → 不发 header → 后端 401。
+                // 新逻辑：验证失败仅记录，保留 localStorage 中的 token。
+                //   token 是否真失效，由具体操作的「预验证」逻辑（匹配前 /auth/me）判定并兜底。
+                console.warn('[Auth] _verifyToken 验证失败(HTTP ' + resp.status + ')，保留 localStorage 待后续操作预验证处理');
+                this._updateUI();  // 仅刷新 UI 状态，不动 localStorage
             }
         } catch (e) {
-            // 网络错误等异常情况，静默清除认证状态
-            this._clearAuth();
-            this._updateUI();
+            // 网络异常同样不清空 localStorage（避免误杀有效 token）
+            console.warn('[Auth] _verifyToken 网络异常，保留 localStorage:', e);
         }
     },
 

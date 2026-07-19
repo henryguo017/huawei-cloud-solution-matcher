@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi import UploadFile, File, BackgroundTasks
 from api.models import (
@@ -79,6 +79,24 @@ def _sse_json_default(obj):
     return str(obj)
 
 router = APIRouter()
+
+@router.get("/debug/echo-headers", tags=["调试"])
+async def debug_echo_headers(request: Request):
+    """
+    临时诊断端点：回显后端实际收到的全部请求头。
+    用于在浏览器登录后访问 https://www.cloudsol.cn/api/debug/echo-headers
+    确认 Authorization 头是否真正到达后端（排查"刚登录即401"问题）。
+    """
+    headers = dict(request.headers)
+    auth = headers.get('authorization', '(无)')
+    return {
+        "authorization_present": auth != '(无)',
+        "authorization_preview": (auth[:30] + '...') if auth != '(无)' else None,
+        "authorization_length": len(auth) if auth != '(无)' else 0,
+        "origin": headers.get('origin', '(无)'),
+        "host": headers.get('host', '(无)'),
+        "all_header_keys": sorted(headers.keys()),
+    }
 
 @router.get("/health", response_model=HealthResponse, tags=["系统"])
 async def health_check():

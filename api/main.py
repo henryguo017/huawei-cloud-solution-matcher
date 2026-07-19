@@ -52,7 +52,11 @@ app.add_middleware(
         "http://0.0.0.0:8000",
         "http://0.0.0.0:8080",
         "http://localhost:5500",
-        "http://127.0.0.1:5500"
+        "http://127.0.0.1:5500",
+        "https://cloudsol.cn",
+        "https://www.cloudsol.cn",
+        "http://cloudsol.cn",
+        "http://www.cloudsol.cn"
     ],
     allow_credentials=True,
     allow_methods=["*"],
