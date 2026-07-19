@@ -133,10 +133,10 @@ async def health_check():
 @router.post("/match", response_model=MatchResponse, tags=["解决方案匹配"])
 async def match_solution(
     request: MatchRequest,
-    user: Optional[dict] = Depends(get_current_user_optional)
+    user: dict = Depends(require_login)
 ):
     """
-    解决方案智能匹配接口
+    解决方案智能匹配接口（强制登录）
     
     - **demand**: 客户需求描述（1-5000字符）
     
