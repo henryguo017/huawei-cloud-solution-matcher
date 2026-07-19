@@ -5312,7 +5312,7 @@ function initEventListeners() {
                 qdBanner.style.display = 'flex';
                 const qdLoginBtn = document.getElementById('qd-login-btn');
                 if (qdLoginBtn) qdLoginBtn.onclick = () => {
-                    if (window.AuthManager && AuthManager._openModal) AuthManager._openModal();
+                    AuthManager._openModal();
                 };
             } else {
                 qdBanner.style.display = 'none';
