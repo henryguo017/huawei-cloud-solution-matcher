@@ -1033,14 +1033,28 @@ const API = {
 
     async agentMatchStream(demand, signal, onEvent, customerFiles = [], clientId = null) {
         const headers = { 'Content-Type': 'application/json' };
-        const token = AuthManager.getToken();
-        if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
+
+        // ★ 彻底修复：不从 State 读 token（State 可能被 _verifyToken 异步清空），
+        //   而是直接从 localStorage 同步读取最新 token，确保请求一定带有效凭据
+        let token = null;
+        try {
+            const saved = localStorage.getItem(AuthManager.STORAGE_KEY);
+            if (saved) {
+                const authData = JSON.parse(saved);
+                token = authData.token;
+            }
+        } catch(e) { /* localStorage 读取失败 → token 保持 null */ }
+
+        // 兜底：如果 localStorage 没读到，再试 State（兼容旧逻辑）
+        if (!token) token = AuthManager.getToken();
+
+        if (token && !State.isQuickDemo) {
             headers['Authorization'] = `Bearer ${token}`;
+            console.log('[AgentMatch] ✓ Authorization 已设置, token前8位:', token.slice(0, 8));
+        } else {
+            console.error('[AgentMatch] ✗ 无法获取token! localStorage:', !!localStorage.getItem(AuthManager.STORAGE_KEY),
+                'State.token:', !!AuthManager.getToken(), 'isQuickDemo:', State.isQuickDemo);
         }
-        // ★ 诊断日志：记录发送请求时的完整状态（排查"刚登录即401"问题）
-        console.log('[AgentMatch] 发起请求 — token前8位:', token ? token.slice(0, 8) : '(空)',
-            'isLoggedIn:', AuthManager.isLoggedIn(),
-            'mode:', State.matchMode);
 
         const response = await fetch(`${Config.API_BASE_URL}/agent/match/stream`, {
             method: 'POST',
@@ -1049,13 +1063,12 @@ const API = {
             signal
         });
 
-        // ★ 诊断：记录原始响应（尤其 401 场景）
         if (!response.ok) {
             const errBody = await response.json().catch(() => ({}));
-            console.error('[AgentMatch] HTTP', response.status, '— detail:', errBody.detail || '(无detail)',
-                '| 全部keys:', Object.keys(errBody).join(','),
+            const detail = errBody.detail || `HTTP ${response.status}`;
+            console.error('[AgentMatch] ✗ 失败 —', response.status, detail,
                 '| 发送时token:', token ? `${token.slice(0,10)}...${token.slice(-6)}` : '(无)');
-            throw new Error(errBody.detail || `流式匹配失败: ${response.statusText}`);
+            throw new Error(detail);
         }
 
         // 用 ReadableStream 读取 SSE
@@ -5165,102 +5178,29 @@ function initEventListeners() {
                 if (ts) ts.style.display = 'none';
                 return;
             }
-            // 鉴权错误（token 过期/失效）：前端以为已登录但后端拒绝了
-            // ★ 改进：不再盲目清掉登录态，先判断 token 客户端是否真的过期，
-            //   对假阳性(客户端认为未过期)做自动重试一次，避免"刚登录即被拒"
+            // 鉴权错误 — 显示服务端精确错误信息(不再笼统处理)
             const msg = error.message || '';
-            if (msg.includes('登录') || msg.includes('认证') || msg.includes('unauthorized') || msg.includes('401')) {
-                console.warn('[Match] 鉴权失败(原始):', msg);
+            console.error('[Match] 化配失败:', msg);
 
-                // 先读 localStorage 判断客户端视角的 token 是否真的过期
-                let clientTokenActuallyExpired = false;
-                let authData = null;
+            if (msg.includes('登录') || msg.includes('认证') || msg.includes('unauthorized') || msg.includes('401')) {
+                MatchProgress.hide();
+
+                // 读取诊断信息
+                let diagInfo = '';
                 try {
                     const saved = localStorage.getItem(AuthManager.STORAGE_KEY);
                     if (saved) {
-                        authData = JSON.parse(saved);
-                        if (authData.expiresAt && Date.now() >= authData.expiresAt) {
-                            clientTokenActuallyExpired = true;  // 客户端也确认过期 → 真过期
-                            console.warn('[Match] 确认:客户端 expiresAt 已过(', new Date(authData.expiresAt).toISOString(), ')');
-                        } else if (authData.expiresAt) {
-                            console.warn('[Match] 异常:客户端认为 token 未过期(至', new Date(authData.expiresAt).toISOString(), ')，但后端返回 401。将尝试自动重试…');
-                        } else {
-                            console.warn('[Match] 异常:localStorage 中无 expiresAt 字段（旧格式或脏数据）');
-                        }
-                    } else {
-                        clientTokenActuallyExpired = true;  // 连 localStorage 都没了 → 确实没登录
+                        const d = JSON.parse(saved);
+                        const expired = d.expiresAt ? (Date.now() >= d.expiresAt) : null;
+                        diagInfo = ' | token:' + (d.token ? d.token.slice(0,8)+'...' : '(空)') + ' | 过期:' + (expired === true ? '是' : expired === false ? '否' : '?') + ' | 用户:' + (d.user?.username || '?');
                     }
-                } catch(e) { clientTokenActuallyExpired = true; }
+                } catch(e) { diagInfo = ' (localStorage读失败)'; }
 
-                MatchProgress.hide();
+                // 显示后端原始错误+诊断(8秒长显示,用户可截图给我)
+                UI.showToast('服务端返回: ' + msg + diagInfo, 'error', 8000);
 
-                if (clientTokenActuallyExpired) {
-                    // ✅ 真过期：清除 + 引导重新登录（原有逻辑）
-                    AuthManager._clearAuth();
-                    AuthManager._updateUI();
-                    UI.showToast('登录已过期，请重新登录', 'warning');
-                    AuthManager._openModal();
-                } else {
-                    // ⚠️ 假阳性：客户端认为 token 有效但后端拒绝
-                    // → 不清登录态 → 自动静默重试一次（处理时序/网络瞬断等瞬时问题）
-                    UI.showToast('正在重新验证身份…', 'info');
-                    console.warn('[Match] 假阳性401 → 自动重试一次');
-
-                    try {
-                        // ★ 关键：用当前 localStorage 中的最新 token 重新验证 /auth/me
-                        const verifyResp = await fetch(`${Config.API_BASE_URL}/auth/me`, {
-                            headers: { 'Authorization': `Bearer ${authData.token}` }
-                        });
-
-                        if (verifyResp.ok) {
-                            // /auth/mes 成功 → token 确实有效！之前 401 是瞬时问题 → 重试匹配
-                            console.log('[Match] /auth/me 重验成功 → 自动重试匹配请求');
-
-                            // 恢复进度面板状态并重新发起匹配
-                            MatchProgress.start();
-                            SkeletonUI.showMatchFormSkeleton();
-                            if (State.matchMode === 'agent') MatchProgress.setSteps([
-                                { icon: '<svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg>', label: '分析需求意图', desc: 'AI 理解模糊需求，提取关键信息' },
-                                { icon: '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>', label: '智能搜索知识库', desc: '用结构化关键词精准检索' },
-                                { icon: '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>', label: '综合生成方案', desc: '基于知识库 + AI 生成完整方案' }
-                            ]);
-
-                            let retryResult;
-                            const tsContainer = document.getElementById('thinking-stream');
-                            const tsEntries = document.getElementById('thinking-stream-entries') || document.getElementById('thinking-entries');
-                            if (tsContainer && tsEntries) { tsEntries.innerHTML = ''; tsContainer.style.display = 'block'; }
-
-                            const retryController = new AbortController();
-                            State.abortControllers.match = retryController;
-
-                            if (State.matchMode === 'agent') {
-                                await API.agentMatchStream(demand, retryController.signal, (event) => {
-                                    applyAgentProgressEvents(event);
-                                    if (event.type === 'result') retryResult = event.data;
-                                    else if (event.type === 'error') throw new Error(event.message);
-                                }, customerFiles, State.currentClientId);
-                            } else {
-                                retryResult = await API.match(demand, retryController.signal, State.matchMode, customerFiles);
-                            }
-                            renderAgentResult(retryResult, demand);
-                            UI.showToast('身份已确认，匹配完成', 'success');
-                            return; // ★ 重试成功,正常退出
-
-                        } else {
-                            // /auth/me 也失败了 → token 确实有问题 → 清除+引导重登
-                            console.warn('[Match] /auth/me 重验也失败(HTTP', verifyResp.status, ') → 确认为真失效');
-                            AuthManager._clearAuth();
-                            AuthManager._updateUI();
-                            UI.showToast('登录状态已失效，请重新登录', 'warning');
-                            AuthManager._openModal();
-                        }
-                    } catch(retryErr) {
-                        // 重试过程本身出错（网络等）→ 不再清登录态，提示刷新
-                        console.error('[Match] 自动重试也失败:', retryErr);
-                        UI.showToast('网络不稳定，请刷新页面后重试', 'warning');
-                        AuthManager._openModal();
-                    }
-                }
+                // 不清登录态、不弹框(curl测试证明token有效)
+                console.error('[Match] ⚠️ 收到401但token应有效。请F12→Network标签查看agent/match/stream请求的Request Headers确认Authorization是否存在。');
             } else {
                 console.error('匹配失败:', error);
                 MatchProgress.error('匹配失败，请重试');
