@@ -133,14 +133,17 @@ async def health_check():
 @router.post("/match", response_model=MatchResponse, tags=["解决方案匹配"])
 async def match_solution(
     request: MatchRequest,
-    user: dict = Depends(require_login)
+    user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
-    解决方案智能匹配接口（强制登录）
+    解决方案智能匹配接口（匿名可用）
     
     - **demand**: 客户需求描述（1-5000字符）
     
     即使知识库为空，AI也会基于华为云产品体系给出建议
+    - 匿名调用走全局知识库；登录用户走其独立知识库
+    - 注意：前端"快速体验"入口(isQuickDemo)走此接口实现免登录尝鲜，
+      正式三种匹配模式(标准/Agent/向导)由前端登录拦截保证需登录。
     """
     try:
         # 使用用户独立知识库（登录用户）；匿名用户使用全局知识库

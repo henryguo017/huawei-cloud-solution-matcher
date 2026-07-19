@@ -303,8 +303,10 @@ const DemoManager = {
             return;
         }
 
-        // 如果当前是向导模式，切换到标准模式
-        if (typeof State !== 'undefined' && State.matchMode === 'wizard') {
+        // 快速体验固定走标准模式（匿名可用），确保体验不依赖登录态、能直接出结果
+        // 注意：默认 matchMode 是 'agent'，若不强制切回 'normal'，体验会走到
+        // /agent/match/stream（强制登录）而被 401。这里无论当前是 agent 还是 wizard 都切到 normal。
+        if (typeof State !== 'undefined' && State.matchMode !== 'normal') {
             State.matchMode = 'normal';
             const modeToggle = document.getElementById('mode-toggle');
             if (modeToggle) {
@@ -312,7 +314,7 @@ const DemoManager = {
                 modeToggle.querySelector('[data-mode="normal"]')?.classList.add('active');
             }
             if (typeof DemandWizard !== 'undefined') DemandWizard.hide();
-            demandInput.parentElement.style.display = '';
+            if (demandInput.parentElement) demandInput.parentElement.style.display = '';
         }
 
         if (typeof UI !== 'undefined') {
