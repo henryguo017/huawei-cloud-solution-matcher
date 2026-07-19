@@ -6878,26 +6878,26 @@ body::after {
 }
 
 .category-group-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border-light);
-    min-height: 40px;
-    box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-light);
+  min-height: 36px;
+  box-sizing: border-box;
 }
 
 .category-group-icon {
-    width: 28px;
-    height: 28px;
-    min-height: 28px;
+    width: 30px;
+    height: 30px;
+    min-height: 30px;
     border-radius: 7px;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     flex-shrink: 0;
-    overflow: hidden;
+    overflow: visible;
     position: relative;
 }
 
@@ -6915,7 +6915,7 @@ body::after {
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: 0.3px;
-    line-height: 1 !important;
+    line-height: 30px !important;
     align-self: center !important;
     padding-top: 0 !important;
     padding-bottom: 0 !important;
@@ -6926,10 +6926,15 @@ body::after {
     color: var(--text-tertiary);
     margin-left: auto;
     background: var(--neutral-100);
-    padding: 4px 10px;
+    padding: 3px 10px;
     border-radius: 10px;
-    line-height: 1 !important;
+    line-height: 1.5 !important;
     white-space: nowrap;
+    align-self: center;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* 分类颜色 */
@@ -9298,6 +9303,7 @@ body::after {
   border-left: 3px solid var(--primary-color); padding-left: 12px;
   background: linear-gradient(90deg, rgba(199,0,11,0.03), transparent);
   border-radius: 0 8px 8px 0;
+  align-items: center;
 }
 
 /* 8. 结果内容排版优化 */
