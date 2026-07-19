@@ -9305,10 +9305,11 @@ body::after {
 /* 7. 分类组标题增强 */
 .category-group-title { font-weight: 600; letter-spacing: 0.3px; }
 .category-group-header {
+  display: flex;                 /* 双保险：确保标题行始终是 flex 容器 */
+  align-items: center;
   border-left: 3px solid var(--primary-color); padding-left: 12px;
   background: linear-gradient(90deg, rgba(199,0,11,0.03), transparent);
   border-radius: 0 8px 8px 0;
-  align-items: center;
 }
 
 /* 8. 结果内容排版优化 */
