@@ -6884,21 +6884,19 @@ body::after {
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border-light);
-  min-height: 36px;
+  height: 36px;
   box-sizing: border-box;
 }
 
 .category-group-icon {
-    width: 30px;
-    height: 30px;
-    min-height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 7px;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     flex-shrink: 0;
-    overflow: visible;
-    position: relative;
+    overflow: hidden;
 }
 
 /* SVG 图标：直接子元素，无 .icon 包裹 */
@@ -6915,10 +6913,7 @@ body::after {
     font-weight: 700;
     color: var(--text-primary);
     letter-spacing: 0.3px;
-    line-height: 30px !important;
-    align-self: center !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
+    line-height: 1.2;
 }
 
 .category-group-count {
@@ -6926,15 +6921,10 @@ body::after {
     color: var(--text-tertiary);
     margin-left: auto;
     background: var(--neutral-100);
-    padding: 3px 10px;
+    padding: 2px 10px;
     border-radius: 10px;
-    line-height: 1.5 !important;
+    line-height: 1.6;
     white-space: nowrap;
-    align-self: center;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 /* 分类颜色 */
