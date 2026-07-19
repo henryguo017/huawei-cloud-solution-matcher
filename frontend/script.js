@@ -1043,27 +1043,25 @@ const API = {
     async agentMatchStream(demand, signal, onEvent, customerFiles = [], clientId = null) {
         const headers = { 'Content-Type': 'application/json' };
 
-        // ★ 彻底修复：不从 State 读 token（State 可能被 _verifyToken 异步清空），
-        //   而是直接从 localStorage 同步读取最新 token，确保请求一定带有效凭据
+        // ★★ 暴力修复（2026-07-19 根治版）★★
+        // 不经过任何中间层(State/AuthManager/isLoggedIn/isQuickDemo)，直接读 localStorage。
+        // 之前所有 401 的根因都是某个中间层返回了 null 或 false，导致跳过 Authorization。
         let token = null;
         try {
-            const saved = localStorage.getItem(AuthManager.STORAGE_KEY);
-            if (saved) {
-                const authData = JSON.parse(saved);
-                token = authData.token;
+            const raw = localStorage.getItem('hwcloud_auth');
+            if (raw) {
+                const d = JSON.parse(raw);
+                token = d.token || d.access_token || null;
             }
-        } catch(e) { /* localStorage 读取失败 → token 保持 null */ }
+        } catch(e) { token = null; }
 
-        // 兜底：如果 localStorage 没读到，再试 State（兼容旧逻辑）
-        if (!token) token = AuthManager.getToken();
-
-        if (token && !State.isQuickDemo) {
-            headers['Authorization'] = `Bearer ${token}`;
-            console.log('[AgentMatch] ✓ Authorization 已设置, token前8位:', token.slice(0, 8));
-        } else {
-            console.error('[AgentMatch] ✗ 无法获取token! localStorage:', !!localStorage.getItem(AuthManager.STORAGE_KEY),
-                'State.token:', !!AuthManager.getToken(), 'isQuickDemo:', State.isQuickDemo);
+        // 有 token 就无条件设置 Authorization —— 不再检查任何 flag
+        if (token) {
+            headers['Authorization'] = 'Bearer ' + token;
+            console.log('[AgentMatch] ✓ Bearer已设 length=' + token.length + ' prefix=' + token.substring(0, 12));
         }
+        // 即使 token 为空也继续发请求 —— 让服务端返回明确错误而不是前端静默失败
+        console.log('[AgentMatch] hwcloud_auth原始值:', localStorage.getItem('hwcloud_auth')?.substring(0, 80));
 
         const response = await fetch(`${Config.API_BASE_URL}/agent/match/stream`, {
             method: 'POST',
@@ -5136,39 +5134,18 @@ function initEventListeners() {
                 { icon: '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>', label: '综合生成方案', desc: '基于知识库 + AI 生成完整方案' }
             ]);
 
-            // ★ 预验证：匹配前主动确认 token 在服务端真正有效
-            // （彻底解决"刚登录即401"——不再等匹配请求被拒后再补救，
-            //   而是 /auth/me 先通过才发请求，从源头杜绝 401）
-            if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
-                let preAuthOk = false;
-                try {
-                    const _saved = localStorage.getItem(AuthManager.STORAGE_KEY);
-                    const _preToken = _saved ? JSON.parse(_saved).token : null;
-                    if (_preToken) {
-                        const _preCheck = await fetch(`${Config.API_BASE_URL}/auth/me`, {
-                            headers: { 'Authorization': `Bearer ${_preToken}` }
-                        });
-                        if (_preCheck.ok) {
-                            preAuthOk = true;
-                        } else {
-                            console.warn('[MatchPreAuth] /auth/me 返回 HTTP', _preCheck.status, '→ token 已失效');
-                        }
-                    } else {
-                        console.warn('[MatchPreAuth] localStorage 中无 token');
-                    }
-                } catch(_preErr) {
-                    console.warn('[MatchPreAuth] 网络异常:', _preErr);
+            // ★ 轻量预验证（不阻断，仅日志）
+            //   之前版本预验证失败会 _clearAuth()+弹登录框，可能误杀有效token。
+            //   改为 fire-and-forget 日志记录，让实际请求结果决定后续行为。
+            try {
+                const _raw = localStorage.getItem('hwcloud_auth');
+                const _t = _raw ? JSON.parse(_raw).token : null;
+                if (_t) {
+                    fetch(`${Config.API_BASE_URL}/auth/me`, { headers: { 'Authorization': 'Bearer ' + _t } })
+                        .then(r => console.log('[MatchPreAuth] /auth/me →', r.status))
+                        .catch(e => console.warn('[MatchPreAuth] 网络异常(非致命):', e));
                 }
-
-                if (!preAuthOk) {
-                    AuthManager._clearAuth();
-                    AuthManager._updateUI();
-                    MatchProgress.hide();
-                    UI.showToast('登录状态已失效，请重新登录', 'warning');
-                    AuthManager._openModal();
-                    return;
-                }
-            }
+            } catch(_) {}
 
             let result;
             if (isAgentMode) {
@@ -5221,25 +5198,12 @@ function initEventListeners() {
                 if (ts) ts.style.display = 'none';
                 return;
             }
-            // 匹配失败处理
-            // （注意：预验证已保证 token 有效，正常流程不会遇到 401。
-            //   如果仍出现鉴权错误，说明匹配过程中 token 被服务端撤销，
-            //   直接清登录态引导重登即可。）
+            // 匹配失败 — 直接显示服务端错误，不再做任何鉴权判断/清登录态/弹框
+            // （2026-07-19 根治版：之前所有"清登录态+弹登录框"的逻辑都会误杀有效token）
             const msg = error.message || '';
-            console.error('[Match] 匹配失败:', msg);
-
-            if (msg.includes('登录') || msg.includes('认证') || msg.includes('unauthorized') || msg.includes('401')) {
-                // 预验证通过了但匹配时仍 401 → token 在匹配过程中失效（极少见）
-                AuthManager._clearAuth();
-                AuthManager._updateUI();
-            }
+            console.error('[Match] 失败:', msg, '| localStorage有token:', !!localStorage.getItem('hwcloud_auth'));
             MatchProgress.hide();
             UI.showToast(msg || '匹配失败，请重试', 'error');
-
-            // 如果是鉴权错误，弹登录框
-            if (msg.includes('登录') || msg.includes('认证') || msg.includes('unauthorized') || msg.includes('401')) {
-                AuthManager._openModal();
-            }
         } finally {
             State.loadingStates.match = false;
             State.isQuickDemo = false;
