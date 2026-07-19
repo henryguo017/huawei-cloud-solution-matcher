@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="style.css?v=20260719i">
+    <link rel="stylesheet" href="style.css?v=20260719j">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -242,6 +242,10 @@
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></span>
                     <span class="nav-text">设置</span>
                 </button>
+                <button class="sidebar-item" data-page="about">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
+                    <span class="nav-text">关于我们</span>
+                </button>
             </nav>
 
             <!-- ===== 主题切换器（侧栏底部）====== -->
@@ -333,6 +337,10 @@
         <button class="mobile-nav-item" data-page="mine">
             <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
             <span class="mobile-nav-label">我的</span>
+        </button>
+        <button class="mobile-nav-item" data-page="about">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
+            <span class="mobile-nav-label">关于</span>
         </button>
     </nav>
     
@@ -1532,6 +1540,73 @@
                     <a class="mine-footer-icp" href="https://beian.miit.gov.cn" target="_blank" rel="noopener">豫ICP备2026027974号</a>
                 </div>
             </div>
+
+            <!-- 关于我们页面 -->
+            <div id="page-about" class="page">
+                <header class="page-header">
+                    <h2 class="page-title">关于我们</h2>
+                    <p class="page-subtitle">cloudsol.cn 是一个面向 ToB 售前与解决方案岗位的智能匹配工具，也是作者的个人技术作品集</p>
+                </header>
+
+                <div class="content-card about-card">
+                    <div class="about-section">
+                        <h3 class="about-section-title"><svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg> 项目简介</h3>
+                        <p class="about-text">
+                            cloudsol.cn 致力于解决售前与解决方案工程师在日常工作中「客户需求 → 华为云产品 / 方案」匹配效率低下的问题。
+                            系统内置华为云行业解决方案知识库与主流云厂商竞品资料，结合大语言模型与向量检索，
+                            支持<strong>方案智能匹配</strong>、<strong>竞品对比分析</strong>、<strong>方案优化建议</strong>与<strong>结构化报告导出</strong>。
+                        </p>
+                        <p class="about-note">
+                            <svg class="icon about-note-icon" aria-hidden="true"><use href="#i-info"></use></svg>
+                            免责声明：本项目为个人作品集，与华为技术有限公司无隶属或合作关系，文中方案与数据均来自公开资料整理，仅供参考。
+                        </p>
+                    </div>
+                </div>
+
+                <div class="content-card about-card">
+                    <div class="about-section">
+                        <h3 class="about-section-title"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg> 关于作者</h3>
+                        <div class="about-author">
+                            <div class="about-author-avatar"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></div>
+                            <div class="about-author-meta">
+                                <div class="about-author-name">郭鸿宇</div>
+                                <div class="about-author-school">杭州电子科技大学 · 电气工程及其自动化</div>
+                            </div>
+                        </div>
+                        <p class="about-text">
+                            云计算 / 安防物联网 / 政企行业方向的 ToB 解决方案与售前工程师（应届）。
+                            熟悉华为云产品体系与政企客户解决方案设计，本项目是其在求职准备过程中，
+                            将真实售前工作流沉淀为可复用工具的一次实践。
+                        </p>
+                    </div>
+                </div>
+
+                <div class="content-card about-card">
+                    <div class="about-section">
+                        <h3 class="about-section-title"><svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg> 联系方式</h3>
+                        <p class="about-text">欢迎就产品建议、技术交流或求职机会与我联系：</p>
+                        <div class="about-contact-list">
+                            <a class="about-contact-item" href="https://github.com/henryguo017" target="_blank" rel="noopener">
+                                <span class="about-contact-icon"><svg class="icon about-github-icon" aria-hidden="true"><use href="#i-github"></use></svg></span>
+                                <span class="about-contact-text">
+                                    <span class="about-contact-label">GitHub</span>
+                                    <span class="about-contact-value">@henryguo017</span>
+                                </span>
+                                <span class="about-contact-arrow">↗</span>
+                            </a>
+                            <a class="about-contact-item" href="mailto:contact@cloudsol.cn">
+                                <span class="about-contact-icon"><svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg></span>
+                                <span class="about-contact-text">
+                                    <span class="about-contact-label">邮箱</span>
+                                    <span class="about-contact-value">contact@cloudsol.cn</span>
+                                </span>
+                                <span class="about-contact-arrow">↗</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
     </main>
@@ -1970,6 +2045,8 @@
   <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" />
   <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
   <path d="M2 12h20" /></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.6-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.22.7.83.58A12 12 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z" /></symbol>
   <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
   <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
   <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
