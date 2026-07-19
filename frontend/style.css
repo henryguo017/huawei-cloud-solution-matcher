@@ -6884,7 +6884,7 @@ body::after {
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border-light);
-  height: 36px;
+  min-height: 40px;
   box-sizing: border-box;
 }
 
@@ -6914,6 +6914,8 @@ body::after {
     color: var(--text-primary);
     letter-spacing: 0.3px;
     line-height: 1.2;
+    display: flex;
+    align-items: center;
 }
 
 .category-group-count {
@@ -6925,6 +6927,8 @@ body::after {
     border-radius: 10px;
     line-height: 1.6;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
 }
 
 /* 分类颜色 */
