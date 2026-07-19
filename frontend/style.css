@@ -6877,6 +6877,7 @@ body::after {
     border-color: var(--text-primary);
 }
 
+/* ===== 分类标题行：嵌套 flex 居中（v5 彻底重写） ===== */
 .category-group-header {
   display: flex;
   align-items: center;
@@ -6884,38 +6885,45 @@ body::after {
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--border-light);
-  box-sizing: border-box;
 }
 
 .category-group-icon {
     width: 28px;
     height: 28px;
+    min-height: 28px;
     border-radius: 7px;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
     overflow: hidden;
-    vertical-align: middle;
 }
 
-/* SVG 图标：直接子元素，无 .icon 包裹 */
+/* SVG：强制重置全局 .icon 的所有可能干扰属性 */
 .category-group-icon > svg,
 .category-group-icon svg {
     width: 16px !important;
     height: 16px !important;
     display: block !important;
     flex-shrink: 0;
-    vertical-align: middle;
+    /* 重置 .icon 继承的属性 */
+    vertical-align: baseline;
     margin: 0 !important;
+    padding: 0 !important;
+    fill: currentColor;
+    stroke: currentColor;
 }
 
 .category-group-title {
     font-size: 0.9rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-primary);
     letter-spacing: 0.3px;
-    line-height: 28px;
+    line-height: 1;
+    /* 内部 flex 居中：让文字在 28px 高度内垂直居中 */
+    display: flex;
+    align-items: center;
+    min-height: 28px;
 }
 
 .category-group-count {
@@ -6925,8 +6933,13 @@ body::after {
     background: var(--neutral-100);
     padding: 0 10px;
     border-radius: 10px;
-    line-height: 28px;
+    line-height: 1;
     white-space: nowrap;
+    /* 内部 flex 居中 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
 }
 
 /* 分类颜色 */
