@@ -5305,10 +5305,11 @@ function initEventListeners() {
         resultContainer.style.display = 'block';
         resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-        // 快速体验引导条：仅免登录体验结果展示（正式三模式登录后不显示）
+        // 快速体验引导条：仅「匿名 + 体验」时展示（把游客转化为注册用户）
+        // 已登录用户用体验时不显示——他们本就拥有保存/历史/向导/Agent 全部能力，无需再推荐登录
         const qdBanner = document.getElementById('quick-demo-banner');
         if (qdBanner) {
-            if (State.isQuickDemo) {
+            if (State.isQuickDemo && !AuthManager.isLoggedIn()) {
                 qdBanner.style.display = 'flex';
                 const qdLoginBtn = document.getElementById('qd-login-btn');
                 if (qdLoginBtn) qdLoginBtn.onclick = () => {
