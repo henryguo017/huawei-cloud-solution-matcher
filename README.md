@@ -26,6 +26,25 @@
 
 ---
 
+## 📸 界面预览
+
+<p align="center">
+  <img src="test_shots/01_home.png" alt="首页" width="800" />
+</p>
+<p align="center"><i>首页：317 篇方案资料 / 25 个行业 / 12 家竞品厂商，输入需求即可一键匹配</i></p>
+
+<p align="center">
+  <img src="test_shots/02_onboard.png" alt="体验入口" width="600" />
+</p>
+<p align="center"><i>快速体验：选择预设案例（制造业/农业/园区）即可一键出结果，无需手动输入需求</i></p>
+
+<p align="center">
+  <img src="test_shots/11_product.png" alt="产品图谱" width="900" />
+</p>
+<p align="center"><i>产品图谱：可视化浏览华为云产品体系（35 产品 / 9 分类 / 42 关联），作为方案设计的参考视图</i></p>
+
+---
+
 ## ✨ 核心特性
 
 - **三种匹配模式**：标准（快、稳）、Agent（带思考流的可视化推理）、向导（零门槛填表式）。
