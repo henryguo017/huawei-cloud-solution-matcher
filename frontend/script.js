@@ -5127,6 +5127,40 @@ function initEventListeners() {
                 { icon: '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>', label: '综合生成方案', desc: '基于知识库 + AI 生成完整方案' }
             ]);
 
+            // ★ 预验证：匹配前主动确认 token 在服务端真正有效
+            // （彻底解决"刚登录即401"——不再等匹配请求被拒后再补救，
+            //   而是 /auth/me 先通过才发请求，从源头杜绝 401）
+            if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
+                let preAuthOk = false;
+                try {
+                    const _saved = localStorage.getItem(AuthManager.STORAGE_KEY);
+                    const _preToken = _saved ? JSON.parse(_saved).token : null;
+                    if (_preToken) {
+                        const _preCheck = await fetch(`${Config.API_BASE_URL}/auth/me`, {
+                            headers: { 'Authorization': `Bearer ${_preToken}` }
+                        });
+                        if (_preCheck.ok) {
+                            preAuthOk = true;
+                        } else {
+                            console.warn('[MatchPreAuth] /auth/me 返回 HTTP', _preCheck.status, '→ token 已失效');
+                        }
+                    } else {
+                        console.warn('[MatchPreAuth] localStorage 中无 token');
+                    }
+                } catch(_preErr) {
+                    console.warn('[MatchPreAuth] 网络异常:', _preErr);
+                }
+
+                if (!preAuthOk) {
+                    AuthManager._clearAuth();
+                    AuthManager._updateUI();
+                    MatchProgress.hide();
+                    UI.showToast('登录状态已失效，请重新登录', 'warning');
+                    AuthManager._openModal();
+                    return;
+                }
+            }
+
             let result;
             if (isAgentMode) {
                 // SSE 流式模式：监听事件更新进度面板 + 实时思考流
@@ -5178,33 +5212,24 @@ function initEventListeners() {
                 if (ts) ts.style.display = 'none';
                 return;
             }
-            // 鉴权错误 — 显示服务端精确错误信息(不再笼统处理)
+            // 匹配失败处理
+            // （注意：预验证已保证 token 有效，正常流程不会遇到 401。
+            //   如果仍出现鉴权错误，说明匹配过程中 token 被服务端撤销，
+            //   直接清登录态引导重登即可。）
             const msg = error.message || '';
-            console.error('[Match] 化配失败:', msg);
+            console.error('[Match] 匹配失败:', msg);
 
             if (msg.includes('登录') || msg.includes('认证') || msg.includes('unauthorized') || msg.includes('401')) {
-                MatchProgress.hide();
+                // 预验证通过了但匹配时仍 401 → token 在匹配过程中失效（极少见）
+                AuthManager._clearAuth();
+                AuthManager._updateUI();
+            }
+            MatchProgress.hide();
+            UI.showToast(msg || '匹配失败，请重试', 'error');
 
-                // 读取诊断信息
-                let diagInfo = '';
-                try {
-                    const saved = localStorage.getItem(AuthManager.STORAGE_KEY);
-                    if (saved) {
-                        const d = JSON.parse(saved);
-                        const expired = d.expiresAt ? (Date.now() >= d.expiresAt) : null;
-                        diagInfo = ' | token:' + (d.token ? d.token.slice(0,8)+'...' : '(空)') + ' | 过期:' + (expired === true ? '是' : expired === false ? '否' : '?') + ' | 用户:' + (d.user?.username || '?');
-                    }
-                } catch(e) { diagInfo = ' (localStorage读失败)'; }
-
-                // 显示后端原始错误+诊断(8秒长显示,用户可截图给我)
-                UI.showToast('服务端返回: ' + msg + diagInfo, 'error', 8000);
-
-                // 不清登录态、不弹框(curl测试证明token有效)
-                console.error('[Match] ⚠️ 收到401但token应有效。请F12→Network标签查看agent/match/stream请求的Request Headers确认Authorization是否存在。');
-            } else {
-                console.error('匹配失败:', error);
-                MatchProgress.error('匹配失败，请重试');
-                UI.showToast(msg || '匹配失败，请重试', 'error');
+            // 如果是鉴权错误，弹登录框
+            if (msg.includes('登录') || msg.includes('认证') || msg.includes('unauthorized') || msg.includes('401')) {
+                AuthManager._openModal();
             }
         } finally {
             State.loadingStates.match = false;
