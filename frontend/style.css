@@ -11182,22 +11182,19 @@ table tbody tr:hover {
 }
 
 /* ==================== 关于我们·案例展示 ==================== */
-.case-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 12px; }
-.case-item { display: flex; flex-direction: column; gap: 6px; }
-.case-label { font-size: 0.82rem; font-weight: 600; color: var(--text-secondary, #444); }
-.case-photo { width: 100%; border-radius: 8px; }
-.case-photo img { width: 100%; display: block; border-radius: 8px; }
-.case-photo--placeholder {
-    aspect-ratio: 16 / 10;
+.case-video-wrap {
+    width: 100%;
+    aspect-ratio: 16 / 9;
     border: 1.5px dashed var(--border-secondary, #d3d1c7);
     background: var(--neutral-50, #fafafa);
+    border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     text-align: center; color: var(--text-tertiary, #888);
-    font-size: 0.8rem; line-height: 1.6; padding: 12px; box-sizing: border-box;
+    font-size: 0.82rem; line-height: 1.6; padding: 16px; box-sizing: border-box;
 }
+.case-video { width: 100%; border-radius: 8px; display: block; aspect-ratio: 16 / 9; background: #000; }
 .case-hint { margin-top: 12px; font-size: 0.78rem; color: var(--text-tertiary, #888); line-height: 1.6; }
 .case-hint code { background: var(--neutral-100, #f1efea); padding: 1px 5px; border-radius: 4px; font-size: 0.76rem; }
-@media (max-width: 640px) { .case-grid { grid-template-columns: 1fr; } }
 
 /* ==================== 关于我们页面 ==================== */
 #page-about .about-card { margin-bottom: 20px; }
