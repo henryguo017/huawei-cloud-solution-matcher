@@ -11192,7 +11192,7 @@ table tbody tr:hover {
     text-align: center; color: var(--text-tertiary, #888);
     font-size: 0.82rem; line-height: 1.6; padding: 16px; box-sizing: border-box;
 }
-.case-video { width: 100%; border-radius: 8px; display: block; aspect-ratio: 16 / 9; background: #000; }
+.case-video { width: 100%; border-radius: 8px; display: block; aspect-ratio: 16 / 9; background: #000; object-fit: contain; }
 .case-hint { margin-top: 12px; font-size: 0.78rem; color: var(--text-tertiary, #888); line-height: 1.6; }
 .case-hint code { background: var(--neutral-100, #f1efea); padding: 1px 5px; border-radius: 4px; font-size: 0.76rem; }
 
