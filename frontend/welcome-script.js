@@ -67,7 +67,7 @@ const WelcomeManager = {
         } catch (e) {
             // API 不可达时降级为与知识库规模相符的保守值
             console.warn('无法获取知识库统计，使用默认值', e);
-            return { solutionFiles: 304, industries: 25, competitors: 12 };
+            return { solutionFiles: 317, industries: 25, competitors: 12 };
         }
     },
 
