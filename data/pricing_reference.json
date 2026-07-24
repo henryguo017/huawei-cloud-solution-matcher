@@ -1,0 +1,1719 @@
+{
+  "collected_at": "2026-07",
+  "region": "华北-北京四",
+  "disclaimer": "本结果为参考估算，基于公开价目表策展常见规格区间，不含折扣与实时波动，实际价格以华为云官网价格计算器 / 销售报价为准。",
+  "default_profile": "通用",
+  "profiles": {
+    "通用": {
+      "description": "通用云底座（计算/存储/数据库/容器/网络/安全/CDN），适用于绝大多数方案的成本量级参考。",
+      "items": [
+        {
+          "product": "ECS 弹性云服务器",
+          "spec": "s6.large.2（2核4G）",
+          "billing": "按需",
+          "unit_label": "月/台",
+          "ref_price": 274.0,
+          "qty": 2,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 274.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 274.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 274.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/560654-5-B",
+          "verified": true,
+          "note": "按需连续运行价≈¥0.38/时；包月约¥166–220/月（渠道价，⚠待官网复核），高可靠建议升主备/集群"
+        },
+        {
+          "product": "OBS 对象存储",
+          "spec": "标准存储·单AZ",
+          "billing": "按量",
+          "unit_label": "月/GB",
+          "ref_price": 0.099,
+          "qty": 2000,
+          "tier": {
+            "low": {
+              "qty": 500,
+              "unit_price": 0.099
+            },
+            "mid": {
+              "qty": 2000,
+              "unit_price": 0.099
+            },
+            "high": {
+              "qty": 10000,
+              "unit_price": 0.099
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/obs.html",
+          "verified": true,
+          "note": "多AZ ¥0.139/GB·月、低频 ¥0.08、归档 ¥0.033；公网流出 ¥0.25–0.50/GB"
+        },
+        {
+          "product": "RDS for MySQL",
+          "spec": "主备·2核4G·40G SSD",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 470.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 470.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/mysql.html",
+          "verified": true,
+          "note": "主备版；单机¥196/月起、集群版¥729/月起"
+        },
+        {
+          "product": "CCE 云容器引擎",
+          "spec": "Standard/Turbo·50节点集群管理费（节点ECS另计）",
+          "billing": "包月",
+          "unit_label": "月/集群",
+          "ref_price": 420.8,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 420.8
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "集群管理费；工作节点 ECS 费用另计"
+        },
+        {
+          "product": "EIP 弹性公网IP",
+          "spec": "按带宽·5Mbit/s·动态BGP",
+          "billing": "按需",
+          "unit_label": "月/个",
+          "ref_price": 245.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 245.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 245.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 245.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/1235594-2-Y",
+          "verified": true,
+          "note": "5M按需≈¥0.34/时；按流量计费¥0.80/GB（波动流量更划算）"
+        },
+        {
+          "product": "HSS 企业主机安全",
+          "spec": "企业版",
+          "billing": "包月",
+          "unit_label": "月/台",
+          "ref_price": 90.0,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 2,
+              "unit_price": 90.0
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 90.0
+            },
+            "high": {
+              "qty": 10,
+              "unit_price": 90.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "企业版¥90/月/台"
+        },
+        {
+          "product": "CDN",
+          "spec": "中国大陆·流量计费",
+          "billing": "按量",
+          "unit_label": "月/GB流量",
+          "ref_price": 0.2,
+          "qty": 5000,
+          "tier": {
+            "low": {
+              "qty": 1000,
+              "unit_price": 0.2
+            },
+            "mid": {
+              "qty": 5000,
+              "unit_price": 0.2
+            },
+            "high": {
+              "qty": 20000,
+              "unit_price": 0.2
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/special/pro-cdn-hwyjf.html",
+          "verified": true,
+          "note": "流量计费¥0.20/GB起；500GB流量包=¥88更划算"
+        },
+        {
+          "product": "EVS 云硬盘",
+          "spec": "高IO / 超高IO（按容量计费）",
+          "no_price": true,
+          "note": "常见块存储，参考价待补充"
+        },
+        {
+          "product": "WeLink 协作",
+          "spec": "企业协同办公",
+          "no_price": true,
+          "note": "协作平台，参考价待补充"
+        }
+      ]
+    },
+    "智慧城市": {
+      "description": "城市物联感知 + AI 推理 + Web 安全防护。",
+      "items": [
+        {
+          "product": "ECS 弹性云服务器",
+          "spec": "s6.large.2（2核4G）",
+          "billing": "按需",
+          "unit_label": "月/台",
+          "ref_price": 274.0,
+          "qty": 2,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 274.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 274.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 274.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/560654-5-B",
+          "verified": true,
+          "note": "按需连续运行价≈¥0.38/时；包月约¥166–220/月（渠道价，⚠待官网复核），高可靠建议升主备/集群"
+        },
+        {
+          "product": "OBS 对象存储",
+          "spec": "标准存储·单AZ",
+          "billing": "按量",
+          "unit_label": "月/GB",
+          "ref_price": 0.099,
+          "qty": 2000,
+          "tier": {
+            "low": {
+              "qty": 500,
+              "unit_price": 0.099
+            },
+            "mid": {
+              "qty": 2000,
+              "unit_price": 0.099
+            },
+            "high": {
+              "qty": 10000,
+              "unit_price": 0.099
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/obs.html",
+          "verified": true,
+          "note": "多AZ ¥0.139/GB·月、低频 ¥0.08、归档 ¥0.033；公网流出 ¥0.25–0.50/GB"
+        },
+        {
+          "product": "RDS for MySQL",
+          "spec": "主备·2核4G·40G SSD",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 470.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 470.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/mysql.html",
+          "verified": true,
+          "note": "主备版；单机¥196/月起、集群版¥729/月起"
+        },
+        {
+          "product": "CCE 云容器引擎",
+          "spec": "Standard/Turbo·50节点集群管理费（节点ECS另计）",
+          "billing": "包月",
+          "unit_label": "月/集群",
+          "ref_price": 420.8,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 420.8
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "集群管理费；工作节点 ECS 费用另计"
+        },
+        {
+          "product": "EIP 弹性公网IP",
+          "spec": "按带宽·5Mbit/s·动态BGP",
+          "billing": "按需",
+          "unit_label": "月/个",
+          "ref_price": 245.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 245.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 245.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 245.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/1235594-2-Y",
+          "verified": true,
+          "note": "5M按需≈¥0.34/时；按流量计费¥0.80/GB（波动流量更划算）"
+        },
+        {
+          "product": "HSS 企业主机安全",
+          "spec": "企业版",
+          "billing": "包月",
+          "unit_label": "月/台",
+          "ref_price": 90.0,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 2,
+              "unit_price": 90.0
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 90.0
+            },
+            "high": {
+              "qty": 10,
+              "unit_price": 90.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "企业版¥90/月/台"
+        },
+        {
+          "product": "CDN",
+          "spec": "中国大陆·流量计费",
+          "billing": "按量",
+          "unit_label": "月/GB流量",
+          "ref_price": 0.2,
+          "qty": 5000,
+          "tier": {
+            "low": {
+              "qty": 1000,
+              "unit_price": 0.2
+            },
+            "mid": {
+              "qty": 5000,
+              "unit_price": 0.2
+            },
+            "high": {
+              "qty": 20000,
+              "unit_price": 0.2
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/special/pro-cdn-hwyjf.html",
+          "verified": true,
+          "note": "流量计费¥0.20/GB起；500GB流量包=¥88更划算"
+        },
+        {
+          "product": "IoTDA 设备接入",
+          "spec": "基础版·消息数",
+          "billing": "按量",
+          "unit_label": "月/百万条",
+          "ref_price": 3.6,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 3.6
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 3.6
+            },
+            "high": {
+              "qty": 20,
+              "unit_price": 3.6
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/productsdesc-bms_2bc4d1e395cba49399742e176762c108support0",
+          "verified": true,
+          "note": "前100万条/月免费；标准版S0免费单元(1000在线设备)"
+        },
+        {
+          "product": "ModelArts",
+          "spec": "昇腾AI加速型(B1) 1卡·推理·公共资源池",
+          "billing": "按需",
+          "unit_label": "月/卡(连续)",
+          "ref_price": 15636.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 15636.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 15636.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 15636.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/productsdesc-bms_961bd6cfc3b893e19abed7aea0d09a1dsupport0",
+          "verified": true,
+          "note": "昇腾B1推理≈¥21.72/时；910 8卡训练≈¥155.98/时；训练/推理按需"
+        },
+        {
+          "product": "WAF Web应用防火墙",
+          "spec": "标准版（云模式）",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 3880.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 3880.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 3880.0
+            },
+            "high": {
+              "qty": 1,
+              "unit_price": 3880.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": false,
+          "note": "⚠数值偏高，疑似专业版价，待官网价格计算器复核"
+        },
+        {
+          "product": "DataArts 数据治理",
+          "spec": "数据治理 / 开发 / 服务",
+          "no_price": true,
+          "note": "数据治理平台，参考价待补充"
+        },
+        {
+          "product": "ROMA 应用与数据集成",
+          "spec": "应用 / 数据 / 设备集成",
+          "no_price": true,
+          "note": "集成平台，参考价待补充"
+        },
+        {
+          "product": "MRS MapReduce服务",
+          "spec": "大数据集群（Hadoop / Spark）",
+          "no_price": true,
+          "note": "大数据平台，参考价待补充"
+        },
+        {
+          "product": "OCR 文字识别",
+          "spec": "按调用量计费",
+          "no_price": true,
+          "note": "AI 文字识别，参考价待补充"
+        },
+        {
+          "product": "内容审核",
+          "spec": "按调用量计费",
+          "no_price": true,
+          "note": "AI 内容审核，参考价待补充"
+        },
+        {
+          "product": "视频直播 Live",
+          "spec": "按流量 / 并发计费",
+          "no_price": true,
+          "note": "视频直播，参考价待补充"
+        }
+      ]
+    },
+    "工业互联网": {
+      "description": "设备接入 + 缓存加速 + AI 质检/预测。",
+      "items": [
+        {
+          "product": "ECS 弹性云服务器",
+          "spec": "s6.large.2（2核4G）",
+          "billing": "按需",
+          "unit_label": "月/台",
+          "ref_price": 274.0,
+          "qty": 2,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 274.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 274.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 274.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/560654-5-B",
+          "verified": true,
+          "note": "按需连续运行价≈¥0.38/时；包月约¥166–220/月（渠道价，⚠待官网复核），高可靠建议升主备/集群"
+        },
+        {
+          "product": "OBS 对象存储",
+          "spec": "标准存储·单AZ",
+          "billing": "按量",
+          "unit_label": "月/GB",
+          "ref_price": 0.099,
+          "qty": 2000,
+          "tier": {
+            "low": {
+              "qty": 500,
+              "unit_price": 0.099
+            },
+            "mid": {
+              "qty": 2000,
+              "unit_price": 0.099
+            },
+            "high": {
+              "qty": 10000,
+              "unit_price": 0.099
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/obs.html",
+          "verified": true,
+          "note": "多AZ ¥0.139/GB·月、低频 ¥0.08、归档 ¥0.033；公网流出 ¥0.25–0.50/GB"
+        },
+        {
+          "product": "RDS for MySQL",
+          "spec": "主备·2核4G·40G SSD",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 470.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 470.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/mysql.html",
+          "verified": true,
+          "note": "主备版；单机¥196/月起、集群版¥729/月起"
+        },
+        {
+          "product": "CCE 云容器引擎",
+          "spec": "Standard/Turbo·50节点集群管理费（节点ECS另计）",
+          "billing": "包月",
+          "unit_label": "月/集群",
+          "ref_price": 420.8,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 420.8
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "集群管理费；工作节点 ECS 费用另计"
+        },
+        {
+          "product": "EIP 弹性公网IP",
+          "spec": "按带宽·5Mbit/s·动态BGP",
+          "billing": "按需",
+          "unit_label": "月/个",
+          "ref_price": 245.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 245.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 245.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 245.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/1235594-2-Y",
+          "verified": true,
+          "note": "5M按需≈¥0.34/时；按流量计费¥0.80/GB（波动流量更划算）"
+        },
+        {
+          "product": "HSS 企业主机安全",
+          "spec": "企业版",
+          "billing": "包月",
+          "unit_label": "月/台",
+          "ref_price": 90.0,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 2,
+              "unit_price": 90.0
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 90.0
+            },
+            "high": {
+              "qty": 10,
+              "unit_price": 90.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "企业版¥90/月/台"
+        },
+        {
+          "product": "CDN",
+          "spec": "中国大陆·流量计费",
+          "billing": "按量",
+          "unit_label": "月/GB流量",
+          "ref_price": 0.2,
+          "qty": 5000,
+          "tier": {
+            "low": {
+              "qty": 1000,
+              "unit_price": 0.2
+            },
+            "mid": {
+              "qty": 5000,
+              "unit_price": 0.2
+            },
+            "high": {
+              "qty": 20000,
+              "unit_price": 0.2
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/special/pro-cdn-hwyjf.html",
+          "verified": true,
+          "note": "流量计费¥0.20/GB起；500GB流量包=¥88更划算"
+        },
+        {
+          "product": "IoTDA 设备接入",
+          "spec": "基础版·消息数",
+          "billing": "按量",
+          "unit_label": "月/百万条",
+          "ref_price": 3.6,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 3.6
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 3.6
+            },
+            "high": {
+              "qty": 20,
+              "unit_price": 3.6
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/productsdesc-bms_2bc4d1e395cba49399742e176762c108support0",
+          "verified": true,
+          "note": "前100万条/月免费；标准版S0免费单元(1000在线设备)"
+        },
+        {
+          "product": "DCS 分布式缓存(Redis)",
+          "spec": "基础版·单机·24GB",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 1012.8,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 1012.8
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 1012.8
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 1012.8
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "基础版24GB；高可靠建议主备/集群版"
+        },
+        {
+          "product": "ModelArts",
+          "spec": "昇腾AI加速型(B1) 1卡·推理·公共资源池",
+          "billing": "按需",
+          "unit_label": "月/卡(连续)",
+          "ref_price": 15636.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 15636.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 15636.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 15636.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/productsdesc-bms_961bd6cfc3b893e19abed7aea0d09a1dsupport0",
+          "verified": true,
+          "note": "昇腾B1推理≈¥21.72/时；910 8卡训练≈¥155.98/时；训练/推理按需"
+        },
+        {
+          "product": "DataArts 数据治理",
+          "spec": "数据治理 / 开发 / 服务",
+          "no_price": true,
+          "note": "数据治理平台，参考价待补充"
+        },
+        {
+          "product": "ROMA 应用与数据集成",
+          "spec": "应用 / 数据 / 设备集成",
+          "no_price": true,
+          "note": "集成平台，参考价待补充"
+        },
+        {
+          "product": "MRS MapReduce服务",
+          "spec": "大数据集群（Hadoop / Spark）",
+          "no_price": true,
+          "note": "大数据平台，参考价待补充"
+        },
+        {
+          "product": "DLI 数据湖探索",
+          "spec": "Serverless 湖仓计算",
+          "no_price": true,
+          "note": "湖仓计算，参考价待补充"
+        }
+      ]
+    },
+    "智慧医疗": {
+      "description": "医疗影像/病历 AI 辅助（盘古为商务报价）+ Web 安全。",
+      "items": [
+        {
+          "product": "ECS 弹性云服务器",
+          "spec": "s6.large.2（2核4G）",
+          "billing": "按需",
+          "unit_label": "月/台",
+          "ref_price": 274.0,
+          "qty": 2,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 274.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 274.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 274.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/560654-5-B",
+          "verified": true,
+          "note": "按需连续运行价≈¥0.38/时；包月约¥166–220/月（渠道价，⚠待官网复核），高可靠建议升主备/集群"
+        },
+        {
+          "product": "OBS 对象存储",
+          "spec": "标准存储·单AZ",
+          "billing": "按量",
+          "unit_label": "月/GB",
+          "ref_price": 0.099,
+          "qty": 2000,
+          "tier": {
+            "low": {
+              "qty": 500,
+              "unit_price": 0.099
+            },
+            "mid": {
+              "qty": 2000,
+              "unit_price": 0.099
+            },
+            "high": {
+              "qty": 10000,
+              "unit_price": 0.099
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/obs.html",
+          "verified": true,
+          "note": "多AZ ¥0.139/GB·月、低频 ¥0.08、归档 ¥0.033；公网流出 ¥0.25–0.50/GB"
+        },
+        {
+          "product": "RDS for MySQL",
+          "spec": "主备·2核4G·40G SSD",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 470.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 470.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/mysql.html",
+          "verified": true,
+          "note": "主备版；单机¥196/月起、集群版¥729/月起"
+        },
+        {
+          "product": "CCE 云容器引擎",
+          "spec": "Standard/Turbo·50节点集群管理费（节点ECS另计）",
+          "billing": "包月",
+          "unit_label": "月/集群",
+          "ref_price": 420.8,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 420.8
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "集群管理费；工作节点 ECS 费用另计"
+        },
+        {
+          "product": "EIP 弹性公网IP",
+          "spec": "按带宽·5Mbit/s·动态BGP",
+          "billing": "按需",
+          "unit_label": "月/个",
+          "ref_price": 245.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 245.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 245.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 245.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/1235594-2-Y",
+          "verified": true,
+          "note": "5M按需≈¥0.34/时；按流量计费¥0.80/GB（波动流量更划算）"
+        },
+        {
+          "product": "HSS 企业主机安全",
+          "spec": "企业版",
+          "billing": "包月",
+          "unit_label": "月/台",
+          "ref_price": 90.0,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 2,
+              "unit_price": 90.0
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 90.0
+            },
+            "high": {
+              "qty": 10,
+              "unit_price": 90.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "企业版¥90/月/台"
+        },
+        {
+          "product": "CDN",
+          "spec": "中国大陆·流量计费",
+          "billing": "按量",
+          "unit_label": "月/GB流量",
+          "ref_price": 0.2,
+          "qty": 5000,
+          "tier": {
+            "low": {
+              "qty": 1000,
+              "unit_price": 0.2
+            },
+            "mid": {
+              "qty": 5000,
+              "unit_price": 0.2
+            },
+            "high": {
+              "qty": 20000,
+              "unit_price": 0.2
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/special/pro-cdn-hwyjf.html",
+          "verified": true,
+          "note": "流量计费¥0.20/GB起；500GB流量包=¥88更划算"
+        },
+        {
+          "product": "WAF Web应用防火墙",
+          "spec": "标准版（云模式）",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 3880.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 3880.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 3880.0
+            },
+            "high": {
+              "qty": 1,
+              "unit_price": 3880.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": false,
+          "note": "⚠数值偏高，疑似专业版价，待官网价格计算器复核"
+        },
+        {
+          "product": "盘古大模型",
+          "business_only": true,
+          "note": "按 token / 专属算力商务报价，请咨询华为云销售"
+        },
+        {
+          "product": "GaussDB",
+          "spec": "分布式数据库",
+          "no_price": true,
+          "note": "数据库，参考价待补充"
+        },
+        {
+          "product": "OCR 文字识别",
+          "spec": "按调用量计费",
+          "no_price": true,
+          "note": "AI 文字识别，参考价待补充"
+        },
+        {
+          "product": "数字人",
+          "spec": "按调用 / 实例计费",
+          "no_price": true,
+          "note": "AI 数字人，参考价待补充"
+        }
+      ]
+    },
+    "政务": {
+      "description": "政务云安全合规（华为云Stack 为私有化项目制报价）。",
+      "items": [
+        {
+          "product": "ECS 弹性云服务器",
+          "spec": "s6.large.2（2核4G）",
+          "billing": "按需",
+          "unit_label": "月/台",
+          "ref_price": 274.0,
+          "qty": 2,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 274.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 274.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 274.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/560654-5-B",
+          "verified": true,
+          "note": "按需连续运行价≈¥0.38/时；包月约¥166–220/月（渠道价，⚠待官网复核），高可靠建议升主备/集群"
+        },
+        {
+          "product": "OBS 对象存储",
+          "spec": "标准存储·单AZ",
+          "billing": "按量",
+          "unit_label": "月/GB",
+          "ref_price": 0.099,
+          "qty": 2000,
+          "tier": {
+            "low": {
+              "qty": 500,
+              "unit_price": 0.099
+            },
+            "mid": {
+              "qty": 2000,
+              "unit_price": 0.099
+            },
+            "high": {
+              "qty": 10000,
+              "unit_price": 0.099
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/obs.html",
+          "verified": true,
+          "note": "多AZ ¥0.139/GB·月、低频 ¥0.08、归档 ¥0.033；公网流出 ¥0.25–0.50/GB"
+        },
+        {
+          "product": "RDS for MySQL",
+          "spec": "主备·2核4G·40G SSD",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 470.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 470.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/mysql.html",
+          "verified": true,
+          "note": "主备版；单机¥196/月起、集群版¥729/月起"
+        },
+        {
+          "product": "CCE 云容器引擎",
+          "spec": "Standard/Turbo·50节点集群管理费（节点ECS另计）",
+          "billing": "包月",
+          "unit_label": "月/集群",
+          "ref_price": 420.8,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 420.8
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "集群管理费；工作节点 ECS 费用另计"
+        },
+        {
+          "product": "EIP 弹性公网IP",
+          "spec": "按带宽·5Mbit/s·动态BGP",
+          "billing": "按需",
+          "unit_label": "月/个",
+          "ref_price": 245.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 245.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 245.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 245.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/1235594-2-Y",
+          "verified": true,
+          "note": "5M按需≈¥0.34/时；按流量计费¥0.80/GB（波动流量更划算）"
+        },
+        {
+          "product": "HSS 企业主机安全",
+          "spec": "企业版",
+          "billing": "包月",
+          "unit_label": "月/台",
+          "ref_price": 90.0,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 2,
+              "unit_price": 90.0
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 90.0
+            },
+            "high": {
+              "qty": 10,
+              "unit_price": 90.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "企业版¥90/月/台"
+        },
+        {
+          "product": "CDN",
+          "spec": "中国大陆·流量计费",
+          "billing": "按量",
+          "unit_label": "月/GB流量",
+          "ref_price": 0.2,
+          "qty": 5000,
+          "tier": {
+            "low": {
+              "qty": 1000,
+              "unit_price": 0.2
+            },
+            "mid": {
+              "qty": 5000,
+              "unit_price": 0.2
+            },
+            "high": {
+              "qty": 20000,
+              "unit_price": 0.2
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/special/pro-cdn-hwyjf.html",
+          "verified": true,
+          "note": "流量计费¥0.20/GB起；500GB流量包=¥88更划算"
+        },
+        {
+          "product": "WAF Web应用防火墙",
+          "spec": "标准版（云模式）",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 3880.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 3880.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 3880.0
+            },
+            "high": {
+              "qty": 1,
+              "unit_price": 3880.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": false,
+          "note": "⚠数值偏高，疑似专业版价，待官网价格计算器复核"
+        },
+        {
+          "product": "华为云Stack",
+          "business_only": true,
+          "note": "私有化项目制报价，请咨询华为云销售"
+        },
+        {
+          "product": "DataArts 数据治理",
+          "spec": "数据治理 / 开发 / 服务",
+          "no_price": true,
+          "note": "数据治理平台，参考价待补充"
+        },
+        {
+          "product": "GaussDB",
+          "spec": "分布式数据库",
+          "no_price": true,
+          "note": "数据库，参考价待补充"
+        },
+        {
+          "product": "BCS 区块链",
+          "spec": "区块链服务",
+          "no_price": true,
+          "note": "区块链，参考价待补充"
+        }
+      ]
+    },
+    "制造": {
+      "description": "产线设备接入 + 缓存加速。",
+      "items": [
+        {
+          "product": "ECS 弹性云服务器",
+          "spec": "s6.large.2（2核4G）",
+          "billing": "按需",
+          "unit_label": "月/台",
+          "ref_price": 274.0,
+          "qty": 2,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 274.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 274.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 274.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/560654-5-B",
+          "verified": true,
+          "note": "按需连续运行价≈¥0.38/时；包月约¥166–220/月（渠道价，⚠待官网复核），高可靠建议升主备/集群"
+        },
+        {
+          "product": "OBS 对象存储",
+          "spec": "标准存储·单AZ",
+          "billing": "按量",
+          "unit_label": "月/GB",
+          "ref_price": 0.099,
+          "qty": 2000,
+          "tier": {
+            "low": {
+              "qty": 500,
+              "unit_price": 0.099
+            },
+            "mid": {
+              "qty": 2000,
+              "unit_price": 0.099
+            },
+            "high": {
+              "qty": 10000,
+              "unit_price": 0.099
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/obs.html",
+          "verified": true,
+          "note": "多AZ ¥0.139/GB·月、低频 ¥0.08、归档 ¥0.033；公网流出 ¥0.25–0.50/GB"
+        },
+        {
+          "product": "RDS for MySQL",
+          "spec": "主备·2核4G·40G SSD",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 470.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 470.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/mysql.html",
+          "verified": true,
+          "note": "主备版；单机¥196/月起、集群版¥729/月起"
+        },
+        {
+          "product": "CCE 云容器引擎",
+          "spec": "Standard/Turbo·50节点集群管理费（节点ECS另计）",
+          "billing": "包月",
+          "unit_label": "月/集群",
+          "ref_price": 420.8,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 420.8
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "集群管理费；工作节点 ECS 费用另计"
+        },
+        {
+          "product": "EIP 弹性公网IP",
+          "spec": "按带宽·5Mbit/s·动态BGP",
+          "billing": "按需",
+          "unit_label": "月/个",
+          "ref_price": 245.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 245.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 245.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 245.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/1235594-2-Y",
+          "verified": true,
+          "note": "5M按需≈¥0.34/时；按流量计费¥0.80/GB（波动流量更划算）"
+        },
+        {
+          "product": "HSS 企业主机安全",
+          "spec": "企业版",
+          "billing": "包月",
+          "unit_label": "月/台",
+          "ref_price": 90.0,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 2,
+              "unit_price": 90.0
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 90.0
+            },
+            "high": {
+              "qty": 10,
+              "unit_price": 90.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "企业版¥90/月/台"
+        },
+        {
+          "product": "CDN",
+          "spec": "中国大陆·流量计费",
+          "billing": "按量",
+          "unit_label": "月/GB流量",
+          "ref_price": 0.2,
+          "qty": 5000,
+          "tier": {
+            "low": {
+              "qty": 1000,
+              "unit_price": 0.2
+            },
+            "mid": {
+              "qty": 5000,
+              "unit_price": 0.2
+            },
+            "high": {
+              "qty": 20000,
+              "unit_price": 0.2
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/special/pro-cdn-hwyjf.html",
+          "verified": true,
+          "note": "流量计费¥0.20/GB起；500GB流量包=¥88更划算"
+        },
+        {
+          "product": "IoTDA 设备接入",
+          "spec": "基础版·消息数",
+          "billing": "按量",
+          "unit_label": "月/百万条",
+          "ref_price": 3.6,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 3.6
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 3.6
+            },
+            "high": {
+              "qty": 20,
+              "unit_price": 3.6
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/productsdesc-bms_2bc4d1e395cba49399742e176762c108support0",
+          "verified": true,
+          "note": "前100万条/月免费；标准版S0免费单元(1000在线设备)"
+        },
+        {
+          "product": "DCS 分布式缓存(Redis)",
+          "spec": "基础版·单机·24GB",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 1012.8,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 1012.8
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 1012.8
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 1012.8
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "基础版24GB；高可靠建议主备/集群版"
+        },
+        {
+          "product": "DWS 数据仓库",
+          "spec": "数据仓库集群",
+          "no_price": true,
+          "note": "数据仓库，参考价待补充"
+        },
+        {
+          "product": "GaussDB",
+          "spec": "分布式数据库",
+          "no_price": true,
+          "note": "数据库，参考价待补充"
+        }
+      ]
+    },
+    "矿山": {
+      "description": "AI 视觉（巡检/作业识别）+ 设备接入（华为云Stack 私有化报价）。",
+      "items": [
+        {
+          "product": "ECS 弹性云服务器",
+          "spec": "s6.large.2（2核4G）",
+          "billing": "按需",
+          "unit_label": "月/台",
+          "ref_price": 274.0,
+          "qty": 2,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 274.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 274.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 274.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/560654-5-B",
+          "verified": true,
+          "note": "按需连续运行价≈¥0.38/时；包月约¥166–220/月（渠道价，⚠待官网复核），高可靠建议升主备/集群"
+        },
+        {
+          "product": "OBS 对象存储",
+          "spec": "标准存储·单AZ",
+          "billing": "按量",
+          "unit_label": "月/GB",
+          "ref_price": 0.099,
+          "qty": 2000,
+          "tier": {
+            "low": {
+              "qty": 500,
+              "unit_price": 0.099
+            },
+            "mid": {
+              "qty": 2000,
+              "unit_price": 0.099
+            },
+            "high": {
+              "qty": 10000,
+              "unit_price": 0.099
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/obs.html",
+          "verified": true,
+          "note": "多AZ ¥0.139/GB·月、低频 ¥0.08、归档 ¥0.033；公网流出 ¥0.25–0.50/GB"
+        },
+        {
+          "product": "RDS for MySQL",
+          "spec": "主备·2核4G·40G SSD",
+          "billing": "包月",
+          "unit_label": "月/实例",
+          "ref_price": 470.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 470.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 470.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/product/mysql.html",
+          "verified": true,
+          "note": "主备版；单机¥196/月起、集群版¥729/月起"
+        },
+        {
+          "product": "CCE 云容器引擎",
+          "spec": "Standard/Turbo·50节点集群管理费（节点ECS另计）",
+          "billing": "包月",
+          "unit_label": "月/集群",
+          "ref_price": 420.8,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 420.8
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 420.8
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "集群管理费；工作节点 ECS 费用另计"
+        },
+        {
+          "product": "EIP 弹性公网IP",
+          "spec": "按带宽·5Mbit/s·动态BGP",
+          "billing": "按需",
+          "unit_label": "月/个",
+          "ref_price": 245.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 245.0
+            },
+            "mid": {
+              "qty": 2,
+              "unit_price": 245.0
+            },
+            "high": {
+              "qty": 4,
+              "unit_price": 245.0
+            }
+          },
+          "source_url": "https://support.huaweicloud.com/topic/1235594-2-Y",
+          "verified": true,
+          "note": "5M按需≈¥0.34/时；按流量计费¥0.80/GB（波动流量更划算）"
+        },
+        {
+          "product": "HSS 企业主机安全",
+          "spec": "企业版",
+          "billing": "包月",
+          "unit_label": "月/台",
+          "ref_price": 90.0,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 2,
+              "unit_price": 90.0
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 90.0
+            },
+            "high": {
+              "qty": 10,
+              "unit_price": 90.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/page-2908",
+          "verified": true,
+          "note": "企业版¥90/月/台"
+        },
+        {
+          "product": "CDN",
+          "spec": "中国大陆·流量计费",
+          "billing": "按量",
+          "unit_label": "月/GB流量",
+          "ref_price": 0.2,
+          "qty": 5000,
+          "tier": {
+            "low": {
+              "qty": 1000,
+              "unit_price": 0.2
+            },
+            "mid": {
+              "qty": 5000,
+              "unit_price": 0.2
+            },
+            "high": {
+              "qty": 20000,
+              "unit_price": 0.2
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/special/pro-cdn-hwyjf.html",
+          "verified": true,
+          "note": "流量计费¥0.20/GB起；500GB流量包=¥88更划算"
+        },
+        {
+          "product": "ModelArts",
+          "spec": "昇腾AI加速型(B1) 1卡·推理·公共资源池",
+          "billing": "按需",
+          "unit_label": "月/卡(连续)",
+          "ref_price": 15636.0,
+          "qty": 1,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 15636.0
+            },
+            "mid": {
+              "qty": 1,
+              "unit_price": 15636.0
+            },
+            "high": {
+              "qty": 2,
+              "unit_price": 15636.0
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/productsdesc-bms_961bd6cfc3b893e19abed7aea0d09a1dsupport0",
+          "verified": true,
+          "note": "昇腾B1推理≈¥21.72/时；910 8卡训练≈¥155.98/时；训练/推理按需"
+        },
+        {
+          "product": "IoTDA 设备接入",
+          "spec": "基础版·消息数",
+          "billing": "按量",
+          "unit_label": "月/百万条",
+          "ref_price": 3.6,
+          "qty": 5,
+          "tier": {
+            "low": {
+              "qty": 1,
+              "unit_price": 3.6
+            },
+            "mid": {
+              "qty": 5,
+              "unit_price": 3.6
+            },
+            "high": {
+              "qty": 20,
+              "unit_price": 3.6
+            }
+          },
+          "source_url": "https://www.huaweicloud.com/guide/productsdesc-bms_2bc4d1e395cba49399742e176762c108support0",
+          "verified": true,
+          "note": "前100万条/月免费；标准版S0免费单元(1000在线设备)"
+        },
+        {
+          "product": "华为云Stack",
+          "business_only": true,
+          "note": "私有化项目制报价，请咨询华为云销售"
+        },
+        {
+          "product": "MRS MapReduce服务",
+          "spec": "大数据集群（Hadoop / Spark）",
+          "no_price": true,
+          "note": "大数据平台，参考价待补充"
+        },
+        {
+          "product": "内容审核",
+          "spec": "按调用量计费",
+          "no_price": true,
+          "note": "AI 内容审核，参考价待补充"
+        }
+      ]
+    }
+  },
+  "business_only_products": [
+    "盘古大模型",
+    "华为云Stack"
+  ]
+}

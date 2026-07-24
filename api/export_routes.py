@@ -39,14 +39,16 @@ async def export_report(request: ExportRequest):
                 report_type=request.report_type,
                 chapters=request.solution_json,
                 format=request.format,
-                metadata=request.metadata or {}
+                metadata=request.metadata or {},
+                cost_reference=request.cost_reference
             )
         else:
             task = report_generator.generate_report(
                 report_type=request.report_type,
                 content=request.content,
                 format=request.format,
-                metadata=request.metadata or {}
+                metadata=request.metadata or {},
+                cost_reference=request.cost_reference
             )
         
         if task.status == TaskStatus.FAILED:

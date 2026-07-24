@@ -211,6 +211,7 @@ class ExportRequest(BaseModel):
     solution_json: Optional[Any] = Field(default=None, description="结构化方案（章节+要点），优先于 content 直接生成报告")
     source_documents: Optional[List[Dict[str, Any]]] = Field(default=None, description="参考文档")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="元数据")
+    cost_reference: Optional[Dict[str, Any]] = Field(default=None, description="成本参考附表（前端成本卡片编辑态：industry/is_default/description/disclaimer/collected_at/region/rows[]），导出时以原生表格渲染，不进入 Markdown 正文")
 
 
 class ExportResultResponse(BaseModel):

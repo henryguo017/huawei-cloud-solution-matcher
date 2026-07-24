@@ -5474,6 +5474,14 @@ function initEventListeners() {
             const disc = document.getElementById('cr-disclaimer');
             if (disc) disc.textContent = (data.disclaimer || '') + `（数据采集：${data.collected_at || ''} · ${data.region || ''}）`;
 
+            // 缓存行业/免责等元信息，供导出成本表使用
+            window.__crState.industry = data.industry || '';
+            window.__crState.is_default = !!data.is_default;
+            window.__crState.description = data.description || '';
+            window.__crState.disclaimer = (data.disclaimer || '') + (data.collected_at ? `（数据采集：${data.collected_at} · ${data.region || ''}）` : '');
+            window.__crState.collected_at = data.collected_at || '';
+            window.__crState.region = data.region || '';
+
             window.__crState.rows = data.items.map(it => {
                 if (it.business_only) {
                     return { product: it.product, spec: it.spec || '', business_only: true, note: it.note || '商务报价，请咨询华为云销售' };
@@ -5684,6 +5692,32 @@ function initEventListeners() {
         }
         UI.showToast('正在生成方案书...', 'info');
         try {
+            // 构造成本参考附表（使用用户在卡片中修改确认过的编辑态）
+            let cost_reference = null;
+            const cr = window.__crState;
+            if (cr && cr.rows && cr.rows.length) {
+                cost_reference = {
+                    industry: cr.industry || (cached.industry || ''),
+                    is_default: !!cr.is_default,
+                    description: cr.description || '',
+                    disclaimer: cr.disclaimer || '',
+                    collected_at: cr.collected_at || '',
+                    region: cr.region || '',
+                    tier: cr.tier || null,
+                    rows: cr.rows.map(r => ({
+                        product: r.product,
+                        spec: r.spec || '',
+                        billing: r.billing || '',
+                        unit_label: r.unit_label || '',
+                        qty: r.qty,
+                        unit_price: r.unit_price,
+                        verified: r.verified !== false,
+                        note: r.note || '',
+                        business_only: !!r.business_only,
+                        no_price: !!r.no_price
+                    }))
+                };
+            }
             const resp = await API.exportReport({
                 report_type: 'solution',
                 format: 'word',
@@ -5691,7 +5725,8 @@ function initEventListeners() {
                 content: cached.answer,
                 solution_json: cached.solution_json || null,
                 source_documents: cached.source_documents || [],
-                metadata: { customer: '', title: '华为云解决方案建议书' }
+                metadata: { customer: '', title: '华为云解决方案建议书' },
+                cost_reference
             });
             const status = (resp.status || '').toUpperCase();
             if (status !== 'COMPLETED') {
@@ -5725,10 +5760,37 @@ function initEventListeners() {
 
     document.getElementById('download-solution-btn')?.addEventListener('click', () => {
         if (State.resultCache.solution) {
-            UI.downloadFile(
-                State.resultCache.solution.answer,
-                '华为云解决方案建议书.md'
-            );
+            let md = State.resultCache.solution.answer || '';
+            // 追加成本参考附表（合法 Markdown 表格，供纯文本查看）
+            const cr = window.__crState;
+            if (cr && cr.rows && cr.rows.length) {
+                const lines = ['', '---', '', '## 成本参考估算（区间参考，非精确报价）', ''];
+                lines.push('| 产品 | 规格 | 计费方式 | 数量 | 单价(元/月) | 小计(元/月) |');
+                lines.push('| :--- | :--- | :--- | :--- | :--- | :--- |');
+                let total = 0;
+                cr.rows.forEach(r => {
+                    const product = r.product || '';
+                    const spec = r.spec || '';
+                    if (r.business_only) {
+                        lines.push(`| **${product}** | ${spec} | — | — | — | 商务定价：${r.note || '请咨询华为云销售'} |`);
+                        return;
+                    }
+                    if (r.no_price) {
+                        lines.push(`| **${product}** | ${spec} | — | — | — | 参考价待补充：${r.note || ''} |`);
+                        return;
+                    }
+                    const qty = Number(r.qty) || 0;
+                    const up = Number(r.unit_price) || 0;
+                    const sub = Math.round(qty * up * 100) / 100;
+                    total += sub;
+                    const billing = (r.billing || '') + (r.unit_label ? ('·' + r.unit_label) : '');
+                    lines.push(`| **${product}** | ${spec} | ${billing} | ${qty} | ${up} | ${sub} |`);
+                });
+                lines.push('', `**合计（估算，不含商务定价与待补充项）：¥${total.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} 元/月**`);
+                if (cr.disclaimer) lines.push('', `免责声明：${cr.disclaimer}`);
+                md += lines.join('\n');
+            }
+            UI.downloadFile(md, '华为云解决方案建议书.md');
         }
     });
 
