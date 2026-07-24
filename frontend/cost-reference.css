@@ -103,6 +103,15 @@
     background: #fafafa;
     color: #86909c;
 }
+.cr-row-noprice {
+    grid-template-columns: 1fr auto;
+    background: #fcfcfd;
+    color: #a9aeb8;
+}
+.cr-row-noprice .cr-c-product b {
+    color: #4e5969;
+    font-weight: 600;
+}
 .cr-c-product b {
     color: #1d2129;
     font-weight: 600;

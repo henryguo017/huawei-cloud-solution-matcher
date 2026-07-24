@@ -145,28 +145,56 @@ BUSINESS_ONLY = {
     "华为云Stack": "私有化项目制报价，请咨询华为云销售",
 }
 
+# 暂无可靠公开价的产品（不编造数字，仅作「参考价待补充」占位，不参与合计）
+NO_PRICE_ITEMS = {
+    "EVS": {"product": "EVS 云硬盘", "spec": "高IO / 超高IO（按容量计费）", "note": "常见块存储，参考价待补充"},
+    "WeLink": {"product": "WeLink 协作", "spec": "企业协同办公", "note": "协作平台，参考价待补充"},
+    "DataArts": {"product": "DataArts 数据治理", "spec": "数据治理 / 开发 / 服务", "note": "数据治理平台，参考价待补充"},
+    "ROMA": {"product": "ROMA 应用与数据集成", "spec": "应用 / 数据 / 设备集成", "note": "集成平台，参考价待补充"},
+    "MRS": {"product": "MRS MapReduce服务", "spec": "大数据集群（Hadoop / Spark）", "note": "大数据平台，参考价待补充"},
+    "DLI": {"product": "DLI 数据湖探索", "spec": "Serverless 湖仓计算", "note": "湖仓计算，参考价待补充"},
+    "DWS": {"product": "DWS 数据仓库", "spec": "数据仓库集群", "note": "数据仓库，参考价待补充"},
+    "GaussDB": {"product": "GaussDB", "spec": "分布式数据库", "note": "数据库，参考价待补充"},
+    "OCR": {"product": "OCR 文字识别", "spec": "按调用量计费", "note": "AI 文字识别，参考价待补充"},
+    "内容审核": {"product": "内容审核", "spec": "按调用量计费", "note": "AI 内容审核，参考价待补充"},
+    "数字人": {"product": "数字人", "spec": "按调用 / 实例计费", "note": "AI 数字人，参考价待补充"},
+    "BCS": {"product": "BCS 区块链", "spec": "区块链服务", "note": "区块链，参考价待补充"},
+    "视频直播": {"product": "视频直播 Live", "spec": "按流量 / 并发计费", "note": "视频直播，参考价待补充"},
+}
+
 
 def biz_item(name):
     return {"product": name, "business_only": True, "note": BUSINESS_ONLY[name]}
+
+
+def no_price_item(name):
+    d = NO_PRICE_ITEMS[name]
+    return {"product": d["product"], "spec": d["spec"], "no_price": True, "note": d["note"]}
 
 
 # ---------- 行业成本参考骨架（profiles）----------
 BASE = ["ECS", "OBS", "RDS", "CCE", "EIP", "HSS", "CDN"]
 
 PROFILE_DEFS = {
-    "通用": {"items": BASE, "biz": [],
+    "通用": {"items": BASE, "biz": [], "noprice": ["EVS", "WeLink"],
              "desc": "通用云底座（计算/存储/数据库/容器/网络/安全/CDN），适用于绝大多数方案的成本量级参考。"},
     "智慧城市": {"items": BASE + ["IoTDA", "ModelArts", "WAF"], "biz": [],
+                 "noprice": ["DataArts", "ROMA", "MRS", "OCR", "内容审核", "视频直播"],
                  "desc": "城市物联感知 + AI 推理 + Web 安全防护。"},
     "工业互联网": {"items": BASE + ["IoTDA", "DCS", "ModelArts"], "biz": [],
+                  "noprice": ["DataArts", "ROMA", "MRS", "DLI"],
                   "desc": "设备接入 + 缓存加速 + AI 质检/预测。"},
     "智慧医疗": {"items": BASE + ["WAF"], "biz": ["盘古大模型"],
+                 "noprice": ["GaussDB", "OCR", "数字人"],
                  "desc": "医疗影像/病历 AI 辅助（盘古为商务报价）+ Web 安全。"},
     "政务": {"items": BASE + ["WAF"], "biz": ["华为云Stack"],
+             "noprice": ["DataArts", "GaussDB", "BCS"],
              "desc": "政务云安全合规（华为云Stack 为私有化项目制报价）。"},
     "制造": {"items": BASE + ["IoTDA", "DCS"], "biz": [],
+             "noprice": ["DWS", "GaussDB"],
              "desc": "产线设备接入 + 缓存加速。"},
     "矿山": {"items": BASE + ["ModelArts", "IoTDA"], "biz": ["华为云Stack"],
+             "noprice": ["MRS", "内容审核"],
              "desc": "AI 视觉（巡检/作业识别）+ 设备接入（华为云Stack 私有化报价）。"},
 }
 
@@ -177,6 +205,8 @@ def build_profiles():
         items = [dict(ITEMS[k]) for k in cfg["items"]]
         for b in cfg["biz"]:
             items.append(biz_item(b))
+        for n in cfg.get("noprice", []):
+            items.append(no_price_item(n))
         profiles[name] = {"description": cfg["desc"], "items": items}
     return profiles
 

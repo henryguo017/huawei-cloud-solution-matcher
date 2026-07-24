@@ -5393,10 +5393,12 @@ function initEventListeners() {
             + '<span class="cr-c-price">单价(月)</span>'
             + '<span class="cr-c-sub">小计</span></div>';
         window.__crState.rows.forEach((row, idx) => {
-            if (row.business_only) {
-                html += `<div class="cr-row cr-row-biz">`
+            if (row.business_only || row.no_price) {
+                const label = row.business_only ? '商务定价' : '参考价待补充';
+                const cls = row.business_only ? 'cr-row-biz' : 'cr-row-noprice';
+                html += `<div class="cr-row ${cls}">`
                     + `<span class="cr-c-product"><b>${_crEsc(row.product)}</b><br><small>${_crEsc(row.spec || '')}</small></span>`
-                    + `<span class="cr-c-biz-note">${_crEsc(row.note)}</span></div>`;
+                    + `<span class="cr-c-biz-note">${_crEsc(label)}：${_crEsc(row.note || '')}</span></div>`;
                 return;
             }
             const sub = row.qty * row.unit_price;
@@ -5425,7 +5427,7 @@ function initEventListeners() {
     }
     function _crComputeTotal() {
         let total = 0;
-        window.__crState.rows.forEach(r => { if (!r.business_only) total += r.qty * r.unit_price; });
+        window.__crState.rows.forEach(r => { if (!r.business_only && !r.no_price) total += r.qty * r.unit_price; });
         const el = document.getElementById('cr-total');
         if (el) el.textContent = '¥' + _crMoney(total);
     }
@@ -5475,6 +5477,9 @@ function initEventListeners() {
             window.__crState.rows = data.items.map(it => {
                 if (it.business_only) {
                     return { product: it.product, spec: it.spec || '', business_only: true, note: it.note || '商务报价，请咨询华为云销售' };
+                }
+                if (it.no_price) {
+                    return { product: it.product, spec: it.spec || '', no_price: true, note: it.note || '参考价待补充' };
                 }
                 const mid = (it.tier && it.tier.mid) || { qty: it.qty || 1, unit_price: it.ref_price || 0 };
                 return {
