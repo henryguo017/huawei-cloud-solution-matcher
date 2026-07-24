@@ -1,0 +1,198 @@
+/* ===== 成本参考卡片（方案成本估算器） ===== */
+/* 主题跟随全局变量 --primary-color (#C7000B 华为红)，白底细边框、无发光，与网站一致 */
+.cost-reference-card {
+    margin-top: 16px;
+    padding: 18px 20px 16px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    border-radius: 12px;
+    background: #fff;
+}
+.cr-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.cr-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1d2129;
+}
+.cr-title .icon {
+    width: 18px;
+    height: 18px;
+    color: var(--primary-color);
+}
+.cr-badge {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: var(--primary-light, rgba(199,0,11,0.08));
+    border-radius: 6px;
+    padding: 2px 8px;
+    margin-left: 4px;
+}
+.cr-sub {
+    font-size: 12px;
+    color: #86909c;
+    flex-basis: 100%;
+    margin-top: 2px;
+}
+.cr-tier-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.cr-tier-label {
+    font-size: 13px;
+    color: #4e5969;
+    margin-right: 2px;
+}
+.cr-tier-btn {
+    font-size: 13px;
+    padding: 5px 14px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    background: #fff;
+    color: #4e5969;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.cr-tier-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+.cr-tier-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    font-weight: 600;
+}
+.cr-table {
+    border: 1px solid var(--border-color, #e6e8eb);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.cr-row {
+    display: grid;
+    grid-template-columns: 1fr 90px 140px 110px;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f1f3;
+    font-size: 13px;
+}
+.cr-row:last-child {
+    border-bottom: none;
+}
+.cr-row-head {
+    background: #f7f8fa;
+    color: #86909c;
+    font-weight: 600;
+    font-size: 12px;
+}
+.cr-row-biz {
+    grid-template-columns: 1fr auto;
+    background: #fafafa;
+    color: #86909c;
+}
+.cr-c-product b {
+    color: #1d2129;
+    font-weight: 600;
+}
+.cr-c-product small {
+    display: block;
+    color: #86909c;
+    font-size: 11px;
+    margin-top: 2px;
+}
+.cr-bill {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #4e5969;
+    background: #f2f3f5;
+    border-radius: 4px;
+    padding: 1px 6px;
+}
+.cr-warn {
+    color: #d4380d;
+    font-weight: 700;
+    margin-left: 4px;
+    cursor: help;
+}
+.cr-c-qty, .cr-c-price {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.cr-input {
+    width: 100%;
+    min-width: 0;
+    padding: 5px 7px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    border-radius: 6px;
+    font-size: 13px;
+    color: #1d2129;
+    background: #fff;
+}
+.cr-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--primary-light, rgba(199,0,11,0.08));
+}
+.cr-unit {
+    font-size: 11px;
+    color: #86909c;
+    white-space: nowrap;
+}
+.cr-c-sub {
+    text-align: right;
+    font-weight: 600;
+    color: #1d2129;
+    font-variant-numeric: tabular-nums;
+}
+.cr-c-biz-note {
+    font-size: 12px;
+    color: #d4380d;
+    text-align: right;
+}
+.cr-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--primary-light, rgba(199,0,11,0.06));
+    border-radius: 10px;
+}
+.cr-total-label {
+    font-size: 13px;
+    color: #4e5969;
+}
+.cr-total-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--primary-color);
+    font-variant-numeric: tabular-nums;
+}
+.cr-disclaimer {
+    margin-top: 10px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #a9aeb8;
+}
+@media (max-width: 600px) {
+    .cr-row {
+        grid-template-columns: 1fr 70px 110px 90px;
+        font-size: 12px;
+    }
+    .cr-total-value { font-size: 19px; }
+}

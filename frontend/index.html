@@ -7,6 +7,7 @@
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="style.css?v=20260724a">
+    <link rel="stylesheet" href="cost-reference.css?v=20260724a">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -743,6 +744,29 @@
                         <button class="btn btn-primary btn-sm qd-login-btn" id="qd-login-btn">登录 / 注册</button>
                     </div>
                     <div class="result-content content-card" id="solution-content"></div>
+                    <!-- 成本参考卡片：匹配结果出来后按行业拉公开价目骨架，可编辑数量/单价做参考估算 -->
+                    <div class="content-card cost-reference-card" id="cost-reference-card" style="display:none;">
+                        <div class="cr-header">
+                            <div class="cr-title">
+                                <svg class="icon" aria-hidden="true"><use href="#i-banknote"></use></svg>
+                                <span>成本参考</span>
+                                <span class="cr-badge" id="cr-industry-badge">通用</span>
+                            </div>
+                            <div class="cr-sub" id="cr-sub">基于公开价目表策展的区间参考</div>
+                        </div>
+                        <div class="cr-tier-tabs" id="cr-tier-tabs">
+                            <span class="cr-tier-label">档位：</span>
+                            <button class="cr-tier-btn" data-tier="low" type="button">低成本</button>
+                            <button class="cr-tier-btn active" data-tier="mid" type="button">均衡</button>
+                            <button class="cr-tier-btn" data-tier="high" type="button">高可靠</button>
+                        </div>
+                        <div class="cr-table" id="cr-table"></div>
+                        <div class="cr-total">
+                            <span class="cr-total-label">预估月费合计（参考）</span>
+                            <strong class="cr-total-value" id="cr-total">¥0</strong>
+                        </div>
+                        <div class="cr-disclaimer" id="cr-disclaimer"></div>
+                    </div>
                     <!-- 方案追问优化区域 -->
                     <div class="follow-up-section" id="follow-up-section" style="display: none;">
                         <div class="follow-up-divider">
@@ -1965,7 +1989,7 @@
     </div><!-- /.app-shell -->
 
     <script src="js/chart.umd.min.js?v=20260714j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
-    <script src="script.js?v=20260719m"></script>
+    <script src="script.js?v=20260724a"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260716f"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">

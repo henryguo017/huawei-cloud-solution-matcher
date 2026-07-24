@@ -1208,11 +1208,22 @@ const API = {
 
     async getKnowledgeStats() {
         const response = await fetch(`${Config.API_BASE_URL}/knowledge/stats`);
-        
+
         if (!response.ok) {
             throw new Error(`获取统计失败: ${response.statusText}`);
         }
-        
+
+        return await response.json();
+    },
+
+    async getPricingReference(industry) {
+        const url = industry
+            ? `${Config.API_BASE_URL}/pricing/reference?industry=${encodeURIComponent(industry)}`
+            : `${Config.API_BASE_URL}/pricing/reference`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`获取价目失败: ${response.statusText}`);
+        }
         return await response.json();
     },
 
@@ -5134,6 +5145,9 @@ function initEventListeners() {
                 return;
             }
             SkeletonUI.showMatchFormSkeleton();
+            // 新匹配开始：隐藏上一轮成本参考卡片
+            const _cr = document.getElementById('cost-reference-card');
+            if (_cr) _cr.style.display = 'none';
             if (isAgentMode) MatchProgress.setSteps([
                 { icon: '<svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg>', label: '分析需求意图', desc: 'AI 理解模糊需求，提取关键信息' },
                 { icon: '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>', label: '智能搜索知识库', desc: '用结构化关键词精准检索' },
@@ -5339,6 +5353,9 @@ function initEventListeners() {
         const favName = (demand || '方案匹配结果').substring(0, 50);
         FavoriteManager._updateResultBtn('fav-solution-btn', favName);
 
+        // 成本参考卡片：按行业拉公开价目骨架，渲染可编辑 BOM
+        renderCostReference(result);
+
         MatchProgress.success('匹配完成！');
         UI.showToast('匹配完成！', 'success');
 
@@ -5349,6 +5366,133 @@ function initEventListeners() {
         if (result.newly_unlocked && result.newly_unlocked.length > 0 && window.AchievementUI && AchievementUI.showUnlockToast) {
             setTimeout(() => AchievementUI.showUnlockToast(result.newly_unlocked), 500);
         }
+    }
+
+    // ==================== 成本参考卡片（方案成本估算器） ====================
+    // 状态挂在 window.__crState，避免与文件其它作用域的 const 冲突
+    if (!window.__crState) window.__crState = { rows: [], tier: 'mid', bound: false };
+
+    function _crEsc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    function _crMoney(n) {
+        const v = Math.round((Number(n) || 0) * 100) / 100;
+        return v.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+    function _crUpdateTierButtons() {
+        document.querySelectorAll('#cr-tier-tabs .cr-tier-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.tier === window.__crState.tier);
+        });
+    }
+    function _crRenderTable() {
+        const table = document.getElementById('cr-table');
+        if (!table) return;
+        let html = '<div class="cr-row cr-row-head">'
+            + '<span class="cr-c-product">产品 / 规格</span>'
+            + '<span class="cr-c-qty">数量</span>'
+            + '<span class="cr-c-price">单价(月)</span>'
+            + '<span class="cr-c-sub">小计</span></div>';
+        window.__crState.rows.forEach((row, idx) => {
+            if (row.business_only) {
+                html += `<div class="cr-row cr-row-biz">`
+                    + `<span class="cr-c-product"><b>${_crEsc(row.product)}</b><br><small>${_crEsc(row.spec || '')}</small></span>`
+                    + `<span class="cr-c-biz-note">${_crEsc(row.note)}</span></div>`;
+                return;
+            }
+            const sub = row.qty * row.unit_price;
+            html += `<div class="cr-row" data-idx="${idx}">`
+                + `<span class="cr-c-product"><b>${_crEsc(row.product)}</b><br><small>${_crEsc(row.spec)}</small>`
+                + `<span class="cr-bill">${_crEsc(row.billing)}${row.unit_label ? (' · ' + _crEsc(row.unit_label)) : ''}</span>`
+                + `${row.verified ? '' : ' <span class="cr-warn" title="待官网复核">⚠</span>'}</span>`
+                + `<span class="cr-c-qty"><input type="number" min="0" class="cr-input cr-qty" data-idx="${idx}" value="${row.qty}"></span>`
+                + `<span class="cr-c-price"><input type="number" min="0" step="0.01" class="cr-input cr-price" data-idx="${idx}" value="${row.unit_price}"><span class="cr-unit">元</span></span>`
+                + `<span class="cr-c-sub" id="cr-sub-${idx}">¥${_crMoney(sub)}</span></div>`;
+        });
+        table.innerHTML = html;
+        table.querySelectorAll('.cr-qty, .cr-price').forEach(inp => {
+            inp.addEventListener('input', (e) => {
+                const i = parseInt(e.target.dataset.idx, 10);
+                const val = parseFloat(e.target.value) || 0;
+                if (e.target.classList.contains('cr-qty')) window.__crState.rows[i].qty = val;
+                else window.__crState.rows[i].unit_price = val;
+                const subEl = document.getElementById('cr-sub-' + i);
+                if (subEl) subEl.textContent = '¥' + _crMoney(window.__crState.rows[i].qty * window.__crState.rows[i].unit_price);
+                window.__crState.tier = null;
+                _crUpdateTierButtons();
+                _crComputeTotal();
+            });
+        });
+    }
+    function _crComputeTotal() {
+        let total = 0;
+        window.__crState.rows.forEach(r => { if (!r.business_only) total += r.qty * r.unit_price; });
+        const el = document.getElementById('cr-total');
+        if (el) el.textContent = '¥' + _crMoney(total);
+    }
+    function _crBindTierTabs() {
+        if (window.__crState.bound) return;
+        const tabs = document.getElementById('cr-tier-tabs');
+        if (!tabs) return;
+        tabs.querySelectorAll('.cr-tier-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tier = btn.dataset.tier;
+                window.__crState.tier = tier;
+                window.__crState.rows.forEach(row => {
+                    if (row.business_only || !row.tier) return;
+                    const t = row.tier[tier];
+                    if (t) { row.qty = t.qty; row.unit_price = t.unit_price; }
+                });
+                _crUpdateTierButtons();
+                _crRenderTable();
+                _crComputeTotal();
+            });
+        });
+        window.__crState.bound = true;
+    }
+    function renderCostReference(result) {
+        const card = document.getElementById('cost-reference-card');
+        if (!card) return;
+        let industry = '';
+        try {
+            const src = (result.source_documents || [])[0];
+            industry = src && src.metadata ? (src.metadata.industry || '') : '';
+        } catch (e) {}
+        if (State.resultCache.solution) State.resultCache.solution.industry = industry;
+
+        API.getPricingReference(industry).then(data => {
+            if (!data || !data.items || data.items.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = 'block';
+            const badge = document.getElementById('cr-industry-badge');
+            if (badge) badge.textContent = data.industry + (data.is_default ? '（通用）' : '');
+            const sub = document.getElementById('cr-sub');
+            if (sub) sub.textContent = data.description || '基于公开价目表策展的区间参考';
+            const disc = document.getElementById('cr-disclaimer');
+            if (disc) disc.textContent = (data.disclaimer || '') + `（数据采集：${data.collected_at || ''} · ${data.region || ''}）`;
+
+            window.__crState.rows = data.items.map(it => {
+                if (it.business_only) {
+                    return { product: it.product, spec: it.spec || '', business_only: true, note: it.note || '商务报价，请咨询华为云销售' };
+                }
+                const mid = (it.tier && it.tier.mid) || { qty: it.qty || 1, unit_price: it.ref_price || 0 };
+                return {
+                    product: it.product, spec: it.spec || '', billing: it.billing || '',
+                    unit_label: it.unit_label || '', ref_price: it.ref_price,
+                    qty: mid.qty, unit_price: mid.unit_price, tier: it.tier || null,
+                    source_url: it.source_url || '', verified: it.verified !== false, note: it.note || ''
+                };
+            });
+            window.__crState.tier = 'mid';
+            _crBindTierTabs();
+            _crUpdateTierButtons();
+            _crRenderTable();
+            _crComputeTotal();
+        }).catch(err => {
+            console.warn('成本参考加载失败:', err);
+            card.style.display = 'none';
+        });
     }
 
     // 展示澄清提问卡（阶段 2.5）

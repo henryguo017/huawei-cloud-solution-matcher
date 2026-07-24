@@ -130,6 +130,69 @@ async def health_check():
             }
         )
 
+# ==================== 成本参考（方案成本估算器基础数据） ====================
+# 数据文件 data/pricing_reference.json 被 gitignore，部署时需单独 scp 到服务器 data/ 目录。
+# 进程内缓存 + 文件 mtime 重载，避免每次请求读盘。
+_PRICING_CACHE: dict = {"data": None, "mtime": 0.0}
+
+def _load_pricing_reference(force: bool = False) -> dict:
+    """读取 data/pricing_reference.json（带 mtime 缓存）。文件缺失时返回空骨架，不抛 500。"""
+    global _PRICING_CACHE
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "pricing_reference.json")
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = 0.0
+    if force or _PRICING_CACHE["data"] is None or _PRICING_CACHE["mtime"] != mtime:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                _PRICING_CACHE["data"] = json.load(f)
+            _PRICING_CACHE["mtime"] = mtime
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"读取价目表失败: {e}")
+            _PRICING_CACHE["data"] = {"profiles": {}, "default_profile": "通用", "disclaimer": "", "collected_at": "", "region": ""}
+            _PRICING_CACHE["mtime"] = mtime
+    return _PRICING_CACHE["data"]
+
+
+@router.get("/pricing/industries", tags=["成本参考"])
+async def pricing_industries():
+    """返回价目表支持的行业骨架列表（供前端校验/回退）。"""
+    data = _load_pricing_reference()
+    profiles = data.get("profiles", {})
+    return {
+        "industries": list(profiles.keys()),
+        "default_profile": data.get("default_profile", "通用"),
+        "collected_at": data.get("collected_at", ""),
+        "region": data.get("region", ""),
+        "disclaimer": data.get("disclaimer", ""),
+    }
+
+
+@router.get("/pricing/reference", tags=["成本参考"])
+async def pricing_reference(industry: Optional[str] = None):
+    """
+    返回成本参考数据：按行业过滤后的成本骨架。
+    - industry 命中 profiles 则返回该行业；否则回退到 default_profile（通用）。
+    - 商务定价产品（business_only=True）不出数字，仅含提示文案。
+    """
+    data = _load_pricing_reference()
+    profiles = data.get("profiles", {})
+    default = data.get("default_profile", "通用")
+    key = industry if industry in profiles else default
+    profile = profiles.get(key, {})
+    return {
+        "industry": key,
+        "is_default": key == default,
+        "description": profile.get("description", ""),
+        "items": profile.get("items", []),
+        "collected_at": data.get("collected_at", ""),
+        "region": data.get("region", ""),
+        "disclaimer": data.get("disclaimer", ""),
+        "business_only_products": data.get("business_only_products", []),
+    }
+
+
 @router.post("/match", response_model=MatchResponse, tags=["解决方案匹配"])
 async def match_solution(
     request: MatchRequest,
