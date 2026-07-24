@@ -9973,10 +9973,10 @@ select:focus {
 /* 覆盖旧固定 navbar 留下的顶部留白 */
 .main-content { padding-top: var(--spacing-xl); }
 
-/* 全局滚动条品牌化 */
+/* 全局滚动条 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(199,0,11,0.25); border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(199,0,11,0.4); }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.32); }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ================================================================
@@ -10562,13 +10562,13 @@ table tbody tr:hover {
     box-shadow: 0 2px 6px rgba(199, 0, 11, 0.25);
 }
 
-/* ---- 18. 滚动条品牌色调 ---- */
+/* ---- 18. 滚动条 ---- */
 ::-webkit-scrollbar-thumb {
-    background: rgba(199, 0, 11, 0.2);
+    background: rgba(0, 0, 0, 0.15);
     border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(199, 0, 11, 0.35);
+    background: rgba(0, 0, 0, 0.3);
 }
 
 /* ============================================================
