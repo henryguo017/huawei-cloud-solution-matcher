@@ -19,6 +19,8 @@ OUT = os.path.join(HERE, "..", "data", "pricing_reference.json")
 
 COLLECTED_AT = "2026-07"
 REGION = "华北-北京四"
+# 年付折扣系数：年费 = 月费 × 12 × ANNUAL_DISCOUNT（模拟年付优惠，前端「月/年」切换用）
+ANNUAL_DISCOUNT = 0.85
 DISCLAIMER = (
     "本结果为参考估算，基于公开价目表策展常见规格区间，不含折扣与实时波动，"
     "实际价格以华为云官网价格计算器 / 销售报价为准。"
@@ -137,6 +139,137 @@ ITEMS = {
         "verified": False,
         "note": "⚠数值偏高，疑似专业版价，待官网价格计算器复核"
     },
+    # ---- 以下为 2026-07 补齐的公开价（原 no_price 项，均取华为云官网/帮助中心公开价）----
+    "EVS": {
+        "product": "EVS 云硬盘", "spec": "块存储（按类型/容量计费）", "billing": "按量",
+        "unit_label": "月/GB", "ref_price": 0.70, "qty": 1000,
+        "tier": {"low": {"qty": 500, "unit_price": 0.35},
+                 "mid": {"qty": 1000, "unit_price": 0.70},
+                 "high": {"qty": 2000, "unit_price": 1.00}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/evs",
+        "verified": True,
+        "note": "高IO ¥0.35/GiB·月、通用型SSD ¥0.70、超高IO ¥1.00、极速型SSD ¥2.00、通用型SSD V2 ¥0.50"
+    },
+    "OCR": {
+        "product": "OCR 文字识别", "spec": "通用文字识别（资源包）", "billing": "按量",
+        "unit_label": "月/千次", "ref_price": 15.0, "qty": 50,
+        "tier": {"low": {"qty": 10, "unit_price": 15.0},
+                 "mid": {"qty": 50, "unit_price": 15.0},
+                 "high": {"qty": 200, "unit_price": 15.0}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/ocr",
+        "verified": True,
+        "note": "资源包¥15/千次(1000次)；按需 网络图片¥0.05/次、增值税发票¥0.18/次、发票验真¥0.23/次"
+    },
+    "内容审核": {
+        "product": "内容审核 Moderation", "spec": "图像审核（按调用量）", "billing": "按量",
+        "unit_label": "月/千次", "ref_price": 0.35, "qty": 200,
+        "tier": {"low": {"qty": 50, "unit_price": 0.35},
+                 "mid": {"qty": 200, "unit_price": 0.35},
+                 "high": {"qty": 1000, "unit_price": 0.35}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/moderation",
+        "verified": True,
+        "note": "图像¥0.35/千次、文本¥0.16/千次、视频¥0.048/分钟"
+    },
+    "MRS": {
+        "product": "MRS MapReduce服务", "spec": "分析集群 5节点 ac7.4xlarge.4（LTS）", "billing": "包月",
+        "unit_label": "月/集群", "ref_price": 16321.60, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 16321.60},
+                 "mid": {"qty": 1, "unit_price": 16321.60},
+                 "high": {"qty": 2, "unit_price": 16321.60}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/mrs",
+        "verified": True,
+        "note": "包月¥16,321.60；按需≈¥30.31/小时（5节点 ac7.4xlarge.4）"
+    },
+    "DLI": {
+        "product": "DLI 数据湖探索", "spec": "套餐包 4000 CU时", "billing": "套餐包",
+        "unit_label": "月/套餐包", "ref_price": 1360.0, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 1360.0},
+                 "mid": {"qty": 2, "unit_price": 1360.0},
+                 "high": {"qty": 4, "unit_price": 1360.0}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/dli",
+        "verified": True,
+        "note": "套餐包4000CU时¥1360；弹性资源池¥0.4/CU·小时，16CU队列≈¥6.4/小时"
+    },
+    "DWS": {
+        "product": "DWS 数据仓库", "spec": "dwsx2.h.2xlarge.4.c7 · 3节点", "billing": "包月",
+        "unit_label": "月/集群", "ref_price": 7653.60, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 7653.60},
+                 "mid": {"qty": 1, "unit_price": 7653.60},
+                 "high": {"qty": 2, "unit_price": 7653.60}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/dws",
+        "verified": True,
+        "note": "包月¥7,653.6；按需≈¥10.63/小时（3节点 dwsx2.h.2xlarge.4.c7）"
+    },
+    "GaussDB": {
+        "product": "GaussDB", "spec": "分布式 / 主备（按部署形态）", "billing": "包月",
+        "unit_label": "月/实例", "ref_price": 4428.0, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 1327.33},
+                 "mid": {"qty": 1, "unit_price": 4428.0},
+                 "high": {"qty": 1, "unit_price": 30576.0}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/gaussdb",
+        "verified": True,
+        "note": "for MySQL 4核16G 2节点≈¥1,327/月(年付¥15,928)；分布式入门≈¥6.15/小时(≈¥4,428/月)；分布式高可用≈¥30,576/月"
+    },
+    "BCS": {
+        "product": "BCS 区块链服务", "spec": "专业版 / 企业版（含Peer）", "billing": "包月",
+        "unit_label": "月/实例", "ref_price": 5000.0, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 5000.0},
+                 "mid": {"qty": 1, "unit_price": 10000.0},
+                 "high": {"qty": 1, "unit_price": 60000.0}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/bcs",
+        "verified": True,
+        "note": "专业版¥5,000/月(含2 Peer,¥8/小时)；企业版¥10,000/月(¥17/小时)；铂金版¥60,000/月；增购Peer专业版¥2,000/个"
+    },
+    "DataArts": {
+        "product": "DataArts Studio 数据治理", "spec": "初级版 cdm.medium 4核8G", "billing": "包月",
+        "unit_label": "月/实例", "ref_price": 2000.0, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 2000.0},
+                 "mid": {"qty": 1, "unit_price": 2000.0},
+                 "high": {"qty": 2, "unit_price": 2000.0}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/dataartsstudio",
+        "verified": True,
+        "note": "初级版¥2,000/月(cdm.medium)；CDM数据集成 cdm.large 8核16G ≈¥2.25/小时(≈¥1,620/月)"
+    },
+    "ROMA": {
+        "product": "ROMA Connect 集成平台", "spec": "新版按 RCU 计费", "billing": "按量",
+        "unit_label": "月/RCU", "ref_price": 1987.2, "qty": 5,
+        "tier": {"low": {"qty": 2, "unit_price": 1987.2},
+                 "mid": {"qty": 5, "unit_price": 1987.2},
+                 "high": {"qty": 15, "unit_price": 1987.2}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/roma",
+        "verified": True,
+        "note": "新版¥3/RCU·小时；套餐包低至¥2.76/RCU·小时(≈¥1,987/RCU·月连续运行)；15 RCU实例≈¥45/小时"
+    },
+    "WeLink": {
+        "product": "WeLink 智能协同办公", "spec": "标准版 / 旗舰版（按人/月）", "billing": "包月",
+        "unit_label": "月/人", "ref_price": 20.0, "qty": 100,
+        "tier": {"low": {"qty": 50, "unit_price": 20.0},
+                 "mid": {"qty": 100, "unit_price": 20.0},
+                 "high": {"qty": 200, "unit_price": 40.0}},
+        "source_url": "https://www.huaweicloud.com/product/welink.html",
+        "verified": True,
+        "note": "标准版¥20/人/月、旗舰版¥40/人/月；免费版≤100成员"
+    },
+    "数字人": {
+        "product": "数字人 MetaStudio", "spec": "分身数字人智能交互（并发路）", "billing": "包月",
+        "unit_label": "月/路", "ref_price": 1800.0, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 1800.0},
+                 "mid": {"qty": 1, "unit_price": 1800.0},
+                 "high": {"qty": 2, "unit_price": 1800.0}},
+        "source_url": "https://support.huaweicloud.com/productdesc-metastudio/metastudio_01_0006.html",
+        "verified": True,
+        "note": "智能交互¥1,800/路·月；视频制作¥10/分钟、视频直播¥23/小时、形象制作¥5,999/个"
+    },
+    "视频直播": {
+        "product": "视频直播 Live", "spec": "标准直播·下行流量计费", "billing": "按量",
+        "unit_label": "月/GB流量", "ref_price": 0.225, "qty": 5000,
+        "tier": {"low": {"qty": 1000, "unit_price": 0.225},
+                 "mid": {"qty": 5000, "unit_price": 0.225},
+                 "high": {"qty": 20000, "unit_price": 0.225}},
+        "source_url": "https://support.huaweicloud.com/price-live/live-price-pdf.pdf",
+        "verified": True,
+        "note": "标准直播下行流量¥0.225/GB；云直播录制¥30/路·月；新开用户仅支持华北-北京四"
+    },
 }
 
 # 商务定价（不出数字，仅提示咨询销售）
@@ -146,21 +279,8 @@ BUSINESS_ONLY = {
 }
 
 # 暂无可靠公开价的产品（不编造数字，仅作「参考价待补充」占位，不参与合计）
-NO_PRICE_ITEMS = {
-    "EVS": {"product": "EVS 云硬盘", "spec": "高IO / 超高IO（按容量计费）", "note": "常见块存储，参考价待补充"},
-    "WeLink": {"product": "WeLink 协作", "spec": "企业协同办公", "note": "协作平台，参考价待补充"},
-    "DataArts": {"product": "DataArts 数据治理", "spec": "数据治理 / 开发 / 服务", "note": "数据治理平台，参考价待补充"},
-    "ROMA": {"product": "ROMA 应用与数据集成", "spec": "应用 / 数据 / 设备集成", "note": "集成平台，参考价待补充"},
-    "MRS": {"product": "MRS MapReduce服务", "spec": "大数据集群（Hadoop / Spark）", "note": "大数据平台，参考价待补充"},
-    "DLI": {"product": "DLI 数据湖探索", "spec": "Serverless 湖仓计算", "note": "湖仓计算，参考价待补充"},
-    "DWS": {"product": "DWS 数据仓库", "spec": "数据仓库集群", "note": "数据仓库，参考价待补充"},
-    "GaussDB": {"product": "GaussDB", "spec": "分布式数据库", "note": "数据库，参考价待补充"},
-    "OCR": {"product": "OCR 文字识别", "spec": "按调用量计费", "note": "AI 文字识别，参考价待补充"},
-    "内容审核": {"product": "内容审核", "spec": "按调用量计费", "note": "AI 内容审核，参考价待补充"},
-    "数字人": {"product": "数字人", "spec": "按调用 / 实例计费", "note": "AI 数字人，参考价待补充"},
-    "BCS": {"product": "BCS 区块链", "spec": "区块链服务", "note": "区块链，参考价待补充"},
-    "视频直播": {"product": "视频直播 Live", "spec": "按流量 / 并发计费", "note": "视频直播，参考价待补充"},
-}
+# 2026-07：原 13 项均已在官网/帮助中心检索到公开价，全部移入 ITEMS，此处清空。
+NO_PRICE_ITEMS = {}
 
 
 def biz_item(name):
@@ -176,26 +296,22 @@ def no_price_item(name):
 BASE = ["ECS", "OBS", "RDS", "CCE", "EIP", "HSS", "CDN"]
 
 PROFILE_DEFS = {
-    "通用": {"items": BASE, "biz": [], "noprice": ["EVS", "WeLink"],
+    "通用": {"items": BASE + ["EVS", "WeLink"], "biz": [], "noprice": [],
              "desc": "通用云底座（计算/存储/数据库/容器/网络/安全/CDN），适用于绝大多数方案的成本量级参考。"},
-    "智慧城市": {"items": BASE + ["IoTDA", "ModelArts", "WAF"], "biz": [],
-                 "noprice": ["DataArts", "ROMA", "MRS", "OCR", "内容审核", "视频直播"],
-                 "desc": "城市物联感知 + AI 推理 + Web 安全防护。"},
-    "工业互联网": {"items": BASE + ["IoTDA", "DCS", "ModelArts"], "biz": [],
-                  "noprice": ["DataArts", "ROMA", "MRS", "DLI"],
-                  "desc": "设备接入 + 缓存加速 + AI 质检/预测。"},
-    "智慧医疗": {"items": BASE + ["WAF"], "biz": ["盘古大模型"],
-                 "noprice": ["GaussDB", "OCR", "数字人"],
-                 "desc": "医疗影像/病历 AI 辅助（盘古为商务报价）+ Web 安全。"},
-    "政务": {"items": BASE + ["WAF"], "biz": ["华为云Stack"],
-             "noprice": ["DataArts", "GaussDB", "BCS"],
-             "desc": "政务云安全合规（华为云Stack 为私有化项目制报价）。"},
-    "制造": {"items": BASE + ["IoTDA", "DCS"], "biz": [],
-             "noprice": ["DWS", "GaussDB"],
-             "desc": "产线设备接入 + 缓存加速。"},
-    "矿山": {"items": BASE + ["ModelArts", "IoTDA"], "biz": ["华为云Stack"],
-             "noprice": ["MRS", "内容审核"],
-             "desc": "AI 视觉（巡检/作业识别）+ 设备接入（华为云Stack 私有化报价）。"},
+    "智慧城市": {"items": BASE + ["IoTDA", "ModelArts", "WAF", "DataArts", "ROMA", "MRS", "OCR", "内容审核", "视频直播"],
+                 "biz": [], "noprice": [],
+                 "desc": "城市物联感知 + AI 推理 + Web 安全防护 + 数据治理 / 大数据 / 音视频。"},
+    "工业互联网": {"items": BASE + ["IoTDA", "DCS", "ModelArts", "DataArts", "ROMA", "MRS", "DLI"],
+                  "biz": [], "noprice": [],
+                  "desc": "设备接入 + 缓存加速 + AI 质检/预测 + 数据集成 / 大数据分析。"},
+    "智慧医疗": {"items": BASE + ["WAF", "GaussDB", "OCR", "数字人"], "biz": ["盘古大模型"], "noprice": [],
+                 "desc": "医疗影像/病历 AI 辅助（盘古为商务报价）+ Web 安全 + 高可用数据库 + OCR / 数字人。"},
+    "政务": {"items": BASE + ["WAF", "DataArts", "GaussDB", "BCS"], "biz": ["华为云Stack"], "noprice": [],
+             "desc": "政务云安全合规（华为云Stack 为私有化项目制报价）+ 数据治理 / 高可用库 / 区块链存证。"},
+    "制造": {"items": BASE + ["IoTDA", "DCS", "DWS", "GaussDB"], "biz": [], "noprice": [],
+             "desc": "产线设备接入 + 缓存加速 + 数据仓库 / 高可用数据库。"},
+    "矿山": {"items": BASE + ["ModelArts", "IoTDA", "MRS", "内容审核"], "biz": ["华为云Stack"], "noprice": [],
+             "desc": "AI 视觉（巡检/作业识别）+ 设备接入 + 大数据 / 内容审核（华为云Stack 私有化报价）。"},
 }
 
 
@@ -215,6 +331,7 @@ def main():
     data = {
         "collected_at": COLLECTED_AT,
         "region": REGION,
+        "annual_discount": ANNUAL_DISCOUNT,
         "disclaimer": DISCLAIMER,
         "default_profile": "通用",
         "profiles": build_profiles(),

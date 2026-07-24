@@ -5370,7 +5370,7 @@ function initEventListeners() {
 
     // ==================== 成本参考卡片（方案成本估算器） ====================
     // 状态挂在 window.__crState，避免与文件其它作用域的 const 冲突
-    if (!window.__crState) window.__crState = { rows: [], tier: 'mid', bound: false };
+    if (!window.__crState) window.__crState = { rows: [], tier: 'mid', view: 'month', annual_discount: 0.85, bound: false, viewBound: false, addBound: false };
 
     function _crEsc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -5384,13 +5384,30 @@ function initEventListeners() {
             b.classList.toggle('active', b.dataset.tier === window.__crState.tier);
         });
     }
+    function _crUpdateViewButtons() {
+        document.querySelectorAll('#cr-view-tabs .cr-view-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.view === (window.__crState.view || 'month'));
+        });
+    }
+    // 周期换算系数：按年 = 月 × 12 × 折扣系数（默认 0.85）
+    function _crFactor() {
+        if (window.__crState.view === 'year') {
+            const d = Number(window.__crState.annual_discount) || 0.85;
+            return 12 * d;
+        }
+        return 1;
+    }
+    function _crRound(n) { return Math.round((Number(n) || 0) * 100) / 100; }
     function _crRenderTable() {
         const table = document.getElementById('cr-table');
         if (!table) return;
+        const factor = _crFactor();
+        const isYear = window.__crState.view === 'year';
+        const priceLabel = isYear ? '单价(年)' : '单价(月)';
         let html = '<div class="cr-row cr-row-head">'
             + '<span class="cr-c-product">产品 / 规格</span>'
             + '<span class="cr-c-qty">数量</span>'
-            + '<span class="cr-c-price">单价(月)</span>'
+            + '<span class="cr-c-price">' + priceLabel + '</span>'
             + '<span class="cr-c-sub">小计</span></div>';
         window.__crState.rows.forEach((row, idx) => {
             if (row.business_only || row.no_price) {
@@ -5401,35 +5418,116 @@ function initEventListeners() {
                     + `<span class="cr-c-biz-note">${_crEsc(label)}：${_crEsc(row.note || '')}</span></div>`;
                 return;
             }
-            const sub = row.qty * row.unit_price;
+            const dispUnit = _crRound(row.unit_price * factor);
+            const dispSub = _crRound(row.qty * row.unit_price * factor);
+            const customTag = row.custom ? '<span class="cr-tag-custom">自定义</span>' : '';
+            const billInner = _crEsc(row.billing || '') + (row.unit_label ? ((row.billing ? ' · ' : '') + _crEsc(row.unit_label)) : '');
+            const billText = (row.billing || row.unit_label) ? `<span class="cr-bill">${billInner}</span>` : '';
+            const warn = (!row.custom && row.verified === false) ? ' <span class="cr-warn" title="待官网复核">⚠</span>' : '';
+            const delBtn = row.custom ? `<button class="cr-del" data-del="${idx}" title="删除该行" type="button">×</button>` : '';
             html += `<div class="cr-row" data-idx="${idx}">`
-                + `<span class="cr-c-product"><b>${_crEsc(row.product)}</b><br><small>${_crEsc(row.spec)}</small>`
-                + `<span class="cr-bill">${_crEsc(row.billing)}${row.unit_label ? (' · ' + _crEsc(row.unit_label)) : ''}</span>`
-                + `${row.verified ? '' : ' <span class="cr-warn" title="待官网复核">⚠</span>'}</span>`
+                + `<span class="cr-c-product"><b>${_crEsc(row.product)}</b>${customTag}<br><small>${_crEsc(row.spec || '')}</small>`
+                + `${billText}${warn}</span>`
                 + `<span class="cr-c-qty"><input type="number" min="0" class="cr-input cr-qty" data-idx="${idx}" value="${row.qty}"></span>`
-                + `<span class="cr-c-price"><input type="number" min="0" step="0.01" class="cr-input cr-price" data-idx="${idx}" value="${row.unit_price}"><span class="cr-unit">元</span></span>`
-                + `<span class="cr-c-sub" id="cr-sub-${idx}">¥${_crMoney(sub)}</span></div>`;
+                + `<span class="cr-c-price"><input type="number" min="0" step="0.01" class="cr-input cr-price" data-idx="${idx}" value="${dispUnit}"><span class="cr-unit">元</span></span>`
+                + `<span class="cr-c-sub"><span class="cr-sub-amt" id="cr-sub-${idx}">¥${_crMoney(dispSub)}</span>${delBtn}</span></div>`;
         });
         table.innerHTML = html;
         table.querySelectorAll('.cr-qty, .cr-price').forEach(inp => {
             inp.addEventListener('input', (e) => {
                 const i = parseInt(e.target.dataset.idx, 10);
                 const val = parseFloat(e.target.value) || 0;
+                const f = _crFactor();
                 if (e.target.classList.contains('cr-qty')) window.__crState.rows[i].qty = val;
-                else window.__crState.rows[i].unit_price = val;
+                else window.__crState.rows[i].unit_price = f ? (val / f) : val; // 单价按当前周期口径输入，存回月度基准
+                const r = window.__crState.rows[i];
                 const subEl = document.getElementById('cr-sub-' + i);
-                if (subEl) subEl.textContent = '¥' + _crMoney(window.__crState.rows[i].qty * window.__crState.rows[i].unit_price);
+                if (subEl) subEl.textContent = '¥' + _crMoney(_crRound(r.qty * r.unit_price * f));
                 window.__crState.tier = null;
                 _crUpdateTierButtons();
                 _crComputeTotal();
             });
         });
+        table.querySelectorAll('.cr-del').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const i = parseInt(e.currentTarget.dataset.del, 10);
+                if (!isNaN(i)) {
+                    window.__crState.rows.splice(i, 1);
+                    _crRenderTable();
+                    _crComputeTotal();
+                }
+            });
+        });
     }
     function _crComputeTotal() {
+        const factor = _crFactor();
         let total = 0;
-        window.__crState.rows.forEach(r => { if (!r.business_only && !r.no_price) total += r.qty * r.unit_price; });
+        window.__crState.rows.forEach(r => {
+            if (!r.business_only && !r.no_price) total += (Number(r.qty) || 0) * (Number(r.unit_price) || 0);
+        });
+        total = _crRound(total * factor);
         const el = document.getElementById('cr-total');
         if (el) el.textContent = '¥' + _crMoney(total);
+        const lbl = document.getElementById('cr-total-label');
+        if (lbl) lbl.textContent = window.__crState.view === 'year' ? '预估年费合计（参考）' : '预估月费合计（参考）';
+        const hint = document.getElementById('cr-view-hint');
+        if (hint) hint.textContent = window.__crState.view === 'year'
+            ? `年费 = 月 × 12 × ${(Number(window.__crState.annual_discount) || 0.85)}` : '';
+    }
+    function _crBindViewTabs() {
+        if (window.__crState.viewBound) return;
+        const tabs = document.getElementById('cr-view-tabs');
+        if (!tabs) return;
+        tabs.querySelectorAll('.cr-view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                window.__crState.view = btn.dataset.view || 'month';
+                _crUpdateViewButtons();
+                _crRenderTable();
+                _crComputeTotal();
+            });
+        });
+        window.__crState.viewBound = true;
+    }
+    function _crBindCustomAdd() {
+        if (window.__crState.addBound) return;
+        const addBtn = document.getElementById('cr-add-btn');
+        const form = document.getElementById('cr-add-form');
+        if (!addBtn || !form) return;
+        const nameI = document.getElementById('cr-add-name');
+        const specI = document.getElementById('cr-add-spec');
+        const priceI = document.getElementById('cr-add-price');
+        const qtyI = document.getElementById('cr-add-qty');
+        const confirmBtn = document.getElementById('cr-add-confirm');
+        const cancelBtn = document.getElementById('cr-add-cancel');
+        const resetForm = () => { nameI.value = ''; specI.value = ''; priceI.value = ''; qtyI.value = '1'; };
+        addBtn.addEventListener('click', () => {
+            const show = form.style.display === 'none' || !form.style.display;
+            form.style.display = show ? 'flex' : 'none';
+            if (show && nameI) nameI.focus();
+        });
+        cancelBtn?.addEventListener('click', () => { form.style.display = 'none'; resetForm(); });
+        confirmBtn?.addEventListener('click', () => {
+            const name = (nameI.value || '').trim();
+            if (!name) { UI.showToast('请填写产品名称', 'warning'); nameI.focus(); return; }
+            const price = parseFloat(priceI.value) || 0;   // 表单统一按「元/月」录入
+            let qty = parseFloat(qtyI.value);
+            if (isNaN(qty) || qty < 0) qty = 1;
+            window.__crState.rows.push({
+                product: name,
+                spec: (specI.value || '').trim(),
+                billing: '自定义', unit_label: '',
+                qty: qty, unit_price: price,
+                custom: true, verified: true, note: '',
+                business_only: false, no_price: false
+            });
+            window.__crState.tier = null;
+            _crUpdateTierButtons();
+            form.style.display = 'none';
+            resetForm();
+            _crRenderTable();
+            _crComputeTotal();
+        });
+        window.__crState.addBound = true;
     }
     function _crBindTierTabs() {
         if (window.__crState.bound) return;
@@ -5481,6 +5579,7 @@ function initEventListeners() {
             window.__crState.disclaimer = (data.disclaimer || '') + (data.collected_at ? `（数据采集：${data.collected_at} · ${data.region || ''}）` : '');
             window.__crState.collected_at = data.collected_at || '';
             window.__crState.region = data.region || '';
+            window.__crState.annual_discount = (typeof data.annual_discount === 'number' && data.annual_discount > 0) ? data.annual_discount : 0.85;
 
             window.__crState.rows = data.items.map(it => {
                 if (it.business_only) {
@@ -5498,8 +5597,12 @@ function initEventListeners() {
                 };
             });
             window.__crState.tier = 'mid';
+            window.__crState.view = 'month';
             _crBindTierTabs();
+            _crBindViewTabs();
+            _crBindCustomAdd();
             _crUpdateTierButtons();
+            _crUpdateViewButtons();
             _crRenderTable();
             _crComputeTotal();
         }).catch(err => {
@@ -5704,6 +5807,8 @@ function initEventListeners() {
                     collected_at: cr.collected_at || '',
                     region: cr.region || '',
                     tier: cr.tier || null,
+                    view_mode: cr.view || 'month',
+                    annual_discount: (typeof cr.annual_discount === 'number' && cr.annual_discount > 0) ? cr.annual_discount : 0.85,
                     rows: cr.rows.map(r => ({
                         product: r.product,
                         spec: r.spec || '',
@@ -5713,6 +5818,7 @@ function initEventListeners() {
                         unit_price: r.unit_price,
                         verified: r.verified !== false,
                         note: r.note || '',
+                        custom: !!r.custom,
                         business_only: !!r.business_only,
                         no_price: !!r.no_price
                     }))
@@ -5764,12 +5870,15 @@ function initEventListeners() {
             // 追加成本参考附表（合法 Markdown 表格，供纯文本查看）
             const cr = window.__crState;
             if (cr && cr.rows && cr.rows.length) {
+                const isYear = cr.view === 'year';
+                const factor = isYear ? 12 * ((Number(cr.annual_discount) || 0.85)) : 1;
+                const unitTxt = isYear ? '元/年' : '元/月';
                 const lines = ['', '---', '', '## 成本参考估算（区间参考，非精确报价）', ''];
-                lines.push('| 产品 | 规格 | 计费方式 | 数量 | 单价(元/月) | 小计(元/月) |');
+                lines.push(`| 产品 | 规格 | 计费方式 | 数量 | 单价(${unitTxt}) | 小计(${unitTxt}) |`);
                 lines.push('| :--- | :--- | :--- | :--- | :--- | :--- |');
                 let total = 0;
                 cr.rows.forEach(r => {
-                    const product = r.product || '';
+                    const product = (r.product || '') + (r.custom ? '（自定义）' : '');
                     const spec = r.spec || '';
                     if (r.business_only) {
                         lines.push(`| **${product}** | ${spec} | — | — | — | 商务定价：${r.note || '请咨询华为云销售'} |`);
@@ -5780,13 +5889,13 @@ function initEventListeners() {
                         return;
                     }
                     const qty = Number(r.qty) || 0;
-                    const up = Number(r.unit_price) || 0;
+                    const up = Math.round((Number(r.unit_price) || 0) * factor * 100) / 100;
                     const sub = Math.round(qty * up * 100) / 100;
                     total += sub;
                     const billing = (r.billing || '') + (r.unit_label ? ('·' + r.unit_label) : '');
                     lines.push(`| **${product}** | ${spec} | ${billing} | ${qty} | ${up} | ${sub} |`);
                 });
-                lines.push('', `**合计（估算，不含商务定价与待补充项）：¥${total.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} 元/月**`);
+                lines.push('', `**合计（估算，不含商务定价与待补充项）：¥${total.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${unitTxt}**`);
                 if (cr.disclaimer) lines.push('', `免责声明：${cr.disclaimer}`);
                 md += lines.join('\n');
             }

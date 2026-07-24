@@ -75,6 +75,49 @@
     color: #fff;
     font-weight: 600;
 }
+/* 档位 + 周期控件同排 */
+.cr-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.cr-controls .cr-tier-tabs {
+    margin-bottom: 0;
+}
+.cr-view-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.cr-view-btn {
+    font-size: 13px;
+    padding: 5px 14px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    background: #fff;
+    color: #4e5969;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.cr-view-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+.cr-view-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    font-weight: 600;
+}
+.cr-view-hint {
+    font-size: 11px;
+    color: #a9aeb8;
+    margin-left: 2px;
+}
 .cr-table {
     border: 1px solid var(--border-color, #e6e8eb);
     border-radius: 10px;
@@ -173,6 +216,91 @@
     color: #d4380d;
     text-align: right;
 }
+/* 自定义产品：添加按钮 + 内联表单 */
+.cr-add-row {
+    margin-top: 10px;
+}
+.cr-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    padding: 7px 14px;
+    border: 1px dashed var(--border-color, #d4d7dc);
+    background: #fff;
+    color: #4e5969;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.cr-add-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+.cr-add-plus {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+}
+.cr-add-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    border-radius: 10px;
+    background: #fafbfc;
+}
+.cr-add-form .cr-add-name { flex: 2 1 160px; }
+.cr-add-form .cr-add-spec { flex: 2 1 160px; }
+.cr-add-form .cr-add-price { flex: 1 1 110px; }
+.cr-add-form .cr-add-qty { flex: 0 1 80px; }
+.cr-add-confirm, .cr-add-cancel {
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid var(--border-color, #e6e8eb);
+    transition: all .15s ease;
+}
+.cr-add-confirm {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    font-weight: 600;
+}
+.cr-add-confirm:hover { opacity: .9; }
+.cr-add-cancel {
+    background: #fff;
+    color: #86909c;
+}
+.cr-add-cancel:hover { color: #4e5969; }
+/* 自定义行标记 + 删除按钮 */
+.cr-tag-custom {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: var(--primary-light, rgba(199,0,11,0.08));
+    border-radius: 4px;
+    padding: 1px 5px;
+    vertical-align: middle;
+}
+.cr-del {
+    margin-left: 8px;
+    border: none;
+    background: transparent;
+    color: #c9cdd4;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    transition: color .15s ease;
+}
+.cr-del:hover { color: var(--primary-color); }
 .cr-total {
     display: flex;
     align-items: center;

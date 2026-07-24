@@ -194,12 +194,24 @@ class ReportGeneratorService:
         report_data['appendix'].append({'title': title, 'content': cr_md})
 
     def _build_cost_reference_markdown(self, cost_reference: Dict[str, Any]) -> str:
-        """把成本参考 rows 渲染为 Markdown 表格文本（供 Word 原生表格渲染）。"""
+        """把成本参考 rows 渲染为 Markdown 表格文本（供 Word 原生表格渲染）。
+
+        支持 view_mode(month/year)：年视图下单价/小计/合计按 12 × annual_discount 折算，
+        列头与单位切换为「元/年」；存储的 unit_price 仍为月度基准。
+        """
         rows = cost_reference.get('rows') or []
         if not rows:
             return ''
+        view_mode = (cost_reference.get('view_mode') or 'month')
+        try:
+            disc = float(cost_reference.get('annual_discount', 0.85) or 0.85)
+        except (TypeError, ValueError):
+            disc = 0.85
+        is_year = (view_mode == 'year')
+        factor = (12 * disc) if is_year else 1
+        unit = '年' if is_year else '月'
         lines = []
-        lines.append('| 产品 | 规格 | 计费方式 | 数量 | 单价(元/月) | 小计(元/月) |')
+        lines.append(f'| 产品 | 规格 | 计费方式 | 数量 | 单价(元/{unit}) | 小计(元/{unit}) |')
         lines.append('| :--- | :--- | :--- | :--- | :--- | :--- |')
         total = 0.0
         for r in rows:
@@ -221,14 +233,16 @@ class ReportGeneratorService:
                 unit_price = float(r.get('unit_price') or 0)
             except (TypeError, ValueError):
                 qty, unit_price = 0.0, 0.0
-            subtotal = round(qty * unit_price, 2)
+            subtotal = round(qty * unit_price * factor, 2)
             total += subtotal
             warn = '' if r.get('verified', True) else ' ⚠'
             lines.append(
-                f'| **{product}**{warn} | {spec} | {bill_txt} | {_fmt_num(qty)} | {_fmt_num(unit_price)} | {_fmt_num(subtotal)} |'
+                f'| **{product}**{warn} | {spec} | {bill_txt} | {_fmt_num(qty)} | '
+                f'{_fmt_num(round(unit_price * factor, 2))} | {_fmt_num(subtotal)} |'
             )
         lines.append('')
-        lines.append(f'**合计（估算，不含商务定价与待补充项）：¥{_fmt_num(round(total, 2))} 元/月**')
+        view_tag = f'年费(年付≈月×12×{disc})' if is_year else '月费'
+        lines.append(f'**合计（估算，不含商务定价与待补充项）：¥{_fmt_num(round(total, 2))} 元/{unit}（{view_tag}）**')
         disclaimer = cost_reference.get('disclaimer', '')
         if disclaimer:
             lines.append('')
@@ -293,13 +307,21 @@ class ReportGeneratorService:
             if cost_reference:
                 cr_rows = cost_reference.get('rows') or []
                 if cr_rows:
+                    cr_view = (cost_reference.get('view_mode') or 'month')
+                    try:
+                        cr_disc = float(cost_reference.get('annual_discount', 0.85) or 0.85)
+                    except (TypeError, ValueError):
+                        cr_disc = 0.85
+                    cr_is_year = (cr_view == 'year')
+                    cr_factor = (12 * cr_disc) if cr_is_year else 1
+                    cr_unit = '年' if cr_is_year else '月'
                     story.append(Spacer(1, 16))
                     industry = cost_reference.get('industry', '') or ''
                     story.append(Paragraph(
                         f'成本参考估算（{industry or "通用"}行业 · 区间参考，非精确报价）',
                         ParagraphStyle('CRTitle', parent=body_style, fontSize=13, spaceAfter=6)
                     ))
-                    header = ['产品', '规格', '计费方式', '数量', '单价(元/月)', '小计(元/月)']
+                    header = ['产品', '规格', '计费方式', '数量', f'单价(元/{cr_unit})', f'小计(元/{cr_unit})']
                     table_data = [[Paragraph(f'<b>{h}</b>', cell_style) for h in header]]
                     total = 0.0
                     for r in cr_rows:
@@ -329,12 +351,13 @@ class ReportGeneratorService:
                             unit_price = float(r.get('unit_price') or 0)
                         except (TypeError, ValueError):
                             qty, unit_price = 0.0, 0.0
-                        subtotal = round(qty * unit_price, 2)
+                        subtotal = round(qty * unit_price * cr_factor, 2)
                         total += subtotal
                         table_data.append([
                             Paragraph(product, cell_style), Paragraph(spec, cell_style),
                             Paragraph(bill_txt, cell_style), Paragraph(_fmt_num(qty), cell_style),
-                            Paragraph(_fmt_num(unit_price), cell_style), Paragraph(_fmt_num(subtotal), cell_style)
+                            Paragraph(_fmt_num(round(unit_price * cr_factor, 2)), cell_style),
+                            Paragraph(_fmt_num(subtotal), cell_style)
                         ])
                     cr_table = Table(table_data, repeatRows=1, colWidths=[
                         3.0 * cm, 4.2 * cm, 2.6 * cm, 1.4 * cm, 2.6 * cm, 2.8 * cm
@@ -352,8 +375,12 @@ class ReportGeneratorService:
                     ]))
                     story.append(cr_table)
                     story.append(Spacer(1, 6))
+                    if cr_is_year:
+                        view_tag = f'年费(年付≈月×12×{cr_disc})'
+                    else:
+                        view_tag = '月费'
                     story.append(Paragraph(
-                        f'合计（估算，不含商务定价与待补充项）：¥{_fmt_num(round(total, 2))} 元/月',
+                        f'合计（估算，不含商务定价与待补充项）：¥{_fmt_num(round(total, 2))} 元/{cr_unit}（{view_tag}）',
                         ParagraphStyle('CRTotal', parent=body_style, fontSize=10, spaceAfter=4)
                     ))
                     disclaimer = cost_reference.get('disclaimer', '')

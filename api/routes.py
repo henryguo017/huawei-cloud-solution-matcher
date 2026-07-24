@@ -188,6 +188,7 @@ async def pricing_reference(industry: Optional[str] = None):
         "items": profile.get("items", []),
         "collected_at": data.get("collected_at", ""),
         "region": data.get("region", ""),
+        "annual_discount": data.get("annual_discount", 0.85),
         "disclaimer": data.get("disclaimer", ""),
         "business_only_products": data.get("business_only_products", []),
     }
