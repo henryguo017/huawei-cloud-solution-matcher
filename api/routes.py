@@ -38,7 +38,7 @@ from api.dependencies import (
 from app.models.llm import get_llm_response
 from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context
 from app.services.usage_logger import UsageLoggerService
-from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY, COMPETITOR_DIRECTORY
+from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY, COMPETITOR_DIRECTORY, SUPPORTED_INDUSTRIES
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
 from app.config import KB_REBUILD_CONCURRENCY
 from app.agent.parsers.read_file import ALLOWED_EXT
@@ -2211,6 +2211,9 @@ async def ai_chat(
             "域名", "DNS", "SSL", "HTTPS", "证书",
             "监控", "日志", "告警", "Prometheus", "ELK",
         ]
+        # 纳入全部支持行业名 + 常见方案场景词，避免"XX行业上云方案"类问题落入通用闲聊不检索
+        cloud_keywords += list(SUPPORTED_INDUSTRIES)
+        cloud_keywords += ["上云", "规划", "架构", "选型", "招投标", "售前", "客户", "方案框架", "建设方案", "整体方案", "技术方案", "落地", "部署"]
         is_cloud = any(kw in question for kw in cloud_keywords)
 
         if is_cloud:
@@ -2266,8 +2269,9 @@ async def _answer_business_question(question: str, kb, history_text: str = "") -
     # 1. 检索相关文档
     docs = []
     try:
-        docs = kb.search_huawei(question, k=5)
-        comp_docs = kb.search_competitor(question, k=2)
+        # 华为云方案 + 全部竞品厂商各取 6 段，覆盖所有平台知识（原竞品仅 2 段，冷门竞品/行业易答不出）
+        docs = kb.search_huawei(question, k=6)
+        comp_docs = kb.search_competitor(question, k=6)
         docs = (docs or []) + (comp_docs or [])
     except Exception as e:
         logger.warning(f"AI助手向量检索异常: {e}")
@@ -2280,14 +2284,14 @@ async def _answer_business_question(question: str, kb, history_text: str = "") -
         for i, doc in enumerate(docs, 1):
             meta = doc.metadata or {}
             source = meta.get("source", "未知来源")
-            content = doc.page_content.strip()[:800]  # 截断避免超token
+            content = doc.page_content.strip()[:1000]  # 截断避免超token（放宽以保留完整方案表述）
             context_parts.append(f"[资料{i}] 来源：{source}\n{content}")
         context_text = "\n\n".join(context_parts)
 
     # 2. 对话式 Prompt（纯文本对话，禁止Markdown）
     system_prompt = """你是「智能方案助手」— 一位专业的云计算方案顾问。
 
-你的任务是直接回答用户的云计算相关问题，基于下方参考资料给出专业建议。
+你的任务是直接回答用户的云计算相关问题，基于下方参考资料给出专业建议。参考资料涵盖华为云及 12 家竞品厂商（阿里云、腾讯云、AWS、Azure 等）的方案文档，覆盖 25 个行业。
 像微信/钉钉聊天那样自然对话，用"您"称呼用户，简洁实用（一般300-500字）。
 
 【格式要求】
