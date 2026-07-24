@@ -4,9 +4,9 @@ cloudsol.cn 完整端到端测试脚本
 覆盖所有 API 端点，输出结构化测试报告。
 
 用法:
-  1. python test_full_e2e.py --fetch-captcha   → 获取验证码存 _captcha.png，人工读图
-  2. python test_full_e2e.py --captcha-value CFCK --run-all guo 123456
-     或一步到位: python test_full_e2e.py guo 123456 (会自动取验证码+等输入)
+  1. python tests/test_full_e2e.py --fetch-captcha   → 获取验证码存 _captcha.png，人工读图
+  2. python tests/test_full_e2e.py --captcha-value CFCK --run-all guo 123456
+     或一步到位: python tests/test_full_e2e.py guo 123456 (会自动取验证码+等输入)
 """
 
 import sys, os, json, time, traceback, base64, argparse

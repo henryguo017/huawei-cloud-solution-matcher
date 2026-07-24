@@ -4,7 +4,7 @@ Agent 本地测试脚本
 用法:
     test_agent.bat                      # 用默认问题测试（自动使用正确的 Python）
     或
-    python test_agent.py "你的自定义问题"
+    python tests/test_agent.py "你的自定义问题"
 
 首次运行会加载 embedding 模型，需要 60-90 秒，后续会更快。
 """

@@ -277,3 +277,10 @@ playwright-cli.json
 test_clients.py
 test_cross_user_clients.py
 test_stage1_acceptance.py
+
+# Repo hygiene: kept locally, never versioned
+test_shots/
+backup/
+_captcha_test.png
+_clarify_test.py
+_version_test.py
