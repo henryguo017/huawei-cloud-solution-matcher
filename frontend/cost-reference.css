@@ -155,6 +155,11 @@
     color: #4e5969;
     font-weight: 600;
 }
+.cr-row-free {
+    grid-template-columns: 1fr auto;
+    background: #f0fdf4;
+    color: #047857;
+}
 .cr-c-product b {
     color: #1d2129;
     font-weight: 600;

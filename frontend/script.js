@@ -3455,6 +3455,10 @@ const HistoryUI = {
         this.bindDetailEvents(item, type);
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
+        // 历史方案匹配详情：补渲染成本参考卡片（只读，不绑定编辑/导出，独立 id 避免冲突）
+        if (type === 'match') {
+            try { renderCostReferenceReadOnly(item); } catch (e) { console.warn('历史成本卡片渲染失败', e); }
+        }
     },
 
     renderDetailBody(item, type) {
@@ -3486,6 +3490,22 @@ const HistoryUI = {
                    <div class="detail-section-label">方案版本（v1/v2/v3）</div>
                    <div id="detail-versions-list" class="versions-list"></div>
                </div>` : '';
+        const costRefSection = (type === 'match') ? `
+            <div class="detail-section">
+                <div class="detail-section-label">成本参考估算</div>
+                <div class="cost-reference-card detail-cr-card" id="detail-cost-reference-card" style="display:none; margin-top:8px;">
+                    <div class="cr-header">
+                        <div><span class="cr-title">方案成本区间参考</span> <span class="cr-badge" id="detail-cr-industry-badge">通用</span></div>
+                        <div class="cr-sub" id="detail-cr-sub">基于公开价目表策展的区间参考</div>
+                    </div>
+                    <div class="cr-disclaimer" id="detail-cr-disclaimer"></div>
+                    <div class="cr-table" id="detail-cr-table"></div>
+                    <div class="cr-total">
+                        <span class="cr-total-label" id="detail-cr-total-label">预估月费合计（参考）</span>
+                        <strong class="cr-total-value" id="detail-cr-total">¥0</strong>
+                    </div>
+                </div>
+            </div>` : '';
         return `
             <div class="detail-section">
                 <div class="detail-section-label">创建时间</div>
@@ -3509,6 +3529,7 @@ const HistoryUI = {
                 </div>
             </div>
             ${versionsSection}
+            ${costRefSection}
             <div class="followup-section" id="followup-section" style="display:none;">
                 <div class="followup-title">追问优化（基于当前方案继续对话，优化后自动保存）</div>
                 <div class="followup-conversation" id="followup-conversation">${this.renderConversation(item.conversation || [])}</div>
@@ -5608,6 +5629,63 @@ function initEventListeners() {
             _crComputeTotal();
         }).catch(err => {
             console.warn('成本参考加载失败:', err);
+            card.style.display = 'none';
+        });
+    }
+
+    // 历史/只读场景的成本参考卡片渲染（无编辑/导出绑定，detail-cr- 独立 id 避免与主页卡片冲突）
+    function renderCostReferenceReadOnly(item) {
+        const card = document.getElementById('detail-cost-reference-card');
+        if (!card) return;
+        let industry = (item && item.industry) || '';
+        try {
+            const src = (item && item.source_documents && item.source_documents[0]);
+            if (!industry && src && src.metadata) industry = src.metadata.industry || '';
+        } catch (e) {}
+        API.getPricingReference(industry).then(data => {
+            if (!data || !data.items || data.items.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = 'block';
+            const badge = document.getElementById('detail-cr-industry-badge');
+            if (badge) badge.textContent = data.industry + (data.is_default ? '（通用）' : '');
+            const sub = document.getElementById('detail-cr-sub');
+            if (sub) sub.textContent = data.description || '基于公开价目表策展的区间参考';
+            const disc = document.getElementById('detail-cr-disclaimer');
+            if (disc) disc.textContent = (data.disclaimer || '') + (data.collected_at ? `（数据采集：${data.collected_at} · ${data.region || ''}）` : '');
+            const rows = data.items.map(it => {
+                if (it.business_only) return { kind: 'biz', product: it.product, spec: it.spec || '', note: it.note || '商务报价，请咨询华为云销售' };
+                if (it.no_price) return { kind: 'noprice', product: it.product, spec: it.spec || '', note: it.note || '参考价待补充' };
+                if (it.free) return { kind: 'free', product: it.product, spec: it.spec || '', note: it.note || '按实际创建的资源计费' };
+                const mid = (it.tier && it.tier.mid) || { qty: it.qty || 1, unit_price: it.ref_price || 0 };
+                return { kind: 'price', product: it.product, spec: it.spec || '', billing: it.billing || '', unit_label: it.unit_label || '', qty: mid.qty, unit_price: mid.unit_price, verified: it.verified !== false, note: it.note || '' };
+            });
+            const table = document.getElementById('detail-cr-table');
+            if (table) {
+                let html = '<div class="cr-row cr-row-head"><span class="cr-c-product">产品 / 规格</span><span class="cr-c-qty">数量</span><span class="cr-c-price">单价(月)</span><span class="cr-c-sub">小计</span></div>';
+                let total = 0;
+                rows.forEach(r => {
+                    if (r.kind === 'biz' || r.kind === 'noprice' || r.kind === 'free') {
+                        const label = r.kind === 'biz' ? '商务定价' : (r.kind === 'free' ? '基础免费' : '参考价待补充');
+                        const cls = r.kind === 'biz' ? 'cr-row-biz' : (r.kind === 'free' ? 'cr-row-free' : 'cr-row-noprice');
+                        html += `<div class="cr-row ${cls}"><span class="cr-c-product"><b>${_crEsc(r.product)}</b><br><small>${_crEsc(r.spec)}</small></span><span class="cr-c-biz-note">${label}：${_crEsc(r.note)}</span></div>`;
+                        return;
+                    }
+                    const subAmt = (Number(r.qty) || 0) * (Number(r.unit_price) || 0);
+                    total += subAmt;
+                    const bill = _crEsc(r.billing) + (r.unit_label ? ((r.billing ? ' · ' : '') + _crEsc(r.unit_label)) : '');
+                    const warn = (!r.verified) ? ' <span class="cr-warn" title="待官网复核">⚠</span>' : '';
+                    html += `<div class="cr-row"><span class="cr-c-product"><b>${_crEsc(r.product)}</b><br><small>${_crEsc(r.spec)}</small>${bill ? `<span class="cr-bill">${bill}</span>` : ''}${warn}</span><span class="cr-c-qty">${r.qty}</span><span class="cr-c-price">¥${_crMoney(r.unit_price)}</span><span class="cr-c-sub">¥${_crMoney(subAmt)}</span></div>`;
+                });
+                table.innerHTML = html;
+                const el = document.getElementById('detail-cr-total');
+                if (el) el.textContent = '¥' + _crMoney(Math.round(total * 100) / 100);
+                const lbl = document.getElementById('detail-cr-total-label');
+                if (lbl) lbl.textContent = '预估月费合计（参考）';
+            }
+        }).catch(err => {
+            console.warn('历史成本参考加载失败:', err);
             card.style.display = 'none';
         });
     }
