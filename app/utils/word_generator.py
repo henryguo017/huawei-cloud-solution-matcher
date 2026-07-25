@@ -214,18 +214,25 @@ class WordGenerator:
                 i += 1
                 continue
 
-            # 表格块：当前行与下一行都以 | 开头，且下一行含 --- 分隔
-            if (stripped.startswith("|") and i + 1 < n
-                    and lines[i + 1].strip().startswith("|")
-                    and re.search(r':?-+:?', lines[i + 1])):
-                block = []
-                j = i
-                while j < n and lines[j].strip().startswith("|"):
-                    block.append(lines[j].strip())
-                    j += 1
-                self._add_table(block)
-                i = j
-                continue
+            # 表格块：当前行以 | 开头，向后查找分隔行（跳过空行，最多看3行）
+            if stripped.startswith("|"):
+                sep_idx = -1
+                for look in range(i + 1, min(i + 4, n)):
+                    ls = lines[look].strip()
+                    if re.match(r'^\|[\s\-:|]{3,}\|$', ls):
+                        sep_idx = look
+                        break
+                    if ls != "" and not ls.startswith("|"):
+                        break
+                if sep_idx != -1:
+                    block = [stripped]
+                    j = sep_idx + 1
+                    while j < n and lines[j].strip().startswith("|"):
+                        block.append(lines[j].strip())
+                        j += 1
+                    self._add_table(block)
+                    i = j
+                    continue
 
             # 无序列表
             m = re.match(r'^([\*\-])\s+(.*)', stripped)

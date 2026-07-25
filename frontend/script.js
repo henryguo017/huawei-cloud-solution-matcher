@@ -2135,53 +2135,100 @@ const UI = {
         html = html.replace(/(<li>.*<\/li>)/s, '<ul style="padding-left:20px;margin:8px 0;">$1</ul>');
         // 有序列表
         html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-        // 表格（在横线之前处理）— 允许行首缩进（LLM 输出的子内容常带缩进）
+        // 表格（在横线之前处理）— 增强版：跳过空行/宽松分隔/兜底管道符
         html = (function () {
             const lines = html.split('\n');
+            const parseCells = (line) => {
+                return line.split('|').slice(1, -1).map(function (c) { return c.trim(); });
+            };
+            const buildTable = (headerLine, dataLines) => {
+                const headers = parseCells(headerLine);
+                let tbl = '<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;">';
+                tbl += '<thead><tr>';
+                headers.forEach(function (h) {
+                    tbl += '<th style="border:1px solid rgba(255,255,255,0.15);padding:8px 12px;text-align:left;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.95);font-weight:600;">' + h + '</th>';
+                });
+                tbl += '</tr></thead><tbody>';
+                dataLines.forEach(function (row) {
+                    const cells = parseCells(row);
+                    tbl += '<tr>';
+                    cells.forEach(function (c) {
+                        tbl += '<td style="border:1px solid rgba(255,255,255,0.1);padding:8px 12px;color:rgba(255,255,255,0.85);">' + c + '</td>';
+                    });
+                    tbl += '</tr>';
+                });
+                tbl += '</tbody></table>';
+                return tbl;
+            };
+            // 判断是否为分隔行（宽松匹配：允许 |---| | :--- | | :--: | 等各种格式）
+            const isSeparator = (line) => /^\|[\s\-:|]{3,}\|$/.test(line.trim());
+            // 判断是否为表格数据行（以 | 开头和结尾，至少含一个 | 分隔的单元格）
+            const isTableRow = (line) => /^\s*\|.+\|$/.test(line);
+
             let i = 0;
             while (i < lines.length) {
-                if (/^\s*\|.+\|$/.test(lines[i])) {
-                    // 找到表头行（允许前导空白）
+                if (isTableRow(lines[i])) {
                     const headerLine = lines[i].trim();
-                    if (i + 1 < lines.length && /^\|[\s\-:|]+\|$/.test(lines[i + 1].trim())) {
-                        // 分隔行，跳过
-                        let j = i + 2;
-                        // 收集数据行（同样允许前导空白）
-                        while (j < lines.length && /^\s*\|.+\|$/.test(lines[j])) {
-                            j++;
+                    let sepIdx = -1;
+                    // 向后查找分隔行（跳过空行，最多看 3 行）
+                    for (let look = i + 1; look <= Math.min(i + 3, lines.length - 1); look++) {
+                        if (isSeparator(lines[look])) { sepIdx = look; break; }
+                        if (lines[look].trim() !== '' && !isTableRow(lines[look])) break; // 非空非表行→停止
+                    }
+
+                    if (sepIdx !== -1) {
+                        // 找到分隔行，收集后续数据行（跳过空行）
+                        let j = sepIdx + 1;
+                        while (j < lines.length) {
+                            if (isTableRow(lines[j])) { j++; }
+                            else if (lines[j].trim() === '') { j++; } // 跳过表内空行
+                            else { break; }
                         }
-                        // 提取并构建表格
-                        const rows = lines.slice(i, j);
-                        const parseCells = (line) => {
-                            return line.split('|').slice(1, -1).map(function (c) {
-                                return c.trim();
-                            });
-                        };
-                        const headers = parseCells(headerLine);
-                        let tbl = '<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;">';
-                        tbl += '<thead><tr>';
-                        headers.forEach(function (h) {
-                            tbl += '<th style="border:1px solid rgba(255,255,255,0.15);padding:8px 12px;text-align:left;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.95);font-weight:600;">' + h + '</th>';
-                        });
-                        tbl += '</tr></thead><tbody>';
-                        for (let r = 2; r < rows.length; r++) {
-                            const cells = parseCells(rows[r]);
-                            tbl += '<tr>';
-                            cells.forEach(function (c) {
-                                tbl += '<td style="border:1px solid rgba(255,255,255,0.1);padding:8px 12px;color:rgba(255,255,255,0.85);">' + c + '</td>';
-                            });
-                            tbl += '</tr>';
-                        }
-                        tbl += '</tbody></table>';
-                        lines.splice(i, j - i, tbl);
+                        lines.splice(i, j - i, buildTable(headerLine, lines.slice(sepIdx + 1, j).filter(l => isTableRow(l))));
                     } else {
-                        i++;
+                        // 无显式分隔行：检测连续管道行是否构成无分隔符表格（≥2行且列数一致）
+                        let j = i + 1;
+                        while (j < lines.length) {
+                            if (isTableRow(lines[j])) { j++; }
+                            else if (lines[j].trim() === '') { j++; }
+                            else { break; }
+                        }
+                        const rowLines = lines.slice(i, j).filter(l => isTableRow(l));
+                        if (rowLines >= 2) {
+                            const colCount = parseCells(rowLines[0]).length;
+                            const allSameCols = rowLines.every(r => parseCells(r).length === colCount);
+                            if (allSameCols && colCount >= 2) {
+                                // 视为无分隔符表格：第一行当表头
+                                lines.splice(i, j - i, buildTable(rowLines[0], rowLines.slice(1)));
+                            } else {
+                                i++;
+                            }
+                        } else {
+                            i++;
+                        }
                     }
                 } else {
                     i++;
                 }
             }
-            return lines.join('\n');
+
+            // 兜底：将剩余孤立管道行转为可读文本（防止单行 |...| 泄漏）
+            html = lines.join('\n');
+            html = html.replace(/^(?:\s*\|.+\|)+$/gm, function (pipeBlock) {
+                const pipeLines = pipeBlock.trim().split('\n').filter(l => /^\s*\|/.test(l));
+                if (pipeLines.length <= 0) return pipeBlock;
+                // 尝试构建简单文本表格
+                const maxCols = Math.max.apply(null, pipeLines.map(l => l.split('|').length - 2));
+                if (maxCols >= 2 && pipeLines.length >= 2) {
+                    return buildTable(pipeLines[0].trim(), pipeLines.slice(1).map(l => l.trim()));
+                }
+                // 单行或单列：直接显示，去掉首尾 |
+                return pipeLines.map(function (l) {
+                    return l.replace(/^\s*\|/, '').replace(/\|\s*$/, '').replace(/\|/g, ' | ');
+                }).join('<br>');
+            });
+
+            return html;
         })();
         // 横线
         html = html.replace(/^---$/gm, '<hr style="border-color:rgba(255,255,255,0.15);margin:16px 0;">');
@@ -6774,7 +6821,7 @@ const AIAssistant = {
 
         var div = document.createElement('div');
         div.className = 'ai-msg ai-msg-' + role;
-        div.innerHTML = '<div class="ai-msg-bubble">' + this._escapeHtml(text).replace(/\n/g, '<br>') + '</div>';
+        div.innerHTML = '<div class="ai-msg-bubble">' + this._renderTablesOnly(this._escapeHtml(text)).replace(/\n/g, '<br>') + '</div>';
         container.appendChild(div);
 
         // 自动滚动到底部
@@ -6838,6 +6885,66 @@ const AIAssistant = {
         } finally {
             this.isTyping = false;
         }
+    },
+
+    // 仅渲染 Markdown 表格（AI 聊天用：保持纯文本输出，但表格转为可读 HTML）
+    _renderTablesOnly(text) {
+        if (!text || !text.includes('|')) return text;
+        var lines = text.split('\n');
+        var parseCells = function(line) {
+            return line.split('|').slice(1, -1).map(function(c) { return c.trim(); });
+        };
+        var buildTable = function(headerLine, dataLines) {
+            var headers = parseCells(headerLine);
+            var tbl = '<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;border:1px solid rgba(255,255,255,0.12);">';
+            tbl += '<thead><tr>';
+            headers.forEach(function(h) {
+                tbl += '<th style="border:1px solid rgba(255,255,255,0.12);padding:6px 10px;text-align:left;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.9);font-weight:600;white-space:nowrap;">' + h + '</th>';
+            });
+            tbl += '</tr></thead><tbody>';
+            dataLines.forEach(function(row) {
+                var cells = parseCells(row);
+                tbl += '<tr>';
+                cells.forEach(function(c) {
+                    tbl += '<td style="border:1px solid rgba(255,255,255,0.08);padding:6px 10px;color:rgba(255,255,255,0.8);">' + c + '</td>';
+                });
+                tbl += '</tr>';
+            });
+            tbl += '</tbody></table>';
+            return tbl;
+        };
+        var isSep = function(l) { return /^\|[\s\-:|]{3,}\|$/.test(l.trim()); };
+        var isRow = function(l) { return /^\s*\|.+\|$/.test(l); };
+
+        var i = 0;
+        while (i < lines.length) {
+            if (isRow(lines[i])) {
+                var headerLine = lines[i].trim();
+                var sepIdx = -1;
+                for (var look = i + 1; look <= Math.min(i + 3, lines.length - 1); look++) {
+                    if (isSep(lines[look])) { sepIdx = look; break; }
+                    if (lines[look].trim() !== '' && !isRow(lines[look])) break;
+                }
+                if (sepIdx !== -1) {
+                    var j = sepIdx + 1;
+                    while (j < lines.length && (isRow(lines[j]) || lines[j].trim() === '')) j++;
+                    var dataRows = lines.slice(sepIdx + 1, j).filter(isRow);
+                    lines.splice(i, j - i, buildTable(headerLine, dataRows));
+                } else {
+                    // 无分隔符：连续 ≥2 行管道且列数一致 → 当表格
+                    var j2 = i + 1;
+                    while (j2 < lines.length && (isRow(lines[j2]) || lines[j2].trim() === '')) j2++;
+                    var rLines = lines.slice(i, j2).filter(isRow);
+                    if (rLines.length >= 2) {
+                        var cc = parseCells(rLines[0]).length;
+                        if (cc >= 2 && rLines.every(function(r) { return parseCells(r).length === cc; })) {
+                            lines.splice(i, j2 - i, buildTable(rLines[0], rLines.slice(1)));
+                        } else { i++; }
+                    } else { i++; }
+                }
+            } else { i++; }
+        }
+        return lines.join('\n');
     },
 
     _escapeHtml(s) {
