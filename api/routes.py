@@ -2618,52 +2618,26 @@ async def _answer_personal_question(question: str, user: dict, history_text: str
             except Exception:
                 pass
 
-    # 3. 未录入客户档案时，从平台公开方案库取行业案例作为参考（明确标注非本人客户）
-    platform_ref_text = ""
-    if not has_clients:
-        try:
-            if kb is None:
-                kb = get_user_knowledge_base(user_id)
-            ref_docs = kb.search_huawei(question, k=5)
-            if ref_docs:
-                parts = []
-                for i, doc in enumerate(ref_docs, 1):
-                    meta = doc.metadata or {}
-                    source = meta.get("source", "华为云方案知识库")
-                    content = doc.page_content.strip()[:600]
-                    parts.append(f"[平台公开案例{i}] 来源：{source}（华为云方案知识库，非您本人客户）\n{content}")
-                platform_ref_text = "\n\n".join(parts)
-        except Exception as e:
-            logger.warning(f"平台参考检索异常: {e}")
-
     has_personal = bool(private_docs_text or profile_text)
     history_block = f"\n【之前的对话】\n{history_text}\n" if history_text.strip() else ""
 
     system_prompt = f"""你是「智能方案助手」— cloudsol.cn 平台的 AI 助手，正在与用户「{username}」对话。
 
 【你的任务】
-用户正在询问与其个人知识/资料相关的问题。请严格区分以下两类信息，绝不可混淆：
+用户正在询问与其个人知识/资料相关的问题。你只能基于下方【我的私有资料】和【我的客户档案与画像】作答，这些是用户本人上传/录入的真实资料。
 
-A. 用户的私有资料（来自【我的私有资料】和【我的客户档案】）：用户本人上传的文档、录入的客户档案、个人画像与偏好。若能在此找到答案，务必基于它如实回答。
-
-B. 平台公开参考（来自【平台公开案例参考】）：华为云方案知识库中的公开行业案例，并非用户本人客户或资料。仅在用户未录入私有客户档案时作为行业参考，且必须明确标注「以下为平台公开案例，非您本人客户」。
-
-【特别规则】
-- 若用户问「我的客户档案/我的客户」但【我的客户档案】为空，必须先坦诚说明「您尚未在系统录入客户档案」，再展示【平台公开案例参考】并标注其来源与性质；
-- 严禁把平台公开案例说成「您的客户」或「您的资料」；
-- 若私有资料与画像中均无相关信息，坦诚说明「我这边暂时没有记录到相关内容」。
+【重要规则】
+- 平台是支持保存客户档案与个人资料的：用户在平台的「客户档案」功能中录入客户后，本助手即可识别并调取。绝不可说「我没有存储/访问客户档案的能力」「每次对话都是独立的」这类否定平台能力的话。
+- 若用户问「我的客户档案/我的客户」但【我的客户档案与画像】中没有客户，必须明确回答：「你目前还没有在系统里录入任何客户档案。」然后简短引导：可以在平台的『客户档案』功能中添加客户，录入后我就能帮你调取、分析和做竞品对标。严禁罗列任何不属于用户的公司或案例来充数。
+- 若私有资料与画像中均无相关信息，坦诚说明「我这边暂时没有记录到你的相关资料」，可再给一句通用建议，但要点明这不是来自你的资料。
 
 像微信朋友一样自然交流，用"你"称呼用户。
-【格式要求】纯文本+换行，不要写 # ## ** ``` 等符号；简洁实用（200-500字）。
+【格式要求】纯文本+换行，不要写 # ## ** ``` 等符号；简洁实用（150-400字）。
 """
 
-    ref_block = ""
-    if not has_clients and platform_ref_text:
-        ref_block = f"\n【平台公开案例参考（非您本人客户，仅供行业参考）】：\n\n{platform_ref_text}\n"
-
     if has_personal:
-        full_prompt = f"{system_prompt}{history_block}【我的私有资料】：\n\n{private_docs_text}\n\n【我的客户档案与画像】：\n\n{profile_text}\n{ref_block}\n【用户提问】：{question}"
+        full_prompt = f"{system_prompt}{history_block}【我的私有资料】：\n\n{private_docs_text}\n\n【我的客户档案与画像】：\n\n{profile_text}\n\n【用户提问】：{question}"
     else:
-        full_prompt = f"{system_prompt}{history_block}（注：当前未检索到您的私有资料与客户档案）{ref_block}\n【用户提问】：{question}"
+        full_prompt = f"{system_prompt}{history_block}（注：当前系统中未检索到你的私有资料，也未录入客户档案）\n【用户提问】：{question}"
 
     return await get_llm_response(full_prompt)
