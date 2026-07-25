@@ -1796,6 +1796,28 @@ body::after {
     margin-bottom: var(--spacing-md);
 }
 
+/* Markdown 表格：确保边框可见（覆盖透明/白色默认值） */
+.markdown-table,
+.result-content .markdown-table {
+    border: 1px solid #d9d9d9 !important;
+}
+.markdown-table th,
+.markdown-table td,
+.result-content .markdown-table th,
+.result-content .markdown-table td {
+    border: 1px solid #e8e8e8 !important;
+    color: #333 !important;
+}
+.markdown-table th,
+.result-content .markdown-table th {
+    background: #f7f8fa !important;
+    color: #1f2329 !important;
+}
+.markdown-table td,
+.result-content .markdown-table td {
+    background: #fff;
+}
+
 .result-content th,
 .result-content td {
     color: var(--text-primary) !important;

@@ -2143,17 +2143,19 @@ const UI = {
             };
             const buildTable = (headerLine, dataLines) => {
                 const headers = parseCells(headerLine);
-                let tbl = '<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;">';
+                let tbl = '<table class="markdown-table" style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;border:1px solid #d9d9d9;">';
                 tbl += '<thead><tr>';
                 headers.forEach(function (h) {
-                    tbl += '<th style="border:1px solid rgba(255,255,255,0.15);padding:8px 12px;text-align:left;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.95);font-weight:600;">' + h + '</th>';
+                    tbl += '<th style="border:1px solid #d9d9d9;padding:10px 14px;text-align:left;background:#f7f8fa;color:#1f2329;font-weight:600;">' + h + '</th>';
                 });
                 tbl += '</tr></thead><tbody>';
                 dataLines.forEach(function (row) {
                     const cells = parseCells(row);
+                    // 跳过全为 - : | 空格 的分隔行（防御性过滤）
+                    if (cells.every(c => /^[\s\-:|]+$/.test(c) || c === '')) return;
                     tbl += '<tr>';
                     cells.forEach(function (c) {
-                        tbl += '<td style="border:1px solid rgba(255,255,255,0.1);padding:8px 12px;color:rgba(255,255,255,0.85);">' + c + '</td>';
+                        tbl += '<td style="border:1px solid #e8e8e8;padding:10px 14px;color:#333;">' + c + '</td>';
                     });
                     tbl += '</tr>';
                 });
@@ -6896,17 +6898,19 @@ const AIAssistant = {
         };
         var buildTable = function(headerLine, dataLines) {
             var headers = parseCells(headerLine);
-            var tbl = '<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;border:1px solid rgba(255,255,255,0.12);">';
+            var tbl = '<table class="markdown-table" style="width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;border:1px solid #d9d9d9;">';
             tbl += '<thead><tr>';
             headers.forEach(function(h) {
-                tbl += '<th style="border:1px solid rgba(255,255,255,0.12);padding:6px 10px;text-align:left;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.9);font-weight:600;white-space:nowrap;">' + h + '</th>';
+                tbl += '<th style="border:1px solid #d9d9d9;padding:6px 10px;text-align:left;background:#f7f8fa;color:#1f2329;font-weight:600;white-space:nowrap;">' + h + '</th>';
             });
             tbl += '</tr></thead><tbody>';
             dataLines.forEach(function(row) {
                 var cells = parseCells(row);
+                // 跳过分隔行（防御性过滤）
+                if (cells.every(function(c) { return /^[\s\-:|]+$/.test(c) || c === ''; })) return;
                 tbl += '<tr>';
                 cells.forEach(function(c) {
-                    tbl += '<td style="border:1px solid rgba(255,255,255,0.08);padding:6px 10px;color:rgba(255,255,255,0.8);">' + c + '</td>';
+                    tbl += '<td style="border:1px solid #e8e8e8;padding:6px 10px;color:#333;">' + c + '</td>';
                 });
                 tbl += '</tr>';
             });
