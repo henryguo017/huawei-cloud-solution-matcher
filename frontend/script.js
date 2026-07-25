@@ -6649,6 +6649,9 @@ const AIAssistant = {
         // 关闭按钮 + 遮罩点击
         var closeBtn = document.getElementById('ai-panel-close');
         if (closeBtn) closeBtn.addEventListener('click', () => this.close());
+        // 新对话按钮（清空上下文，保留面板打开）
+        var newChatBtn = document.getElementById('ai-new-chat-btn');
+        if (newChatBtn) newChatBtn.addEventListener('click', () => this.newChat());
         var overlay = document.getElementById('ai-assistant-overlay');
         if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) this.close(); });
 
@@ -6710,6 +6713,19 @@ const AIAssistant = {
         if (container) container.innerHTML = '';
         var qa = document.getElementById('ai-quick-actions');
         if (qa) qa.style.display = '';
+    },
+
+    newChat() {
+        // 开始新对话：清空上下文（保留面板打开），恢复快捷建议与输入态
+        this.history = [];
+        this.isTyping = false;
+        var container = document.getElementById('ai-chat-messages');
+        if (container) container.innerHTML = '';
+        var qa = document.getElementById('ai-quick-actions');
+        if (qa) qa.style.display = '';
+        var input = document.getElementById('ai-input');
+        if (input) { input.value = ''; input.style.height = 'auto'; }
+        this._updateSendBtn();
     },
 
     toggle() {

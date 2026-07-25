@@ -8172,6 +8172,24 @@ body::after {
     transform: rotate(90deg);
 }
 
+.ai-new-chat-btn {
+    height: 30px;
+    padding: 0 14px;
+    margin-right: 10px;
+    border-radius: 15px;
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.2s;
+}
+.ai-new-chat-btn:hover {
+    background: rgba(255,255,255,0.32);
+}
+
 /* ---- 快捷建议 ---- */
 .ai-quick-actions {
     padding: 20px;

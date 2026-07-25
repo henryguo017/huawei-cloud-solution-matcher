@@ -2292,6 +2292,39 @@ async def refine_competitor_analysis(request: RefineCompetitorRequest):
 
 # ==================== AI 智能助手 ====================
 
+# 单次对话上下文的 token 预算：尽量长，但预留 system + 检索 + 回复 空间。
+# deepseek-v4 上下文窗口较大，30000 token（约 4.8 万中文字）已非常充裕，可按需调大。
+HISTORY_TOKEN_BUDGET = int(os.getenv("AI_CHAT_HISTORY_TOKEN_BUDGET", "30000"))
+
+
+def _estimate_tokens(text: str) -> int:
+    """粗略 token 估算：中文约 1.6 字符/token，英文约 4 字符/token。仅用于历史截断预算。"""
+    if not text:
+        return 0
+    cjk = sum(1 for ch in text if '\u4e00' <= ch <= '\u9fff')
+    non_cjk = len(text) - cjk
+    return max(1, int(cjk / 1.6) + non_cjk / 4)
+
+
+def _truncate_history_by_tokens(raw_history: list, max_tokens: int = HISTORY_TOKEN_BUDGET) -> list:
+    """从最新一条往前累计 token，尽量保留长上下文；至少保留最近 2 条，避免一轮对话被截断。"""
+    if not raw_history:
+        return []
+    selected = []
+    used = 0
+    for msg in reversed(raw_history):
+        content = msg.get("text", "") or msg.get("content", "") or ""
+        t = _estimate_tokens(content)
+        if selected and used + t > max_tokens:
+            break
+        selected.append(msg)
+        used += t
+        if len(selected) >= len(raw_history):
+            break
+    selected.reverse()
+    return selected
+
+
 @router.post("/ai/chat", tags=["AI 助手"])
 async def ai_chat(
     request: dict,
@@ -2310,8 +2343,8 @@ async def ai_chat(
 
         # ---- 提取对话历史（用于上下文）----
         raw_history = request.get("history", [])
-        # 只取最近10轮（20条消息），避免 token 超限
-        recent_history = raw_history[-20:] if len(raw_history) > 20 else raw_history
+        # 按 token 预算动态截断，尽量保留长上下文（单次对话内上下文尽量长）
+        recent_history = _truncate_history_by_tokens(raw_history, HISTORY_TOKEN_BUDGET)
         # 格式化为文本："用户：...\n助手：..."
         history_text = ""
         for msg in recent_history[:-1]:  # 排除当前这一轮的最后一条（就是 question 本身）
@@ -2349,7 +2382,21 @@ async def ai_chat(
             answer = await _answer_usage_question(question, history_text)
             return {"answer": answer}
 
-        # 第二优先级：云计算/IT/技术业务类问题（走 RAG）
+        # 第二优先级（位于 cloud 之前）：个人知识类问题——已登录时基于用户私有数据作答
+        # 必须在 cloud 之前判定，否则"我的客户档案"等会被 cloud 的泛化"客户"关键词抢走
+        personal_keywords = [
+            "我的客户", "客户档案", "我的资料", "我的知识库", "我上传", "我的文档",
+            "我记得", "我的偏好", "关于我", "我的信息", "我存的", "我的方案",
+            "我的账号", "我的历史", "我之前", "我整理", "我收集", "个人知识",
+            "我的笔记", "我的需求", "我们客户", "我的项目", "我的经历", "我的记忆",
+            "我这边", "我的客户档案", "我之前做的", "我保存", "我的客户资料",
+        ]
+        is_personal = bool(user) and any(kw in question for kw in personal_keywords)
+        if is_personal:
+            answer = await _answer_personal_question(question, user, history_text)
+            return {"answer": answer}
+
+        # 第三优先级：云计算/IT/技术业务类问题（走 RAG）
         cloud_keywords = [
             "华为云", "阿里云", "腾讯云", "AWS", "Azure", "Google Cloud",
             "云服务", "云计算", "云服务器", "云数据库", "云存储",
@@ -2497,4 +2544,95 @@ async def _answer_general_question(question: str, history_text: str = "") -> str
 
 用户问题："""
     full_prompt = system_prompt + history_block + question
+    return await get_llm_response(full_prompt)
+
+
+async def _answer_personal_question(question: str, user: dict, history_text: str = "") -> str:
+    """回答个人知识类问题：基于用户私有知识库 + 客户档案 + 用户画像 + 偏好作答（仅已登录）"""
+    user_id = user.get('id')
+    username = user.get('username', '用户')
+
+    # 1. 检索用户私有知识库（含其上传文档 + 平台默认文档副本）
+    personal_docs_text = ""
+    try:
+        kb = get_user_knowledge_base(user_id)
+        docs = kb.search_huawei(question, k=6)
+        if docs:
+            parts = []
+            for i, doc in enumerate(docs, 1):
+                meta = doc.metadata or {}
+                source = meta.get("source", "未知来源")
+                content = doc.page_content.strip()[:1000]
+                parts.append(f"[私有资料{i}] 来源：{source}\n{content}")
+            personal_docs_text = "\n\n".join(parts)
+    except Exception as e:
+        logger.warning(f"个人知识库检索异常: {e}")
+
+    # 2. 客户档案 + 用户画像 + 偏好（来自 DB）
+    profile_text = ""
+    conn = None
+    try:
+        from app.utils.db_init import get_db_connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # 客户档案
+        cur.execute("SELECT name, note FROM clients WHERE user_id=?", (user_id,))
+        clients = cur.fetchall()
+        if clients:
+            lines = [f"- {name}" + (f"：{note}" if note else "") for (name, note) in clients]
+            profile_text += "【我的客户档案】\n" + "\n".join(lines) + "\n"
+        # 用户画像
+        cur.execute("SELECT profile_json FROM user_profile WHERE user_id=?", (user_id,))
+        row = cur.fetchone()
+        if row and row[0]:
+            try:
+                pj = json.loads(row[0])
+                summary = pj.get("summary") or json.dumps(pj, ensure_ascii=False)
+                profile_text += f"【我的用户画像】\n{summary}\n"
+            except Exception:
+                pass
+        # 偏好
+        cur.execute("SELECT preferred_industries, theme, language FROM user_preferences WHERE user_id=?", (user_id,))
+        prow = cur.fetchone()
+        if prow:
+            pref_parts = []
+            if prow[0]:
+                pref_parts.append(f"偏好行业：{prow[0]}")
+            if prow[1]:
+                pref_parts.append(f"主题：{prow[1]}")
+            if prow[2]:
+                pref_parts.append(f"语言：{prow[2]}")
+            if pref_parts:
+                profile_text += "【我的偏好】\n" + "；".join(pref_parts) + "\n"
+    except Exception as e:
+        logger.warning(f"读取个人档案异常: {e}")
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    has_personal = bool(personal_docs_text or profile_text)
+    history_block = f"\n【之前的对话】\n{history_text}\n" if history_text.strip() else ""
+
+    system_prompt = f"""你是「智能方案助手」— cloudsol.cn 平台的 AI 助手，正在与用户「{username}」对话。
+
+【你的任务】
+用户正在询问与其个人知识/资料相关的问题。请优先基于下方《用户的个人资料》作答：
+- 如果问题能在个人资料中找到答案，务必基于资料如实回答，不要编造资料中没有的内容；
+- 如果个人资料中没有相关信息，坦诚说明「我这边暂时没有记录到相关内容」，再基于通用知识给建议，并点明这不是来自用户的资料；
+- 像微信朋友一样自然交流，用"你"称呼用户。
+
+【格式要求】
+- 禁止 Markdown：纯文本+换行，不要写 # ## ** ``` 等符号
+- 简洁实用（200-500字）
+
+"""
+
+    if has_personal:
+        full_prompt = f"{system_prompt}{history_block}【用户的个人资料】：\n\n{personal_docs_text}\n\n{profile_text}\n\n【用户提问】：{question}"
+    else:
+        full_prompt = f"{system_prompt}{history_block}（注：当前未检索到与该问题相关的个人资料）\n\n【用户提问】：{question}"
+
     return await get_llm_response(full_prompt)
