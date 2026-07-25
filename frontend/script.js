@@ -6806,9 +6806,16 @@ const AIAssistant = {
         this._showThinking();
 
         try {
+            // 带上登录 token，后端才能识别 user → 命中 personal 路由（"我的客户档案"等个人知识类问题）
+            var _headers = { 'Content-Type': 'application/json' };
+            try {
+                if (AuthManager.isLoggedIn()) {
+                    _headers['Authorization'] = 'Bearer ' + AuthManager.getToken();
+                }
+            } catch (e) { /* 未登录则匿名请求，走 cloud/general 路由 */ }
             var resp = await fetch('/api/ai/chat', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: _headers,
                 body: JSON.stringify({ question: question, history: this.history })
             });
 
