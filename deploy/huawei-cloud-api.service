@@ -8,7 +8,9 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/huawei-cloud-solution-matcher
 Environment="PATH=/var/www/huawei-cloud-solution-matcher/venv/bin"
-ExecStart=/var/www/huawei-cloud-solution-matcher/venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 --workers 4
+# 必须单 worker：KB 重建任务状态存进程内存(_task_store)、并发锁(_user_sync_locks)为进程内全局，
+# 多 worker 会导致轮询任务 404、锁失效、SQLite 并发写 "database is locked"。切勿添加 --workers。
+ExecStart=/var/www/huawei-cloud-solution-matcher/venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=10
