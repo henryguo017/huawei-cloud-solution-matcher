@@ -423,6 +423,111 @@ ITEMS = {
         "verified": True,
         "note": "基础解析免费；智能解析/私有Zone/高防DNS等增值服务按量收费"
     },
+    "NAT": {
+        "product": "NAT 网关", "spec": "小型(5Gbps)", "billing": "包月",
+        "unit_label": "月/实例", "ref_price": 256.0, "qty": 1,
+        "source_url": "https://www.huaweicloud.com/product/natgateway.html",
+        "verified": True,
+        "note": "小型NAT网关¥256/月；中型¥500/月；大型¥1000/月；SNAT流量费另计"
+    },
+    "VPN": {
+        "product": "VPN 网关", "spec": "专业型(最大10Mbps)", "billing": "包月",
+        "unit_label": "月/网关", "ref_price": 580.0, "qty": 1,
+        "source_url": "https://www.huaweicloud.com/product/vpn.html",
+        "verified": True,
+        "note": "专业型VPN网关¥580/月；流量费¥0.15/GB；支持主备双链路"
+    },
+    "SWR": {
+        "product": "SWR 容器镜像服务", "spec": "共享版(组织级)", "billing": "免费",
+        "unit_label": "月/服务", "ref_price": 0.0, "qty": 1, "free": True,
+        "source_url": "https://www.huaweicloud.com/product/swr.html",
+        "verified": True,
+        "note": "共享版免费（含10GB存储）；企业版按存储量计费，约¥1.2/GB·月"
+    },
+    "APIG": {
+        "product": "APIG API网关", "spec": "基础型(100万次/天)", "billing": "包月",
+        "unit_label": "月/实例", "ref_price": 3000.0, "qty": 1,
+        "source_url": "https://www.huaweicloud.com/product/apig.html",
+        "verified": False,
+        "note": "基础型约¥3000/月；专业型/企业型更高；也可按调用次数阶梯计费（⚠待官网复核）"
+    },
+    "CSE": {
+        "product": "CSE 微服务引擎", "spec": "注册配置中心(基础)", "billing": "免费",
+        "unit_label": "月/服务", "ref_price": 0.0, "qty": 1, "free": True,
+        "source_url": "https://www.huaweicloud.com/product/cse.html",
+        "verified": True,
+        "note": "注册配置中心(Nacos)免费；微服务治理中心(Mesher)按实例数收费，约¥0.4/实例·时"
+    },
+    "S2": {
+        "product": "ServiceStage 应用管理", "spec": "基础版(按资源)", "billing": "按需",
+        "unit_label": "月/应用", "ref_price": 0.0, "qty": 1, "free": True,
+        "source_url": "https://www.huaweicloud.com/product/servicestage.html",
+        "verified": True,
+        "note": "ServiceStage本身免费管理；费用来自底层CCE/CCI等被管资源的计费"
+    },
+    "IAM": {
+        "product": "IAM 统一身份认证", "spec": "基础身份管理", "billing": "免费",
+        "unit_label": "月/服务", "ref_price": 0.0, "qty": 1, "free": True,
+        "source_url": "https://www.huaweicloud.com/product/iam.html",
+        "verified": True,
+        "note": "IAM基础功能免费（用户/策略/权限管理）；MFA硬件令牌等高级功能可能收费"
+    },
+    "DEW": {
+        "product": "DEW 密钥管理", "spec": "默认密钥轮转", "billing": "免费",
+        "unit_label": "月/服务", "ref_price": 0.0, "qty": 1, "free": True,
+        "source_url": "https://www.huaweicloud.com/product/dew.html",
+        "verified": True,
+        "note": "默认密钥管理免费；专用HSM实例/自定义密钥材料(KMS)按规格收费"
+    },
+    "DAS": {
+        "product": "DAS 数据管理服务", "spec": "企业版(VIP)", "billing": "包月",
+        "unit_label": "月/实例", "ref_price": 1980.0, "qty": 1,
+        "source_url": "https://www.huaweicloud.com/product/das.html",
+        "verified": False,
+        "note": "企业版约¥1980/月；免费版提供基础SQL窗口和监控（⚠待官网复核）"
+    },
+    "CloudTable": {
+        "product": "CloudTable 表格存储", "spec": "HBase标准型(4节点16核64G)", "billing": "包月",
+        "unit_label": "月/集群", "ref_price": 4200.0, "qty": 1,
+        "source_url": "https://www.huaweicloud.com/product/cloudtable.html",
+        "verified": False,
+        "note": "HBase集群约¥4200/月(4节点)；OpenTSDB按节点计费；也支持按量付费（⚠待官网复核）"
+    },
+    "ROMA": {
+        "product": "ROMA 应用与数据集成", "spec": "企业版(专业)", "billing": "包月",
+        "unit_label": "月/实例", "ref_price": 8800.0, "qty": 1,
+        "source_url": "https://www.huaweicloud.com/product/roma.html",
+        "verified": False,
+        "note": "ROMA Connect企业版属商务定价范畴，约¥8800+/月起（⚠待官网复核，建议咨询销售）"
+    },
+    "DataArts": {
+        "product": "DataArts 数据治理", "spec": "专业版(工作空间)", "billing": "包月",
+        "unit_label": "月/工作空间", "ref_price": 6800.0, "qty": 1,
+        "source_url": "https://www.huaweicloud.com/product/dataartsstudio.html",
+        "verified": False,
+        "note": "DataArts Studio专业版属商务定价，约¥6800+/月（⚠待官网复核，建议咨询销售）"
+    },
+    "CES": {
+        "product": "CES 云监控", "spec": "基础监控(免费)", "billing": "免费",
+        "unit_label": "月/服务", "ref_price": 0.0, "qty": 1, "free": True,
+        "source_url": "https://www.huaweicloud.com/product/ces.html",
+        "verified": True,
+        "note": "云资源基础监控免费；Agent深度监控、自定义Dashboard高级功能部分收费"
+    },
+    "LTS": {
+        "product": "LTS 日志服务", "spec": "标准存储(按量)", "billing": "按量",
+        "unit_label": "月/GB", "ref_price": 0.47, "qty": 10,
+        "source_url": "https://www.huaweicloud.com/product/lts.html",
+        "verified": False,
+        "note": "日志索引+存储约¥0.47/GB·月；冷存储更低；ICAgent采集免费（⚠待官网复核）"
+    },
+    "SMN": {
+        "product": "SMN 消息通知", "spec": "短信通知(国内)", "billing": "按量",
+        "unit_label": "条", "ref_price": 0.06, "qty": 1000,
+        "source_url": "https://www.huaweicloud.com/product/smn.html",
+        "verified": True,
+        "note": "国内短信约¥0.06/条；邮件/HTTP通知免费；国际短信约¥0.12/条"
+    },
 }
 
 # 商务定价（不出数字，仅提示咨询销售）
