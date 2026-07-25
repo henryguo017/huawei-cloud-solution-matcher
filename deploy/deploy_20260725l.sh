@@ -54,9 +54,15 @@ cd "$PROJECT_DIR"
 venv/bin/python -c "from app.services.knowledge_base import KnowledgeBaseService; s=KnowledgeBaseService(user_id=0); print(s.build_from_directory(use_default_dirs=True))"
 
 # ---- 可选: 已登录现有账号私有库是注册时快照, 不含新产品档案 ----
-# 若你的账号也想检索这 15 篇, 对其各自 user_id 同样重建一次:
-#   USER_ID=$(sqlite3 "$PROJECT_DIR/users.db" "SELECT id FROM users WHERE username='你的账号'")
-#   venv/bin/python -c "from app.services.knowledge_base import KnowledgeBaseService; s=KnowledgeBaseService(user_id=$USER_ID); print(s.build_from_directory(use_default_dirs=True))"
+# ⚠️ 注意: build_from_directory(use_default_dirs=True) 会先清空整个用户向量库再只灌全局文档,
+#    若账号上传过私有文档会被清掉向量(磁盘原文件还在但检索不到)。两种跑法:
+#  A. 账号没上传过私有文档 -> 直接重建即可:
+#    USER_ID=$(sqlite3 "$PROJECT_DIR/users.db" "SELECT id FROM users WHERE username='你的账号'")
+#    venv/bin/python -c "from app.services.knowledge_base import KnowledgeBaseService; s=KnowledgeBaseService(user_id=$USER_ID); print(s.build_from_directory(use_default_dirs=True))"
+#  B. 账号上传过私有文档 -> 安全法(保留上传): 先把15篇并入用户目录, 再从用户自己目录重建
+#    USER_ID=$(sqlite3 "$PROJECT_DIR/users.db" "SELECT id FROM users WHERE username='你的账号'")
+#    cp -rn "$PROJECT_DIR/data/sample_solutions/产品档案" "$PROJECT_DIR/data/user_docs/$USER_ID/sample_solutions/"
+#    venv/bin/python -c "from app.services.knowledge_base import KnowledgeBaseService; s=KnowledgeBaseService(user_id=$USER_ID); print(s.build_from_directory(use_default_dirs=False))"
 
 # --------------------------------------------------
 # 5. 起服
