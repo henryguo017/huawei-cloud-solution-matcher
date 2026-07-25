@@ -2362,6 +2362,8 @@ async def ai_chat(
     1. 平台使用类 → 使用向导（纯 LLM，基于 PLATFORM_GUIDE）
     2. 个人知识类 → 基于用户私有资料作答（仅已登录）
     3. 云计算/IT/技术业务类 → 对话式 RAG（专业回答）
+       3.5 兜底检索：关键词未命中时，用一次极小 LLM 调用判断是否云/IT/方案问题，
+           命中则补走 RAG（解决口语化提问漏检索知识库的问题）
     4. 其他所有话题 → 通用 AI 助手（什么都能聊）
     """
     try:
@@ -2463,6 +2465,16 @@ async def ai_chat(
             answer = await _answer_business_question(question, kb, history_text)
             return {"answer": _strip_markdown(answer)}
 
+        # 兜底检索：关键词表未命中，但可能是「口语化」的云计算/IT/方案问题
+        # （如"数据不能丢怎么设计""系统扛不住高峰怎么办"——一个关键词都不含）
+        # 用一次极小 LLM 调用判断是否属于云/IT/方案范畴，命中则转 RAG，
+        # 避免辛苦建的知识库对口语化提问完全失效。判断失败安全降级为通用闲聊。
+        if await _is_cloud_question_llm(question):
+            user_id = user.get('id') if user else 0
+            kb = get_user_knowledge_base(user_id) if user_id > 0 else get_knowledge_base()
+            answer = await _answer_business_question(question, kb, history_text)
+            return {"answer": _strip_markdown(answer)}
+
         # 第四优先级：其他所有话题 → 通用 AI 助手
         answer = await _answer_general_question(question, history_text)
         return {"answer": _strip_markdown(answer)}
@@ -2548,6 +2560,40 @@ async def _answer_business_question(question: str, kb, history_text: str = "") -
         full_prompt = f"{system_prompt}{history_block}（注：当前知识库暂无相关资料，请根据您的专业知识尽量准确回答）\n\n【用户提问】：{question}"
 
     return await get_llm_response(full_prompt)
+
+
+async def _is_cloud_question_llm(question: str) -> bool:
+    """兜底判断：关键词表未命中时，用一次极小 LLM 调用判断问题是否属于
+    【云计算/IT技术/企业数字化/解决方案·售前】范畴。命中则转 RAG 路由，
+    避免口语化云问题（如"数据不能丢怎么设计"）掉进通用闲聊不检索知识库。
+    判断失败时安全降级为 False（走通用闲聊，保持原行为，绝不阻断问答）。"""
+    try:
+        prompt = (
+            "你是一个分类器。判断下面这句用户提问是否属于"
+            "【云计算、IT技术架构、企业数字化转型、行业解决方案/售前咨询】范畴。\n"
+            "只回答一个字：是 或 否。禁止任何解释、标点或多余文字。\n\n"
+            "示例：\n"
+            "「数据不能丢应该怎么设计」→ 是\n"
+            "「系统扛不住流量高峰怎么办」→ 是\n"
+            "「想做个能弹性扩容的架构」→ 是\n"
+            "「医院信息化要考虑什么」→ 是\n"
+            "「帮我写一首关于春天的诗」→ 否\n"
+            "「今天天气怎么样」→ 否\n"
+            "「推荐个午饭吃什么」→ 否\n\n"
+            f"这句提问：{question}\n回答："
+        )
+        resp = (await get_llm_response(prompt) or "").strip()
+        head = resp[:6]
+        # 先拦否定词（"不是""否""不属于"都含或不含"是"，必须优先判断）
+        if ("否" in head) or ("不是" in head) or ("不属于" in head) or ("no" in head.lower()):
+            return False
+        if ("是" in head) or ("yes" in head.lower()):
+            return True
+        # 无法解析 → 安全降级
+        return False
+    except Exception as e:
+        logger.warning(f"兜底云问题 LLM 判断失败，降级为通用闲聊: {e}")
+        return False
 
 
 async def _answer_general_question(question: str, history_text: str = "") -> str:
