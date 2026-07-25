@@ -370,6 +370,29 @@ class KnowledgeBaseService:
                         break
         return results[:k]
 
+    def search_user_uploaded(self, query, k=6):
+        """只召回用户真实上传/新建的私有文档（doc_origin=user_uploaded），排除平台默认库副本"""
+        results = []
+        try:
+            results = self.vector_db.similarity_search(
+                query, k=k, filter={"doc_origin": {"$eq": "user_uploaded"}}
+            )
+        except Exception as e:
+            logger.warning(f"用户私有文档检索异常，回退混合池: {e}")
+        if len(results) < k:
+            seen = {d.page_content for d in results}
+            try:
+                pool = self._similarity_pool(query, pool_size=max(k * 4, 40))
+                for d in pool:
+                    if (d.metadata or {}).get("doc_origin") == "user_uploaded" and d.page_content not in seen:
+                        results.append(d)
+                        seen.add(d.page_content)
+                        if len(results) >= k:
+                            break
+            except Exception as e:
+                logger.warning(f"用户私有文档回退池异常: {e}")
+        return results[:k]
+
     def search_competitor(self, query, k=2):
         """只召回竞品方案文档（竞品对比章节用）——直接在竞品子集上检索"""
         comp = self._competitor_companies
@@ -615,6 +638,9 @@ class KnowledgeBaseService:
             shutil.copy2(file_path, tmp_file)
             chunks = load_documents_from_directory(tmp_dir, CHUNK_SIZE, CHUNK_OVERLAP)
             if chunks:
+                # 标记为「用户真实上传/新建」，与平台默认库副本区分（personal 路由据此只检索真私有资料）
+                for c in chunks:
+                    c.metadata["doc_origin"] = "user_uploaded"
                 self.vector_db.add_documents(chunks)
                 print(f"[索引] {os.path.basename(file_path)} → {len(chunks)} 个向量片段")
             return len(chunks)

@@ -2549,28 +2549,31 @@ async def _answer_general_question(question: str, history_text: str = "") -> str
 
 
 async def _answer_personal_question(question: str, user: dict, history_text: str = "") -> str:
-    """回答个人知识类问题：基于用户私有知识库 + 客户档案 + 用户画像 + 偏好作答（仅已登录）"""
+    """回答个人知识类问题：基于用户真实私有资料（上传文档 + 客户档案 + 画像 + 偏好）作答，
+    严格区分「用户私有资料」与「平台公开参考」，避免把平台案例当成用户客户。"""
     user_id = user.get('id')
     username = user.get('username', '用户')
 
-    # 1. 检索用户私有知识库（含其上传文档 + 平台默认文档副本）
-    personal_docs_text = ""
+    # 1. 检索用户真实上传/新建的私有文档（排除平台默认库副本）
+    private_docs_text = ""
+    kb = None
     try:
         kb = get_user_knowledge_base(user_id)
-        docs = kb.search_huawei(question, k=6)
+        docs = kb.search_user_uploaded(question, k=6)
         if docs:
             parts = []
             for i, doc in enumerate(docs, 1):
                 meta = doc.metadata or {}
                 source = meta.get("source", "未知来源")
                 content = doc.page_content.strip()[:1000]
-                parts.append(f"[私有资料{i}] 来源：{source}\n{content}")
-            personal_docs_text = "\n\n".join(parts)
+                parts.append(f"[我的私有资料{i}] 来源：{source}\n{content}")
+            private_docs_text = "\n\n".join(parts)
     except Exception as e:
         logger.warning(f"个人知识库检索异常: {e}")
 
-    # 2. 客户档案 + 用户画像 + 偏好（来自 DB）
+    # 2. 客户档案 + 用户画像 + 偏好（来自 DB，客户档案优先）
     profile_text = ""
+    has_clients = False
     conn = None
     try:
         from app.utils.db_init import get_db_connection
@@ -2580,6 +2583,7 @@ async def _answer_personal_question(question: str, user: dict, history_text: str
         cur.execute("SELECT name, note FROM clients WHERE user_id=?", (user_id,))
         clients = cur.fetchall()
         if clients:
+            has_clients = True
             lines = [f"- {name}" + (f"：{note}" if note else "") for (name, note) in clients]
             profile_text += "【我的客户档案】\n" + "\n".join(lines) + "\n"
         # 用户画像
@@ -2614,26 +2618,52 @@ async def _answer_personal_question(question: str, user: dict, history_text: str
             except Exception:
                 pass
 
-    has_personal = bool(personal_docs_text or profile_text)
+    # 3. 未录入客户档案时，从平台公开方案库取行业案例作为参考（明确标注非本人客户）
+    platform_ref_text = ""
+    if not has_clients:
+        try:
+            if kb is None:
+                kb = get_user_knowledge_base(user_id)
+            ref_docs = kb.search_huawei(question, k=5)
+            if ref_docs:
+                parts = []
+                for i, doc in enumerate(ref_docs, 1):
+                    meta = doc.metadata or {}
+                    source = meta.get("source", "华为云方案知识库")
+                    content = doc.page_content.strip()[:600]
+                    parts.append(f"[平台公开案例{i}] 来源：{source}（华为云方案知识库，非您本人客户）\n{content}")
+                platform_ref_text = "\n\n".join(parts)
+        except Exception as e:
+            logger.warning(f"平台参考检索异常: {e}")
+
+    has_personal = bool(private_docs_text or profile_text)
     history_block = f"\n【之前的对话】\n{history_text}\n" if history_text.strip() else ""
 
     system_prompt = f"""你是「智能方案助手」— cloudsol.cn 平台的 AI 助手，正在与用户「{username}」对话。
 
 【你的任务】
-用户正在询问与其个人知识/资料相关的问题。请优先基于下方《用户的个人资料》作答：
-- 如果问题能在个人资料中找到答案，务必基于资料如实回答，不要编造资料中没有的内容；
-- 如果个人资料中没有相关信息，坦诚说明「我这边暂时没有记录到相关内容」，再基于通用知识给建议，并点明这不是来自用户的资料；
-- 像微信朋友一样自然交流，用"你"称呼用户。
+用户正在询问与其个人知识/资料相关的问题。请严格区分以下两类信息，绝不可混淆：
 
-【格式要求】
-- 禁止 Markdown：纯文本+换行，不要写 # ## ** ``` 等符号
-- 简洁实用（200-500字）
+A. 用户的私有资料（来自【我的私有资料】和【我的客户档案】）：用户本人上传的文档、录入的客户档案、个人画像与偏好。若能在此找到答案，务必基于它如实回答。
 
+B. 平台公开参考（来自【平台公开案例参考】）：华为云方案知识库中的公开行业案例，并非用户本人客户或资料。仅在用户未录入私有客户档案时作为行业参考，且必须明确标注「以下为平台公开案例，非您本人客户」。
+
+【特别规则】
+- 若用户问「我的客户档案/我的客户」但【我的客户档案】为空，必须先坦诚说明「您尚未在系统录入客户档案」，再展示【平台公开案例参考】并标注其来源与性质；
+- 严禁把平台公开案例说成「您的客户」或「您的资料」；
+- 若私有资料与画像中均无相关信息，坦诚说明「我这边暂时没有记录到相关内容」。
+
+像微信朋友一样自然交流，用"你"称呼用户。
+【格式要求】纯文本+换行，不要写 # ## ** ``` 等符号；简洁实用（200-500字）。
 """
 
+    ref_block = ""
+    if not has_clients and platform_ref_text:
+        ref_block = f"\n【平台公开案例参考（非您本人客户，仅供行业参考）】：\n\n{platform_ref_text}\n"
+
     if has_personal:
-        full_prompt = f"{system_prompt}{history_block}【用户的个人资料】：\n\n{personal_docs_text}\n\n{profile_text}\n\n【用户提问】：{question}"
+        full_prompt = f"{system_prompt}{history_block}【我的私有资料】：\n\n{private_docs_text}\n\n【我的客户档案与画像】：\n\n{profile_text}\n{ref_block}\n【用户提问】：{question}"
     else:
-        full_prompt = f"{system_prompt}{history_block}（注：当前未检索到与该问题相关的个人资料）\n\n【用户提问】：{question}"
+        full_prompt = f"{system_prompt}{history_block}（注：当前未检索到您的私有资料与客户档案）{ref_block}\n【用户提问】：{question}"
 
     return await get_llm_response(full_prompt)
