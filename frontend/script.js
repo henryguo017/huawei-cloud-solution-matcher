@@ -3247,7 +3247,7 @@ const HistoryUI = {
                                 ${this._statusBadges(item)}
                             </span>
                         </div>
-                        <div class="history-item-demand" style="color: rgba(255,255,255,0.6);">分析报告已生成 · 点击查看详情</div>
+                        <div class="history-item-demand">${item.competitor ? '华为云 vs ' + this.escapeHtml(item.competitor) + (item.industry ? ' · ' + this.escapeHtml(item.industry) : '') + ' 对比分析' : '竞品分析报告 · 点击查看详情'}</div>
                     </div>
                     <div class="history-item-actions">
                         <button class="btn-icon" title="下载分析报告" onclick="event.stopPropagation(); HistoryUI.downloadItem(${item.id})"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></button>
