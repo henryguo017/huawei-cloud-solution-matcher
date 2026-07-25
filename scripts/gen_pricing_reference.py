@@ -270,6 +270,159 @@ ITEMS = {
         "verified": True,
         "note": "标准直播下行流量¥0.225/GB；云直播录制¥30/路·月；新开用户仅支持华北-北京四"
     },
+    # ---- 2026-07-25 补齐产品图谱缺失价目（仅取华为云官网公开价，不编造数字）----
+    "SFS": {
+        "product": "SFS 弹性文件服务", "spec": "SFS Turbo 标准型(40MB/s/TiB)", "billing": "包月",
+        "unit_label": "月/GB", "ref_price": 0.40, "qty": 500,
+        "tier": {"low": {"qty": 100, "unit_price": 0.40},
+                 "mid": {"qty": 500, "unit_price": 0.40},
+                 "high": {"qty": 1000, "unit_price": 0.40}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/sfs",
+        "verified": True,
+        "note": "SFS Turbo 标准型¥0.40/GB·月；高性能型(125MB/s/TiB)¥0.90、250MB/s/TiB¥1.31；标准SFS更低"
+    },
+    "DDS": {
+        "product": "DDS 文档数据库", "spec": "副本集·通用型·4vCPU 8GB·三节点·300GB", "billing": "按需",
+        "unit_label": "月/三节点实例", "ref_price": 2592.0, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 2592.0},
+                 "mid": {"qty": 1, "unit_price": 2592.0},
+                 "high": {"qty": 1, "unit_price": 2592.0}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/dds",
+        "verified": True,
+        "note": "按需¥3.6/小时≈¥2,592/月(三节点4vCPU8GB)；包月更优，2vCPU8GB约¥1,566/月(5节点)"
+    },
+    "GeminiDB": {
+        "product": "GeminiDB", "spec": "Redis接口·2vCPU·3节点·40GB(包月)", "billing": "包月",
+        "unit_label": "月/实例", "ref_price": 1953.40, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 1953.40},
+                 "mid": {"qty": 1, "unit_price": 1953.40},
+                 "high": {"qty": 1, "unit_price": 1953.40}},
+        "source_url": "https://www.huaweicloud.com/pricing.html?tab=detail#/geminidb",
+        "verified": True,
+        "note": "Redis接口包月¥1,953.40/月(2vCPU 3节点40GB，华北-北京四)；集群版2vCPU16GB包月¥926.70"
+    },
+    "VOD": {
+        "product": "VOD 视频点播", "spec": "CDN下行流量(阶梯)", "billing": "按量",
+        "unit_label": "月/GB流量", "ref_price": 0.20, "qty": 5000,
+        "tier": {"low": {"qty": 1000, "unit_price": 0.20},
+                 "mid": {"qty": 5000, "unit_price": 0.20},
+                 "high": {"qty": 20000, "unit_price": 0.15}},
+        "source_url": "https://www.huaweicloud.com/special/pro-vod-yure.html",
+        "verified": True,
+        "note": "CDN流量¥0.2/GB起(0~10TB，阶梯递减至¥0.11)；存储¥0.099/GB·月；H.264转码¥0.022/分钟(SD)起"
+    },
+    "RTC": {
+        "product": "RTC 实时音视频", "spec": "SparkRTC·视频通话(720p/HD)", "billing": "按量",
+        "unit_label": "月/分钟", "ref_price": 0.028, "qty": 10000,
+        "tier": {"low": {"qty": 1000, "unit_price": 0.014},
+                 "mid": {"qty": 10000, "unit_price": 0.028},
+                 "high": {"qty": 100000, "unit_price": 0.105}},
+        "source_url": "https://www.huaweicloud.com/special/rtc-ysphy.html",
+        "verified": True,
+        "note": "按下行分钟计费：音频¥0.007/分钟、SD¥0.014、HD(720p)¥0.028、FHD¥0.105；不使用不计费"
+    },
+    "Meeting": {
+        "product": "Meeting 华为云会议", "spec": "并发参会方(包月)", "billing": "包月",
+        "unit_label": "月/并发方", "ref_price": 160.0, "qty": 10,
+        "tier": {"low": {"qty": 1, "unit_price": 160.0},
+                 "mid": {"qty": 10, "unit_price": 160.0},
+                 "high": {"qty": 50, "unit_price": 160.0}},
+        "source_url": "https://support.huaweicloud.com/en-us/pg-meeting/price.html",
+        "verified": True,
+        "note": "并发参会方¥160/月/方(不限时长)；云会议室10方¥409/月、25方¥639、50方¥1,662；免费版50方45分钟"
+    },
+    "CBR": {
+        "product": "CBR 云备份", "spec": "云服务器备份存储库", "billing": "包月",
+        "unit_label": "月/GB", "ref_price": 0.20, "qty": 500,
+        "tier": {"low": {"qty": 100, "unit_price": 0.20},
+                 "mid": {"qty": 500, "unit_price": 0.20},
+                 "high": {"qty": 2000, "unit_price": 0.20}},
+        "source_url": "https://support.huaweicloud.com/price-cbr/cbr_07_0008.html",
+        "verified": True,
+        "note": "云服务器备份存储库¥0.20/GB·月；文件/云硬盘备份同价；跨区域复制流量另计"
+    },
+    "AAD": {
+        "product": "AAD DDoS防护", "spec": "DDoS高防标准版(10Gbps保底)", "billing": "包月",
+        "unit_label": "月/实例", "ref_price": 9800.0, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 9800.0},
+                 "mid": {"qty": 1, "unit_price": 9800.0},
+                 "high": {"qty": 1, "unit_price": 9800.0}},
+        "source_url": "https://support.huaweicloud.com/price-aad/price-aad-pdf.pdf",
+        "verified": False,
+        "note": "DDoS高防标准版约¥9,800/月(10Gbps保底，弹性带宽按天计费)；原生基础防护(Anti-DDoS流量清洗)免费2-5Gbps；原生高级防护按实例/时长付费"
+    },
+    "EI": {
+        "product": "EI 企业智能", "spec": "AI能力套件(以人脸活体为例)", "billing": "按量",
+        "unit_label": "月/次", "ref_price": 0.20, "qty": 1000,
+        "tier": {"low": {"qty": 100, "unit_price": 0.20},
+                 "mid": {"qty": 1000, "unit_price": 0.20},
+                 "high": {"qty": 10000, "unit_price": 0.20}},
+        "source_url": "https://www.huaweicloud.com/special/sis-jc.html",
+        "verified": True,
+        "note": "EI为AI能力套件，按各API调用量分别计费：人脸动作活体¥0.2/次、一句话识别¥4/千次、语音合成¥2/千次、OCR见OCR产品；无统一单价"
+    },
+    "CCI": {
+        "product": "CCI 云容器实例", "spec": "通用型·2vCPU 4GiB(Pod)", "billing": "按需",
+        "unit_label": "小时/Pod", "ref_price": 0.44, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 0.44},
+                 "mid": {"qty": 1, "unit_price": 0.44},
+                 "high": {"qty": 1, "unit_price": 0.44}},
+        "source_url": "https://support.huaweicloud.com/price-cci2/cci_06_1004.html",
+        "verified": True,
+        "note": "通用型北京四：CPU¥0.1764/vCPU·小时、内存¥0.022/GiB·小时(2vCPU4GiB≈¥0.44/小时)；轻享型更低；按秒计费"
+    },
+    "FGS": {
+        "product": "FGS 函数工作流", "spec": "函数(超出免费额度)", "billing": "按量",
+        "unit_label": "月/百万次", "ref_price": 1.33, "qty": 1,
+        "tier": {"low": {"qty": 0, "unit_price": 0.0},
+                 "mid": {"qty": 1, "unit_price": 1.33},
+                 "high": {"qty": 10, "unit_price": 1.33}},
+        "source_url": "https://support.huaweicloud.com/topic/696103-10-H",
+        "verified": True,
+        "note": "每月前100万次调用免费；超出¥1.33/百万次；内存计量>40万GB·秒部分¥0.00011108/GB·秒"
+    },
+    "ELB": {
+        "product": "ELB 弹性负载均衡", "spec": "共享型(性能保障模式)", "billing": "按需",
+        "unit_label": "小时/实例", "ref_price": 0.32, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 0.32},
+                 "mid": {"qty": 1, "unit_price": 0.32},
+                 "high": {"qty": 1, "unit_price": 0.32}},
+        "source_url": "https://www.huaweicloud.com/guide/productsdesc-bms_7bcc5e892939943a5032cf522c466bb7support1_D",
+        "verified": True,
+        "note": "共享型(性能保障模式)按需¥0.32/小时≈¥230/月；独享型按实例+LCU计费(LCU¥0.0417/小时·个)；共享型基础版免费"
+    },
+    "BMS": {
+        "product": "BMS 裸金属服务器", "spec": "通用型(中配)·28核192GB", "billing": "包月",
+        "unit_label": "月/台", "ref_price": 6560.0, "qty": 1,
+        "tier": {"low": {"qty": 1, "unit_price": 6560.0},
+                 "mid": {"qty": 1, "unit_price": 6560.0},
+                 "high": {"qty": 1, "unit_price": 9560.0}},
+        "source_url": "https://www.huaweicloud.com/product/bms.html",
+        "verified": True,
+        "note": "通用型(中配)physical.s4.xlarge 28核192GB ¥6,560/月；标配44核384GB¥9,560；本地存储型¥11,260；高性能计算型¥13,360"
+    },
+    # ---- 免费类（基础功能免费，按实际创建的资源计费）----
+    "AS": {
+        "product": "AS 弹性伸缩", "spec": "弹性伸缩服务", "billing": "免费",
+        "unit_label": "月/服务", "ref_price": 0.0, "qty": 1, "free": True,
+        "source_url": "https://www.huaweicloud.com/product/as.html",
+        "verified": True,
+        "note": "弹性伸缩服务本身免费，按实际扩容的ECS/BMS等资源计费"
+    },
+    "VPC": {
+        "product": "VPC 虚拟私有云", "spec": "基础私有网络", "billing": "免费",
+        "unit_label": "月/服务", "ref_price": 0.0, "qty": 1, "free": True,
+        "source_url": "https://www.huaweicloud.com/product/vpc.html",
+        "verified": True,
+        "note": "VPC基础功能免费（私有网络/子网/路由/安全组）；VPN/云专线/公网带宽等附加资源另计"
+    },
+    "DNS": {
+        "product": "DNS 云解析服务", "spec": "公网权威解析(基础)", "billing": "免费",
+        "unit_label": "月/服务", "ref_price": 0.0, "qty": 1, "free": True,
+        "source_url": "https://www.huaweicloud.com/product/dns.html",
+        "verified": True,
+        "note": "基础解析免费；智能解析/私有Zone/高防DNS等增值服务按量收费"
+    },
 }
 
 # 商务定价（不出数字，仅提示咨询销售）
@@ -335,6 +488,8 @@ def main():
         "disclaimer": DISCLAIMER,
         "default_profile": "通用",
         "profiles": build_profiles(),
+        # 扁平全量价目（产品图谱「产品介绍」用，独立于行业成本参考 profiles）
+        "all_items": [dict(v) for v in ITEMS.values()],
         "business_only_products": list(BUSINESS_ONLY.keys()),
     }
     os.makedirs(os.path.dirname(OUT), exist_ok=True)

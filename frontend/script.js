@@ -7196,6 +7196,10 @@ const ProductGraph = {
             return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
                 '<div class="pp-price-body"><div class="pp-price-note pp-biz">商务定价：' + _esc(item.note || '请咨询华为云销售') + '</div></div></div>';
         }
+        if (item.free) {
+            return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
+                '<div class="pp-price-body"><div class="pp-price-note pp-free">基础功能免费：' + _esc(item.note || '按实际创建的资源计费') + '</div></div></div>';
+        }
         if (item.no_price) {
             return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
                 '<div class="pp-price-body"><div class="pp-price-note pp-noprice">参考价待补充：' + _esc(item.note || '') + '</div></div></div>';

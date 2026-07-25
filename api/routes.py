@@ -197,10 +197,41 @@ async def pricing_reference(industry: Optional[str] = None):
 @router.get("/pricing/products", tags=["成本参考"])
 async def pricing_products():
     """
-    返回全量价目产品（跨所有行业去重），供产品图谱「产品介绍」按 code 查参考价。
-    包含：各行业 profile.items（含 no_price 待补充项）+ 顶层 business_only_products（商务定价项）。
+    返回全量价目产品（去重），供产品图谱「产品介绍」按产品名查参考价。
+    优先使用 JSON 顶层 all_items（扁平全量，独立于行业成本参考 profiles）；
+    旧版 JSON 无 all_items 时回退到遍历各行业 profile.items + 商务定价项。
     """
     data = _load_pricing_reference()
+    all_items = data.get("all_items")
+    if all_items:
+        seen = set()
+        items = []
+        for it in all_items:
+            name = it.get("product", "")
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            items.append({
+                "product": name,
+                "spec": it.get("spec", ""),
+                "billing": it.get("billing", ""),
+                "unit_label": it.get("unit_label", ""),
+                "ref_price": it.get("ref_price", 0),
+                "qty": it.get("qty", 1),
+                "tier": it.get("tier", None),
+                "source_url": it.get("source_url", ""),
+                "verified": it.get("verified", True),
+                "note": it.get("note", ""),
+                "business_only": bool(it.get("business_only", False)),
+                "no_price": bool(it.get("no_price", False)),
+                "free": bool(it.get("free", False)),
+            })
+        return {
+            "items": items,
+            "region": data.get("region", ""),
+            "annual_discount": data.get("annual_discount", 0.85),
+        }
+    # 回退路径（兼容旧版 JSON：无 all_items）
     profiles = data.get("profiles", {})
     bop = data.get("business_only_products", [])
     seen = set()
@@ -225,6 +256,7 @@ async def pricing_products():
                 "note": it.get("note", ""),
                 "business_only": bool(it.get("business_only", False)),
                 "no_price": bool(it.get("no_price", False)),
+                "free": bool(it.get("free", False)),
             })
     # 2) 顶层商务定价产品（可能是名称字符串列表，也可能是完整 dict）
     for it in bop:
@@ -254,6 +286,7 @@ async def pricing_products():
             "note": note,
             "business_only": True,
             "no_price": False,
+            "free": False,
         })
     return {
         "items": items,
