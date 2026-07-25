@@ -5372,13 +5372,14 @@ function initEventListeners() {
     // 状态挂在 window.__crState，避免与文件其它作用域的 const 冲突
     if (!window.__crState) window.__crState = { rows: [], tier: 'mid', view: 'month', annual_discount: 0.85, bound: false, viewBound: false, addBound: false };
 
-    function _crEsc(s) {
+    // 工具函数挂到 window，确保所有作用域（含 ProductGraph 对象方法）都能访问
+    window._crEsc = function _crEsc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    }
-    function _crMoney(n) {
+    };
+    window._crMoney = function _crMoney(n) {
         const v = Math.round((Number(n) || 0) * 100) / 100;
         return v.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-    }
+    };
     function _crUpdateTierButtons() {
         document.querySelectorAll('#cr-tier-tabs .cr-tier-btn').forEach(b => {
             b.classList.toggle('active', b.dataset.tier === window.__crState.tier);
@@ -7188,31 +7189,34 @@ const ProductGraph = {
 
     _priceSectionHtml(item) {
         var meta = this._priceMeta || {};
+        // 安全引用：优先 window._crEsc/_crMoney，兜底内联实现
+        var _esc = (window._crEsc || function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[c];}); });
+        var _money = (window._crMoney || function(n){ return Math.round((Number(n)||0)*100)/100; });
         if (item.business_only) {
             return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
-                '<div class="pp-price-body"><div class="pp-price-note pp-biz">商务定价：' + _crEsc(item.note || '请咨询华为云销售') + '</div></div></div>';
+                '<div class="pp-price-body"><div class="pp-price-note pp-biz">商务定价：' + _esc(item.note || '请咨询华为云销售') + '</div></div></div>';
         }
         if (item.no_price) {
             return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
-                '<div class="pp-price-body"><div class="pp-price-note pp-noprice">参考价待补充：' + _crEsc(item.note || '') + '</div></div></div>';
+                '<div class="pp-price-body"><div class="pp-price-note pp-noprice">参考价待补充：' + _esc(item.note || '') + '</div></div></div>';
         }
         var unit = item.unit_label || '元/月';
-        var rp = _crMoney(item.ref_price || 0);
+        var rp = _money(item.ref_price || 0);
         var warn = (item.verified === false) ? ' <span class="pp-warn" title="待官网复核">⚠</span>' : '';
         var tierHtml = '';
         if (item.tier) {
-            var lo = item.tier.low ? _crMoney(item.tier.low.unit_price || 0) : '—';
-            var mid = item.tier.mid ? _crMoney(item.tier.mid.unit_price || 0) : '—';
-            var hi = item.tier.high ? _crMoney(item.tier.high.unit_price || 0) : '—';
-            tierHtml = '<div class="pp-tiers">低 <b>¥' + lo + '</b> · 中 <b>¥' + mid + '</b> · 高 <b>¥' + hi + '</b> <span class="pp-unit">(' + _crEsc(unit) + ')</span></div>';
+            var lo = item.tier.low ? _money(item.tier.low.unit_price || 0) : '—';
+            var mid = item.tier.mid ? _money(item.tier.mid.unit_price || 0) : '—';
+            var hi = item.tier.high ? _money(item.tier.high.unit_price || 0) : '—';
+            tierHtml = '<div class="pp-tiers">低 <b>¥' + lo + '</b> · 中 <b>¥' + mid + '</b> · 高 <b>¥' + hi + '</b> <span class="pp-unit">(' + _esc(unit) + ')</span></div>';
         }
-        var noteHtml = item.note ? '<div class="pp-price-note">' + _crEsc(item.note) + '</div>' : '';
-        var srcHtml = item.source_url ? '<a class="pp-price-src" href="' + _crEsc(item.source_url) + '" target="_blank" rel="noopener">来源：华为云官网价目表 ↗</a>' : '';
-        var metaHtml = (meta.region || meta.annual_discount) ? '<div class="pp-price-meta">地区 ' + _crEsc(meta.region || '—') + ' · 年付 ≈ 月×12×' + (meta.annual_discount || 0.85) + '</div>' : '';
+        var noteHtml = item.note ? '<div class="pp-price-note">' + _esc(item.note) + '</div>' : '';
+        var srcHtml = item.source_url ? '<a class="pp-price-src" href="' + _esc(item.source_url) + '" target="_blank" rel="noopener">来源：华为云官网价目表 ↗</a>' : '';
+        var metaHtml = (meta.region || meta.annual_discount) ? '<div class="pp-price-meta">地区 ' + _esc(meta.region || '—') + ' · 年付 ≈ 月×12×' + (meta.annual_discount || 0.85) + '</div>' : '';
         return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
             '<div class="pp-price-body">' +
-            '<div class="pp-row"><span>计费方式</span><b>' + _crEsc(item.billing || '—') + (item.unit_label ? (' · ' + _crEsc(item.unit_label)) : '') + '</b></div>' +
-            '<div class="pp-row"><span>参考单价</span><b>¥' + rp + ' <i class="pp-unit">/' + _crEsc(unit) + '</i></b>' + warn + '</div>' +
+            '<div class="pp-row"><span>计费方式</span><b>' + _esc(item.billing || '—') + (item.unit_label ? (' · ' + _esc(item.unit_label)) : '') + '</b></div>' +
+            '<div class="pp-row"><span>参考单价</span><b>¥' + rp + ' <i class="pp-unit">/' + _esc(unit) + '</i></b>' + warn + '</div>' +
             tierHtml + noteHtml + srcHtml + metaHtml +
             '</div></div>';
     },
