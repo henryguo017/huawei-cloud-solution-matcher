@@ -76,11 +76,24 @@ systemctl status huawei-cloud-api --no-pager | head -6
 # 6. 部署后验证 (铁律⑤: 真 curl 确认生效, 勿信版本号/截图)
 # --------------------------------------------------
 echo "[6/6] 验证前端版本号生效 (应检测到 $VER)..."
-curl -s "https://www.cloudsol.cn/index.html" | grep -o "style.css?v=$VER" || echo "⚠️ 未检测到版本号, 检查 CDN/缓存"
-curl -s "https://www.cloudsol.cn/index.html" | grep -o "script.js?v=$VER" || echo "⚠️ 未检测到版本号, 检查 CDN/缓存"
-echo "--- 验证后端健康 ---"
-curl -s "https://www.cloudsol.cn/api/health" | head -c 200
-echo ""
+curl -s "https://www.cloudsol.cn/index.html" | grep -o "style.css?v=$VER" || echo "⚠️ 未检测到 style.css 版本号, 检查 CDN/缓存"
+curl -s "https://www.cloudsol.cn/index.html" | grep -o "script.js?v=$VER" || echo "⚠️ 未检测到 script.js 版本号, 检查 CDN/缓存"
+echo "--- 验证后端健康 (轮询等待冷启动, 最多 ~60s) ---"
+HEALTH_OK=0
+for i in $(seq 1 20); do
+  RESP=$(curl -s --max-time 5 "https://www.cloudsol.cn/api/health" || true)
+  if echo "$RESP" | grep -q '"status":"healthy"'; then
+    HEALTH_OK=1
+    echo "  [$i] 后端健康: $RESP"
+    break
+  fi
+  # 502/超时 = nginx 已起但 uvicorn 冷启动中(加载 embedding 模型约 20s), 继续等
+  echo "  [$i] 暂未就绪 ($(echo "$RESP" | head -c 60))，3s 后重试..."
+  sleep 3
+done
+if [ "$HEALTH_OK" -ne 1 ]; then
+  echo "⚠️ 60s 内未拿到 healthy, 请 ssh 登录后查: journalctl -u huawei-cloud-api -n 50 --no-pager"
+fi
 
 echo "=========================================="
 echo "  ✅ 部署完成! 版本 $VER"
