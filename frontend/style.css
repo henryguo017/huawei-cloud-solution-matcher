@@ -8681,6 +8681,48 @@ body::after {
     display: none; /* 隐藏默认 bullet */
 }
 
+/* ====== 产品介绍：参考价格区块（成本参考价目联动） ====== */
+.pp-price {
+    margin-top: 18px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #FFF7F7, #FDEEEE);
+    border: 1px solid rgba(199,0,11,0.14);
+    border-radius: 12px;
+}
+.pp-price-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #C7000B;
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pp-price-title::before {
+    content: '￥';
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px; height: 18px;
+    background: #C7000B; color: #fff;
+    border-radius: 5px; font-size: 0.72rem; font-weight: 700;
+}
+.pp-price-body { font-size: 0.82rem; line-height: 1.7; color: var(--text-primary); }
+.pp-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 3px 0; }
+.pp-row span { color: var(--text-secondary); flex-shrink: 0; }
+.pp-row b { font-weight: 700; color: #C7000B; text-align: right; }
+.pp-unit { font-style: normal; font-size: 0.72rem; color: var(--text-secondary); font-weight: 400; }
+.pp-tiers { margin-top: 6px; font-size: 0.78rem; color: var(--text-secondary); }
+.pp-tiers b { color: #C7000B; }
+.pp-price-note { margin-top: 8px; font-size: 0.76rem; color: var(--text-secondary); line-height: 1.55; }
+.pp-biz { color: #B45309; font-weight: 600; }
+.pp-noprice { color: #6B7280; font-style: italic; }
+.pp-warn { color: #B45309; }
+.pp-price-src { display: inline-block; margin-top: 8px; font-size: 0.76rem; color: #C7000B; text-decoration: none; font-weight: 600; }
+.pp-price-src:hover { text-decoration: underline; }
+.pp-price-meta { margin-top: 6px; font-size: 0.72rem; color: #9AA0A6; }
+
 /* 拖拽手柄装饰条 */
 .product-modal-content::after {
     content: '';

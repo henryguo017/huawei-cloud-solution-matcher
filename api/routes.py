@@ -194,6 +194,74 @@ async def pricing_reference(industry: Optional[str] = None):
     }
 
 
+@router.get("/pricing/products", tags=["成本参考"])
+async def pricing_products():
+    """
+    返回全量价目产品（跨所有行业去重），供产品图谱「产品介绍」按 code 查参考价。
+    包含：各行业 profile.items（含 no_price 待补充项）+ 顶层 business_only_products（商务定价项）。
+    """
+    data = _load_pricing_reference()
+    profiles = data.get("profiles", {})
+    bop = data.get("business_only_products", [])
+    seen = set()
+    items = []
+    # 1) 各行业 items（已含 no_price 项）
+    for prof in profiles.values():
+        for it in prof.get("items", []):
+            name = it.get("product", "")
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            items.append({
+                "product": name,
+                "spec": it.get("spec", ""),
+                "billing": it.get("billing", ""),
+                "unit_label": it.get("unit_label", ""),
+                "ref_price": it.get("ref_price", 0),
+                "qty": it.get("qty", 1),
+                "tier": it.get("tier", None),
+                "source_url": it.get("source_url", ""),
+                "verified": it.get("verified", True),
+                "note": it.get("note", ""),
+                "business_only": bool(it.get("business_only", False)),
+                "no_price": bool(it.get("no_price", False)),
+            })
+    # 2) 顶层商务定价产品（可能是名称字符串列表，也可能是完整 dict）
+    for it in bop:
+        if isinstance(it, dict):
+            name = it.get("product", "")
+            spec = it.get("spec", "")
+            note = it.get("note", "商务报价，请咨询华为云销售")
+            src = it.get("source_url", "")
+        else:
+            name = str(it)
+            spec = ""
+            note = "商务报价，请咨询华为云销售"
+            src = ""
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        items.append({
+            "product": name,
+            "spec": spec,
+            "billing": "",
+            "unit_label": "",
+            "ref_price": 0,
+            "qty": 1,
+            "tier": None,
+            "source_url": src,
+            "verified": True,
+            "note": note,
+            "business_only": True,
+            "no_price": False,
+        })
+    return {
+        "items": items,
+        "region": data.get("region", ""),
+        "annual_discount": data.get("annual_discount", 0.85),
+    }
+
+
 @router.post("/match", response_model=MatchResponse, tags=["解决方案匹配"])
 async def match_solution(
     request: MatchRequest,

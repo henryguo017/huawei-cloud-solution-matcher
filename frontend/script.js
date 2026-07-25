@@ -6851,6 +6851,7 @@ const ProductGraph = {
             this._renderGrid();
             this._bindEvents();
             this._initHotProducts(); // 初始化右侧面板热门产品
+            this._ensurePriceMap();  // 预热产品→参考价 lookup（异步，命中后产品介绍展示价格）
         } catch (e) {
             console.error('[ProductGraph] 初始化失败:', e);
         }
@@ -7045,6 +7046,7 @@ const ProductGraph = {
         document.getElementById('panel-default-state').style.display = 'none';
         document.getElementById('panel-hover-state').style.display = 'none';
         document.getElementById('panel-selected-state').style.display = '';
+        this._attachPanelPrice(product); // 异步追加参考价格区块
     },
 
     /* 打开完整详情弹窗（从面板按钮触发） */
@@ -7137,7 +7139,105 @@ const ProductGraph = {
             modalBody.innerHTML = html;
             overlay.style.display = 'flex';
             document.body.style.overflow = 'hidden';
+            self._attachPrice(product); // 异步追加参考价格区块
         }
+    },
+
+    /* ---- 参考价格联动：产品介绍 = 成本参考价目表里「有价格」的产品 ---- */
+    _ensurePriceMap() {
+        if (this._priceMapPromise) return this._priceMapPromise;
+        var self = this;
+        this._priceMapPromise = fetch(Config.API_BASE_URL + '/api/pricing/products')
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(d){
+                if (!d || !d.items) { self._priceMap = {}; self._priceMeta = {}; return self._priceMap; }
+                var map = {};
+                d.items.forEach(function(it){
+                    var name = it.product || '';
+                    if (!name) return;
+                    var toks = name.split(/\s+/);
+                    var keys = [];
+                    if (toks[0]) keys.push(toks[0].toLowerCase());
+                    // 末位英文 token 也作 key（处理「视频直播 Live」这类中英倒置）
+                    if (toks.length > 1 && /^[A-Za-z0-9]+$/.test(toks[toks.length - 1])) keys.push(toks[toks.length - 1].toLowerCase());
+                    keys.push(name.toLowerCase());
+                    keys.forEach(function(k){ if (!map[k]) map[k] = it; });
+                });
+                self._priceMap = map;
+                self._priceMeta = {
+                    region: d.region || '',
+                    annual_discount: (typeof d.annual_discount === 'number' && d.annual_discount > 0) ? d.annual_discount : 0.85
+                };
+                return map;
+            })
+            .catch(function(){ self._priceMap = {}; self._priceMeta = {}; return self._priceMap; });
+        return this._priceMapPromise;
+    },
+
+    _priceFor(product) {
+        var map = this._priceMap;
+        if (!map || !product) return null;
+        var cand = [];
+        if (product.id) cand.push(String(product.id).toLowerCase());
+        var toks = (product.name || '').split(/\s+/);
+        if (toks[0]) cand.push(toks[0].toLowerCase());
+        cand.push((product.name || '').toLowerCase());
+        for (var i = 0; i < cand.length; i++) { if (map[cand[i]]) return map[cand[i]]; }
+        return null;
+    },
+
+    _priceSectionHtml(item) {
+        var meta = this._priceMeta || {};
+        if (item.business_only) {
+            return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
+                '<div class="pp-price-body"><div class="pp-price-note pp-biz">商务定价：' + _crEsc(item.note || '请咨询华为云销售') + '</div></div></div>';
+        }
+        if (item.no_price) {
+            return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
+                '<div class="pp-price-body"><div class="pp-price-note pp-noprice">参考价待补充：' + _crEsc(item.note || '') + '</div></div></div>';
+        }
+        var unit = item.unit_label || '元/月';
+        var rp = _crMoney(item.ref_price || 0);
+        var warn = (item.verified === false) ? ' <span class="pp-warn" title="待官网复核">⚠</span>' : '';
+        var tierHtml = '';
+        if (item.tier) {
+            var lo = item.tier.low ? _crMoney(item.tier.low.unit_price || 0) : '—';
+            var mid = item.tier.mid ? _crMoney(item.tier.mid.unit_price || 0) : '—';
+            var hi = item.tier.high ? _crMoney(item.tier.high.unit_price || 0) : '—';
+            tierHtml = '<div class="pp-tiers">低 <b>¥' + lo + '</b> · 中 <b>¥' + mid + '</b> · 高 <b>¥' + hi + '</b> <span class="pp-unit">(' + _crEsc(unit) + ')</span></div>';
+        }
+        var noteHtml = item.note ? '<div class="pp-price-note">' + _crEsc(item.note) + '</div>' : '';
+        var srcHtml = item.source_url ? '<a class="pp-price-src" href="' + _crEsc(item.source_url) + '" target="_blank" rel="noopener">来源：华为云官网价目表 ↗</a>' : '';
+        var metaHtml = (meta.region || meta.annual_discount) ? '<div class="pp-price-meta">地区 ' + _crEsc(meta.region || '—') + ' · 年付 ≈ 月×12×' + (meta.annual_discount || 0.85) + '</div>' : '';
+        return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
+            '<div class="pp-price-body">' +
+            '<div class="pp-row"><span>计费方式</span><b>' + _crEsc(item.billing || '—') + (item.unit_label ? (' · ' + _crEsc(item.unit_label)) : '') + '</b></div>' +
+            '<div class="pp-row"><span>参考单价</span><b>¥' + rp + ' <i class="pp-unit">/' + _crEsc(unit) + '</i></b>' + warn + '</div>' +
+            tierHtml + noteHtml + srcHtml + metaHtml +
+            '</div></div>';
+    },
+
+    _attachPrice(product) {
+        var self = this;
+        this._ensurePriceMap().then(function(){
+            var item = self._priceFor(product);
+            var body = document.getElementById('product-modal-body');
+            if (!body || !item) return;
+            if (document.getElementById('pp-price-in-modal')) return; // 已追加
+            var pd = body.querySelector('.product-detail-body');
+            if (pd) pd.insertAdjacentHTML('beforeend', '<div id="pp-price-in-modal">' + self._priceSectionHtml(item) + '</div>');
+        });
+    },
+
+    _attachPanelPrice(product) {
+        var self = this;
+        this._ensurePriceMap().then(function(){
+            var item = self._priceFor(product);
+            var container = document.getElementById('selected-detail-content');
+            if (!container || !item) return;
+            if (document.getElementById('pp-price-in-panel')) return; // 已追加
+            container.insertAdjacentHTML('beforeend', '<div id="pp-price-in-panel">' + self._priceSectionHtml(item) + '</div>');
+        });
     },
 
     _getRelatedProducts(productId) {
