@@ -841,6 +841,14 @@ body::after {
     box-shadow: none;
 }
 
+/* P0-2: 键盘导航可见 focus 环（鼠标点击不触发，:focus-visible 仅键盘）
+   必须放在 .btn:focus 之后且加 :focus-visible 提升优先级，否则被上面 outline:none 压掉 */
+.btn:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
 .btn:active {
     transform: scale(0.97);
 }
