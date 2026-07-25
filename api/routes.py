@@ -2331,10 +2331,11 @@ async def ai_chat(
     user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
-    AI 智能助手 - 三路自由问答
-    1. 平台使用类 → 使用向导（纯 LLM）
-    2. 云计算/IT/技术业务类 → 对话式 RAG（专业回答）
-    3. 其他所有话题 → 通用 AI 助手（什么都能聊）
+    AI 智能助手 - 四路自由问答
+    1. 平台使用类 → 使用向导（纯 LLM，基于 PLATFORM_GUIDE）
+    2. 个人知识类 → 基于用户私有资料作答（仅已登录）
+    3. 云计算/IT/技术业务类 → 对话式 RAG（专业回答）
+    4. 其他所有话题 → 通用 AI 助手（什么都能聊）
     """
     try:
         question = request.get("question", "").strip()
