@@ -1818,8 +1818,9 @@ body::after {
 }
 .markdown-table th,
 .result-content .markdown-table th {
-    background: #f7f8fa !important;
+    background: rgba(199, 0, 11, 0.06) !important;   /* P0-3: 华为红极浅底 */
     color: #1f2329 !important;
+    border-bottom: 2px solid rgba(199, 0, 11, 0.15) !important;   /* 表头红下沿 */
 }
 .markdown-table td,
 .result-content .markdown-table td {

@@ -2146,7 +2146,7 @@ const UI = {
                 let tbl = '<table class="markdown-table" style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;border:1px solid #d9d9d9;">';
                 tbl += '<thead><tr>';
                 headers.forEach(function (h) {
-                    tbl += '<th style="border:1px solid #d9d9d9;padding:10px 14px;text-align:left;background:#f7f8fa;color:#1f2329;font-weight:600;">' + h + '</th>';
+                    tbl += '<th style="border:1px solid #d9d9d9;border-bottom:2px solid rgba(199,0,11,0.15);padding:10px 14px;text-align:left;background:rgba(199,0,11,0.06);color:#1f2329;font-weight:600;">' + h + '</th>';
                 });
                 tbl += '</tr></thead><tbody>';
                 dataLines.forEach(function (row) {
@@ -6901,7 +6901,7 @@ const AIAssistant = {
             var tbl = '<table class="markdown-table" style="width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;border:1px solid #d9d9d9;">';
             tbl += '<thead><tr>';
             headers.forEach(function(h) {
-                tbl += '<th style="border:1px solid #d9d9d9;padding:6px 10px;text-align:left;background:#f7f8fa;color:#1f2329;font-weight:600;white-space:nowrap;">' + h + '</th>';
+                tbl += '<th style="border:1px solid #d9d9d9;border-bottom:2px solid rgba(199,0,11,0.15);padding:6px 10px;text-align:left;background:rgba(199,0,11,0.06);color:#1f2329;font-weight:600;white-space:nowrap;">' + h + '</th>';
             });
             tbl += '</tr></thead><tbody>';
             dataLines.forEach(function(row) {
