@@ -2115,15 +2115,15 @@ const UI = {
         html = html.replace(/```[\s\S]*?```/g, function (m) {
             const idx = codeBlocks.length;
             const inner = m.replace(/```[\w]*\n?/, '').replace(/```$/, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            codeBlocks.push('<pre style="background:rgba(255,255,255,0.08);padding:12px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6;"><code>' + inner + '</code></pre>');
+            codeBlocks.push('<pre style="background:var(--neutral-300,#F7F8FA);border:1px solid var(--neutral-400,#F2F3F5);color:var(--neutral-900,#1D2129);padding:12px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6;"><code>' + inner + '</code></pre>');
             return '___CODEBLOCK_' + idx + '___';
         });
         // 行内代码
-        html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.12);padding:1px 5px;border-radius:4px;font-size:13px;">$1</code>');
-        // 标题
-        html = html.replace(/^### (.+)$/gm, '<h4 style="color:rgba(255,255,255,0.95);margin:16px 0 8px;">$1</h4>');
-        html = html.replace(/^## (.+)$/gm, '<h3 style="color:rgba(255,255,255,0.95);margin:18px 0 10px;">$1</h3>');
-        html = html.replace(/^# (.+)$/gm, '<h2 style="color:rgba(255,255,255,0.95);margin:20px 0 12px;">$1</h2>');
+        html = html.replace(/`([^`]+)`/g, '<code style="background:var(--neutral-300,#F7F8FA);color:var(--primary-color,#C7000B);border:1px solid var(--neutral-400,#F2F3F5);padding:1px 5px;border-radius:4px;font-size:13px;">$1</code>');
+        // 标题（颜色用 token，字号交给 .result-content 的 token 规则以保留响应式缩放）
+        html = html.replace(/^### (.+)$/gm, '<h4 style="color:var(--text-primary,#1D2129);margin:16px 0 8px;">$1</h4>');
+        html = html.replace(/^## (.+)$/gm, '<h3 style="color:var(--text-primary,#1D2129);margin:18px 0 10px;">$1</h3>');
+        html = html.replace(/^# (.+)$/gm, '<h2 style="color:var(--text-primary,#1D2129);margin:20px 0 12px;">$1</h2>');
         // 加粗
         html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         // 斜体
@@ -2143,7 +2143,7 @@ const UI = {
             };
             const buildTable = (headerLine, dataLines) => {
                 const headers = parseCells(headerLine);
-                let tbl = '<table class="markdown-table" style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;border:1px solid #d9d9d9;">';
+                let tbl = '<table class="markdown-table" style="width:100%;border-collapse:collapse;margin:12px 0;font-size:var(--font-size-sm,14px);border:1px solid #d9d9d9;">';
                 tbl += '<thead><tr>';
                 headers.forEach(function (h) {
                     tbl += '<th style="border:1px solid #d9d9d9;border-bottom:2px solid rgba(199,0,11,0.15);padding:10px 14px;text-align:left;background:rgba(199,0,11,0.06);color:#1f2329;font-weight:600;">' + h + '</th>';
@@ -2233,7 +2233,7 @@ const UI = {
             return html;
         })();
         // 横线
-        html = html.replace(/^---$/gm, '<hr style="border-color:rgba(255,255,255,0.15);margin:16px 0;">');
+        html = html.replace(/^---$/gm, '<hr style="border:none;border-top:1px solid var(--neutral-500,#DCE0E6);margin:16px 0;">');
         // 段落
         html = html.replace(/\n\n/g, '<br><br>');
         html = html.replace(/\n/g, '<br>');
