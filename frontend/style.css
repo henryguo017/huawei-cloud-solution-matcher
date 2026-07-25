@@ -8445,7 +8445,7 @@ body::after {
 /* ====== Header：红渐变 Hero（与仪表盘统一，占满宽度+顶部圆角）====== */
 .product-modal-content .product-detail-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 14px;
     margin: 0 -24px 28px -24px;
     padding: 36px 24px 32px;
@@ -8464,7 +8464,7 @@ body::after {
     pointer-events: none;
 }
 
-/* 分类 badge pill */
+/* 分类 badge pill — 左上角小标签 */
 .product-modal-content .detail-category-badge {
     display: inline-flex;
     align-items: center;
@@ -8478,6 +8478,14 @@ body::after {
     color: #fff !important;
     flex-shrink: 0;
     white-space: nowrap;
+    margin-top: 2px;
+}
+
+/* 产品名区域 */
+.product-modal-content .detail-header-titles {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
 /* 产品名 */

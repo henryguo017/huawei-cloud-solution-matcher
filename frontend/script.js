@@ -7170,7 +7170,7 @@ const ProductGraph = {
         var html =
             '<div class="product-detail-header">'+
                 '<span class="detail-category-badge">'+(cat.label||cat)+'</span>'+
-                '<div><h3>'+product.name+'</h3><div class="detail-name-en">'+product.nameEn+'</div></div>'+
+                '<div class="detail-header-titles"><h3>'+product.name+'</h3><div class="detail-name-en">'+product.nameEn+'</div></div>'+
             '</div><div class="product-detail-body">'+
             // 简介：暖灰卡片
             '<div class="detail-section section-intro"><div class="detail-section-title title-intro">简介</div>'+
