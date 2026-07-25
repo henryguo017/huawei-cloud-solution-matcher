@@ -6890,6 +6890,7 @@ const ProductGraph = {
             if (!this.state) { this.state = { selectedNode: null, activeFilter: 'all', searchQuery: '', highlightedProducts: [], coreProducts: [], nodes: {}, nodeElements: {}, groupElements: {} }; }
             this._buildIndex();
             this._renderGrid();
+            this._renderStats();
             this._bindEvents();
             this._initHotProducts(); // 初始化右侧面板热门产品
             this._ensurePriceMap();  // 预热产品→参考价 lookup（异步，命中后产品介绍展示价格）
@@ -6957,6 +6958,24 @@ const ProductGraph = {
                 gridEl.appendChild(node);
                 self.state.nodeElements[product.id] = node;
             });
+        });
+    },
+
+    _renderStats() {
+        if (!this.productTree) return;
+        var productsCount = this.productTree.length;
+        var categoriesCount = (this.categoryOrder || []).length;
+        var linksCount = (this.links || []).length;
+        var map = {
+            'pg-stat-products': productsCount,
+            'pg-stat-categories': categoriesCount,
+            'pg-stat-links': linksCount,
+            'pg-nav-products': productsCount,
+            'pg-nav-categories': categoriesCount
+        };
+        Object.keys(map).forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = map[id];
         });
     },
 
