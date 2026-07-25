@@ -37,7 +37,7 @@ ITEMS = {
                  "high": {"qty": 4, "unit_price": 274.0}},
         "source_url": "https://support.huaweicloud.com/topic/560654-5-B",
         "verified": True,
-        "note": "按需连续运行价≈¥0.38/时；包月约¥166–220/月（渠道价，⚠待官网复核），高可靠建议升主备/集群"
+        "note": "按需连续运行价≈¥0.38/时；包月约¥166–220/月（⚠待官网复核），高可靠建议升主备/集群"
     },
     "OBS": {
         "product": "OBS 对象存储", "spec": "标准存储·单AZ", "billing": "按量",

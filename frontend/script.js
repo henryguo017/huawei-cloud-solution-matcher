@@ -7211,7 +7211,7 @@ const ProductGraph = {
             tierHtml = '<div class="pp-tiers">低 <b>¥' + lo + '</b> · 中 <b>¥' + mid + '</b> · 高 <b>¥' + hi + '</b> <span class="pp-unit">(' + _esc(unit) + ')</span></div>';
         }
         var noteHtml = item.note ? '<div class="pp-price-note">' + _esc(item.note) + '</div>' : '';
-        var srcHtml = item.source_url ? '<a class="pp-price-src" href="' + _esc(item.source_url) + '" target="_blank" rel="noopener">来源：华为云官网价目表 ↗</a>' : '';
+        var srcHtml = item.source_url ? '<a class="pp-price-src" href="' + _esc(item.source_url) + '" target="_blank" rel="noopener">正式下单，待官网核查 ↗</a>' : '';
         var metaHtml = (meta.region || meta.annual_discount) ? '<div class="pp-price-meta">地区 ' + _esc(meta.region || '—') + ' · 年付 ≈ 月×12×' + (meta.annual_discount || 0.85) + '</div>' : '';
         return '<div class="pp-price"><div class="pp-price-title">参考价格</div>' +
             '<div class="pp-price-body">' +
