@@ -10122,6 +10122,18 @@ select:focus {
     transform: translateY(-1px);
 }
 
+/* P0-1 表面层级：核心浮层（弹窗/详情面板）补中性阴影，建立"浮起来"的层级感。
+   纯新增，不改任何现有规则与 DOM 结构；--shadow-xl 已定义(style.css:69)。
+   注：普通卡片已有 glass-shadow 层级系统，此处补齐"浮层"缺口。 */
+.modal-content,
+.history-modal-content,
+.detail-modal,
+.detail-panel,
+.product-detail-content,
+.popup-body {
+    box-shadow: var(--shadow-xl);
+}
+
 /* ---- 输入框聚焦红光晕 ---- */
 input:focus, select:focus {
     border-color: var(--primary-color) !important;
