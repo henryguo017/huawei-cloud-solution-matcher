@@ -7147,7 +7147,7 @@ const ProductGraph = {
     _ensurePriceMap() {
         if (this._priceMapPromise) return this._priceMapPromise;
         var self = this;
-        this._priceMapPromise = fetch(Config.API_BASE_URL + '/api/pricing/products')
+        this._priceMapPromise = fetch(Config.API_BASE_URL + '/pricing/products')
             .then(function(r){ return r.ok ? r.json() : null; })
             .then(function(d){
                 if (!d || !d.items) { self._priceMap = {}; self._priceMeta = {}; return self._priceMap; }
