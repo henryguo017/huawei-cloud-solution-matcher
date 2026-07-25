@@ -45,6 +45,7 @@ from app.agent.parsers.read_file import ALLOWED_EXT
 from typing import Optional, Dict
 from datetime import datetime, date
 import os
+import re
 import json
 import asyncio
 import time
@@ -2325,6 +2326,32 @@ def _truncate_history_by_tokens(raw_history: list, max_tokens: int = HISTORY_TOK
     return selected
 
 
+def _strip_markdown(text: str) -> str:
+    """兜底清洗 AI 回复里的 Markdown 符号（LLM 常无视 prompt 的"禁止 Markdown"要求）。
+    只去格式符号，保留正文与 "1." "2." 列表编号、换行。"""
+    if not text:
+        return text
+    s = text
+    # 代码块围栏 ```lang ... ``` → 去围栏保留内容
+    s = re.sub(r"```[a-zA-Z0-9_-]*\n?", "", s)
+    # 行内代码 `code` → code
+    s = re.sub(r"`([^`]+)`", r"\1", s)
+    # 加粗/斜体 **x** / __x__ → x
+    s = re.sub(r"\*\*([^*]+)\*\*", r"\1", s)
+    s = re.sub(r"__([^_]+)__", r"\1", s)
+    # Markdown 链接 [text](url) → text
+    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
+    # 行首标题符 # ## ###
+    s = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", s)
+    # 行首引用符 >
+    s = re.sub(r"(?m)^\s{0,3}>\s?", "", s)
+    # 残留的成对 ** 兜底
+    s = s.replace("**", "")
+    # 残留孤立行内代码反引号
+    s = s.replace("`", "")
+    return s
+
+
 @router.post("/ai/chat", tags=["AI 助手"])
 async def ai_chat(
     request: dict,
@@ -2381,7 +2408,7 @@ async def ai_chat(
 
         if is_usage:
             answer = await _answer_usage_question(question, history_text)
-            return {"answer": answer}
+            return {"answer": _strip_markdown(answer)}
 
         # 第二优先级（位于 cloud 之前）：个人知识类问题——已登录时基于用户私有数据作答
         # 必须在 cloud 之前判定，否则"我的客户档案"等会被 cloud 的泛化"客户"关键词抢走
@@ -2395,7 +2422,7 @@ async def ai_chat(
         is_personal = bool(user) and any(kw in question for kw in personal_keywords)
         if is_personal:
             answer = await _answer_personal_question(question, user, history_text)
-            return {"answer": answer}
+            return {"answer": _strip_markdown(answer)}
 
         # 第三优先级：云计算/IT/技术业务类问题（走 RAG）
         cloud_keywords = [
@@ -2434,11 +2461,11 @@ async def ai_chat(
             user_id = user.get('id') if user else 0
             kb = get_user_knowledge_base(user_id) if user_id > 0 else get_knowledge_base()
             answer = await _answer_business_question(question, kb, history_text)
-            return {"answer": answer}
+            return {"answer": _strip_markdown(answer)}
 
-        # 第三优先级：其他所有话题 → 通用 AI 助手
+        # 第四优先级：其他所有话题 → 通用 AI 助手
         answer = await _answer_general_question(question, history_text)
-        return {"answer": answer}
+        return {"answer": _strip_markdown(answer)}
 
     except HTTPException:
         raise
