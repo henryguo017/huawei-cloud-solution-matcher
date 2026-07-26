@@ -6187,9 +6187,12 @@ function initEventListeners() {
                 UI.showToast('请先生成方案再分享', 'warning');
                 return;
             }
+            const token = AuthManager && AuthManager.getToken ? AuthManager.getToken() : null;
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
             fetch(Config.API_BASE_URL + '/share', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers,
                 body: JSON.stringify({ title: title || '', payload: payload })
             }).then(function (r) { return r.json(); }).then(function (d) {
                 if (!d.share_id) throw new Error('no id');
