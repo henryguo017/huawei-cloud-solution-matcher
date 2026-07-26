@@ -142,16 +142,6 @@
                 font-size: 12px;
             }
             .topbar-link { font-size: 11px; }
-            .topbar-title,
-            .topbar-link { font-size: 0; }
-            .topbar-title::before {
-                content: attr(data-short);
-                font-size: 12px;
-            }
-            .topbar-link::before {
-                content: attr(data-short);
-                font-size: 11px;
-            }
             #share-qrcode svg { width: 140px; height: 140px; }
             .share-qr-inner { padding: 10px; }
         }
@@ -169,5 +159,16 @@
     </div>
     <script src="js/vendor/qrcode.js"></script>
     <script src="js/share.js"></script>
+    <script>
+        // 移动端顶部栏文字缩短
+        (function() {
+            var t = document.querySelector('.topbar-title');
+            var l = document.querySelector('.topbar-link');
+            if (t && l && window.innerWidth <= 600) {
+                t.textContent = t.getAttribute('data-short') || '方案分享（只读）';
+                l.textContent = l.getAttribute('data-short') || '工作台 →';
+            }
+        })();
+    </script>
 </body>
 </html>
