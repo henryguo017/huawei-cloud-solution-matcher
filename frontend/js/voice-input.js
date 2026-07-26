@@ -74,17 +74,52 @@
         var baseValue = '';
         var finalTranscript = '';
         var listening = false;
+        var failed = false;           // 该输入框语音已被判定不可用（如识别服务连不上）
+        var watchdog = null;          // 静默挂起看门狗：开始后长时间无结果则判定失败
+
+        function notify(msg, type) {
+            if (window.UI && typeof window.UI.showToast === 'function') {
+                window.UI.showToast(msg, type || 'warning');
+            } else {
+                alert(msg);
+            }
+        }
+
+        function markUnsupported(reason) {
+            if (failed) return;
+            failed = true;
+            listening = false;
+            if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+            btn.classList.remove('listening');
+            btn.classList.add('is-disabled');
+            btn.title = '当前浏览器语音识别不可用';
+            btn.disabled = true;
+            notify('语音识别不可用：' + reason + ' 请直接输入文字（建议用 Chrome / Edge / Safari 的语音输入）。', 'warning');
+        }
 
         function render(interim) {
             setVal(el, baseValue + finalTranscript + (interim || ''));
         }
 
+        function armWatchdog() {
+            if (watchdog) clearTimeout(watchdog);
+            // 开始后 10s 仍无任何识别结果 → 判定静默失败（如设备无法连接识别服务器）
+            watchdog = setTimeout(function () {
+                if (listening && !failed) {
+                    try { rec.stop(); } catch (e) {}
+                    markUnsupported('识别服务无响应');
+                }
+            }, 10000);
+        }
+
         rec.onstart = function () {
             listening = true;
             btn.classList.add('listening');
+            armWatchdog();
         };
 
         rec.onresult = function (e) {
+            if (watchdog) { clearTimeout(watchdog); watchdog = null; }
             var interim = '';
             for (var i = e.resultIndex; i < e.results.length; i++) {
                 var t = e.results[i][0].transcript;
@@ -97,16 +132,29 @@
         rec.onerror = function (e) {
             listening = false;
             btn.classList.remove('listening');
-            if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-                alert('麦克风权限被拒绝，请在浏览器地址栏允许麦克风后重试。');
+            if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+            var err = e && e.error;
+            if (err === 'not-allowed') {
+                // 用户拒绝了麦克风权限，可重新授权，不判定为永久不可用
+                notify('麦克风权限被拒绝，请在浏览器地址栏允许麦克风后重试。', 'warning');
+            } else if (err === 'service-not-allowed') {
+                // 浏览器/设备层面禁止（如无法连接识别服务）→ 永久降级
+                markUnsupported('浏览器或设备未授权语音识别服务');
+            } else if (err === 'network') {
+                // 连不上识别服务器（华为等无 GMS 设备典型症状）→ 永久降级
+                markUnsupported('无法连接语音识别服务器（多为设备/网络限制）');
+            } else if (err === 'audio-capture') {
+                notify('未检测到麦克风设备。', 'warning');
             }
+            // no-speech / aborted 等瞬时错误：忽略，保持按钮可用
         };
 
         rec.onend = function () {
+            if (watchdog) { clearTimeout(watchdog); watchdog = null; }
             // 提交最终文本（去掉临时 interim）
             setVal(el, baseValue + finalTranscript);
             finalTranscript = '';
-            if (listening) {
+            if (listening && !failed) {
                 // continuous 模式浏览器静音自动结束后，保持续听
                 try { rec.start(); } catch (err) { /* 已在监听则忽略 */ }
             } else {
@@ -115,6 +163,7 @@
         };
 
         btn.addEventListener('click', function () {
+            if (failed) return;            // 已判定不可用，直接忽略
             if (listening) {
                 listening = false;
                 rec.stop();

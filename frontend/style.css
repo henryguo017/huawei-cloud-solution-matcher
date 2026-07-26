@@ -11419,6 +11419,15 @@ table tbody tr:hover {
 }
 .voice-mic-btn:hover { border-color: var(--primary-color, #C7000B); }
 .voice-mic-btn svg { width: 16px; height: 16px; pointer-events: none; }
+.voice-mic-btn.is-disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    background: var(--bg-muted, #f2f3f5);
+    color: var(--text-muted, #86909c);
+    border-color: var(--border-color, #e2e4ea);
+    animation: none;
+}
+.voice-mic-btn.is-disabled:hover { border-color: var(--border-color, #e2e4ea); }
 .voice-mic-btn.listening {
     background: var(--primary-color, #C7000B);
     color: #fff;
