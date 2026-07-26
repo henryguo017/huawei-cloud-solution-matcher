@@ -296,6 +296,86 @@ async def pricing_products():
     }
 
 
+async def _build_match_response(result: dict, user, request, original_demand: str, user_id: int) -> dict:
+    """标准/向导匹配结果统一后处理：来源文档 + 历史 + 成就 → MatchResponse 字段 dict。
+    供 /match 与 /match/stream 共用，单一事实来源避免逻辑分叉。"""
+    source_docs = [
+        SourceDocument(page_content=doc.page_content, metadata=doc.metadata)
+        for doc in result.get("source_documents", [])
+    ]
+
+    history_id = None
+    newly_unlocked = None
+    _version_meta: dict = {}
+
+    if user and user.get('id'):
+        newly_unlocked = []  # 已登录默认空列表；非快速体验才检测成就
+        try:
+            usage_logger = get_usage_logger()
+            # 使用原始 demand 记录（空输入不会被默认 prompt 覆盖）
+            usage_logger.log_match(original_demand or "", user_id=user['id'], mode=request.mode)
+        except Exception as log_err:
+            logger.warning(f"记录使用日志失败: {log_err}")
+
+        try:
+            industry_hint = ""
+            try:
+                for doc in result.get("source_documents", []):
+                    if hasattr(doc, "metadata") and doc.metadata:
+                        ind = doc.metadata.get("industry", "")
+                        if ind:
+                            industry_hint = ind
+                            break
+            except:
+                pass
+            history_id = usage_logger.save_match_history(
+                demand_text=original_demand or "",
+                solution=result["answer"],
+                industry=industry_hint,
+                sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", [])],
+                user_id=user['id'],
+                group_id=request.group_id,
+            )
+            _version_meta = usage_logger.get_match_history_meta(history_id, user_id=user['id']) or {}
+        except Exception as hist_err:
+            logger.warning(f"保存匹配历史记录失败: {hist_err}")
+
+        # 成就检测（快速体验不触发）
+        if not request.is_quick_demo:
+            try:
+                achievement_svc = get_achievement_service_dep()
+                industry_hint = ""
+                try:
+                    for doc in result.get("source_documents", []):
+                        if hasattr(doc, "metadata") and doc.metadata:
+                            ind = doc.metadata.get("industry", "")
+                            if ind:
+                                industry_hint = ind
+                                break
+                except:
+                    pass
+                newly_unlocked = achievement_svc.check_after_match(
+                    user_id=user['id'],
+                    demand_text=original_demand,
+                    mode=request.mode if hasattr(request, 'mode') else "standard",
+                    industry=industry_hint,
+                )
+            except Exception as ach_err:
+                logger.warning(f"成就检测失败: {ach_err}")
+
+    return {
+        "answer": result["answer"],
+        "source_documents": source_docs,
+        "solution_json": result.get("solution_json"),
+        "history_id": history_id,
+        "newly_unlocked": newly_unlocked,
+        "group_id": _version_meta.get("group_id"),
+        "version": _version_meta.get("version"),
+        "is_final": _version_meta.get("is_final", False),
+        "title": _version_meta.get("title"),
+    }
+
+
 @router.post("/match", response_model=MatchResponse, tags=["解决方案匹配"])
 async def match_solution(
     request: MatchRequest,
@@ -339,86 +419,11 @@ async def match_solution(
                 logger.info(f"[匹配] 已并入 {len(request.customer_files)} 个客户资料文件")
 
         result = await matcher.match(enriched_demand)
-        
-        source_docs = [
-            SourceDocument(
-                page_content=doc.page_content,
-                metadata=doc.metadata
-            )
-            for doc in result.get("source_documents", [])
-        ]
-        
+
         logger.info("解决方案匹配成功")
-        
-        # 保存到历史记录 + 记录使用日志（仅登录用户）
-        history_id = None
-        if user and user.get('id'):
-            try:
-                usage_logger = get_usage_logger()
-                # 使用原始 demand 记录（空输入不会被默认 prompt 覆盖）
-                usage_logger.log_match(original_demand or "", user_id=user['id'], mode=request.mode)
-            except Exception as log_err:
-                logger.warning(f"记录使用日志失败: {log_err}")
 
-            try:
-                usage_logger = get_usage_logger()
-                industry_hint = ""
-                try:
-                    for doc in result.get("source_documents", []):
-                        if hasattr(doc, "metadata") and doc.metadata:
-                            ind = doc.metadata.get("industry", "")
-                            if ind:
-                                industry_hint = ind
-                                break
-                except:
-                    pass
-                history_id = usage_logger.save_match_history(
-                    demand_text=original_demand or "",
-                    solution=result["answer"],
-                    industry=industry_hint,
-                    sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", [])],
-                    user_id=user['id'],
-                    group_id=request.group_id,
-                )
-                _version_meta = usage_logger.get_match_history_meta(history_id, user_id=user['id']) or {}
-            except Exception as hist_err:
-                logger.warning(f"保存匹配历史记录失败: {hist_err}")
-
-        # 成就检测
-        achievement_result = []
-        if user and user.get('id') and not request.is_quick_demo:
-            try:
-                achievement_svc = get_achievement_service_dep()
-                industry_hint = ""
-                try:
-                    for doc in result.get("source_documents", []):
-                        if hasattr(doc, "metadata") and doc.metadata:
-                            ind = doc.metadata.get("industry", "")
-                            if ind:
-                                industry_hint = ind
-                                break
-                except:
-                    pass
-                achievement_result = achievement_svc.check_after_match(
-                    user_id=user['id'],
-                    demand_text=original_demand,
-                    mode=request.mode if hasattr(request, 'mode') else "standard",
-                    industry=industry_hint,
-                )
-            except Exception as ach_err:
-                logger.warning(f"成就检测失败: {ach_err}")
-
-        return MatchResponse(
-            answer=result["answer"],
-            source_documents=source_docs,
-            solution_json=result.get("solution_json"),
-            history_id=history_id,
-            newly_unlocked=achievement_result if user and user.get('id') else None,
-            group_id=_version_meta.get("group_id"),
-            version=_version_meta.get("version"),
-            is_final=_version_meta.get("is_final", False),
-            title=_version_meta.get("title"),
-        )
+        resp = await _build_match_response(result, user, request, original_demand, user_id)
+        return MatchResponse(**resp)
     except Exception as e:
         logger.error(f"解决方案匹配失败: {e}")
         raise HTTPException(
@@ -426,6 +431,102 @@ async def match_solution(
             detail=f"匹配失败: {str(e)}"
         )
     
+@router.post("/match/stream", tags=["解决方案匹配"])
+async def match_solution_stream(
+    request: MatchRequest,
+    user: Optional[dict] = Depends(get_current_user_optional)
+):
+    """
+    标准/向导模式 SSE 流式匹配接口（匿名可用，与 /match 同源）。
+
+    实时推送：
+    - event: token  → 生成增量（前端逐字渲染）
+    - event: step   → 进度步骤(2=生成中)
+    - event: result → 完整结果（answer/source_documents/solution_json + 历史/成就后处理）
+    - event: error  → 错误
+    """
+    user_id = user.get('id') if user else 0
+    matcher = get_solution_matcher_for_user(user_id) if user_id > 0 else get_solution_matcher()
+
+    # 预处理：空输入兜底 + 客户文件并入需求（与 /match 完全一致）
+    original_demand = request.demand
+    if not request.demand or not request.demand.strip():
+        request.demand = "（用户未输入需求，请介绍华为云的核心解决方案和产品体系）"
+    enriched_demand = request.demand
+    if request.customer_files:
+        file_text = _read_customer_files_text(user_id, request.customer_files)
+        if file_text:
+            enriched_demand = (
+                f"[用户上传的客户资料]\n{file_text}\n[/用户上传的客户资料]\n\n"
+                f"{request.demand}"
+            )
+
+    async def generate():
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def run_match():
+            try:
+                await matcher.match_stream(enriched_demand, queue)
+            except Exception as e:
+                logger.error(f"[match/stream] 执行失败: {e}")
+                await queue.put({"type": "error", "message": str(e)})
+            finally:
+                try:
+                    await queue.put(None)  # 结束信号
+                except Exception:
+                    pass
+
+        task = asyncio.ensure_future(run_match())
+
+        start_time = time.time()
+        try:
+            while True:
+                if SSE_HEARTBEAT_ENABLED:
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_INTERVAL)
+                    except asyncio.TimeoutError:
+                        if time.time() - start_time > SSE_TIMEOUT:
+                            logger.info("[match/stream] 流式超过超时上限,主动结束")
+                            break
+                        yield ": ping\n\n"
+                        continue
+                else:
+                    event = await queue.get()
+                if event is None:
+                    break
+                if event.get("type") == "error":
+                    yield f"event: error\ndata: {json.dumps(event, ensure_ascii=False, default=_sse_json_default)}\n\n"
+                    break
+                if event.get("type") == "result":
+                    # 统一后处理（历史/成就/来源文档），与 /match 共用 _build_match_response
+                    payload = await _build_match_response(event["data"], user, request, original_demand, user_id)
+                    yield f"event: result\ndata: {json.dumps({'type': 'result', 'data': payload}, ensure_ascii=False, default=_sse_json_default)}\n\n"
+                    continue
+                # token / step 透传
+                yield f"event: {event.get('type', 'message')}\ndata: {json.dumps(event, ensure_ascii=False, default=_sse_json_default)}\n\n"
+        except asyncio.CancelledError:
+            logger.info("[match/stream] 客户端断开连接")
+            task.cancel()
+        except Exception as gen_err:
+            logger.error(f"[match/stream] 生成器异常(连接将中断): {gen_err}")
+            try:
+                yield f"event: error\ndata: {json.dumps({'type':'error','message':f'内部错误: {gen_err}'}, ensure_ascii=False)}\n\n"
+            except Exception:
+                pass
+        finally:
+            await task
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 禁用 Nginx 缓冲
+        },
+    )
+
+
 # ========== 客户资料文件上传（阶段1） ==========
 
 @router.post("/upload/customer-file", tags=["文件交互"])

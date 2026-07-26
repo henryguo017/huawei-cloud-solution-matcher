@@ -4,7 +4,7 @@ import os
 import logging
 from typing import Optional, Dict, Any, List
 
-from app.models.llm import get_llm_response
+from app.models.llm import get_llm_response, get_llm_response_stream
 from app.config import MATCH_LLM_MODEL
 from app.services.solution_prompt import (
     build_industry_line,
@@ -181,15 +181,14 @@ class SolutionMatcherService:
     # ============================================================
     # 主入口
     # ============================================================
-    async def match(self, customer_demand, industry: Optional[str] = None):
+    async def _prepare(self, customer_demand, industry: Optional[str] = None) -> Dict[str, Any]:
+        """标准/向导检索 + 需求结构化前置（流式与非流式共用，单一事实来源）。
+
+        返回 dict 含：kb_empty / competitor_companies / docs / context_content /
+        demand_analysis / industry / playbook_text / fallback_prompt / final_prompt。
+        fallback_prompt 与 final_prompt 互斥：知识库为空则前者非空，否则后者非空。
         """
-        标准模式匹配。
-        - industry: 可选，由调用方传入（如向导模式采集的行业）；为空则内部复用 analyze_demand 推断。
-        """
-        # 1+2. 知识库检索 与 需求结构化(analyze_demand) 互相独立，并行发起省时。
-        #      analyze_demand 是一次 LLM 调用(~2-4s)，检索仅 ~0.5s；并行后 analyze_demand
-        #      的耗时被检索时间掩盖一部分，总耗时从"检索+分析"降为"max(检索, 分析)"。
-        #      仅当未显式传入行业时才需要 analyze_demand（向导模式已带行业则跳过，省整次 LLM 调用）。
+        # 1+2. 知识库检索 与 需求结构化(analyze_demand) 并行（与 match() 原逻辑一致）
         try:
             stats = self.kb_service.get_stats()
             kb_empty = (stats.get("total_documents", 0) == 0)
@@ -226,42 +225,111 @@ class SolutionMatcherService:
             industry = demand_analysis.get("industry")
         playbook_text = self._playbook_text(industry or "")
 
-        # 3. 知识库为空 → 通用兜底（同样注入行业/话术约束）
-        if not docs or not context_content.strip():
-            fallback_prompt = self._build_fallback_prompt(customer_demand, industry, playbook_text)
-            answer_result = await get_llm_response(fallback_prompt, model=self.match_model)
-            # 追加参考资料节（兜底模式 context 可能为空，build_references_section 会安全返回空串）
-            if "参考资料" not in answer_result:
-                refs = build_references_section(context_content)
-                if refs:
-                    answer_result = answer_result.rstrip() + "\n" + refs
-            return {
-                "answer": answer_result,
-                "source_documents": [],
-                "solution_json": self._parse_markdown_to_chapters(answer_result),
-            }
+        result: Dict[str, Any] = {
+            "kb_empty": kb_empty,
+            "competitor_companies": competitor_companies,
+            "docs": docs,
+            "context_content": context_content,
+            "demand_analysis": demand_analysis,
+            "industry": industry,
+            "playbook_text": playbook_text,
+            "fallback_prompt": None,
+            "final_prompt": None,
+        }
 
-        # 4. 正常生成
-        final_prompt = self._build_prompt(
-            question=customer_demand,
-            context=context_content,
-            industry=industry or "",
-            playbook_text=playbook_text,
-            demand_analysis=demand_analysis,
-        )
-        answer_result = await get_llm_response(final_prompt, model=self.match_model)
+        # 知识库为空 → 通用兜底 prompt；否则正常生成 prompt（二者互斥）
+        if not docs or not context_content.strip():
+            result["fallback_prompt"] = self._build_fallback_prompt(customer_demand, industry, playbook_text)
+        else:
+            result["final_prompt"] = self._build_prompt(
+                question=customer_demand,
+                context=context_content,
+                industry=industry or "",
+                playbook_text=playbook_text,
+                demand_analysis=demand_analysis,
+            )
+        return result
+
+    async def match(self, customer_demand, industry: Optional[str] = None):
+        """
+        标准模式匹配（非流式，保留作兜底/兼容）。
+        - industry: 可选，由调用方传入（如向导模式采集的行业）；为空则内部复用 analyze_demand 推断。
+        """
+        prep = await self._prepare(customer_demand, industry)
+        return await self._finalize_answer(prep)
+
+    async def _finalize_answer(self, prep: Dict[str, Any]) -> Dict[str, Any]:
+        """根据 _prepare 结果生成最终答案（追加参考资料节），返回与 match() 同形状 dict。"""
+        ctx = prep["context_content"]
+        if prep["fallback_prompt"] is not None:
+            answer_result = await get_llm_response(prep["fallback_prompt"], model=self.match_model)
+            source_docs = []
+        else:
+            answer_result = await get_llm_response(prep["final_prompt"], model=self.match_model)
+            source_docs = prep["docs"]
 
         # 追加『参考资料』节，让 [资料N] 标注可追溯
         if "参考资料" not in answer_result:
-            refs = build_references_section(context_content)
+            refs = build_references_section(ctx)
             if refs:
                 answer_result = answer_result.rstrip() + "\n" + refs
 
         return {
             "answer": answer_result,
-            "source_documents": docs,
+            "source_documents": source_docs,
             "solution_json": self._parse_markdown_to_chapters(answer_result),
         }
+
+    async def match_stream(self, customer_demand, queue: asyncio.Queue, industry: Optional[str] = None):
+        """标准/向导匹配流式生成（P0-2）。
+
+        检索 + 需求结构化复用 _prepare；生成阶段逐 token 推送给 queue。
+        queue 事件:
+          - {"type":"step","step":int}        进度步骤(2=生成中)
+          - {"type":"token","text":str}       生成增量
+          - {"type":"result","data":dict}     同 match() 返回(answer/source_documents/solution_json)
+          - {"type":"error","message":str}
+        """
+        try:
+            prep = await self._prepare(customer_demand, industry)
+        except Exception as e:
+            logger.error(f"[match_stream] 预处理失败: {e}")
+            await queue.put({"type": "error", "message": str(e)})
+            return
+
+        ctx = prep["context_content"]
+        answer_result = ""
+        try:
+            if prep["fallback_prompt"] is not None:
+                # 兜底模式（知识库为空）：非流式一次性生成
+                answer_result = await get_llm_response(prep["fallback_prompt"], model=self.match_model)
+            else:
+                await queue.put({"type": "step", "step": 2})
+                collected: list = []
+                async for delta in get_llm_response_stream(prep["final_prompt"], model=self.match_model):
+                    if delta:
+                        collected.append(delta)
+                        await queue.put({"type": "token", "text": delta})
+                answer_result = "".join(collected)
+        except Exception as e:
+            logger.error(f"[match_stream] 生成失败: {e}")
+            await queue.put({"type": "error", "message": str(e)})
+            return
+
+        # 追加『参考资料』节，让 [资料N] 标注可追溯
+        if "参考资料" not in answer_result:
+            refs = build_references_section(ctx)
+            if refs:
+                answer_result = answer_result.rstrip() + "\n" + refs
+
+        await queue.put({
+            "type": "result",
+            "data": {
+                "answer": answer_result,
+                "source_documents": prep["docs"],
+                "solution_json": self._parse_markdown_to_chapters(answer_result),
+            }
+        })
 
     def _build_fallback_prompt(self, customer_demand: str, industry: str, playbook_text: str) -> str:
         """知识库为空时的通用生成 prompt（保留行业/话术/防幻觉约束）"""

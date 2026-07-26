@@ -1040,6 +1040,71 @@ const API = {
         return await response.json();
     },
 
+    // 标准/向导模式 SSE 流式匹配（P0-2）：镜像 agentMatchStream 的 reader 框架
+    async matchStream(demand, signal, mode = "standard", customerFiles = [], onEvent) {
+        const headers = { 'Content-Type': 'application/json' };
+        // 直读 localStorage token（与 agentMatchStream 一致的暴力修复，避免中间层吞掉 Authorization）
+        let token = null;
+        try {
+            const raw = localStorage.getItem('hwcloud_auth');
+            if (raw) {
+                const d = JSON.parse(raw);
+                token = d.token || d.access_token || null;
+            }
+        } catch (e) { token = null; }
+        if (token) {
+            headers['Authorization'] = 'Bearer ' + token;
+        }
+
+        const response = await fetch(`${Config.API_BASE_URL}/match/stream`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ demand, mode, customer_files: customerFiles, is_quick_demo: State.isQuickDemo }),
+            signal
+        });
+
+        if (!response.ok) {
+            const errBody = await response.json().catch(() => ({}));
+            const detail = errBody.detail || `HTTP ${response.status}`;
+            throw new Error(detail);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
+
+            for (const part of parts) {
+                if (!part.trim()) continue;
+                const lines = part.split('\n');
+                let eventType = '';
+                let dataStr = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) {
+                        eventType = line.slice(7).trim();
+                    } else if (line.startsWith('data: ')) {
+                        dataStr = line.slice(6);
+                    }
+                }
+                if (dataStr) {
+                    try {
+                        const data = JSON.parse(dataStr);
+                        onEvent(data);
+                    } catch (e) {
+                        console.warn('[SSE match] JSON 解析失败:', dataStr);
+                    }
+                }
+            }
+        }
+    },
+
     async agentMatchStream(demand, signal, onEvent, customerFiles = [], clientId = null) {
         const headers = { 'Content-Type': 'application/json' };
 
@@ -5301,7 +5366,27 @@ function initEventListeners() {
                     }
                 }, customerFiles, State.currentClientId);
             } else {
-                result = await API.match(demand, controller.signal, State.matchMode, customerFiles);
+                // 标准/向导模式：SSE 流式消费（P0-2）—— 逐字渲染答案，终态调 renderAgentResult 做完整渲染
+                const streamContent = document.getElementById('solution-content');
+                const streamContainer = document.getElementById('solution-result');
+                let streamedAnswer = '';
+                let _lastRender = 0;
+                await API.matchStream(demand, controller.signal, State.matchMode, customerFiles, (event) => {
+                    if (event.type === 'token') {
+                        streamedAnswer += (event.text || '');
+                        const now = Date.now();
+                        // 轻量节流：约每 180ms 或遇换行时重渲染，避免长文逐 token 重排卡顿
+                        if (streamContent && (now - _lastRender > 180 || (event.text || '').indexOf('\n') >= 0)) {
+                            _lastRender = now;
+                            streamContent.innerHTML = UI.renderMarkdown(streamedAnswer);
+                            if (streamContainer) streamContainer.style.display = 'block';
+                        }
+                    } else if (event.type === 'result') {
+                        result = event.data;
+                    } else if (event.type === 'error') {
+                        throw new Error(event.message);
+                    }
+                });
             }
             
             // 统一渲染结果（首轮与澄清续跑共用；含暂停/过期守卫）
