@@ -6607,11 +6607,11 @@ body::after {
     color: #f59e0b;
 }
 
-/* 结果卡片内的收藏按钮 */
+/* 结果卡片内的收藏按钮 — 与下载/导出/分享统一为红色系 */
 .btn-favorite-result {
-    background: transparent;
-    border: 1px solid rgba(255, 215, 0, 0.3);
-    color: #fbbf24;
+    background: #fff;
+    border: 1px solid rgba(199, 0, 11, 0.25);
+    color: #C7000B;
     cursor: pointer;
     font-size: 0.875rem;
     padding: 8px 18px;
@@ -6624,14 +6624,17 @@ body::after {
     font-weight: 500;
 }
 .btn-favorite-result:hover {
-    background: rgba(251, 191, 36, 0.15);
-    border-color: rgba(251, 191, 36, 0.5);
+    background: linear-gradient(135deg, #C7000B, #E02020);
+    color: #fff;
+    border-color: transparent;
     transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(199, 0, 11, 0.18);
 }
 .btn-favorite-result.active {
-    background: rgba(251, 191, 36, 0.2);
-    border-color: #fbbf24;
-    color: #f59e0b;
+    background: linear-gradient(135deg, #C7000B, #E02020);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 2px 6px rgba(199, 0, 11, 0.25);
 }
 
 /* Modal header favorite button */
