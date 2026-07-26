@@ -31,7 +31,7 @@
 <p align="center">
   <img src="test_shots/01_home.png" alt="首页" width="800" />
 </p>
-<p align="center"><i>首页：330+ 篇方案资料 / 25 个行业 / 12 家竞品厂商，输入需求即可一键匹配</i></p>
+<p align="center"><i>首页：300+ 篇方案资料（华为云 + 12 家竞品）/ 25 个行业，输入需求即可一键匹配</i></p>
 
 <p align="center">
   <img src="test_shots/02_onboard.png" alt="体验入口" width="600" />
@@ -47,7 +47,7 @@
 
 ## ✨ 核心特性
 
-- **三种匹配模式**：标准（快、稳）、Agent（带思考流的可视化推理）、向导（零门槛填表式）。
+- **三种匹配模式**：标准 / 向导（使用 `deepseek-v4-flash` 快速生成，并支持 SSE 流式逐字输出）、Agent（deepseek-v4-pro + 自写编排引擎，可视化思考流推理）。
 - **免登录尝鲜**：提供独立的「快速体验」入口，无需注册即可走标准模式出结果；体验后可引导注册解锁完整能力。
 - **竞品对比话术**：12 家主流厂商方案资料，一键生成差异化优势与应对建议。
 - **私有知识库**：每个用户完全隔离的知识库，支持在线增删改与单文件重索引。
@@ -84,9 +84,9 @@
 ## 🧩 功能模块详解
 
 ### 1. 三种匹配模式
-- **标准模式**：需求文本 → 向量检索 → LLM 生成结构化方案（固定章节结构，质量稳定）。
-- **Agent 模式（智能 · Agentic Workflow）**：自写编排引擎驱动「需求分析 → 检索知识库 → 检索竞品 → 生成方案」循环，SSE 实时推送 AI 的**思考流**，能看到它一步步怎么推理。记忆与画像依赖账号。
-- **向导模式**：行业 → 规模 → 痛点 → 确认，4 步引导自动合成需求后提交匹配，不会写需求也能出方案。
+- **标准模式**：需求文本 → 向量检索（向量 + 关键词 RRF 混合召回）→ LLM 生成结构化方案（固定章节结构，质量稳定）；生成使用 `deepseek-v4-flash` 提速，并支持 **SSE 流式逐字输出**。
+- **Agent 模式（智能 · Agentic Workflow）**：自写编排引擎驱动「需求分析 → 检索知识库 → 检索竞品 → 生成方案」循环，SSE 实时推送 AI 的**思考流**，能看到它一步步怎么推理；使用 `deepseek-v4-pro` 保证复杂多轮编排质量。记忆与画像依赖账号。
+- **向导模式**：行业 → 规模 → 痛点 → 确认，4 步引导自动合成需求后提交匹配，不会写需求也能出方案；与标准模式共用 flash + 流式管线。
 
 ### 2. 客户档案与 Agent 记忆隔离（登录后）
 - Agent 模式下显示「当前客户档案」栏，下拉选择客户（或「+ 新建」「× 删除」），记忆键为 `用户ID:客户ID`，**同一销售的不同客户记忆完全隔离**。
@@ -99,7 +99,7 @@
 ### 4. 用户独立知识库（登录后）
 - 每个用户拥有**完全隔离**的知识库（文件 + ChromaDB 向量库），注册自动从默认库复制。
 - 支持在线**增删改文档**，改动后一键**单文件重索引**。
-- 知识库内置 **330+ 篇方案资料**：华为云方案（含 15 篇产品档案）+ **12 家竞品厂商**方案，全部切分为 **900+ 个向量片段**用于检索，覆盖 **25 个行业**。
+- 知识库内置 **300+ 篇方案资料**：华为云方案 + **12 家竞品厂商**方案，全部切分为 **约 800+ 个向量片段**用于检索，覆盖 **25 个行业**。
 
 ### 5. 竞品分析（免登录）
 - 内置 12 家主流厂商（阿里云 / 腾讯云 / AWS / 微软 Azure / Google Cloud / Oracle Cloud / 天翼云 / 移动云 / 联通云 / 字节跳动火山引擎 / 西门子 / 施耐德电气）方案对比资料。
@@ -155,7 +155,7 @@
 | 数据库 | SQLite（用户 / 历史 / 收藏 / 知识库元数据 / 客户档案 / Agent 记忆 / 用户画像）+ ChromaDB `0.4.24`（向量库） |
 | AI 编排 | LangChain `0.1.x` + 自写 Agentic Workflow 引擎 |
 | 向量模型 | BGE-small-zh（`sentence-transformers 5.5.1`，本地加载） |
-| 大模型 | DeepSeek（默认 `deepseek-v4-pro`）/ 阿里云百炼 / 百度文心 / OpenAI（可配置切换） |
+| 大模型 | DeepSeek（标准 / 向导用 `deepseek-v4-flash` 提速，Agent 用 `deepseek-v4-pro`）/ 阿里云百炼 / 百度文心 / OpenAI（可配置切换） |
 | 文档处理 | python-docx + reportlab（导出）、PyMuPDF + pytesseract + Pillow（解析 / OCR） |
 | 鉴权 | PyJWT + passlib(bcrypt) + 验证码 |
 | 部署 | 云服务器 + Nginx 反代 + systemd 守护 + HTTPS（已上线运行） |
@@ -209,6 +209,7 @@ python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 |------|------|--------|
 | `LLM_PROVIDER` | 大模型提供商：`deepseek` / `aliyun` / `baidu` / `openai` | `deepseek` |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key（国内推荐） | 空 |
+| `MATCH_LLM_MODEL` | 标准 / 向导模式匹配的专用模型（提速降本，不影响 Agent） | `deepseek-v4-flash` |
 | `ALIYUN_API_KEY` / `BAIDU_API_KEY` / `OPENAI_API_KEY` | 对应厂商 Key | 空 |
 | `EMBEDDING_MODEL_NAME` | 向量模型名 | `BAAI/bge-small-zh-v1.5` |
 | `EMBEDDING_MODEL_LOCAL_PATH` | 本地向量模型目录 | `./data/embedding_model` |
@@ -259,8 +260,8 @@ huawei-cloud-solution-matcher/
 
 | 模块 | 主要能力 |
 |------|----------|
-| 匹配 | `POST /api/match`（标准）、`POST /api/agent/match/stream`（Agent SSE 流式） |
-| 竞品分析 | `POST /api/competitor/analyze` |
+| 匹配 | `POST /api/match`（标准 / 向导，非流式）、`POST /api/match/stream`（标准 / 向导 SSE 流式）、`POST /api/agent/match/stream`（Agent SSE 流式） |
+| 竞品分析 | `POST /api/analyze`、追问优化 `POST /api/competitor/refine` |
 | 知识库 | 文档增删改查、单文件重索引、`/rebuild` 与 `/sync-mine` 异步重建、stats |
 | 导出 | 方案 Word / PDF 生成与下载 |
 | 认证 | 注册 / 登录 / 当前用户 / 验证码 / 密码找回（JWT） |
