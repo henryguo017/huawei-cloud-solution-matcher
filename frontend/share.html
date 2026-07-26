@@ -45,6 +45,13 @@
             font-weight: 400;
             opacity: 0.92;
         }
+        .topbar-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            min-width: 0;
+        }
         .share-container { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
         .share-state { text-align: center; padding: 80px 0; color: var(--text-muted); font-size: 15px; }
         .share-card {
@@ -123,13 +130,37 @@
         @media (max-width: 600px) {
             .share-card { padding: 20px 16px; }
             .share-title { font-size: 20px; }
+            .share-container { padding: 16px 12px 48px; }
+            .share-topbar {
+                height: 44px;
+                padding: 0 14px;
+                font-size: 13px;
+                letter-spacing: 0;
+            }
+            .topbar-title {
+                max-width: 58%;
+                font-size: 12px;
+            }
+            .topbar-link { font-size: 11px; }
+            .topbar-title,
+            .topbar-link { font-size: 0; }
+            .topbar-title::before {
+                content: attr(data-short);
+                font-size: 12px;
+            }
+            .topbar-link::before {
+                content: attr(data-short);
+                font-size: 11px;
+            }
+            #share-qrcode svg { width: 140px; height: 140px; }
+            .share-qr-inner { padding: 10px; }
         }
     </style>
 </head>
 <body>
     <div class="share-topbar">
-        <span>cloudsol.cn · 华为云解决方案分享（只读）</span>
-        <a href="/" target="_blank">打开完整工作台 →</a>
+        <span class="topbar-title" data-short="方案分享（只读）">cloudsol.cn · 华为云解决方案分享（只读）</span>
+        <a href="/" target="_blank" class="topbar-link" data-short="工作台 →">打开完整工作台 →</a>
     </div>
     <div class="share-container">
         <div id="share-state" class="share-state">加载中…</div>
