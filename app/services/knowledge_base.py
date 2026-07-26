@@ -12,9 +12,6 @@ from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
 
-# 可插拔重排器注册表（默认空 = no-op；接入 bge-reranker 等时在此注册 "default" 实现）
-RERANKER_REGISTRY = {}
-
 # ===== 用户上下文：在线程中传递当前 user_id，供 Agent 工具等无参接口使用 =====
 _kb_current_user_id: contextvars.ContextVar[int] = contextvars.ContextVar('kb_user_id', default=0)
 
@@ -311,26 +308,8 @@ class KnowledgeBaseService:
             result.append(doc)
         return result
 
-    def _rerank(self, query, docs):
-        """可插拔重排钩子（默认 no-op）。
-
-        当前未接入重排后端（如 bge-reranker）。开启 ENABLE_RERANK 但无后端时安全透传，
-        仅告警，不改变顺序/内容；接入时在 RERANKER_REGISTRY 注册实现即可。
-        """
-        if not ENABLE_RERANK:
-            return docs
-        reranker = RERANKER_REGISTRY.get("default")
-        if reranker is None:
-            logger.warning("ENABLE_RERANK=true 但未配置重排后端,安全透传(顺序不变)")
-            return docs
-        try:
-            return reranker(query, docs)
-        except Exception as e:
-            logger.warning(f"重排失败,回退透传: {e}")
-            return docs
-
     def _hybrid_pool(self, query, pool_size=15):
-        """混合召回候选池：向量召回 + 关键词全文召回 → RRF 融合 → 重排 → 阈值过滤。"""
+        """混合召回候选池：向量召回 + 关键词全文召回 → RRF 融合 → 阈值过滤。"""
         # 1) 向量召回（带分数）
         try:
             vector_res = self.vector_db.similarity_search_with_score(query, k=pool_size)
@@ -341,9 +320,7 @@ class KnowledgeBaseService:
         keyword_res = self._keyword_recall(query, top_n=max(pool_size * 3, 40))
         # 3) RRF 融合
         fused = self._rrf_fuse(vector_res, keyword_res)
-        # 4) 重排（可插拔，默认 no-op）
-        fused = self._rerank(query, fused)
-        # 5) 阈值过滤
+        # 4) 阈值过滤
         if RAG_THRESHOLD > 0:
             fused = [d for d in fused if (d.metadata or {}).get("_score", 1.0) >= RAG_THRESHOLD]
         return fused[:pool_size]
