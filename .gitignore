@@ -283,3 +283,10 @@ backup/
 _captcha_test.png
 _clarify_test.py
 _version_test.py
+
+# Debug / test artifacts (local only, never versioned)
+.tmp_*.png
+test_shots/
+scripts/ai_chat_test_results.json
+scripts/test_ai_chat_regression.py
+UI_OPTIMIZATION_PLAN.md
