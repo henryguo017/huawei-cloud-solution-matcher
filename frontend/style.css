@@ -6613,14 +6613,9 @@ body::after {
     border: 1px solid rgba(199, 0, 11, 0.25);
     color: #C7000B;
     cursor: pointer;
-    font-size: 0.875rem;
-    padding: 8px 18px;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     transition: all 0.2s;
     white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
     font-weight: 500;
 }
 .btn-favorite-result:hover {
