@@ -11469,7 +11469,7 @@ table tbody tr:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1100;
+    z-index: 2100; /* 高于 history-modal(2000)，确保从历史详情内打开分享时不被遮挡 */
     padding: 16px;
 }
 .modal-content {
