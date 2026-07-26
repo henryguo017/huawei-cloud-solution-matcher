@@ -11516,3 +11516,10 @@ table tbody tr:hover {
 }
 #share-qr svg { width: 176px; height: 176px; display: block; }
 .share-qr-tip { color: var(--text-muted); font-size: 13px; margin-top: 10px; }
+
+/* 移动端分享弹窗：隐藏链接输入框，复制按钮全宽 */
+@media (max-width: 600px) {
+    .share-link-input { display: none; }
+    .share-link-row { display: block; }
+    .share-link-row #share-copy-btn { width: 100%; }
+}

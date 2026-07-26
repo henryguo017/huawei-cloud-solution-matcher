@@ -5813,7 +5813,9 @@ function initEventListeners() {
         if (!card) return;
         let industry = (item && item.industry) || '';
         try {
-            const src = (item && item.source_documents && item.source_documents[0]);
+            // 历史详情 API 返回 sources（非 source_documents），兼容两种字段名
+            const docs = (item && item.source_documents) || (item && item.sources) || [];
+            const src = docs[0];
             if (!industry && src && src.metadata) industry = src.metadata.industry || '';
         } catch (e) {}
         API.getPricingReference(industry).then(data => {
