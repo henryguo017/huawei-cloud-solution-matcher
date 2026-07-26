@@ -82,6 +82,7 @@ DETECTION_TIMEOUT = int(os.getenv("DETECTION_TIMEOUT", "5"))
 # RAG 三段式：向量召回 + 关键词全文召回 → RRF 融合 → 重排 → 阈值
 ENABLE_HYBRID_RETRIEVAL = os.getenv("ENABLE_HYBRID_RETRIEVAL", "true").lower() == "true"
 ENABLE_RERANK = os.getenv("ENABLE_RERANK", "false").lower() == "true"
+RERANK_MODEL_NAME = os.getenv("RERANK_MODEL_NAME", "BAAI/bge-reranker-v2-m3")  # 精排模型（交叉编码器）
 RAG_RRF_ALPHA = float(os.getenv("RAG_RRF_ALPHA", "0.5"))   # 向量召回在 RRF 中的权重（1-alpha 给关键词召回）
 RAG_RRF_K = int(os.getenv("RAG_RRF_K", "60"))               # RRF 常数，避免并列时除零
 RAG_THRESHOLD = float(os.getenv("RAG_THRESHOLD", "0.0"))    # 融合后低于该分的片段过滤掉（0=不过滤）

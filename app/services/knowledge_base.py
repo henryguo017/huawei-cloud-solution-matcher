@@ -314,11 +314,18 @@ class KnowledgeBaseService:
     def _rerank(self, query, docs):
         """可插拔重排钩子（默认 no-op）。
 
-        当前未接入重排后端（如 bge-reranker）。开启 ENABLE_RERANK 但无后端时安全透传，
-        仅告警，不改变顺序/内容；接入时在 RERANKER_REGISTRY 注册实现即可。
+        开启 ENABLE_RERANK 但后端未注册时，延迟导入 app.services.reranker 触发注册
+        （模块加载即写入 RERANKER_REGISTRY["default"]，避免顶层循环 import）。
+        任何加载/推理失败均安全透传，不改变顺序/内容（绝不降质）。
         """
         if not ENABLE_RERANK:
             return docs
+        if "default" not in RERANKER_REGISTRY:
+            try:
+                import app.services.reranker  # 触发模块顶层注册
+            except Exception as e:
+                logger.warning(f"重排后端加载失败,安全透传: {e}")
+                return docs
         reranker = RERANKER_REGISTRY.get("default")
         if reranker is None:
             logger.warning("ENABLE_RERANK=true 但未配置重排后端,安全透传(顺序不变)")
@@ -349,12 +356,16 @@ class KnowledgeBaseService:
         return fused[:pool_size]
 
     def search_huawei(self, query, k=4):
-        """只召回华为云方案文档（主方案落地用）——直接在华为子集上检索，避免被竞品挤出前排"""
+        """只召回华为云方案文档（主方案落地用）——直接在华为子集上检索，避免被竞品挤出前排。
+        粗排召回候选池（远大于 k）→ 精排（_rerank）取 topK；ENABLE_RERANK 关时 _rerank 透传，零影响。
+        """
         comp = self._competitor_companies
         results = []
         try:
+            # 粗排：在华为子集上召回候选池，供精排筛选（候选池越大，精排空间越足）
+            pool_k = max(k * 3, 12)
             results = self.vector_db.similarity_search(
-                query, k=k, filter={"industry": {"$nin": list(comp)}}
+                query, k=pool_k, filter={"industry": {"$nin": list(comp)}}
             )
         except Exception as e:
             logger.warning(f"华为子集检索异常，回退混合池: {e}")
@@ -368,7 +379,8 @@ class KnowledgeBaseService:
                     seen.add(d.page_content)
                     if len(results) >= k:
                         break
-        return results[:k]
+        # 精排：对候选池重排后取 topK（ENABLE_RERANK 关时 _rerank 透传，行为不变）
+        return self._rerank(query, results)[:k]
 
     def search_user_uploaded(self, query, k=6):
         """只召回用户真实上传/新建的私有文档（doc_origin=user_uploaded），排除平台默认库副本"""
@@ -394,12 +406,16 @@ class KnowledgeBaseService:
         return results[:k]
 
     def search_competitor(self, query, k=2):
-        """只召回竞品方案文档（竞品对比章节用）——直接在竞品子集上检索"""
+        """只召回竞品方案文档（竞品对比章节用）——直接在竞品子集上检索。
+        粗排召回候选池（远大于 k）→ 精排（_rerank）取 topK；ENABLE_RERANK 关时 _rerank 透传，零影响。
+        """
         comp = self._competitor_companies
         results = []
         try:
+            # 粗排：在竞品子集上召回候选池，供精排筛选
+            pool_k = max(k * 3, 12)
             results = self.vector_db.similarity_search(
-                query, k=k, filter={"industry": {"$in": list(comp)}}
+                query, k=pool_k, filter={"industry": {"$in": list(comp)}}
             )
         except Exception as e:
             logger.warning(f"竞品子集检索异常，回退混合池: {e}")
@@ -412,7 +428,8 @@ class KnowledgeBaseService:
                     seen.add(d.page_content)
                     if len(results) >= k:
                         break
-        return results[:k]
+        # 精排：对候选池重排后取 topK（ENABLE_RERANK 关时 _rerank 透传，行为不变）
+        return self._rerank(query, results)[:k]
 
     def get_stats(self):
         """统计知识库数据 + 行业分布"""
