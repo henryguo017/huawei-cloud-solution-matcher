@@ -192,7 +192,7 @@ async def serve_js(filename: str):
         return FileResponse(js_path, media_type=media_type)
     raise HTTPException(status_code=404)
 
-@app.get("/share", tags=["前端"])
+@app.get("/share.html", tags=["前端"])
 async def share_page():
     """
     返回方案只读分享页（不暴露后台，匿名可访问）
@@ -201,6 +201,18 @@ async def share_page():
     if os.path.exists(share_path):
         return FileResponse(share_path, media_type="text/html")
     raise HTTPException(status_code=404, detail="分享页不存在")
+
+
+from fastapi.responses import RedirectResponse
+
+@app.get("/share", tags=["前端"])
+async def share_redirect(request: Request):
+    """旧版分享链接重定向到 .html（Nginx SPA fallback 兼容）"""
+    qs = request.url.query
+    url = "/share.html"
+    if qs:
+        url += "?" + qs
+    return RedirectResponse(url=url, status_code=301)
 
 
 @app.get("/{full_path:path}", tags=["前端SPA"])

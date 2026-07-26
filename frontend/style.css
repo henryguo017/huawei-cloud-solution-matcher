@@ -11441,6 +11441,17 @@ table tbody tr:hover {
 }
 #ai-input.has-voice { padding-left: 42px; }
 
+/* 追问/竞品追问输入区：语音 wrap 后 .voice-field 需撑满 flex 剩余空间 */
+.follow-up-input-area > .voice-field {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+}
+.follow-up-input-area > .voice-field > textarea {
+    flex: 1;
+    min-height: 52px;
+}
+
 /* ===== 方案分享弹窗 ===== */
 .modal-overlay {
     position: fixed;

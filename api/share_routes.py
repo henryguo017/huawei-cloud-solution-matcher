@@ -28,7 +28,7 @@ async def create_share(req: ShareCreateRequest, user=Depends(get_current_user_op
     share_id = _share_service.create_share(req.title, req.payload)
     if not share_id:
         raise HTTPException(status_code=500, detail="创建分享失败，请稍后重试")
-    return ShareResponse(share_id=share_id, url=f"/share?id={share_id}")
+    return ShareResponse(share_id=share_id, url=f"/share.html?id={share_id}")
 
 
 @router.get("/share/{share_id}")
