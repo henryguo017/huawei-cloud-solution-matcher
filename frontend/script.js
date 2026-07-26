@@ -1,4 +1,12 @@
 // [版本] 20260531w — 移除3D产品架构弹窗(ArchTree3D)功能，保留产品图谱页面(ProductGraph)
+// 成本卡片工具函数（提到顶层，确保历史详情等路径也能访问，不再依赖 renderAgentResult 先执行）
+window._crEsc = function _crEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+};
+window._crMoney = function _crMoney(n) {
+    const v = Math.round((Number(n) || 0) * 100) / 100;
+    return v.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+};
 const Config = {
     API_BASE_URL: '/api',
     ANIMATION: {

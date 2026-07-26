@@ -40,8 +40,9 @@ async def create_share(req: ShareCreateRequest, user=Depends(get_current_user_op
         try:
             svc = get_achievement_service()
             newly_unlocked = svc.check_page_view(user["id"], "share")
+            logger.info(f"[Share] user_id={user.get('id')} 成就检测结果: {len(newly_unlocked)} 个解锁 ({[a.get('id') for a in newly_unlocked]})")
         except Exception as e:
-            logger.warning(f"[Share] 成就检测失败: {e}")
+            logger.warning(f"[Share] 成就检测失败: {e}", exc_info=True)
     return ShareResponse(
         share_id=share_id,
         url=f"/share.html?id={share_id}",
