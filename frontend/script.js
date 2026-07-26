@@ -6199,6 +6199,10 @@ function initEventListeners() {
                 }
                 const modal = document.getElementById('share-modal');
                 if (modal) modal.style.display = 'flex';
+                // 分享解锁的成就弹窗（如"分享达人"）
+                if (d.newly_unlocked && d.newly_unlocked.length) {
+                    try { AchievementUI.showUnlockToast(d.newly_unlocked); } catch (e) {}
+                }
             }).catch(function (e) {
                 UI.showToast('分享生成失败，请重试', 'error');
             });
