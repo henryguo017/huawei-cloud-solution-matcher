@@ -11440,3 +11440,59 @@ table tbody tr:hover {
     transform: translateY(-50%);
 }
 #ai-input.has-voice { padding-left: 42px; }
+
+/* ===== 方案分享弹窗 ===== */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    padding: 16px;
+}
+.modal-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px 28px;
+    max-width: 460px;
+    width: 100%;
+    position: relative;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    border: none;
+    background: transparent;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+.modal-close:hover { color: var(--text-primary); }
+.share-modal-title { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
+.share-modal-tip { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; }
+.share-link-row { display: flex; gap: 8px; }
+.share-link-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--border, #E5E6EB);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg, #F5F6F8);
+}
+.share-qr-wrap { text-align: center; margin-top: 20px; }
+.share-qr-inner {
+    display: inline-block;
+    border: 2px solid var(--primary-color, #C7000B);
+    border-radius: 12px;
+    padding: 14px;
+    background: #fff;
+}
+#share-qr svg { width: 176px; height: 176px; display: block; }
+.share-qr-tip { color: var(--text-muted); font-size: 13px; margin-top: 10px; }

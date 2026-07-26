@@ -13,6 +13,7 @@ from api.routes import router
 from api.export_routes import router as export_router
 from api.auth_routes import router as auth_router
 from api.achievement_routes import router as achievement_router
+from api.share_routes import router as share_router
 from app.config import APP_NAME, APP_VERSION
 from app.core.errors import AppError, app_error_handler
 import logging
@@ -111,6 +112,7 @@ app.include_router(router, prefix="/api")
 app.include_router(export_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(achievement_router, prefix="/api")
+app.include_router(share_router, prefix="/api")
 
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
@@ -189,6 +191,17 @@ async def serve_js(filename: str):
         elif filename.endswith(".svg"): media_type = "image/svg+xml"
         return FileResponse(js_path, media_type=media_type)
     raise HTTPException(status_code=404)
+
+@app.get("/share", tags=["前端"])
+async def share_page():
+    """
+    返回方案只读分享页（不暴露后台，匿名可访问）
+    """
+    share_path = os.path.join(frontend_path, "share.html")
+    if os.path.exists(share_path):
+        return FileResponse(share_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="分享页不存在")
+
 
 @app.get("/{full_path:path}", tags=["前端SPA"])
 async def spa_fallback(full_path: str):

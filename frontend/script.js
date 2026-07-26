@@ -3635,6 +3635,7 @@ const HistoryUI = {
                 ${statusLine}
                 <div class="detail-action-btns">
                     <button class="btn btn-secondary btn-sm" id="detail-download-btn"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载报告</button>
+                    <button class="btn btn-secondary btn-sm" id="detail-share-btn"><svg class="icon" aria-hidden="true"><use href="#i-share"></use></svg> 分享</button>
                     ${archiveBtn}
                     ${followupBtn}
                     ${finalizeBtn}
@@ -3725,6 +3726,19 @@ const HistoryUI = {
             if (p) p.style.display = 'none';
             if (pa) pa.style.display = 'none';
             this._pendingRefined = null;
+        });
+        const sb = document.getElementById('detail-share-btn');
+        if (sb) sb.addEventListener('click', () => {
+            CloudSolShare.open({
+                kind: type === 'analyze' ? 'analyze' : 'match',
+                title: item.title || (item.demand_text || '历史方案').substring(0, 60),
+                demand: item.demand_text || '',
+                solution: item.solution || '',
+                industry: item.industry || '',
+                sources: item.sources || [],
+                competitor: item.competitor || '',
+                created_at: item.created_at || ''
+            }, item.title);
         });
         // 方案版本化：定稿 / 回滚 / 查看版本
         const fb = document.getElementById('detail-finalize-btn');
@@ -6143,6 +6157,70 @@ function initEventListeners() {
     });
 
     document.getElementById('export-docx-btn')?.addEventListener('click', triggerExportSolutionBook);
+
+    document.getElementById('share-solution-btn')?.addEventListener('click', () => {
+        const c = State.resultCache.solution;
+        if (!c) return;
+        CloudSolShare.open({
+            kind: 'match',
+            title: c.title || (c.demand || '方案匹配结果').substring(0, 60),
+            demand: c.demand || '',
+            solution: c.answer || '',
+            industry: c.industry || '',
+            sources: c.source_documents || [],
+            created_at: new Date().toISOString()
+        }, c.title);
+    });
+
+    // 方案只读分享：生成链接 + 二维码（匿名可用，不暴露任何账号信息）
+    window.CloudSolShare = {
+        open: function (payload, title) {
+            if (!payload || (!payload.solution && !payload.answer && !payload.demand)) {
+                UI.showToast('请先生成方案再分享', 'warning');
+                return;
+            }
+            fetch(Config.API_BASE_URL + '/share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title || '', payload: payload })
+            }).then(function (r) { return r.json(); }).then(function (d) {
+                if (!d.share_id) throw new Error('no id');
+                const url = location.origin + d.url;
+                const inp = document.getElementById('share-link-input');
+                if (inp) inp.value = url;
+                const q = document.getElementById('share-qr');
+                if (q) {
+                    try {
+                        const qr = qrcode(0, 'M');
+                        qr.addData(url);
+                        qr.make();
+                        q.innerHTML = qr.createSvgTag(5, 4);
+                    } catch (e) { q.innerHTML = ''; }
+                }
+                const modal = document.getElementById('share-modal');
+                if (modal) modal.style.display = 'flex';
+            }).catch(function (e) {
+                UI.showToast('分享生成失败，请重试', 'error');
+            });
+        },
+        close: function () {
+            const m = document.getElementById('share-modal');
+            if (m) m.style.display = 'none';
+        }
+    };
+    document.getElementById('share-modal-close')?.addEventListener('click', function () { CloudSolShare.close(); });
+    document.getElementById('share-copy-btn')?.addEventListener('click', function () {
+        const inp = document.getElementById('share-link-input');
+        if (!inp) return;
+        inp.select();
+        const done = function () { UI.showToast('链接已复制', 'success'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(inp.value).then(done, function () { try { document.execCommand('copy'); } catch (e) {} done(); });
+        } else {
+            try { document.execCommand('copy'); } catch (e) {}
+            done();
+        }
+    });
 
     document.getElementById('fav-solution-btn')?.addEventListener('click', () => {
         const cached = State.resultCache.solution;
