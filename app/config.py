@@ -21,6 +21,10 @@ OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.1"))
 # DeepSeek配置 (国内推荐)
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL_NAME = os.getenv("DEEPSEEK_MODEL_NAME", "deepseek-v4-pro")
+# 匹配生成专用模型（标准/向导模式）。Agent 模式仍使用上面的 DEEPSEEK_MODEL_NAME(pro)。
+# 分流目的：标准/向导模式对延迟更敏感，flash 模型墙钟显著更短、基本不触发 60s 超时重试；
+# 通过环境变量可随时切换回 pro（铁律③：改默认值须同步 .env.example，或直接改服务器 .env）。
+MATCH_LLM_MODEL = os.getenv("MATCH_LLM_MODEL", "deepseek-v4-flash")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 DEEPSEEK_TEMPERATURE = float(os.getenv("DEEPSEEK_TEMPERATURE", "0.1"))
 

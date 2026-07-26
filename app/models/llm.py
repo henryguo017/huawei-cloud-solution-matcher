@@ -19,12 +19,12 @@ class LLMProvider(ABC):
     """LLM提供商抽象基类"""
 
     @abstractmethod
-    async def chat(self, prompt: str, temperature: Optional[float] = None) -> str:
+    async def chat(self, prompt: str, temperature: Optional[float] = None, model: Optional[str] = None) -> str:
         """发送对话请求"""
 
-    async def chat_stream(self, prompt: str, temperature: Optional[float] = None):
+    async def chat_stream(self, prompt: str, temperature: Optional[float] = None, model: Optional[str] = None):
         """流式对话请求，yield 每个 token 字符串（默认实现：非流式降级）"""
-        result = await self.chat(prompt, temperature)
+        result = await self.chat(prompt, temperature, model)
         yield result
 
     @abstractmethod
@@ -55,8 +55,9 @@ class DeepSeekProvider(LLMProvider):
         if not DEEPSEEK_API_KEY:
             raise ValueError("请设置 DEEPSEEK_API_KEY 环境变量")
 
-    async def chat(self, prompt: str, temperature: Optional[float] = None) -> str:
+    async def chat(self, prompt: str, temperature: Optional[float] = None, model: Optional[str] = None) -> str:
         temp = temperature if temperature is not None else DEEPSEEK_TEMPERATURE
+        model_name = model or DEEPSEEK_MODEL_NAME
 
         async def _request():
             url = f"{DEEPSEEK_BASE_URL}/chat/completions"
@@ -65,7 +66,7 @@ class DeepSeekProvider(LLMProvider):
                 "Content-Type": "application/json"
             }
             data = {
-                "model": DEEPSEEK_MODEL_NAME,
+                "model": model_name,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": temp
             }
@@ -76,16 +77,17 @@ class DeepSeekProvider(LLMProvider):
 
         return await self._retry_request(_request)
 
-    async def chat_stream(self, prompt: str, temperature: Optional[float] = None):
+    async def chat_stream(self, prompt: str, temperature: Optional[float] = None, model: Optional[str] = None):
         """DeepSeek 流式调用，yield 每个 delta content 字符串"""
         temp = temperature if temperature is not None else DEEPSEEK_TEMPERATURE
+        model_name = model or DEEPSEEK_MODEL_NAME
         url = f"{DEEPSEEK_BASE_URL}/chat/completions"
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
         data = {
-            "model": DEEPSEEK_MODEL_NAME,
+            "model": model_name,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": temp,
             "stream": True
@@ -123,7 +125,7 @@ class AliyunProvider(LLMProvider):
         if not ALIYUN_API_KEY:
             raise ValueError("请设置 ALIYUN_API_KEY 环境变量")
 
-    async def chat(self, prompt: str, temperature: Optional[float] = None) -> str:
+    async def chat(self, prompt: str, temperature: Optional[float] = None, model: Optional[str] = None) -> str:
         temp = temperature if temperature is not None else ALIYUN_TEMPERATURE
 
         async def _request():
@@ -176,7 +178,7 @@ class BaiduProvider(LLMProvider):
             self._token_expire_time = time.time() + result.get("expires_in", 86400) - 3600
             return self._access_token
 
-    async def chat(self, prompt: str, temperature: Optional[float] = None) -> str:
+    async def chat(self, prompt: str, temperature: Optional[float] = None, model: Optional[str] = None) -> str:
         temp = temperature if temperature is not None else BAIDU_TEMPERATURE
 
         async def _request():
@@ -208,7 +210,7 @@ class OpenAIProvider(LLMProvider):
         if not OPENAI_API_KEY:
             raise ValueError("请设置 OPENAI_API_KEY 环境变量")
 
-    async def chat(self, prompt: str, temperature: Optional[float] = None) -> str:
+    async def chat(self, prompt: str, temperature: Optional[float] = None, model: Optional[str] = None) -> str:
         temp = temperature if temperature is not None else OPENAI_TEMPERATURE
 
         async def _request():
@@ -270,16 +272,20 @@ async def get_llm(provider: str = None, temperature: float = 0.1) -> Callable:
     return lambda prompt: provider_instance.chat(prompt, temperature)
 
 
-async def get_llm_response(prompt: str = "你好", provider: str = None) -> str:
-    """获取LLM响应 (兼容原有接口，异步版)"""
+async def get_llm_response(prompt: str = "你好", provider: str = None, model: Optional[str] = None) -> str:
+    """获取LLM响应 (兼容原有接口，异步版)
+
+    Args:
+        model: 可选，指定具体模型名（如 MATCH_LLM_MODEL 分流）。None 时用 provider 默认模型。
+    """
     provider_instance = LLMFactory.create(provider)
-    return await provider_instance.chat(prompt)
+    return await provider_instance.chat(prompt, model=model)
 
 
-async def get_llm_response_stream(prompt: str = "你好", provider: str = None):
+async def get_llm_response_stream(prompt: str = "你好", provider: str = None, model: Optional[str] = None):
     """获取LLM流式响应，yield 每个 token"""
     provider_instance = LLMFactory.create(provider)
-    async for token in provider_instance.chat_stream(prompt):
+    async for token in provider_instance.chat_stream(prompt, model=model):
         yield token
 
 

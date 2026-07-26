@@ -5,6 +5,7 @@ import logging
 from typing import Optional, Dict, Any, List
 
 from app.models.llm import get_llm_response
+from app.config import MATCH_LLM_MODEL
 from app.services.solution_prompt import (
     build_industry_line,
     build_analysis_line,
@@ -40,6 +41,9 @@ class SolutionMatcherService:
 
         # 加载行业剧本（用于增强行业针对性）
         self._playbook = self._load_playbook()
+
+        # 匹配生成专用模型（标准/向导模式用 flash；Agent 模式走 generate_enhanced 不传 model，保持 pro）
+        self.match_model = MATCH_LLM_MODEL
 
     # ============================================================
     # 资源加载
@@ -225,7 +229,7 @@ class SolutionMatcherService:
         # 3. 知识库为空 → 通用兜底（同样注入行业/话术约束）
         if not docs or not context_content.strip():
             fallback_prompt = self._build_fallback_prompt(customer_demand, industry, playbook_text)
-            answer_result = await get_llm_response(fallback_prompt)
+            answer_result = await get_llm_response(fallback_prompt, model=self.match_model)
             # 追加参考资料节（兜底模式 context 可能为空，build_references_section 会安全返回空串）
             if "参考资料" not in answer_result:
                 refs = build_references_section(context_content)
@@ -245,7 +249,7 @@ class SolutionMatcherService:
             playbook_text=playbook_text,
             demand_analysis=demand_analysis,
         )
-        answer_result = await get_llm_response(final_prompt)
+        answer_result = await get_llm_response(final_prompt, model=self.match_model)
 
         # 追加『参考资料』节，让 [资料N] 标注可追溯
         if "参考资料" not in answer_result:
