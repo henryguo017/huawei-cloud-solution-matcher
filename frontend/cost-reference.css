@@ -333,8 +333,48 @@
 }
 @media (max-width: 600px) {
     .cr-row {
-        grid-template-columns: 1fr 70px 110px 90px;
+        grid-template-columns: 1fr;
+        gap: 4px 12px;
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+    .cr-row-head {
+        display: none; /* 移动端隐藏表头，每行自解释 */
+    }
+    /* 移动端：产品名左，价格右 */
+    .cr-c-product {
+        grid-column: 1 / -1;
+    }
+    .cr-c-product b {
+        font-size: 14px;
+    }
+    .cr-c-product small {
         font-size: 12px;
     }
-    .cr-total-value { font-size: 19px; }
+    .cr-c-qty, .cr-c-price {
+        grid-column: 1;
+        justify-content: flex-start;
+        font-size: 12px;
+        color: #86909c;
+    }
+    .cr-c-qty::before { content: '数量 '; color: #86909c; }
+    .cr-c-price::before { content: '单价 '; color: #86909c; }
+    .cr-c-sub {
+        grid-column: 2;
+        justify-content: flex-end;
+        font-weight: 600;
+        color: var(--primary-color, #C7000B);
+        font-size: 14px;
+    }
+    /* 商务/免费/无价行移动端适配 */
+    .cr-row-biz, .cr-row-noprice, .cr-row-free {
+        grid-template-columns: 1fr;
+    }
+    .cr-c-biz-note {
+        grid-column: 1 / -1;
+        font-size: 12px;
+    }
+    .cr-total-value { font-size: 20px; }
+    /* 成本卡片整体内边距收窄 */
+    .cost-reference-card { padding: 12px !important; }
 }

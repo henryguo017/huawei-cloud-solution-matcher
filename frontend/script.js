@@ -7,6 +7,63 @@ window._crMoney = function _crMoney(n) {
     const v = Math.round((Number(n) || 0) * 100) / 100;
     return v.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 };
+// 历史/只读成本卡片渲染（提到顶层，HistoryUI._openDetailModal 可直接调用）
+window.renderCostReferenceReadOnly = function renderCostReferenceReadOnly(item) {
+    var card = document.getElementById('detail-cost-reference-card');
+    if (!card) return;
+    var industry = (item && item.industry) || '';
+    try {
+        var docs = (item && item.source_documents) || (item && item.sources) || [];
+        var src = docs[0];
+        if (!industry && src && src.metadata) industry = src.metadata.industry || '';
+    } catch (e) {}
+    API.getPricingReference(industry).then(function(data) {
+        if (!data || !data.items || data.items.length === 0) {
+            card.style.display = 'none';
+            return;
+        }
+        card.style.display = 'block';
+        var badge = document.getElementById('detail-cr-industry-badge');
+        if (badge) badge.textContent = data.industry + (data.is_default ? '（通用）' : '');
+        var sub = document.getElementById('detail-cr-sub');
+        if (sub) sub.textContent = data.description || '基于公开价目表策展的区间参考';
+        var disc = document.getElementById('detail-cr-disclaimer');
+        if (disc) disc.textContent = (data.disclaimer || '') + (data.collected_at ? '（数据采集：' + data.collected_at + ' · ' + (data.region || '') + '）' : '');
+        var rows = data.items.map(function(it) {
+            if (it.business_only) return { kind: 'biz', product: it.product, spec: it.spec || '', note: it.note || '商务报价，请咨询华为云销售' };
+            if (it.no_price) return { kind: 'noprice', product: it.product, spec: it.spec || '', note: it.note || '参考价待补充' };
+            if (it.free) return { kind: 'free', product: it.product, spec: it.spec || '', note: it.note || '按实际创建的资源计费' };
+            var mid = (it.tier && it.tier.mid) || { qty: it.qty || 1, unit_price: it.ref_price || 0 };
+            return { kind: 'price', product: it.product, spec: it.spec || '', billing: it.billing || '', unit_label: it.unit_label || '', qty: mid.qty, unit_price: mid.unit_price, verified: it.verified !== false, note: it.note || '' };
+        });
+        var table = document.getElementById('detail-cr-table');
+        if (table) {
+            var html = '<div class="cr-row cr-row-head"><span class="cr-c-product">产品 / 规格</span><span class="cr-c-qty">数量</span><span class="cr-c-price">单价(月)</span><span class="cr-c-sub">小计</span></div>';
+            var total = 0;
+            rows.forEach(function(r) {
+                if (r.kind === 'biz' || r.kind === 'noprice' || r.kind === 'free') {
+                    var label = r.kind === 'biz' ? '商务定价' : (r.kind === 'free' ? '基础免费' : '参考价待补充');
+                    var cls = r.kind === 'biz' ? 'cr-row-biz' : (r.kind === 'free' ? 'cr-row-free' : 'cr-row-noprice');
+                    html += '<div class="cr-row ' + cls + '"><span class="cr-c-product"><b>' + window._crEsc(r.product) + '</b><br><small>' + window._crEsc(r.spec) + '</small></span><span class="cr-c-biz-note">' + label + '：' + window._crEsc(r.note) + '</span></div>';
+                    return;
+                }
+                var subAmt = (Number(r.qty) || 0) * (Number(r.unit_price) || 0);
+                total += subAmt;
+                var bill = window._crEsc(r.billing) + (r.unit_label ? ((r.billing ? ' · ' : '') + window._crEsc(r.unit_label)) : '');
+                var warn = (!r.verified) ? ' <span class="cr-warn" title="待官网复核">⚠</span>' : '';
+                html += '<div class="cr-row"><span class="cr-c-product"><b>' + window._crEsc(r.product) + '</b><br><small>' + window._crEsc(r.spec) + '</small>' + (bill ? '<span class="cr-bill">' + bill + '</span>' : '') + warn + '</span><span class="cr-c-qty">' + r.qty + '</span><span class="cr-c-price">¥' + window._crMoney(r.unit_price) + '</span><span class="cr-c-sub">¥' + window._crMoney(subAmt) + '</span></div>';
+            });
+            table.innerHTML = html;
+            var el = document.getElementById('detail-cr-total');
+            if (el) el.textContent = '¥' + window._crMoney(Math.round(total * 100) / 100);
+            var lbl = document.getElementById('detail-cr-total-label');
+            if (lbl) lbl.textContent = '预估月费合计（参考）';
+        }
+    }).catch(function(err) {
+        console.warn('历史成本参考加载失败:', err);
+        card.style.display = 'none';
+    });
+};
 const Config = {
     API_BASE_URL: '/api',
     ANIMATION: {
@@ -3579,7 +3636,7 @@ const HistoryUI = {
         document.body.style.overflow = 'hidden';
         // 历史方案匹配详情：补渲染成本参考卡片（只读，不绑定编辑/导出，独立 id 避免冲突）
         if (type === 'match') {
-            try { renderCostReferenceReadOnly(item); } catch (e) { console.warn('历史成本卡片渲染失败', e); }
+            try { window.renderCostReferenceReadOnly(item); } catch (e) { console.warn('历史成本卡片渲染失败', e); }
         }
     },
 
@@ -5811,65 +5868,6 @@ function initEventListeners() {
             _crComputeTotal();
         }).catch(err => {
             console.warn('成本参考加载失败:', err);
-            card.style.display = 'none';
-        });
-    }
-
-    // 历史/只读场景的成本参考卡片渲染（无编辑/导出绑定，detail-cr- 独立 id 避免与主页卡片冲突）
-    function renderCostReferenceReadOnly(item) {
-        const card = document.getElementById('detail-cost-reference-card');
-        if (!card) return;
-        let industry = (item && item.industry) || '';
-        try {
-            // 历史详情 API 返回 sources（非 source_documents），兼容两种字段名
-            const docs = (item && item.source_documents) || (item && item.sources) || [];
-            const src = docs[0];
-            if (!industry && src && src.metadata) industry = src.metadata.industry || '';
-        } catch (e) {}
-        API.getPricingReference(industry).then(data => {
-            if (!data || !data.items || data.items.length === 0) {
-                card.style.display = 'none';
-                return;
-            }
-            card.style.display = 'block';
-            const badge = document.getElementById('detail-cr-industry-badge');
-            if (badge) badge.textContent = data.industry + (data.is_default ? '（通用）' : '');
-            const sub = document.getElementById('detail-cr-sub');
-            if (sub) sub.textContent = data.description || '基于公开价目表策展的区间参考';
-            const disc = document.getElementById('detail-cr-disclaimer');
-            if (disc) disc.textContent = (data.disclaimer || '') + (data.collected_at ? `（数据采集：${data.collected_at} · ${data.region || ''}）` : '');
-            const rows = data.items.map(it => {
-                if (it.business_only) return { kind: 'biz', product: it.product, spec: it.spec || '', note: it.note || '商务报价，请咨询华为云销售' };
-                if (it.no_price) return { kind: 'noprice', product: it.product, spec: it.spec || '', note: it.note || '参考价待补充' };
-                if (it.free) return { kind: 'free', product: it.product, spec: it.spec || '', note: it.note || '按实际创建的资源计费' };
-                const mid = (it.tier && it.tier.mid) || { qty: it.qty || 1, unit_price: it.ref_price || 0 };
-                return { kind: 'price', product: it.product, spec: it.spec || '', billing: it.billing || '', unit_label: it.unit_label || '', qty: mid.qty, unit_price: mid.unit_price, verified: it.verified !== false, note: it.note || '' };
-            });
-            const table = document.getElementById('detail-cr-table');
-            if (table) {
-                let html = '<div class="cr-row cr-row-head"><span class="cr-c-product">产品 / 规格</span><span class="cr-c-qty">数量</span><span class="cr-c-price">单价(月)</span><span class="cr-c-sub">小计</span></div>';
-                let total = 0;
-                rows.forEach(r => {
-                    if (r.kind === 'biz' || r.kind === 'noprice' || r.kind === 'free') {
-                        const label = r.kind === 'biz' ? '商务定价' : (r.kind === 'free' ? '基础免费' : '参考价待补充');
-                        const cls = r.kind === 'biz' ? 'cr-row-biz' : (r.kind === 'free' ? 'cr-row-free' : 'cr-row-noprice');
-                        html += `<div class="cr-row ${cls}"><span class="cr-c-product"><b>${_crEsc(r.product)}</b><br><small>${_crEsc(r.spec)}</small></span><span class="cr-c-biz-note">${label}：${_crEsc(r.note)}</span></div>`;
-                        return;
-                    }
-                    const subAmt = (Number(r.qty) || 0) * (Number(r.unit_price) || 0);
-                    total += subAmt;
-                    const bill = _crEsc(r.billing) + (r.unit_label ? ((r.billing ? ' · ' : '') + _crEsc(r.unit_label)) : '');
-                    const warn = (!r.verified) ? ' <span class="cr-warn" title="待官网复核">⚠</span>' : '';
-                    html += `<div class="cr-row"><span class="cr-c-product"><b>${_crEsc(r.product)}</b><br><small>${_crEsc(r.spec)}</small>${bill ? `<span class="cr-bill">${bill}</span>` : ''}${warn}</span><span class="cr-c-qty">${r.qty}</span><span class="cr-c-price">¥${_crMoney(r.unit_price)}</span><span class="cr-c-sub">¥${_crMoney(subAmt)}</span></div>`;
-                });
-                table.innerHTML = html;
-                const el = document.getElementById('detail-cr-total');
-                if (el) el.textContent = '¥' + _crMoney(Math.round(total * 100) / 100);
-                const lbl = document.getElementById('detail-cr-total-label');
-                if (lbl) lbl.textContent = '预估月费合计（参考）';
-            }
-        }).catch(err => {
-            console.warn('历史成本参考加载失败:', err);
             card.style.display = 'none';
         });
     }

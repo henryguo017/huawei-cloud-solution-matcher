@@ -26,6 +26,7 @@ class ShareResponse(BaseModel):
     share_id: str
     url: str  # 相对路径，前端用 location.origin 拼接成完整链接
     newly_unlocked: List[Dict[str, Any]] = []  # 分享解锁的成就（如"分享达人"），匿名用户为空
+    _debug: Optional[Dict[str, Any]] = None  # 临时诊断字段，确认后可删
 
 
 @router.post("/share", response_model=ShareResponse)
@@ -36,17 +37,25 @@ async def create_share(req: ShareCreateRequest, user=Depends(get_current_user_op
     # 已登录用户首次分享触发"分享达人"成就（check_page_view 内解锁 first_share）
     # 匿名用户不触发成就（成就归属账号）；usage_logs 表 action_type 有 CHECK 约束不可直接记 share，故走成就检测解锁
     newly_unlocked = []
+    _debug_info = {"user_detected": bool(user), "user_id": user.get("id") if user else None}
     if user:
         try:
             svc = get_achievement_service()
+            # 诊断：先查是否已解锁
+            already = svc.is_unlocked(user["id"], "first_share") if hasattr(svc, 'is_unlocked') else None
+            _debug_info["already_unlocked"] = already
             newly_unlocked = svc.check_page_view(user["id"], "share")
-            logger.info(f"[Share] user_id={user.get('id')} 成就检测结果: {len(newly_unlocked)} 个解锁 ({[a.get('id') for a in newly_unlocked]})")
+            _debug_info["unlock_count"] = len(newly_unlocked)
+            _debug_info["unlock_ids"] = [a.get("id") for a in newly_unlocked]
+            logger.info(f"[Share] user_id={user.get('id')} 已解锁={already} 本次新增={len(newly_unlocked)} ({_debug_info['unlock_ids']})")
         except Exception as e:
+            _debug_info["error"] = str(e)
             logger.warning(f"[Share] 成就检测失败: {e}", exc_info=True)
     return ShareResponse(
         share_id=share_id,
         url=f"/share.html?id={share_id}",
         newly_unlocked=newly_unlocked,
+        _debug=_debug_info,
     )
 
 
