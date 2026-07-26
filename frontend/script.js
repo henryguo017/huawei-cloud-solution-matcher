@@ -4606,6 +4606,31 @@ function initEventListeners() {
         document.getElementById('profile-panel').style.display = 'none';
     }
 
+    // 数字从 0 滚动到目标值（带 easeOut 缓动），用于个人档案统计卡 count-up 动画
+    // 支持重入：再次触发时取消上一次未完成的动画，避免关闭后重开时数字错乱
+    function animateStatCountUp(el, end, duration, delay) {
+        if (!el) return;
+        const endVal = Math.max(0, parseInt(end, 10) || 0);
+        el.textContent = 0;
+        if (el._countUpRAF) cancelAnimationFrame(el._countUpRAF);
+        setTimeout(function () {
+            const startTime = performance.now();
+            function tick(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeOut = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.floor(endVal * easeOut);
+                if (progress < 1) {
+                    el._countUpRAF = requestAnimationFrame(tick);
+                } else {
+                    el.textContent = endVal;
+                    el._countUpRAF = null;
+                }
+            }
+            el._countUpRAF = requestAnimationFrame(tick);
+        }, delay || 0);
+    }
+
     async function loadProfileData() {
         const token = AuthManager.getToken();
         if (!token) return;
@@ -4647,10 +4672,11 @@ function initEventListeners() {
                 });
                 if (statsResp.ok) {
                     const stats = await statsResp.json();
-                    document.getElementById('stat-match').textContent = stats.match_count || 0;
-                    document.getElementById('stat-analyze').textContent = stats.analyze_count || 0;
-                    document.getElementById('stat-favorites').textContent = stats.favorites_count || 0;
-                    document.getElementById('stat-history').textContent = stats.history_count || 0;
+                    // 统计数字 count-up 动画（从 0 滚动到真实值，依次错开更有节奏感）
+                    animateStatCountUp(document.getElementById('stat-match'), stats.match_count || 0, 1200, 0);
+                    animateStatCountUp(document.getElementById('stat-analyze'), stats.analyze_count || 0, 1200, 100);
+                    animateStatCountUp(document.getElementById('stat-favorites'), stats.favorites_count || 0, 1200, 200);
+                    animateStatCountUp(document.getElementById('stat-history'), stats.history_count || 0, 1200, 300);
                 }
             } catch (e) {
                 // Stats are non-critical, fail silently
