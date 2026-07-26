@@ -11393,3 +11393,50 @@ table tbody tr:hover {
     .about-author-avatar { width: 48px; height: 48px; }
     .about-author-avatar .icon { width: 24px; height: 24px; }
 }
+
+/* ===== 语音输入麦克风按钮（华为红主题） ===== */
+.voice-field {
+    position: relative;
+    width: 100%;
+}
+.voice-mic-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border-color, #e2e4ea);
+    background: var(--bg-card, #fff);
+    color: var(--primary-color, #C7000B);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 5;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.voice-mic-btn:hover { border-color: var(--primary-color, #C7000B); }
+.voice-mic-btn svg { width: 16px; height: 16px; pointer-events: none; }
+.voice-mic-btn.listening {
+    background: var(--primary-color, #C7000B);
+    color: #fff;
+    border-color: var(--primary-color, #C7000B);
+    animation: voicePulse 1.2s infinite;
+}
+@keyframes voicePulse {
+    0%   { box-shadow: 0 0 0 0 rgba(199, 0, 11, 0.5); }
+    70%  { box-shadow: 0 0 0 10px rgba(199, 0, 11, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(199, 0, 11, 0); }
+}
+/* 包裹式：为麦克风预留右侧空间，避免文字被遮 */
+.voice-field .textarea-input,
+.voice-field input { padding-right: 42px; }
+/* Agent 输入框内联麦克风（与发送按钮同排，绝对定位不破坏 flex） */
+.ai-input-box { position: relative; }
+.ai-input-box .voice-mic-btn {
+    top: 50%; right: auto; bottom: auto; left: 10px;
+    transform: translateY(-50%);
+}
+#ai-input.has-voice { padding-left: 42px; }
