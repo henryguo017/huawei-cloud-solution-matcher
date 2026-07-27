@@ -5372,6 +5372,119 @@ function initEventListeners() {
     // 初始化：登录态就绪后显示客户栏（三模式通用，方案挂客户）
     setTimeout(() => { ensureClientBar(); }, 300);
 
+    // ===== 客户档案管理弹窗（轻量全景：列表 + 结构化档案 + 名下方案） =====
+    function openClientManage() {
+        const modal = document.getElementById('client-manage-modal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        loadClientManageList();
+    }
+    function closeClientManage() {
+        const modal = document.getElementById('client-manage-modal');
+        if (modal) modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    async function loadClientManageList() {
+        const listEl = document.getElementById('client-manage-list');
+        if (!listEl) return;
+        try {
+            const resp = await fetch(`${Config.API_BASE_URL}/clients`, { headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` } });
+            const data = resp.ok ? await resp.json() : { clients: [] };
+            const clients = data.clients || [];
+            State.clients = clients;
+            if (window.HistoryUI) HistoryUI.refreshClientFilterOptions();
+            if (!clients.length) {
+                listEl.innerHTML = '<div class="client-manage-empty">暂无客户档案，点击「+ 新建客户」创建</div>';
+                const detail = document.getElementById('client-manage-detail');
+                if (detail) detail.innerHTML = '<div class="client-manage-empty">从左侧选择一个客户查看详情</div>';
+                return;
+            }
+            listEl.innerHTML = clients.map(c => `
+                <div class="client-manage-item" data-id="${c.id}">
+                    <div class="client-manage-item-name">${escapeHtml(c.name)}</div>
+                    <div class="client-manage-item-meta">${escapeHtml([c.industry, c.stage].filter(Boolean).join(' · ') || '未填写行业/阶段')}</div>
+                </div>`).join('');
+            listEl.querySelectorAll('.client-manage-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    listEl.querySelectorAll('.client-manage-item').forEach(x => x.classList.remove('active'));
+                    el.classList.add('active');
+                    loadClientManageDetail(Number(el.dataset.id));
+                });
+            });
+            listEl.querySelector('.client-manage-item')?.click();
+        } catch (e) {
+            listEl.innerHTML = '<div class="client-manage-empty">加载失败</div>';
+        }
+    }
+    async function loadClientManageDetail(id) {
+        const detail = document.getElementById('client-manage-detail');
+        if (!detail) return;
+        try {
+            const resp = await fetch(`${Config.API_BASE_URL}/clients/${id}`, { headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` } });
+            if (!resp.ok) throw new Error('加载失败');
+            const c = await resp.json();
+            const fields = [
+                ['所属行业', c.industry], ['企业规模', c.company_size], ['所在区域', c.region],
+                ['联系人', c.contact_name], ['职位', c.contact_title], ['电话', c.contact_phone],
+                ['邮箱', c.contact_email], ['商机阶段', c.stage], ['预算范围', c.budget],
+                ['核心痛点', c.pain_points], ['决策链', c.decision_chain], ['标签', c.tags], ['其他备注', c.note]
+            ].filter(f => f[1]);
+            const grid = fields.map(([label, val]) => `
+                <div class="client-detail-field">
+                    <span class="client-detail-label">${escapeHtml(label)}</span>
+                    <span class="client-detail-value">${escapeHtml(String(val))}</span>
+                </div>`).join('');
+            const solutions = (c.solutions || []);
+            const solHtml = solutions.length ? solutions.map(s => `
+                <div class="client-solution-item" data-id="${s.id}">
+                    <div class="client-solution-title">${escapeHtml((s.title || s.demand_text || '未命名方案').substring(0, 80))}</div>
+                    <div class="client-solution-meta">${escapeHtml(s.industry || '')} · ${escapeHtml((s.created_at || '').replace('T', ' ').substring(0, 16))}${s.version ? ' · v' + s.version : ''}</div>
+                </div>`).join('') : '<div class="client-solution-empty">该客户暂无关联方案</div>';
+            detail.innerHTML = `
+                <div class="client-detail-head">
+                    <div class="client-detail-title">${escapeHtml(c.name)}</div>
+                    <div class="client-detail-actions">
+                        <button class="btn btn-secondary btn-sm" id="cm-edit-btn">编辑</button>
+                        <button class="btn btn-secondary btn-sm" id="cm-del-btn">删除</button>
+                    </div>
+                </div>
+                <div class="client-detail-grid">${grid}</div>
+                <div class="client-detail-section-title">名下方案（${solutions.length}）</div>
+                <div id="cm-solutions">${solHtml}</div>
+            `;
+            detail.querySelector('#cm-edit-btn')?.addEventListener('click', () => {
+                closeClientManage();
+                openClientModal(id);
+            });
+            detail.querySelector('#cm-del-btn')?.addEventListener('click', () => {
+                if (!confirm(`确定删除客户「${c.name}」？其 Agent 记忆将一并清除。`)) return;
+                fetch(`${Config.API_BASE_URL}/clients/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` } })
+                    .then(r => {
+                        if (r.ok) { UI.showToast('已删除客户', 'success'); if (State.currentClientId === id) State.currentClientId = null; loadClients(); loadClientManageList(); }
+                        else UI.showToast('删除失败', 'error');
+                    })
+                    .catch(() => UI.showToast('删除失败', 'error'));
+            });
+            detail.querySelectorAll('.client-solution-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const sid = Number(el.dataset.id);
+                    closeClientManage();
+                    HistoryUI.currentType = 'match';
+                    HistoryUI.showDetail(sid);
+                });
+            });
+        } catch (e) {
+            detail.innerHTML = '<div class="client-manage-empty">加载失败</div>';
+        }
+    }
+    document.getElementById('client-manage-btn')?.addEventListener('click', openClientManage);
+    document.getElementById('client-manage-close')?.addEventListener('click', closeClientManage);
+    document.getElementById('client-manage-new')?.addEventListener('click', () => { closeClientManage(); openClientModal(); });
+    document.getElementById('client-manage-modal')?.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('client-manage-modal')) closeClientManage();
+    });
+
     // ===== 匹配模式切换 =====
     const modeToggle = document.getElementById('mode-toggle');
     const modeHint = document.getElementById('mode-hint');

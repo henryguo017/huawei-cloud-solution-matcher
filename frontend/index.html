@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260727c">
+<link rel="stylesheet" href="style.css?v=20260727d">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
@@ -574,6 +574,7 @@
                             </select>
                             <button type="button" id="client-new-btn" class="btn-secondary client-new-btn">+ 新建</button>
                             <button type="button" id="client-edit-btn" class="btn-secondary client-edit-btn">编辑</button>
+                            <button type="button" id="client-manage-btn" class="btn-secondary client-manage-btn">管理</button>
                             <button type="button" id="client-del-btn" class="btn-icon client-del-btn" title="删除当前选中的客户">×</button>
                         </div>
                     </div>
@@ -614,6 +615,28 @@
                             <div class="modal-footer">
                                 <button class="btn-secondary" id="client-modal-cancel" type="button">取消</button>
                                 <button class="btn-primary" id="client-modal-save" type="button">保存</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== 客户档案管理弹窗（轻量全景：列表 + 结构化档案 + 名下方案） ===== -->
+                    <div id="client-manage-modal" class="history-modal" style="display: none;">
+                        <div class="history-modal-content client-manage-content">
+                            <div class="modal-header">
+                                <h3><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg> 客户档案管理</h3>
+                                <button class="btn-close" id="client-manage-close" type="button"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                            </div>
+                            <div class="client-manage-toolbar">
+                                <button class="btn btn-primary btn-sm" id="client-manage-new">+ 新建客户</button>
+                                <span class="client-manage-hint">左侧选择客户，右侧查看结构化档案与其名下方案</span>
+                            </div>
+                            <div class="client-manage-body">
+                                <div class="client-manage-list" id="client-manage-list">
+                                    <div class="client-manage-empty">加载中…</div>
+                                </div>
+                                <div class="client-manage-detail" id="client-manage-detail">
+                                    <div class="client-manage-empty">从左侧选择一个客户查看详情</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2079,7 +2102,7 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260727c"></script>
+    <script src="script.js?v=20260727d"></script>
     <script src="js/voice-input.js?v=20260726f"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260716f"></script>
