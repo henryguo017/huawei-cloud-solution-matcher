@@ -18,7 +18,7 @@ from api.models import (
     KBDocumentCreateResponse, KBDocumentUpdateRequest,
     KBDocumentUpdateResponse, KBDocumentDeleteResponse,
     KBDocumentReindexResponse, HistoryFlagResponse,
-    HistoryFollowUpRequest, HistoryFollowUpResponse, ClientCreateRequest,
+    HistoryFollowUpRequest, HistoryFollowUpResponse, ClientCreateRequest, ClientUpdateRequest,
     ClarifyRequest,
     HistoryGroupResponse, FinalizeResponse, RollbackResponse,
 )
@@ -1101,29 +1101,45 @@ async def agent_clarify(
 
 
 # ===== 客户档案（方案B：Agent 记忆按客户维度隔离） =====
+
+# 客户结构化字段清单（与 db_init.py 迁移列保持一致，name/note 之外的新增列）
+CLIENT_STRUCT_FIELDS = [
+    "industry", "company_size", "region",
+    "contact_name", "contact_title", "contact_phone", "contact_email",
+    "stage", "budget", "pain_points", "decision_chain", "tags",
+]
+_CLIENT_SELECT_COLS = "id, name, note, created_at, updated_at, " + ", ".join(CLIENT_STRUCT_FIELDS)
+
+
+def _client_row_to_dict(row) -> dict:
+    """把 clients 行转成 API 响应 dict（含全部结构化字段）"""
+    d = {
+        "id": row["id"], "name": row["name"], "note": row["note"],
+        "created_at": row["created_at"], "updated_at": row["updated_at"],
+    }
+    for f in CLIENT_STRUCT_FIELDS:
+        d[f] = row[f]
+    return d
+
+
 @router.get("/clients", tags=["客户档案"])
 async def list_clients(user: dict = Depends(require_login)):
-    """列出当前用户的所有客户档案（按创建时间倒序）"""
+    """列出当前用户的所有客户档案（按创建时间倒序，含结构化字段）"""
     from app.utils.db_init import get_db_connection
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, name, note, created_at FROM clients WHERE user_id=? ORDER BY created_at DESC",
+        f"SELECT {_CLIENT_SELECT_COLS} FROM clients WHERE user_id=? ORDER BY created_at DESC",
         (user['id'],),
     )
     rows = cur.fetchall()
     conn.close()
-    return {
-        "clients": [
-            {"id": r["id"], "name": r["name"], "note": r["note"], "created_at": r["created_at"]}
-            for r in rows
-        ]
-    }
+    return {"clients": [_client_row_to_dict(r) for r in rows]}
 
 
 @router.post("/clients", tags=["客户档案"])
 async def create_client(req: ClientCreateRequest, user: dict = Depends(require_login)):
-    """为当前用户新建客户档案（同名去重）"""
+    """为当前用户新建客户档案（同名去重，支持结构化字段）"""
     from app.utils.db_init import get_db_connection
     name = (req.name or "").strip()
     if not name:
@@ -1134,16 +1150,85 @@ async def create_client(req: ClientCreateRequest, user: dict = Depends(require_l
     if cur.fetchone():
         conn.close()
         raise HTTPException(status_code=409, detail="该客户名称已存在")
+    cols = ["user_id", "name", "note"] + CLIENT_STRUCT_FIELDS
+    vals = [user['id'], name, req.note] + [getattr(req, f) for f in CLIENT_STRUCT_FIELDS]
+    placeholders = ", ".join(["?"] * len(cols))
     cur.execute(
-        "INSERT INTO clients (user_id, name, note) VALUES (?, ?, ?)",
-        (user['id'], name, req.note),
+        f"INSERT INTO clients ({', '.join(cols)}) VALUES ({placeholders})",
+        vals,
     )
     cid = cur.lastrowid
     conn.commit()
-    cur.execute("SELECT id, name, note, created_at FROM clients WHERE id=?", (cid,))
+    cur.execute(f"SELECT {_CLIENT_SELECT_COLS} FROM clients WHERE id=?", (cid,))
     row = cur.fetchone()
     conn.close()
-    return {"id": row["id"], "name": row["name"], "note": row["note"], "created_at": row["created_at"]}
+    return _client_row_to_dict(row)
+
+
+@router.get("/clients/{client_id}", tags=["客户档案"])
+async def get_client_detail(client_id: int, user: dict = Depends(require_login)):
+    """客户详情：结构化档案 + 该客户名下的方案历史列表（供客户详情页/轻量全景使用）"""
+    from app.utils.db_init import get_db_connection
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT {_CLIENT_SELECT_COLS} FROM clients WHERE id=? AND user_id=?",
+        (client_id, user['id']),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="客户不存在或无权限")
+    detail = _client_row_to_dict(row)
+    # 该客户名下的方案历史（按时间倒序，最多 50 条）
+    try:
+        solutions = get_usage_logger().get_client_solutions(user_id=user['id'], client_id=client_id, limit=50)
+    except Exception as e:
+        logger.warning(f"读取客户方案列表异常: {e}")
+        solutions = []
+    detail["solutions"] = solutions
+    return detail
+
+
+@router.put("/clients/{client_id}", tags=["客户档案"])
+async def update_client(client_id: int, req: ClientUpdateRequest, user: dict = Depends(require_login)):
+    """编辑客户档案：仅更新传入的非 None 字段；改名时做同名去重"""
+    from app.utils.db_init import get_db_connection
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM clients WHERE id=? AND user_id=?", (client_id, user['id']))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="客户不存在或无权限")
+
+    updates = {}
+    if req.name is not None:
+        new_name = req.name.strip()
+        if not new_name:
+            conn.close()
+            raise HTTPException(status_code=400, detail="客户名称不能为空")
+        cur.execute("SELECT id FROM clients WHERE user_id=? AND name=? AND id<>?",
+                    (user['id'], new_name, client_id))
+        if cur.fetchone():
+            conn.close()
+            raise HTTPException(status_code=409, detail="该客户名称已存在")
+        updates["name"] = new_name
+    for f in ["note"] + CLIENT_STRUCT_FIELDS:
+        v = getattr(req, f)
+        if v is not None:
+            updates[f] = v
+
+    if updates:
+        set_clause = ", ".join([f"{k}=?" for k in updates]) + ", updated_at=datetime('now', 'localtime')"
+        cur.execute(
+            f"UPDATE clients SET {set_clause} WHERE id=? AND user_id=?",
+            list(updates.values()) + [client_id, user['id']],
+        )
+        conn.commit()
+    cur.execute(f"SELECT {_CLIENT_SELECT_COLS} FROM clients WHERE id=?", (client_id,))
+    row = cur.fetchone()
+    conn.close()
+    return _client_row_to_dict(row)
 
 
 @router.delete("/clients/{client_id}", tags=["客户档案"])
@@ -2753,12 +2838,41 @@ async def _answer_personal_question(question: str, user: dict, history_text: str
         from app.utils.db_init import get_db_connection
         conn = get_db_connection()
         cur = conn.cursor()
-        # 客户档案
-        cur.execute("SELECT name, note FROM clients WHERE user_id=?", (user_id,))
+        # 客户档案（结构化拼装：行业/规模/区域/阶段/预算/痛点/决策链/联系人/标签/备注）
+        cur.execute(
+            "SELECT name, note, industry, company_size, region, stage, budget, "
+            "pain_points, decision_chain, contact_name, contact_title, tags "
+            "FROM clients WHERE user_id=?",
+            (user_id,),
+        )
         clients = cur.fetchall()
         if clients:
             has_clients = True
-            lines = [f"- {name}" + (f"：{note}" if note else "") for (name, note) in clients]
+            lines = []
+            for c in clients:
+                parts = []
+                if c["industry"]:
+                    parts.append(f"行业：{c['industry']}")
+                if c["company_size"]:
+                    parts.append(f"规模：{c['company_size']}")
+                if c["region"]:
+                    parts.append(f"区域：{c['region']}")
+                if c["stage"]:
+                    parts.append(f"阶段：{c['stage']}")
+                if c["budget"]:
+                    parts.append(f"预算：{c['budget']}")
+                if c["pain_points"]:
+                    parts.append(f"痛点：{c['pain_points']}")
+                if c["decision_chain"]:
+                    parts.append(f"决策链：{c['decision_chain']}")
+                if c["contact_name"]:
+                    contact = c["contact_name"] + (f"({c['contact_title']})" if c["contact_title"] else "")
+                    parts.append(f"联系人：{contact}")
+                if c["tags"]:
+                    parts.append(f"标签：{c['tags']}")
+                if c["note"]:
+                    parts.append(f"备注：{c['note']}")
+                lines.append(f"- {c['name']}" + ("｜" + "；".join(parts) if parts else ""))
             profile_text += "【我的客户档案】\n" + "\n".join(lines) + "\n"
         # 用户画像
         cur.execute("SELECT profile_json FROM user_profile WHERE user_id=?", (user_id,))

@@ -143,6 +143,16 @@ class UsageLoggerService:
             except:
                 pass
 
+            # 客户关联（2026-07 客户档案升级 — 方案挂客户）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN client_id INTEGER")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_history_client ON match_history(client_id)")
+            except:
+                pass
+
             conn.commit()
             logger.info(f"使用日志数据库已初始化: {self.db_path}")
 
@@ -816,6 +826,38 @@ class UsageLoggerService:
                 return results
         except Exception as e:
             logger.error(f"获取匹配历史列表失败: {e}")
+            return []
+
+    def get_client_solutions(self, user_id: int, client_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """获取某客户名下的方案历史（轻量列表，供客户详情页使用）"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    SELECT id, demand_text, industry, created_at, group_id, version, is_final, title
+                    FROM match_history
+                    WHERE type = 'match' AND user_id = ? AND client_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (user_id, client_id, limit)
+                )
+                rows = cursor.fetchall()
+                return [
+                    {
+                        "id": row["id"],
+                        "demand_text": (row["demand_text"] or "")[:200],
+                        "industry": row["industry"] or "",
+                        "created_at": row["created_at"],
+                        "group_id": row["group_id"],
+                        "version": row["version"] if row["version"] is not None else 1,
+                        "is_final": bool(row["is_final"]),
+                        "title": row["title"] or "",
+                    }
+                    for row in rows
+                ]
+        except Exception as e:
+            logger.error(f"获取客户方案列表失败: {e}")
             return []
 
     def get_match_history_by_id(self, history_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:

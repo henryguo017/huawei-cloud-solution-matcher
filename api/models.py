@@ -20,7 +20,37 @@ class MatchRequest(BaseModel):
 
 class ClientCreateRequest(BaseModel):
     name: str = Field(..., description="客户名称", min_length=1, max_length=100)
-    note: Optional[str] = Field(default=None, description="客户备注（可选）", max_length=500)
+    note: Optional[str] = Field(default=None, description="其他备注（可选）", max_length=500)
+    # ===== 结构化字段（2026-07 客户档案升级，全部可选，向后兼容） =====
+    industry: Optional[str] = Field(default=None, description="所属行业", max_length=50)
+    company_size: Optional[str] = Field(default=None, description="企业规模（如 <100人 / 100-500人 / 500-2000人 / 2000人以上）", max_length=50)
+    region: Optional[str] = Field(default=None, description="所在区域", max_length=100)
+    contact_name: Optional[str] = Field(default=None, description="联系人姓名", max_length=50)
+    contact_title: Optional[str] = Field(default=None, description="联系人职位", max_length=50)
+    contact_phone: Optional[str] = Field(default=None, description="联系电话", max_length=50)
+    contact_email: Optional[str] = Field(default=None, description="联系邮箱", max_length=100)
+    stage: Optional[str] = Field(default=None, description="商机阶段（初步接触/需求调研/方案报价/商务谈判/已成交/已流失）", max_length=20)
+    budget: Optional[str] = Field(default=None, description="预算范围", max_length=100)
+    pain_points: Optional[str] = Field(default=None, description="核心痛点", max_length=1000)
+    decision_chain: Optional[str] = Field(default=None, description="决策链/关键角色", max_length=500)
+    tags: Optional[str] = Field(default=None, description="标签（逗号分隔）", max_length=200)
+
+class ClientUpdateRequest(BaseModel):
+    """编辑客户档案：所有字段可选，仅更新传入的字段（None 表示不修改）"""
+    name: Optional[str] = Field(default=None, description="客户名称", min_length=1, max_length=100)
+    note: Optional[str] = Field(default=None, description="其他备注", max_length=500)
+    industry: Optional[str] = Field(default=None, max_length=50)
+    company_size: Optional[str] = Field(default=None, max_length=50)
+    region: Optional[str] = Field(default=None, max_length=100)
+    contact_name: Optional[str] = Field(default=None, max_length=50)
+    contact_title: Optional[str] = Field(default=None, max_length=50)
+    contact_phone: Optional[str] = Field(default=None, max_length=50)
+    contact_email: Optional[str] = Field(default=None, max_length=100)
+    stage: Optional[str] = Field(default=None, max_length=20)
+    budget: Optional[str] = Field(default=None, max_length=100)
+    pain_points: Optional[str] = Field(default=None, max_length=1000)
+    decision_chain: Optional[str] = Field(default=None, max_length=500)
+    tags: Optional[str] = Field(default=None, max_length=200)
 
 class AnalyzeRequest(BaseModel):
     competitor: str = Field(..., description="竞争对手名称")
@@ -237,6 +267,9 @@ class MatchHistoryItem(BaseModel):
     version: Optional[int] = Field(default=1, description="版本号，从 1 开始")
     is_final: bool = Field(default=False, description="是否为定稿版本")
     title: Optional[str] = Field(default=None, description="方案分组标题")
+    # 客户关联（2026-07 客户档案升级）
+    client_id: Optional[int] = Field(default=None, description="关联客户 ID")
+    client_name: Optional[str] = Field(default=None, description="关联客户名称")
 
 class MatchHistoryDetail(BaseModel):
     id: int = Field(..., description="记录ID")
@@ -253,6 +286,9 @@ class MatchHistoryDetail(BaseModel):
     version: Optional[int] = Field(default=1, description="版本号，从 1 开始")
     is_final: bool = Field(default=False, description="是否为定稿版本")
     title: Optional[str] = Field(default=None, description="方案分组标题")
+    # 客户关联（2026-07 客户档案升级）
+    client_id: Optional[int] = Field(default=None, description="关联客户 ID")
+    client_name: Optional[str] = Field(default=None, description="关联客户名称")
 
 class MatchHistoryListResponse(BaseModel):
     items: List[MatchHistoryItem] = Field(default_factory=list, description="历史记录列表")

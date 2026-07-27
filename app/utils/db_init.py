@@ -117,6 +117,28 @@ def init_database():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_clients_user_id ON clients(user_id)")
 
+    # 迁移：客户档案结构化字段（2026-07 客户档案升级，幂等 ALTER）
+    # note 保留作「其他备注」；以下为新增结构化列
+    _client_columns = [
+        ("industry", "TEXT"),          # 所属行业
+        ("company_size", "TEXT"),      # 企业规模
+        ("region", "TEXT"),            # 所在区域
+        ("contact_name", "TEXT"),      # 联系人姓名
+        ("contact_title", "TEXT"),     # 联系人职位
+        ("contact_phone", "TEXT"),     # 联系电话
+        ("contact_email", "TEXT"),     # 联系邮箱
+        ("stage", "TEXT"),             # 商机阶段（初步接触/需求调研/方案报价/商务谈判/已成交/已流失）
+        ("budget", "TEXT"),            # 预算范围
+        ("pain_points", "TEXT"),       # 核心痛点
+        ("decision_chain", "TEXT"),    # 决策链/关键角色
+        ("tags", "TEXT"),              # 标签（逗号分隔）
+    ]
+    for _col, _type in _client_columns:
+        try:
+            cursor.execute(f"ALTER TABLE clients ADD COLUMN {_col} {_type}")
+        except sqlite3.OperationalError:
+            pass  # 列已存在
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS captchas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
