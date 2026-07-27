@@ -5501,6 +5501,28 @@ function initEventListeners() {
             if (grid) grid.innerHTML = '<div class="clients-empty">请先登录后查看客户档案</div>';
             return;
         }
+        // 绑定 CRM 页面操作按钮（每次加载确保可用）
+        const newBtn = document.getElementById('clients-new-btn');
+        if (newBtn && !newBtn._crmBound) {
+            newBtn._crmBound = true;
+            newBtn.addEventListener('click', () => openClientModal());
+        }
+        const backBtn = document.getElementById('client-detail-back');
+        if (backBtn && !backBtn._crmBound) {
+            backBtn._crmBound = true;
+            backBtn.addEventListener('click', backToClientsList);
+        }
+        const searchInput = document.getElementById('clients-search-input');
+        if (searchInput && !searchInput._crmBound) {
+            searchInput._crmBound = true;
+            searchInput.addEventListener('input', (e) => { _clientsKeyword = e.target.value; renderClientCards(); });
+        }
+        const stageFilter = document.getElementById('clients-stage-filter');
+        if (stageFilter && !stageFilter._crmBound) {
+            stageFilter._crmBound = true;
+            stageFilter.addEventListener('change', (e) => { _clientsStage = e.target.value; renderClientCards(); });
+        }
+
         if (grid) grid.innerHTML = '<div class="clients-empty">加载中…</div>';
         document.getElementById('clients-list-view').style.display = '';
         document.getElementById('client-detail-view').style.display = 'none';
@@ -5650,11 +5672,6 @@ function initEventListeners() {
             UI.showToast('已选中该客户，填写需求即可为其发起匹配', 'info');
         });
     }
-
-    document.getElementById('clients-new-btn')?.addEventListener('click', () => openClientModal());
-    document.getElementById('client-detail-back')?.addEventListener('click', backToClientsList);
-    document.getElementById('clients-search-input')?.addEventListener('input', (e) => { _clientsKeyword = e.target.value; renderClientCards(); });
-    document.getElementById('clients-stage-filter')?.addEventListener('change', (e) => { _clientsStage = e.target.value; renderClientCards(); });
 
     // ===== 匹配模式切换 =====
     const modeToggle = document.getElementById('mode-toggle');

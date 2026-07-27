@@ -11558,6 +11558,18 @@ table tbody tr:hover {
     min-height: 68px;
     height: auto;
 }
+
+/* 手机端：客户表单单列排版 */
+@media (max-width: 768px) {
+    .client-form-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px;
+    }
+    .client-form-grid .form-row.full {
+        grid-column: auto;
+    }
+}
+
 .history-modal-content .modal-footer {
     display: flex;
     justify-content: flex-end;
