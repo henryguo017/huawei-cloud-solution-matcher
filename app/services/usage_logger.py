@@ -427,7 +427,7 @@ class UsageLoggerService:
 
     # ========== 历史记录（方案匹配回溯 & 对比） ==========
 
-    def save_match_history(self, demand_text: str, solution: str, industry: str = "", sources: List[Dict[str, Any]] = None, user_id: Optional[int] = None, group_id: Optional[int] = None, title: Optional[str] = None) -> Optional[int]:
+    def save_match_history(self, demand_text: str, solution: str, industry: str = "", sources: List[Dict[str, Any]] = None, user_id: Optional[int] = None, group_id: Optional[int] = None, title: Optional[str] = None, client_id: Optional[int] = None) -> Optional[int]:
         """
         保存一次匹配方案到历史记录
 
@@ -453,7 +453,7 @@ class UsageLoggerService:
                     ).fetchone()
                     version = (row["mx"] if row and row["mx"] is not None else 0) + 1
                 cursor = conn.execute(
-                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id, group_id, version, is_final, title) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id, group_id, version, is_final, title, client_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
                     (
                         demand_text,
                         solution,
@@ -463,6 +463,7 @@ class UsageLoggerService:
                         group_id,
                         version,
                         title,
+                        client_id,
                     )
                 )
                 conn.commit()
@@ -595,7 +596,7 @@ class UsageLoggerService:
                     where_user = " AND user_id = ?"
                     params.append(user_id)
                 row = conn.execute(
-                    f"SELECT id, group_id, version, demand_text, solution, industry, sources, title FROM match_history WHERE id = ?{where_user}", params
+                    f"SELECT id, group_id, version, demand_text, solution, industry, sources, title, client_id FROM match_history WHERE id = ?{where_user}", params
                 ).fetchone()
                 if row is None:
                     return None
@@ -610,7 +611,7 @@ class UsageLoggerService:
                 ).fetchone()
                 new_version = (maxv["mx"] if maxv and maxv["mx"] is not None else 0) + 1
                 cur = conn.execute(
-                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id, group_id, version, is_final, title) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id, group_id, version, is_final, title, client_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
                     (
                         row["demand_text"],
                         row["solution"],
@@ -620,6 +621,7 @@ class UsageLoggerService:
                         gid,
                         new_version,
                         row["title"] or "",
+                        row["client_id"],
                     )
                 )
                 conn.commit()
@@ -779,26 +781,27 @@ class UsageLoggerService:
             logger.error(f"获取竞品分析历史总数失败: {e}")
             return 0
 
-    def get_match_history_list(self, limit: int = 50, offset: int = 0, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """获取匹配历史记录列表（按时间倒序，支持分页）"""
+    def get_match_history_list(self, limit: int = 50, offset: int = 0, user_id: Optional[int] = None, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """获取匹配历史记录列表（按时间倒序，支持分页；client_id 提供时按客户筛选）"""
         try:
             with self._get_connection() as conn:
                 if user_id is not None:
-                    cursor = conn.execute(
-                        """
-                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived, group_id, version, is_final, title
+                    sql = """
+                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived, group_id, version, is_final, title, client_id
                         FROM match_history
                         WHERE type = 'match' AND user_id = ?
-                        ORDER BY created_at DESC
-                        LIMIT ?
-                        OFFSET ?
-                        """,
-                        (user_id, limit, offset)
-                    )
+                        """
+                    params = [user_id]
+                    if client_id is not None:
+                        sql += " AND client_id = ?"
+                        params.append(client_id)
+                    sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+                    params.extend([limit, offset])
+                    cursor = conn.execute(sql, tuple(params))
                 else:
                     cursor = conn.execute(
                         """
-                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived, group_id, version, is_final, title
+                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived, group_id, version, is_final, title, client_id
                         FROM match_history
                         WHERE type = 'match'
                         ORDER BY created_at DESC
@@ -822,6 +825,7 @@ class UsageLoggerService:
                         "version": row["version"] if row["version"] is not None else 1,
                         "is_final": bool(row["is_final"]) if "is_final" in row.keys() else False,
                         "title": row["title"] or "",
+                        "client_id": row["client_id"] if "client_id" in row.keys() else None,
                     })
                 return results
         except Exception as e:
@@ -893,6 +897,7 @@ class UsageLoggerService:
                     "version": row["version"] if row["version"] is not None else 1,
                     "is_final": bool(row["is_final"]) if "is_final" in row.keys() else False,
                     "title": row["title"] or "",
+                    "client_id": row["client_id"] if "client_id" in row.keys() else None,
                 }
         except Exception as e:
             logger.error(f"获取匹配历史记录失败: {e}")

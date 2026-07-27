@@ -335,6 +335,7 @@ async def _build_match_response(result: dict, user, request, original_demand: st
                 sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", [])],
                 user_id=user['id'],
                 group_id=request.group_id,
+                client_id=request.client_id,
             )
             _version_meta = usage_logger.get_match_history_meta(history_id, user_id=user['id']) or {}
         except Exception as hist_err:
@@ -622,7 +623,7 @@ def _resolve_agent_session_id(user: dict, client_id: Optional[int]) -> str:
     return str(user['id'])
 
 
-async def _process_and_emit_agent_result(queue, result: dict, user: dict, original_demand: str, is_quick_demo: bool, group_id=None):
+async def _process_and_emit_agent_result(queue, result: dict, user: dict, original_demand: str, is_quick_demo: bool, group_id=None, client_id=None):
     """
     Agent 流式结束后统一处理：保存历史（含版本化）、成就检测、提取来源文档、推送 result 事件。
     供 /agent/match/stream 与 /agent/clarify 共用，单一事实来源避免逻辑分叉。
@@ -665,6 +666,7 @@ async def _process_and_emit_agent_result(queue, result: dict, user: dict, origin
                 sources=[],
                 user_id=user['id'],
                 group_id=group_id,
+                client_id=client_id,
             )
             # 回填版本元信息
             meta = usage_logger.get_match_history_meta(history_id, user_id=user['id'])
@@ -814,7 +816,8 @@ async def agent_match_solution(
                     solution=answer,
                     industry=industry_hint,
                     sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in source_docs],
-                    user_id=user['id']
+                    user_id=user['id'],
+                    client_id=request.client_id,
                 )
             except Exception as log_err:
                 logger.warning(f"[Agent] 保存历史失败: {log_err}")
@@ -918,6 +921,7 @@ async def agent_match_stream(
                 await _process_and_emit_agent_result(
                     queue, result, user, original_demand, request.is_quick_demo,
                     group_id=request.group_id,
+                    client_id=request.client_id,
                 )
             except Exception as e:
                 logger.error(f"[Agent SSE] 执行失败: {e}")
@@ -1024,6 +1028,7 @@ async def agent_clarify(
                 try:
                     await _process_and_emit_agent_result(
                         queue, result, user, original_demand, is_quick_demo=False, group_id=None,
+                        client_id=request.client_id,
                     )
                     result_emitted = True
                 except Exception as proc_err:
@@ -1838,12 +1843,33 @@ async def get_dashboard_stats(
 
 # ========== 历史记录（方案匹配回溯 & 对比） ==========
 
+def _fetch_client_name_map(user_id: int, client_ids):
+    """跨库：根据 client_id 列表查 clients 表，返回 {id: name} 映射，供历史记录回填客户名"""
+    try:
+        from app.utils.db_init import get_db_connection
+        cids = [c for c in client_ids if c]
+        if not cids:
+            return {}
+        conn = get_db_connection()
+        placeholders = ",".join("?" * len(cids))
+        rows = conn.execute(
+            f"SELECT id, name FROM clients WHERE user_id=? AND id IN ({placeholders})",
+            [user_id, *cids]
+        ).fetchall()
+        conn.close()
+        return {r["id"]: r["name"] for r in rows}
+    except Exception as e:
+        logger.warning(f"查询客户名称映射失败: {e}")
+        return {}
+
+
 @router.get("/history/list", response_model=MatchHistoryListResponse, tags=["历史记录"])
 async def get_match_history_list(
     current_user: dict = Depends(get_current_user),
     page: int = 1,
     page_size: int = 20,
     limit: int = 100,
+    client_id: Optional[int] = None,
     usage_logger: UsageLoggerService = Depends(get_usage_logger)
 ):
     """
@@ -1870,7 +1896,8 @@ async def get_match_history_list(
         offset = (page - 1) * page_size
         effective_limit = min(page_size, limit)
 
-        items = usage_logger.get_match_history_list(limit=effective_limit, offset=offset, user_id=current_user.get('id'))
+        items = usage_logger.get_match_history_list(limit=effective_limit, offset=offset, user_id=current_user.get('id'), client_id=client_id)
+        name_map = _fetch_client_name_map(current_user.get('id'), [it.get("client_id") for it in items])
         return MatchHistoryListResponse(
             items=[
                 MatchHistoryItem(
@@ -1880,7 +1907,9 @@ async def get_match_history_list(
                     industry=item["industry"],
                     created_at=item["created_at"],
                     downloaded=bool(item.get("downloaded", False)),
-                    archived=bool(item.get("archived", False))
+                    archived=bool(item.get("archived", False)),
+                    client_id=item.get("client_id"),
+                    client_name=name_map.get(item.get("client_id")) if item.get("client_id") else None,
                 )
                 for item in items
             ],
@@ -1914,6 +1943,7 @@ async def get_match_history_detail(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="历史记录不存在"
             )
+        name_map = _fetch_client_name_map(current_user.get("id"), [item.get("client_id")])
         return MatchHistoryDetail(
             id=item["id"],
             demand_text=item["demand_text"],
@@ -1923,7 +1953,9 @@ async def get_match_history_detail(
             created_at=item["created_at"],
             downloaded=item.get("downloaded", False),
             archived=item.get("archived", False),
-            conversation=item.get("conversation", [])
+            conversation=item.get("conversation", []),
+            client_id=item.get("client_id"),
+            client_name=name_map.get(item.get("client_id")) if item.get("client_id") else None,
         )
     except HTTPException:
         raise
