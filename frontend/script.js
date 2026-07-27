@@ -4390,8 +4390,8 @@ function initEventListeners() {
     document.querySelectorAll('.navbar-item').forEach(item => {
         item.addEventListener('click', () => {
             const page = item.dataset.page;
-            // 登录检查：Dashboard 和历史记录需要登录
-            if ((page === 'dashboard' || page === 'history') && !AuthManager.isLoggedIn()) {
+            // 登录检查：Dashboard、历史记录、客户管理需要登录
+            if ((page === 'dashboard' || page === 'history' || page === 'clients') && !AuthManager.isLoggedIn()) {
                 AuthManager._openModal();
                 return;
             }
@@ -4409,8 +4409,8 @@ function initEventListeners() {
     document.querySelectorAll('.mobile-nav-item').forEach(item => {
         item.addEventListener('click', () => {
             const page = item.dataset.page;
-            // 登录检查：Dashboard 和历史记录需要登录
-            if ((page === 'dashboard' || page === 'history') && !AuthManager.isLoggedIn()) {
+            // 登录检查：Dashboard、历史记录、客户管理需要登录
+            if ((page === 'dashboard' || page === 'history' || page === 'clients') && !AuthManager.isLoggedIn()) {
                 AuthManager._openModal();
                 return;
             }
@@ -4482,7 +4482,7 @@ function initEventListeners() {
     document.querySelectorAll('.sidebar-item').forEach(item => {
         item.addEventListener('click', () => {
             const page = item.dataset.page;
-            if ((page === 'dashboard' || page === 'history') && !AuthManager.isLoggedIn()) {
+            if ((page === 'dashboard' || page === 'history' || page === 'clients') && !AuthManager.isLoggedIn()) {
                 AuthManager._openModal();
                 return;
             }
@@ -5499,6 +5499,7 @@ function initEventListeners() {
         const grid = document.getElementById('clients-grid');
         if (!AuthManager.isLoggedIn()) {
             if (grid) grid.innerHTML = '<div class="clients-empty">请先登录后查看客户档案</div>';
+            AuthManager._openModal();
             return;
         }
         // 绑定 CRM 页面操作按钮（每次加载确保可用）
