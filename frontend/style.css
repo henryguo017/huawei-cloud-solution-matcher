@@ -11470,6 +11470,145 @@ table tbody tr:hover {
     z-index: 2100; /* 高于 history-modal(2000)，确保从历史详情内打开分享时不被遮挡 */
     padding: 16px;
 }
+
+/* ===== 客户档案弹窗（结构化表单，复用 history-modal 容器） ===== */
+.client-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+    margin-bottom: 14px;
+}
+.client-form-grid .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.client-form-grid .form-row.full {
+    grid-column: 1 / -1;
+}
+.client-form-grid label {
+    font-size: 12px;
+    color: #555;
+    font-weight: 600;
+}
+.client-form-grid input,
+.client-form-grid select,
+.client-form-grid textarea {
+    border: 1px solid #e3e3e8;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+    color: #222;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color .15s, box-shadow .15s;
+}
+.client-form-grid input:focus,
+.client-form-grid select:focus,
+.client-form-grid textarea:focus {
+    outline: none;
+    border-color: #C7000B;
+    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.12);
+}
+.client-form-grid textarea {
+    resize: vertical;
+}
+.history-modal-content .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px 18px;
+    border-top: 1px solid #f0f0f0;
+}
+.history-modal-content .modal-footer .btn-primary {
+    background: #C7000B;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.history-modal-content .modal-footer .btn-primary:hover {
+    background: #a80009;
+}
+
+/* ===== 历史记录：按客户筛选 + 客户标签 + 详情关联客户 ===== */
+.history-filter-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 12px;
+    font-size: 13px;
+    color: var(--text-secondary, #666);
+}
+.history-filter-label .icon {
+    width: 15px;
+    height: 15px;
+    color: var(--huawei-red, #C7000B);
+}
+.history-client-filter {
+    margin-left: 6px;
+    padding: 6px 10px;
+    border: 1px solid #e2e2e5;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-primary, #1f2329);
+    background: #fff;
+    cursor: pointer;
+    min-width: 150px;
+}
+.history-client-filter:focus {
+    outline: none;
+    border-color: var(--huawei-red, #C7000B);
+    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.12);
+}
+
+/* 列表项客户标签 */
+.history-item-client {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    background: rgba(199, 0, 11, 0.08);
+    color: var(--huawei-red, #C7000B);
+    border: 1px solid rgba(199, 0, 11, 0.18);
+    margin-left: 6px;
+    white-space: nowrap;
+}
+.history-item-client .icon {
+    width: 12px;
+    height: 12px;
+}
+
+/* 详情：关联客户行 */
+.detail-client-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.detail-client-select {
+    flex: 1;
+    min-width: 180px;
+    padding: 8px 10px;
+    border: 1px solid #e2e2e5;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-primary, #1f2329);
+    background: #fff;
+    cursor: pointer;
+    height: 36px;
+}
+.detail-client-select:focus {
+    outline: none;
+    border-color: var(--huawei-red, #C7000B);
+    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.12);
+}
 .modal-content {
     background: #fff;
     border-radius: 12px;

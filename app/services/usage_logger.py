@@ -864,6 +864,38 @@ class UsageLoggerService:
             logger.error(f"获取客户方案列表失败: {e}")
             return []
 
+    def set_match_history_client(self, history_id: int, user_id: int, client_id: Optional[int]) -> bool:
+        """改挂 / 解除关联客户（方案历史与客户的后期绑定）
+
+        注意：clients 表在 users.db，match_history 在 usage 独立库，跨库不可 JOIN，
+        故客户归属校验走 get_db_connection()，历史更新走 _get_connection()。
+        """
+        try:
+            if client_id is not None:
+                # 校验该客户确实属于当前用户，避免越权绑定他人客户（clients 在 users.db）
+                from app.utils.db_init import get_db_connection
+                uconn = get_db_connection()
+                try:
+                    ok = uconn.execute(
+                        "SELECT 1 FROM clients WHERE id = ? AND user_id = ?",
+                        (client_id, user_id)
+                    ).fetchone()
+                finally:
+                    uconn.close()
+                if not ok:
+                    logger.warning(f"改挂客户失败：客户 {client_id} 不属于用户 {user_id}")
+                    return False
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE match_history SET client_id = ? WHERE id = ? AND type = 'match' AND user_id = ?",
+                    (client_id, history_id, user_id)
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"改挂客户失败: {e}")
+            return False
+
     def get_match_history_by_id(self, history_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """根据 ID 获取单条匹配历史记录（含完整方案内容）"""
         try:
@@ -902,6 +934,29 @@ class UsageLoggerService:
         except Exception as e:
             logger.error(f"获取匹配历史记录失败: {e}")
             return None
+
+    def update_match_history_client(self, record_id: int, client_id: Optional[int], user_id: Optional[int] = None) -> bool:
+        """
+        更新某条历史记录的关联客户（事后改挂 / 解绑）。client_id 为 None 表示解绑。
+        Returns: 成功返回 True，失败（如记录不存在）返回 False
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = [client_id]
+                if user_id is not None:
+                    where_user = " AND user_id = ?"
+                    params.append(user_id)
+                params.append(record_id)
+                cur = conn.execute(
+                    f"UPDATE match_history SET client_id = ? WHERE id = ?{where_user}",
+                    tuple(params)
+                )
+                conn.commit()
+                return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"更新历史记录关联客户失败(id={record_id}): {e}")
+            return False
 
     # ========== 竞品分析历史记录 ==========
 

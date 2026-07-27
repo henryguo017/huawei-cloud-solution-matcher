@@ -19,7 +19,7 @@ from api.models import (
     KBDocumentUpdateResponse, KBDocumentDeleteResponse,
     KBDocumentReindexResponse, HistoryFlagResponse,
     HistoryFollowUpRequest, HistoryFollowUpResponse, ClientCreateRequest, ClientUpdateRequest,
-    ClarifyRequest,
+    ClarifyRequest, UpdateHistoryClientRequest,
     HistoryGroupResponse, FinalizeResponse, RollbackResponse,
 )
 from api.platform_knowledge import PLATFORM_GUIDE, PLATFORM_BRIEF
@@ -1964,6 +1964,32 @@ async def get_match_history_detail(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取历史记录详情失败: {str(e)}"
+        )
+
+@router.put("/history/{history_id}/client", tags=["历史记录"])
+async def update_history_client(
+    history_id: int,
+    req: UpdateHistoryClientRequest,
+    current_user: dict = Depends(get_current_user),
+    usage_logger: UsageLoggerService = Depends(get_usage_logger)
+):
+    """改挂 / 解除关联客户（方案历史与客户的后期绑定，供历史详情页使用）"""
+    try:
+        ok = usage_logger.set_match_history_client(history_id, current_user.get("id"), req.client_id)
+        if not ok:
+            # 要么记录不存在，要么 client_id 越权
+            exist = usage_logger.get_match_history_by_id(history_id, user_id=current_user.get("id"))
+            if exist is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="历史记录不存在")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="关联的客户不存在或不属于当前用户")
+        return {"success": True, "history_id": history_id, "client_id": req.client_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"改挂客户失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"改挂客户失败: {str(e)}"
         )
 
 @router.post("/history/compare", response_model=CompareResponse, tags=["历史记录"])

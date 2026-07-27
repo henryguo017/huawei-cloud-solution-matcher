@@ -382,6 +382,9 @@ class ClarifyAnswer(BaseModel):
     question: str = Field(..., description="被回答的问题")
     answer: str = Field(..., description="用户给出的回答")
 
+class UpdateHistoryClientRequest(BaseModel):
+    client_id: Optional[int] = Field(default=None, description="关联的客户档案 ID；传 null 表示解除关联")
+
 # ========== 方案版本化 ==========
 
 class HistoryVersionItem(BaseModel):

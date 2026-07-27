@@ -1085,7 +1085,7 @@ const PaginationUI = {
 };
 
 const API = {
-    async match(demand, signal, mode = "standard", customerFiles = []) {
+    async match(demand, signal, mode = "standard", customerFiles = [], clientId = null) {
         const headers = { 'Content-Type': 'application/json' };
         // 仅登录用户且非快速体验时发送鉴权
         if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
@@ -1094,7 +1094,7 @@ const API = {
         const response = await fetch(`${Config.API_BASE_URL}/match`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ demand, mode, customer_files: customerFiles, is_quick_demo: State.isQuickDemo }),
+            body: JSON.stringify({ demand, mode, customer_files: customerFiles, client_id: clientId, is_quick_demo: State.isQuickDemo }),
             signal
         });
 
@@ -1106,7 +1106,7 @@ const API = {
     },
 
     // 标准/向导模式 SSE 流式匹配（P0-2）：镜像 agentMatchStream 的 reader 框架
-    async matchStream(demand, signal, mode = "standard", customerFiles = [], onEvent) {
+    async matchStream(demand, signal, mode = "standard", customerFiles = [], onEvent, clientId = null) {
         const headers = { 'Content-Type': 'application/json' };
         // 直读 localStorage token（与 agentMatchStream 一致的暴力修复，避免中间层吞掉 Authorization）
         let token = null;
@@ -1124,7 +1124,7 @@ const API = {
         const response = await fetch(`${Config.API_BASE_URL}/match/stream`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ demand, mode, customer_files: customerFiles, is_quick_demo: State.isQuickDemo }),
+            body: JSON.stringify({ demand, mode, customer_files: customerFiles, client_id: clientId, is_quick_demo: State.isQuickDemo }),
             signal
         });
 
@@ -1509,12 +1509,30 @@ const API = {
     },
 
     // ========== 历史记录 API ==========
-    async getHistoryList(offset = 0, limit = 20) {
-        const response = await fetch(`${Config.API_BASE_URL}/history/list?page=${Math.floor(offset / limit) + 1}&page_size=${limit}`, {
+    async getHistoryList(offset = 0, limit = 20, clientId = null) {
+        let url = `${Config.API_BASE_URL}/history/list?page=${Math.floor(offset / limit) + 1}&page_size=${limit}`;
+        if (clientId) url += `&client_id=${encodeURIComponent(clientId)}`;
+        const response = await fetch(url, {
             headers: AuthManager.isLoggedIn() ? { 'Authorization': `Bearer ${AuthManager.getToken()}` } : {}
         });
         if (!response.ok) throw new Error(`获取历史记录失败: ${response.statusText}`);
         return await response.json();
+    },
+
+    // 方案历史改挂/解除关联客户
+    async updateHistoryClient(id, clientId) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const response = await fetch(`${Config.API_BASE_URL}/history/${id}/client`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({ client_id: clientId })
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || `更新关联客户失败: ${response.statusText}`);
+        }
+        return response.json();
     },
 
     // 方案版本化：获取同一分组的全部版本（v1/v2/v3...）
@@ -3278,6 +3296,7 @@ const HistoryUI = {
     isCompareMode: false,
     currentCompareIds: [],
     currentType: 'match',  // 'match' | 'analyze'
+    currentClientFilter: null,  // 按客户筛选历史（null = 全部）
 
     switchTab(type) {
         this.currentType = type;
@@ -3303,7 +3322,7 @@ const HistoryUI = {
             const offset = (currentPage - 1) * pageSize;
 
             if (this.currentType === 'match') {
-                const data = await API.getHistoryList(offset, pageSize);
+                const data = await API.getHistoryList(offset, pageSize, this.currentClientFilter);
                 this.items = data.items || [];
                 State.pagination.totalItems = data.total || 0;
                 State.pagination.totalPages = data.total_pages || 1;
@@ -3327,6 +3346,17 @@ const HistoryUI = {
         const el = document.getElementById('history-count');
         const label = this.currentType === 'match' ? '方案匹配' : '竞品分析';
         if (el) el.textContent = `共 ${State.pagination.totalItems} 条${label}记录`;
+    },
+
+    // 用 State.clients 刷新历史页顶部「按客户筛选」下拉
+    refreshClientFilterOptions() {
+        const sel = document.getElementById('history-client-filter');
+        if (!sel) return;
+        const clients = (window.State && State.clients) || [];
+        const current = this.currentClientFilter;
+        sel.innerHTML = '<option value="">全部客户</option>' +
+            clients.map(c => `<option value="${c.id}">${this.escapeHtml(c.name)}</option>`).join('');
+        sel.value = current ? String(current) : '';
     },
 
     renderList() {
@@ -3393,6 +3423,7 @@ const HistoryUI = {
                             <span class="history-item-date">${dateStr}</span>
                             <span class="history-item-tags">
                                 ${item.industry ? `<span class="history-item-industry">${item.industry}</span>` : ''}
+                                ${item.client_name ? `<span class="history-item-client"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg> ${this.escapeHtml(item.client_name)}</span>` : ''}
                                 ${this._versionBadge(item)}
                                 ${this._statusBadges(item)}
                             </span>
@@ -3669,6 +3700,24 @@ const HistoryUI = {
                    <div class="detail-section-label">方案版本（v1/v2/v3）</div>
                    <div id="detail-versions-list" class="versions-list"></div>
                </div>` : '';
+        // 关联客户档案（仅方案匹配）
+        const clientOptions = (() => {
+            const list = (window.State && State.clients) || [];
+            let opts = '<option value="">（未关联客户）</option>';
+            if (item.client_id && !list.some(c => c.id === item.client_id)) {
+                opts += `<option value="${item.client_id}" selected>${this.escapeHtml(item.client_name || '已删除的客户')}</option>`;
+            }
+            opts += list.map(c => `<option value="${c.id}" ${item.client_id === c.id ? 'selected' : ''}>${this.escapeHtml(c.name)}</option>`).join('');
+            return opts;
+        })();
+        const clientSection = (type === 'match') ? `
+            <div class="detail-section">
+                <div class="detail-section-label">关联客户档案</div>
+                <div class="detail-client-row">
+                    <select id="detail-client-select" class="detail-client-select">${clientOptions}</select>
+                    <button class="btn btn-secondary btn-sm" id="detail-client-save">更新关联</button>
+                </div>
+            </div>` : '';
         const costRefSection = (type === 'match') ? `
             <div class="detail-section">
                 <div class="detail-section-label">成本参考估算</div>
@@ -3691,6 +3740,7 @@ const HistoryUI = {
                 <div style="font-size: var(--font-size-sm); color: var(--text-secondary);">${dateStr}</div>
             </div>
             ${demandBlock}
+            ${clientSection}
             ${versionLine}
             <div class="detail-section">
                 <div class="detail-section-label">${contentLabel}</div>
@@ -3804,6 +3854,21 @@ const HistoryUI = {
                 competitor: item.competitor || '',
                 created_at: item.created_at || ''
             }, item.title);
+        });
+        // 关联客户：改挂 / 解除关联（仅方案匹配）
+        const cs = document.getElementById('detail-client-save');
+        if (cs) cs.addEventListener('click', async () => {
+            const sel = document.getElementById('detail-client-select');
+            const cid = sel && sel.value ? Number(sel.value) : null;
+            try {
+                await API.updateHistoryClient(item.id, cid);
+                item.client_id = cid;
+                item.client_name = cid ? ((State.clients || []).find(c => c.id === cid) || {}).name || '' : null;
+                this.renderList();
+                UI.showToast(cid ? '已更新关联客户' : '已解除关联客户', 'success');
+            } catch (e) {
+                UI.showToast(e.message || '更新失败', 'error');
+            }
         });
         // 方案版本化：定稿 / 回滚 / 查看版本
         const fb = document.getElementById('detail-finalize-btn');
@@ -4008,6 +4073,17 @@ const HistoryUI = {
         document.querySelectorAll('.history-tab').forEach(tab => {
             tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
         });
+
+        // 按客户筛选历史
+        const clientFilter = document.getElementById('history-client-filter');
+        if (clientFilter) {
+            this.refreshClientFilterOptions();
+            clientFilter.addEventListener('change', (e) => {
+                this.currentClientFilter = e.target.value ? Number(e.target.value) : null;
+                State.pagination.currentPage = 1;
+                this.loadHistory();
+            });
+        }
 
         // 点击遮罩关闭
         document.getElementById('history-detail-modal')?.addEventListener('click', (e) => {
@@ -5181,7 +5257,7 @@ function initEventListeners() {
     const matchBtn = document.getElementById('match-btn');
     const matchBtnText = matchBtn?.querySelector('.btn-text');
 
-    // ===== 客户档案（方案B：Agent 记忆按客户隔离） =====
+    // ===== 客户档案（方案挂客户：三种匹配模式通用） =====
     function escapeHtml(s) {
         return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
     }
@@ -5195,27 +5271,84 @@ function initEventListeners() {
             .then(r => r.ok ? r.json() : { clients: [] })
             .then(data => {
                 const clients = (data.clients || []);
-                sel.innerHTML = '<option value="">（全局记忆 · 不限定客户）</option>' +
+                State.clients = clients;
+                sel.innerHTML = '<option value="">（不限定客户）</option>' +
                     clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
                 if (prev) sel.value = String(prev);
                 State.currentClientId = sel.value ? Number(sel.value) : null;
+                if (window.HistoryUI) HistoryUI.refreshClientFilterOptions();
             })
             .catch(() => {});
     }
-    document.getElementById('client-new-btn')?.addEventListener('click', () => {
-        const name = prompt('请输入客户名称（如：某某制造企业）：');
-        if (!name || !name.trim()) return;
-        const note = prompt('客户备注（可选，可留空）：') || '';
-        fetch(`${Config.API_BASE_URL}/clients`, {
-            method: 'POST',
+    // 三模式通用：登录态就绪后显示客户栏并加载下拉
+    function ensureClientBar() {
+        if (AuthManager.isLoggedIn()) {
+            const cb = document.getElementById('client-bar');
+            if (cb) cb.style.display = '';
+            loadClients();
+        }
+    }
+    // ===== 客户档案弹窗（新建 / 编辑，结构化字段） =====
+    const CF_FIELDS = ['name', 'industry', 'company_size', 'region', 'contact_name', 'contact_title', 'contact_phone', 'contact_email', 'stage', 'budget', 'pain_points', 'decision_chain', 'tags', 'note'];
+    function openClientModal(clientId) {
+        const modal = document.getElementById('client-modal');
+        const form = document.getElementById('client-form');
+        if (form) form.reset();
+        document.getElementById('cf-id').value = clientId || '';
+        document.getElementById('client-modal-title').textContent = clientId ? '编辑客户档案' : '新建客户档案';
+        CF_FIELDS.forEach(f => { const el = document.getElementById('cf-' + f); if (el) el.value = ''; });
+        if (clientId) {
+            fetch(`${Config.API_BASE_URL}/clients/${clientId}`, {
+                headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` }
+            })
+                .then(r => r.ok ? r.json() : Promise.reject(r))
+                .then(c => {
+                    CF_FIELDS.forEach(f => {
+                        const el = document.getElementById('cf-' + f);
+                        if (el && c[f] != null) el.value = c[f];
+                    });
+                })
+                .catch(() => {});
+        }
+        if (modal) modal.style.display = 'flex';
+        setTimeout(() => document.getElementById('cf-name')?.focus(), 50);
+    }
+    function closeClientModal() {
+        const modal = document.getElementById('client-modal');
+        if (modal) modal.style.display = 'none';
+    }
+    function saveClientModal() {
+        const id = document.getElementById('cf-id').value;
+        const payload = {};
+        CF_FIELDS.forEach(f => {
+            const el = document.getElementById('cf-' + f);
+            const v = el ? el.value.trim() : '';
+            payload[f] = v === '' ? null : v;
+        });
+        if (!payload.name) { UI.showToast('请填写客户名称', 'error'); return; }
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `${Config.API_BASE_URL}/clients/${id}` : `${Config.API_BASE_URL}/clients`;
+        fetch(url, {
+            method,
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AuthManager.getToken()}` },
-            body: JSON.stringify({ name: name.trim(), note })
-        }).then(r => r.ok ? r.json() : Promise.reject(r))
-          .then(c => { UI.showToast(`已新建客户「${c.name}」`, 'success'); State.currentClientId = c.id; loadClients(); })
-          .catch(err => { err.json?.().then?.(e => UI.showToast(e.detail || '新建客户失败', 'error')); });
+            body: JSON.stringify(payload)
+        })
+            .then(r => r.ok ? r.json() : Promise.reject(r))
+            .then(c => {
+                UI.showToast(id ? '已更新客户档案' : `已新建客户「${c.name}」`, 'success');
+                closeClientModal();
+                State.currentClientId = (c.id != null) ? c.id : (id ? Number(id) : State.currentClientId);
+                loadClients();
+            })
+            .catch(err => { err.json?.().then?.(e => UI.showToast(e.detail || '保存失败', 'error')); });
+    }
+    document.getElementById('client-new-btn')?.addEventListener('click', () => openClientModal());
+    document.getElementById('client-edit-btn')?.addEventListener('click', () => {
+        if (!State.currentClientId) { UI.showToast('请先在上方选择一个客户', 'info'); return; }
+        openClientModal(State.currentClientId);
     });
     document.getElementById('client-del-btn')?.addEventListener('click', () => {
-        if (!State.currentClientId) { UI.showToast('当前为全局记忆，无需删除', 'info'); return; }
+        if (!State.currentClientId) { UI.showToast('当前为「不限定客户」，无需删除', 'info'); return; }
         const sel = document.getElementById('client-select');
         const name = sel?.selectedOptions?.[0]?.textContent || '该客户';
         if (!confirm(`确定删除客户「${name}」？其 Agent 记忆将一并清除。`)) return;
@@ -5230,15 +5363,14 @@ function initEventListeners() {
     document.getElementById('client-select')?.addEventListener('change', (e) => {
         State.currentClientId = e.target.value ? Number(e.target.value) : null;
     });
-    // 初始化：默认 Agent 模式 → 显示客户栏
-    if (State.matchMode === 'agent') {
-        const cb = document.getElementById('client-bar');
-        if (cb) cb.style.display = '';
-        // 登录态可能尚未就绪：本块在脚本顶层执行，早于 init() 中的 AuthManager.init()，
-        // 此时 isLoggedIn() 仍为 false，直接 loadClients() 会被跳过导致下拉永远为空。
-        // 延迟到登录态（含服务端校验）确认后再加载，参考 CustomerFileUploader 模式（行4449）。
-        setTimeout(() => { if (AuthManager.isLoggedIn()) loadClients(); }, 300);
-    }
+    document.getElementById('client-modal-close')?.addEventListener('click', closeClientModal);
+    document.getElementById('client-modal-cancel')?.addEventListener('click', closeClientModal);
+    document.getElementById('client-modal-save')?.addEventListener('click', saveClientModal);
+    document.getElementById('client-modal')?.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('client-modal')) closeClientModal();
+    });
+    // 初始化：登录态就绪后显示客户栏（三模式通用，方案挂客户）
+    setTimeout(() => { ensureClientBar(); }, 300);
 
     // ===== 匹配模式切换 =====
     const modeToggle = document.getElementById('mode-toggle');
@@ -5263,16 +5395,8 @@ function initEventListeners() {
             modeHint.textContent = hints[newMode] || '';
         }
 
-        // 客户档案栏：仅 Agent 模式显示并加载
-        const clientBar = document.getElementById('client-bar');
-        if (clientBar) {
-            if (newMode === 'agent') {
-                clientBar.style.display = '';
-                loadClients();
-            } else {
-                clientBar.style.display = 'none';
-            }
-        }
+        // 客户档案栏：三模式通用，登录后始终显示并加载
+        ensureClientBar();
 
         // 向导模式的显示/隐藏
         const demandInput = document.getElementById('demand-input');
@@ -5465,7 +5589,7 @@ function initEventListeners() {
                     } else if (event.type === 'error') {
                         throw new Error(event.message);
                     }
-                });
+                }, State.currentClientId);
             }
             
             // 统一渲染结果（首轮与澄清续跑共用；含暂停/过期守卫）

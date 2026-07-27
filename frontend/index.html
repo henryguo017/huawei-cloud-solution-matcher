@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260726j">
+<link rel="stylesheet" href="style.css?v=20260727c">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
@@ -561,19 +561,60 @@
                         <span class="mode-hint" id="mode-hint">AI 记忆上下文 → 精准检索 → 为你定制方案</span>
                     </div>
 
-                    <!-- ===== 客户档案栏（仅 Agent 模式显示，方案B：记忆按客户隔离） ===== -->
+                    <!-- ===== 客户档案栏（三种匹配模式通用，方案挂客户） ===== -->
                     <div class="form-group client-bar" id="client-bar" style="display: none;">
                         <label class="form-label" for="client-select">
                             <svg class="icon form-label-icon" aria-hidden="true"><use href="#i-building-2"></use></svg>
                             当前客户档案
-                            <span class="client-hint">记忆按客户隔离，切换客户互不串味</span>
+                            <span class="client-hint">方案将归入所选客户，便于后续检索</span>
                         </label>
                         <div class="client-select-row">
                             <select id="client-select" class="client-select">
-                                <option value="">（全局记忆 · 不限定客户）</option>
+                                <option value="">（不限定客户）</option>
                             </select>
                             <button type="button" id="client-new-btn" class="btn-secondary client-new-btn">+ 新建</button>
+                            <button type="button" id="client-edit-btn" class="btn-secondary client-edit-btn">编辑</button>
                             <button type="button" id="client-del-btn" class="btn-icon client-del-btn" title="删除当前选中的客户">×</button>
+                        </div>
+                    </div>
+
+                    <!-- ===== 客户档案编辑/新建弹窗（结构化字段） ===== -->
+                    <div id="client-modal" class="history-modal" style="display: none;">
+                        <div class="history-modal-content">
+                            <div class="modal-header">
+                                <h3 id="client-modal-title">新建客户档案</h3>
+                                <button class="btn-close" id="client-modal-close" type="button"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="client-form" onsubmit="return false;">
+                                    <input type="hidden" id="cf-id">
+                                    <div class="client-form-grid">
+                                        <div class="form-row"><label>客户名称 *</label><input id="cf-name" maxlength="100" required></div>
+                                        <div class="form-row"><label>所属行业</label><input id="cf-industry" maxlength="50"></div>
+                                        <div class="form-row"><label>企业规模</label><input id="cf-company_size" maxlength="50" placeholder="如 500-2000人"></div>
+                                        <div class="form-row"><label>所在区域</label><input id="cf-region" maxlength="100"></div>
+                                        <div class="form-row"><label>联系人姓名</label><input id="cf-contact_name" maxlength="50"></div>
+                                        <div class="form-row"><label>联系人职位</label><input id="cf-contact_title" maxlength="50"></div>
+                                        <div class="form-row"><label>联系电话</label><input id="cf-contact_phone" maxlength="50"></div>
+                                        <div class="form-row"><label>联系邮箱</label><input id="cf-contact_email" maxlength="100"></div>
+                                        <div class="form-row"><label>商机阶段</label>
+                                            <select id="cf-stage">
+                                                <option value="">（未设定）</option>
+                                                <option>初步接触</option><option>需求调研</option><option>方案报价</option><option>商务谈判</option><option>已成交</option><option>已流失</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-row"><label>预算范围</label><input id="cf-budget" maxlength="100"></div>
+                                        <div class="form-row"><label>标签（逗号分隔）</label><input id="cf-tags" maxlength="200"></div>
+                                    </div>
+                                    <div class="form-row full"><label>核心痛点</label><textarea id="cf-pain_points" maxlength="1000" rows="2"></textarea></div>
+                                    <div class="form-row full"><label>决策链 / 关键角色</label><input id="cf-decision_chain" maxlength="500"></div>
+                                    <div class="form-row full"><label>其他备注</label><textarea id="cf-note" maxlength="500" rows="2"></textarea></div>
+                                </form>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn-secondary" id="client-modal-cancel" type="button">取消</button>
+                                <button class="btn-primary" id="client-modal-save" type="button">保存</button>
+                            </div>
                         </div>
                     </div>
 
@@ -1356,6 +1397,12 @@
                 <div class="history-toolbar">
                     <div class="history-toolbar-left">
                         <span id="history-count">共 0 条记录</span>
+                        <label class="history-filter-label" for="history-client-filter">
+                            <svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg> 客户
+                        </label>
+                        <select id="history-client-filter" class="history-client-filter">
+                            <option value="">全部客户</option>
+                        </select>
                     </div>
                     <div class="history-toolbar-right">
                         <span id="compare-hint" class="compare-hint">选择两条记录进行对比</span>
@@ -2032,7 +2079,7 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260726k"></script>
+    <script src="script.js?v=20260727c"></script>
     <script src="js/voice-input.js?v=20260726f"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260716f"></script>
