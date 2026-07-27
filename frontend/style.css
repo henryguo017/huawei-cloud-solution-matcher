@@ -11544,7 +11544,14 @@ table tbody tr:hover {
 .client-form-grid textarea:focus {
     outline: none;
     border-color: #C7000B;
-    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.12);
+    box-shadow: 0 0 0 2px rgba(199, 0, 11, 0.15);
+}
+/* 覆盖全局 :focus-visible 双环，客户表单内只用单层细环 */
+.client-form-grid input:focus-visible,
+.client-form-grid select:focus-visible,
+.client-form-grid textarea:focus-visible {
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(199, 0, 11, 0.15) !important;
 }
 .client-form-grid textarea {
     resize: vertical;
@@ -11569,6 +11576,20 @@ table tbody tr:hover {
 }
 .history-modal-content .modal-footer .btn-primary:hover {
     background: #a80009;
+}
+/* 客户弹窗取消按钮：与保存按钮同尺寸同圆角 */
+.history-modal-content .modal-footer .btn-secondary {
+    background: #fff;
+    color: var(--neutral-700);
+    border: 1px solid var(--neutral-300);
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.history-modal-content .modal-footer .btn-secondary:hover {
+    background: var(--neutral-100);
+    border-color: var(--neutral-500);
 }
 
 /* ===== 历史记录：按客户筛选 + 客户标签 + 详情关联客户 ===== */
