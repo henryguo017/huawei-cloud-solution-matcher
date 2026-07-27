@@ -11813,6 +11813,220 @@ table tbody tr:hover {
     color: var(--text-muted, #999);
     padding: 8px 0;
 }
+
+/* ===== 客户管理页面（一级入口：列表 + 详情，P6） ===== */
+.clients-toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+.clients-search {
+    position: relative;
+    flex: 1;
+    min-width: 220px;
+    display: flex;
+    align-items: center;
+}
+.clients-search .icon {
+    position: absolute;
+    left: 12px;
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted, #999);
+    pointer-events: none;
+}
+.clients-search input {
+    width: 100%;
+    height: 38px;
+    padding: 0 12px 0 36px;
+    border: 1px solid var(--neutral-500, #DCE0E6);
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--text-primary, #1f2329);
+    box-sizing: border-box;
+    transition: border-color .15s, box-shadow .15s;
+}
+.clients-search input:focus {
+    outline: none;
+    border-color: var(--primary-color, #C7000B);
+    box-shadow: 0 0 0 2px rgba(199, 0, 11, 0.12);
+}
+.clients-filter-select {
+    height: 38px;
+    padding: 0 32px 0 12px;
+    border: 1px solid var(--neutral-500, #DCE0E6);
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2386909C' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 12px center;
+    color: var(--text-primary, #1f2329);
+    cursor: pointer;
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.clients-filter-select:focus {
+    outline: none;
+    border-color: var(--primary-color, #C7000B);
+}
+.clients-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+}
+.clients-empty {
+    padding: 40px 16px;
+    text-align: center;
+    color: var(--text-muted, #999);
+    font-size: 13px;
+}
+.client-card {
+    background: #fff;
+    border: 1px solid var(--neutral-500, #DCE0E6);
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.client-card:hover {
+    border-color: var(--primary-color, #C7000B);
+    box-shadow: var(--shadow-md, 0 2px 8px rgba(0,0,0,0.04));
+    transform: translateY(-2px);
+}
+.client-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.client-card-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary, #1f2329);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.client-stage-badge {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--neutral-300, #F7F8FA);
+    color: var(--text-secondary, #555);
+}
+.stage-初步接触 { background: #E8F3FF; color: #165DFF; }
+.stage-需求调研 { background: #E8F3FF; color: #165DFF; }
+.stage-方案报价 { background: #FFF3E8; color: #FF7D00; }
+.stage-商务谈判 { background: #FFF3E8; color: #FF7D00; }
+.stage-已成交 { background: #E8FFEA; color: #00B42A; }
+.stage-已流失 { background: #FFECE8; color: #F53F3F; }
+.client-card-meta {
+    font-size: 12px;
+    color: var(--text-secondary, #555);
+    margin-bottom: 4px;
+}
+.client-card-contact {
+    font-size: 12px;
+    color: var(--text-muted, #999);
+    margin-bottom: 12px;
+}
+.client-card-foot {
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid var(--neutral-400, #F2F3F5);
+    padding-top: 10px;
+}
+.client-card-go {
+    border: none;
+    background: transparent;
+    color: var(--primary-color, #C7000B);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 4px;
+}
+.client-card-go:hover {
+    text-decoration: underline;
+}
+.client-detail-view {
+    max-width: 880px;
+}
+#client-detail-back {
+    margin-bottom: 16px;
+}
+.client-detail-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.client-detail-title-wrap {
+    min-width: 0;
+}
+.client-detail-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary, #1f2329);
+}
+.client-detail-sub {
+    font-size: 13px;
+    color: var(--text-muted, #999);
+    margin-top: 4px;
+}
+.client-detail-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.client-detail-stage-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: var(--neutral-300, #F7F8FA);
+    border-radius: 8px;
+}
+.client-detail-stage-row .client-detail-label {
+    font-size: 13px;
+    color: var(--text-secondary, #555);
+}
+.client-detail-stage-select {
+    height: 34px;
+    padding: 0 32px 0 10px;
+    border: 1px solid var(--neutral-500, #DCE0E6);
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2386909C' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 10px center;
+    color: var(--text-primary, #1f2329);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.client-detail-stage-select:focus {
+    outline: none;
+    border-color: var(--primary-color, #C7000B);
+}
+.client-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 18px;
+    margin-bottom: 20px;
+}
+@media (max-width: 560px) {
+    .client-detail-grid { grid-template-columns: 1fr; }
+    .clients-grid { grid-template-columns: 1fr; }
+}
 .modal-content {
     background: #fff;
     border-radius: 12px;

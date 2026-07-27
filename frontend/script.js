@@ -4400,6 +4400,7 @@ function initEventListeners() {
                 if (page === 'dashboard') DashboardUI.loadStats();
                 if (page === 'history') HistoryUI.loadHistory();
                 if (page === 'settings') SettingsManager.updateSystemInfo();
+                if (page === 'clients') loadClientsPage();
                 if (page === 'products') { setTimeout(function() { try { ProductGraph._renderGrid(); } catch(e) { console.warn('[PageSwitch] 产品图谱渲染失败:', e); } }, 100); }
             }).catch(err => console.warn('[PageSwitch] 页面切换失败:', err));
         });
@@ -4418,6 +4419,7 @@ function initEventListeners() {
                 if (page === 'dashboard') DashboardUI.loadStats();
                 if (page === 'history') HistoryUI.loadHistory();
                 if (page === 'settings') SettingsManager.updateSystemInfo();
+                if (page === 'clients') loadClientsPage();
                 if (page === 'mine') { try { AuthManager._updateMineCard(); MineUI.syncCounts(); } catch(e) {} }
                 if (page === 'products') { setTimeout(function() { try { ProductGraph._renderGrid(); } catch(e) { console.warn('[PageSwitch] 产品图谱渲染失败:', e); } }, 100); }
             }).catch(err => console.warn('[PageSwitch] 页面切换失败:', err));
@@ -4489,6 +4491,7 @@ function initEventListeners() {
                 if (page === 'dashboard') DashboardUI.loadStats();
                 if (page === 'history') HistoryUI.loadHistory();
                 if (page === 'settings') SettingsManager.updateSystemInfo();
+                if (page === 'clients') loadClientsPage();
                 if (page === 'products') { setTimeout(function() { try { ProductGraph._renderGrid(); } catch(e) { console.warn('[PageSwitch] 产品图谱渲染失败:', e); } }, 100); }
             }).catch(err => console.warn('[PageSwitch] 页面切换失败:', err));
         });
@@ -5339,6 +5342,7 @@ function initEventListeners() {
                 closeClientModal();
                 State.currentClientId = (c.id != null) ? c.id : (id ? Number(id) : State.currentClientId);
                 loadClients();
+                if (document.getElementById('page-clients')?.classList.contains('active')) loadClientsPage();
             })
             .catch(err => { err.json?.().then?.(e => UI.showToast(e.detail || '保存失败', 'error')); });
     }
@@ -5484,6 +5488,173 @@ function initEventListeners() {
     document.getElementById('client-manage-modal')?.addEventListener('click', (e) => {
         if (e.target === document.getElementById('client-manage-modal')) closeClientManage();
     });
+
+    // ===== 客户管理页面（一级入口：列表 + 详情，P6） =====
+    const STAGE_OPTIONS = ['初步接触', '需求调研', '方案报价', '商务谈判', '已成交', '已流失'];
+    let _clientsAll = [];
+    let _clientsKeyword = '';
+    let _clientsStage = '';
+
+    function loadClientsPage() {
+        const grid = document.getElementById('clients-grid');
+        if (!AuthManager.isLoggedIn()) {
+            if (grid) grid.innerHTML = '<div class="clients-empty">请先登录后查看客户档案</div>';
+            return;
+        }
+        if (grid) grid.innerHTML = '<div class="clients-empty">加载中…</div>';
+        document.getElementById('clients-list-view').style.display = '';
+        document.getElementById('client-detail-view').style.display = 'none';
+        fetch(`${Config.API_BASE_URL}/clients`, { headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` } })
+            .then(r => r.ok ? r.json() : { clients: [] })
+            .then(data => {
+                _clientsAll = data.clients || [];
+                State.clients = _clientsAll;
+                if (window.HistoryUI) HistoryUI.refreshClientFilterOptions();
+                renderClientCards();
+            })
+            .catch(() => { if (grid) grid.innerHTML = '<div class="clients-empty">加载失败</div>'; });
+    }
+
+    function renderClientCards() {
+        const grid = document.getElementById('clients-grid');
+        if (!grid) return;
+        const kw = (_clientsKeyword || '').trim().toLowerCase();
+        const stage = _clientsStage || '';
+        const list = _clientsAll.filter(c => {
+            if (stage && c.stage !== stage) return false;
+            if (kw) {
+                const hay = [c.name, c.industry, c.contact_name, c.region, c.tags].filter(Boolean).join(' ').toLowerCase();
+                if (!hay.includes(kw)) return false;
+            }
+            return true;
+        });
+        if (!_clientsAll.length) {
+            grid.innerHTML = '<div class="clients-empty">暂无客户档案，点击「+ 新建客户」创建第一个客户</div>';
+            return;
+        }
+        if (!list.length) {
+            grid.innerHTML = '<div class="clients-empty">没有符合筛选条件的客户</div>';
+            return;
+        }
+        grid.innerHTML = list.map(c => {
+            const stageCls = c.stage ? 'stage-' + c.stage : '';
+            return `
+            <div class="client-card" data-id="${c.id}">
+                <div class="client-card-head">
+                    <div class="client-card-name">${escapeHtml(c.name)}</div>
+                    ${c.stage ? `<span class="client-stage-badge ${stageCls}">${escapeHtml(c.stage)}</span>` : ''}
+                </div>
+                <div class="client-card-meta">${escapeHtml([c.industry, c.company_size].filter(Boolean).join(' · ') || '未填写行业/规模')}</div>
+                ${c.contact_name ? `<div class="client-card-contact">联系人：${escapeHtml(c.contact_name)}${c.contact_title ? '（' + escapeHtml(c.contact_title) + '）' : ''}</div>` : ''}
+                <div class="client-card-foot">
+                    <button class="client-card-go" data-id="${c.id}">查看详情 →</button>
+                </div>
+            </div>`;
+        }).join('');
+        grid.querySelectorAll('.client-card').forEach(el => {
+            el.addEventListener('click', () => showClientDetail(Number(el.dataset.id)));
+        });
+    }
+
+    async function showClientDetail(id) {
+        document.getElementById('clients-list-view').style.display = 'none';
+        const dv = document.getElementById('client-detail-view');
+        const content = document.getElementById('client-detail-content');
+        dv.style.display = '';
+        content.innerHTML = '<div class="clients-empty">加载中…</div>';
+        try {
+            const resp = await fetch(`${Config.API_BASE_URL}/clients/${id}`, { headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` } });
+            if (!resp.ok) throw new Error('加载失败');
+            const c = await resp.json();
+            const fields = [
+                ['所属行业', c.industry], ['企业规模', c.company_size], ['所在区域', c.region],
+                ['联系人', c.contact_name], ['职位', c.contact_title], ['电话', c.contact_phone],
+                ['邮箱', c.contact_email], ['预算范围', c.budget],
+                ['核心痛点', c.pain_points], ['决策链', c.decision_chain], ['标签', c.tags], ['其他备注', c.note]
+            ].filter(f => f[1]);
+            const grid = fields.map(([label, val]) => `
+                <div class="client-detail-field">
+                    <span class="client-detail-label">${escapeHtml(label)}</span>
+                    <span class="client-detail-value">${escapeHtml(String(val))}</span>
+                </div>`).join('');
+            const solutions = (c.solutions || []);
+            const solHtml = solutions.length ? solutions.map(s => `
+                <div class="client-solution-item" data-id="${s.id}">
+                    <div class="client-solution-title">${escapeHtml((s.title || s.demand_text || '未命名方案').substring(0, 80))}</div>
+                    <div class="client-solution-meta">${escapeHtml(s.industry || '')} · ${escapeHtml((s.created_at || '').replace('T', ' ').substring(0, 16))}${s.version ? ' · v' + s.version : ''}</div>
+                </div>`).join('') : '<div class="client-solution-empty">该客户暂无关联方案</div>';
+            const stageOpts = STAGE_OPTIONS.map(s => `<option ${c.stage === s ? 'selected' : ''}>${s}</option>`).join('');
+            content.innerHTML = `
+                <div class="client-detail-head">
+                    <div class="client-detail-title-wrap">
+                        <div class="client-detail-title">${escapeHtml(c.name)}</div>
+                        <div class="client-detail-sub">${escapeHtml([c.industry, c.company_size].filter(Boolean).join(' · ') || '')}</div>
+                    </div>
+                    <div class="client-detail-actions">
+                        <button class="btn btn-primary btn-sm" id="cd-match-btn"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg> 为该客户发起匹配</button>
+                        <button class="btn btn-secondary btn-sm" id="cd-edit-btn">编辑</button>
+                        <button class="btn btn-secondary btn-sm" id="cd-del-btn">删除</button>
+                    </div>
+                </div>
+                <div class="client-detail-stage-row">
+                    <span class="client-detail-label">商机阶段</span>
+                    <select id="cd-stage" class="client-detail-stage-select"><option value="">（未设定）</option>${stageOpts}</select>
+                </div>
+                <div class="client-detail-grid">${grid}</div>
+                <div class="client-detail-section-title">名下方案（${solutions.length}）</div>
+                <div id="cd-solutions">${solHtml}</div>
+            `;
+            content.querySelector('#cd-match-btn')?.addEventListener('click', () => startMatchForClient(id));
+            content.querySelector('#cd-edit-btn')?.addEventListener('click', () => openClientModal(id));
+            content.querySelector('#cd-del-btn')?.addEventListener('click', () => {
+                if (!confirm(`确定删除客户「${c.name}」？其 Agent 记忆将一并清除。`)) return;
+                fetch(`${Config.API_BASE_URL}/clients/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` } })
+                    .then(r => {
+                        if (r.ok) { UI.showToast('已删除客户', 'success'); if (State.currentClientId === id) State.currentClientId = null; loadClients(); backToClientsList(); loadClientsPage(); }
+                        else UI.showToast('删除失败', 'error');
+                    })
+                    .catch(() => UI.showToast('删除失败', 'error'));
+            });
+            content.querySelector('#cd-stage')?.addEventListener('change', async (e) => {
+                const stage = e.target.value || null;
+                try {
+                    const r = await fetch(`${Config.API_BASE_URL}/clients/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AuthManager.getToken()}` },
+                        body: JSON.stringify({ stage })
+                    });
+                    if (r.ok) { UI.showToast('商机阶段已更新', 'success'); const idx = _clientsAll.findIndex(x => x.id === id); if (idx >= 0) _clientsAll[idx].stage = stage; }
+                    else UI.showToast('更新失败', 'error');
+                } catch { UI.showToast('更新失败', 'error'); }
+            });
+            content.querySelectorAll('.client-solution-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const sid = Number(el.dataset.id);
+                    if (window.HistoryUI) { HistoryUI.currentType = 'match'; HistoryUI.showDetail(sid); }
+                });
+            });
+        } catch (e) {
+            content.innerHTML = '<div class="clients-empty">加载失败</div>';
+        }
+    }
+
+    function backToClientsList() {
+        document.getElementById('client-detail-view').style.display = 'none';
+        document.getElementById('clients-list-view').style.display = '';
+    }
+
+    function startMatchForClient(id) {
+        State.currentClientId = id;
+        PageTransition.switchTo('solution').then(() => {
+            ensureClientBar();
+            UI.showToast('已选中该客户，填写需求即可为其发起匹配', 'info');
+        });
+    }
+
+    document.getElementById('clients-new-btn')?.addEventListener('click', () => openClientModal());
+    document.getElementById('client-detail-back')?.addEventListener('click', backToClientsList);
+    document.getElementById('clients-search-input')?.addEventListener('input', (e) => { _clientsKeyword = e.target.value; renderClientCards(); });
+    document.getElementById('clients-stage-filter')?.addEventListener('change', (e) => { _clientsStage = e.target.value; renderClientCards(); });
 
     // ===== 匹配模式切换 =====
     const modeToggle = document.getElementById('mode-toggle');

@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260727g">
+<link rel="stylesheet" href="style.css?v=20260727h">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
@@ -215,6 +215,10 @@
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
                     <span class="nav-text">方案匹配</span>
                 </button>
+                <button class="sidebar-item" data-page="clients">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
+                    <span class="nav-text">客户管理</span>
+                </button>
                 <button class="sidebar-item" data-page="competitor">
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
                     <span class="nav-text">竞品分析</span>
@@ -330,6 +334,10 @@
         <button class="mobile-nav-item" data-page="dashboard">
             <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
             <span class="mobile-nav-label">仪表盘</span>
+        </button>
+        <button class="mobile-nav-item" data-page="clients">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
+            <span class="mobile-nav-label">客户</span>
         </button>
         <button class="mobile-nav-item" data-page="knowledge">
             <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
@@ -1152,6 +1160,38 @@
                 </div>
 
 
+            </div>
+
+            <!-- 客户管理页面（总入口：列表 + 客户详情） -->
+            <div id="page-clients" class="page">
+                <header class="page-header">
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg> 客户管理 CRM</h2>
+                    <p class="page-subtitle">以客户为中心组织方案工作：查看客户全景、名下方案时间线，并一键为其发起匹配</p>
+                </header>
+
+                <!-- 列表视图 -->
+                <div id="clients-list-view">
+                    <div class="clients-toolbar">
+                        <div class="clients-search">
+                            <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+                            <input type="text" id="clients-search-input" placeholder="搜索客户名称 / 行业 / 联系人">
+                        </div>
+                        <select id="clients-stage-filter" class="clients-filter-select">
+                            <option value="">全部商机阶段</option>
+                            <option>初步接触</option><option>需求调研</option><option>方案报价</option><option>商务谈判</option><option>已成交</option><option>已流失</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" id="clients-new-btn">+ 新建客户</button>
+                    </div>
+                    <div class="clients-grid" id="clients-grid">
+                        <div class="clients-empty">加载中…</div>
+                    </div>
+                </div>
+
+                <!-- 详情视图 -->
+                <div id="client-detail-view" style="display:none;">
+                    <button class="btn btn-secondary btn-sm" id="client-detail-back"><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg> 返回客户列表</button>
+                    <div id="client-detail-content"></div>
+                </div>
             </div>
 
             <!-- Dashboard 数据仪表盘页面 -->
@@ -2102,7 +2142,7 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260727g"></script>
+    <script src="script.js?v=20260727h"></script>
     <script src="js/voice-input.js?v=20260726f"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260716f"></script>
