@@ -11494,6 +11494,31 @@ table tbody tr:hover {
 .client-form-grid .form-row.full {
     grid-column: 1 / -1;
 }
+/* 全宽行内的输入框也要统一尺寸（!important 确保不被全局规则覆盖） */
+.client-form-grid .form-row.full input,
+.client-form-grid .form-row.full select,
+.client-form-grid .form-row.full textarea,
+#cf-pain_points,
+#cf-decision_chain,
+#cf-note {
+    width: 100% !important;
+    height: 40px !important;
+    border-radius: 10px !important;
+    padding: 10px 12px !important;
+    border: 1px solid #e3e3e8 !important;
+    font-size: 13px !important;
+    font-family: inherit !important;
+    background: #fff !important;
+    color: #222 !important;
+    box-sizing: border-box !important;
+}
+.client-form-grid .form-row.full textarea,
+#cf-pain_points,
+#cf-note {
+    min-height: 68px !important;
+    height: auto !important;
+    resize: vertical !important;
+}
 .client-form-grid label {
     font-size: 12px;
     color: #555;
