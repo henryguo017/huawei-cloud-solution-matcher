@@ -1225,10 +1225,15 @@ async def _select_relevant_client_solutions(new_demand: str, solutions: list, to
             scored.append((sim, s))
         scored.sort(key=lambda x: x[0], reverse=True)
         above = [s for sim, s in scored if sim >= 0.30]
-        chosen = above[:top_k] if above else solutions[:top_k]
-        if len(chosen) < top_k:
-            extra = [s for s in solutions if s not in chosen]
-            chosen = chosen + extra[:top_k - len(chosen)]
+        if above:
+            # 只注入相关项，宁缺毋滥（符合"智能化选取"设计：不灌无关历史）
+            chosen = above[:top_k]
+        elif scored and scored[0][0] >= 0.15:
+            # 全部低于 0.30 但有一条稍相关：兜底取相似度最高的一条，避免全丢
+            chosen = [scored[0][1]]
+        else:
+            # 完全无关：不注入任何历史，避免噪声干扰（客户档案仍会注入）
+            chosen = []
         return chosen
     except Exception as e:
         logger.warning(f"[客户上下文] 嵌入排序失败，回退时间倒序: {e}")
