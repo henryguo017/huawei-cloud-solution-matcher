@@ -5319,6 +5319,7 @@ function initEventListeners() {
     function closeClientModal() {
         const modal = document.getElementById('client-modal');
         if (modal) modal.style.display = 'none';
+        document.body.style.overflow = '';
     }
     function saveClientModal() {
         const id = document.getElementById('cf-id').value;
@@ -5342,7 +5343,12 @@ function initEventListeners() {
                 closeClientModal();
                 State.currentClientId = (c.id != null) ? c.id : (id ? Number(id) : State.currentClientId);
                 loadClients();
-                if (document.getElementById('page-clients')?.classList.contains('active')) loadClientsPage();
+                // 确保列表视图可见（防止停留在详情视图或空白状态）
+                const listView = document.getElementById('clients-list-view');
+                const detailView = document.getElementById('client-detail-view');
+                if (listView) listView.style.display = '';
+                if (detailView) detailView.style.display = 'none';
+                loadClientsPage();
             })
             .catch(err => { err.json?.().then?.(e => UI.showToast(e.detail || '保存失败', 'error')); });
     }
@@ -5658,6 +5664,16 @@ function initEventListeners() {
         if (newBtn) { openClientModal(); return; }
         const backBtn = e.target.closest('#client-detail-back');
         if (backBtn) { backToClientsList(); return; }
+        // 客户卡片点击 → 进入详情
+        const card = e.target.closest('.client-card');
+        if (card) { showClientDetail(Number(card.dataset.id)); return; }
+        // 名下方案条目点击 → 查看方案详情
+        const solItem = e.target.closest('.client-solution-item');
+        if (solItem) {
+            const sid = Number(solItem.dataset.id);
+            if (window.HistoryUI) { HistoryUI.currentType = 'match'; HistoryUI.showDetail(sid); }
+            return;
+        }
     });
     document.addEventListener('input', (e) => {
         if (e.target && e.target.id === 'clients-search-input') { _clientsKeyword = e.target.value; renderClientCards(); }
