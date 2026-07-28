@@ -164,7 +164,7 @@ if JWT_SECRET_KEY in _PLACEHOLDER_JWT_KEYS:
         stacklevel=2,
     )
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24小时
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "360"))  # 6小时
 
 # ==================== 验证码配置 ====================
 CAPTCHA_LENGTH = int(os.getenv("CAPTCHA_LENGTH", "4"))
