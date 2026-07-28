@@ -3352,7 +3352,7 @@ const HistoryUI = {
     refreshClientFilterOptions() {
         const sel = document.getElementById('history-client-filter');
         if (!sel) return;
-        const clients = (window.State && State.clients) || [];
+        const clients = (typeof State !== 'undefined' && State.clients) || [];
         const current = this.currentClientFilter;
         sel.innerHTML = '<option value="">全部客户</option>' +
             clients.map(c => `<option value="${c.id}">${this.escapeHtml(c.name)}</option>`).join('');
@@ -3702,7 +3702,7 @@ const HistoryUI = {
                </div>` : '';
         // 关联客户档案（仅方案匹配）
         const clientOptions = (() => {
-            const list = (window.State && State.clients) || [];
+            const list = (typeof State !== 'undefined' && State.clients) || [];
             let opts = '<option value="">（未关联客户）</option>';
             if (item.client_id && !list.some(c => c.id === item.client_id)) {
                 opts += `<option value="${item.client_id}" selected>${this.escapeHtml(item.client_name || '已删除的客户')}</option>`;
@@ -5279,7 +5279,7 @@ function initEventListeners() {
                     clients.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
                 if (prev) sel.value = String(prev);
                 State.currentClientId = sel.value ? Number(sel.value) : null;
-                if (window.HistoryUI) HistoryUI.refreshClientFilterOptions();
+                if (typeof HistoryUI !== 'undefined') HistoryUI.refreshClientFilterOptions();
             })
             .catch(() => {});
     }
@@ -5403,7 +5403,7 @@ function initEventListeners() {
             const data = resp.ok ? await resp.json() : { clients: [] };
             const clients = data.clients || [];
             State.clients = clients;
-            if (window.HistoryUI) HistoryUI.refreshClientFilterOptions();
+            if (typeof HistoryUI !== 'undefined') HistoryUI.refreshClientFilterOptions();
             if (!clients.length) {
                 listEl.innerHTML = '<div class="client-manage-empty">暂无客户档案，点击「+ 新建客户」创建</div>';
                 const detail = document.getElementById('client-manage-detail');
@@ -5516,7 +5516,7 @@ function initEventListeners() {
             .then(data => {
                 _clientsAll = data.clients || [];
                 State.clients = _clientsAll;
-                if (window.HistoryUI) HistoryUI.refreshClientFilterOptions();
+                if (typeof HistoryUI !== 'undefined') HistoryUI.refreshClientFilterOptions();
                 renderClientCards();
             })
             .catch(() => { if (grid) grid.innerHTML = '<div class="clients-empty">加载失败</div>'; });
@@ -5637,7 +5637,7 @@ function initEventListeners() {
             content.querySelectorAll('.client-solution-item').forEach(el => {
                 el.addEventListener('click', () => {
                     const sid = Number(el.dataset.id);
-                    if (window.HistoryUI) { HistoryUI.currentType = 'match'; HistoryUI.showDetail(sid); }
+                    if (typeof HistoryUI !== 'undefined') { HistoryUI.currentType = 'match'; HistoryUI.showDetail(sid); }
                 });
             });
         } catch (e) {
@@ -5671,7 +5671,7 @@ function initEventListeners() {
         const solItem = e.target.closest('.client-solution-item');
         if (solItem) {
             const sid = Number(solItem.dataset.id);
-            if (window.HistoryUI) { HistoryUI.currentType = 'match'; HistoryUI.showDetail(sid); }
+            if (typeof HistoryUI !== 'undefined') { HistoryUI.currentType = 'match'; HistoryUI.showDetail(sid); }
             return;
         }
     });
