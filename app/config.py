@@ -149,7 +149,20 @@ SUPPORTED_COMPETITORS = [
 ]
 
 # ==================== JWT认证配置 ====================
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "huawei-cloud-solution-matcher-secret-key-change-in-production")
+_DEFAULT_JWT_KEY = "huawei-cloud-solution-matcher-secret-key-change-in-production"
+# .env.example 中的占位值，直接复制未改同样视为不安全
+_PLACEHOLDER_JWT_KEYS = {
+    _DEFAULT_JWT_KEY,
+    "change-in-production-please-set-a-random-secret-key",
+}
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", _DEFAULT_JWT_KEY)
+if JWT_SECRET_KEY in _PLACEHOLDER_JWT_KEYS:
+    import warnings
+    warnings.warn(
+        "[SECURITY] JWT_SECRET_KEY 正在使用默认/占位密钥，登录令牌可被伪造！"
+        "请在 .env 中设置随机强密钥（例如: python -c \"import secrets;print(secrets.token_urlsafe(48))\"）。",
+        stacklevel=2,
+    )
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24小时
 
