@@ -6,6 +6,7 @@ from app.models.user_models import (
 )
 from app.services.auth_service import AuthService
 from app.utils.captcha_utils import generate_captcha
+from app.utils.auth_utils import create_access_token
 from api.auth_dependencies import get_current_user
 from api.dependencies import get_achievement_service_dep
 from typing import Optional
@@ -93,6 +94,32 @@ async def logout(current_user: dict = Depends(get_current_user)):
             detail=result["message"]
         )
     return {"message": result["message"]}
+
+@router.post("/refresh")
+async def refresh_token(current_user: dict = Depends(get_current_user)):
+    """
+    滑动续期：用当前【仍有效】的 token 换发一个新 token，有效期重置为完整时长。
+    安全性由 get_current_user 保证 —— 仅当原 token 未过期且 token_version 校验通过时才放行；
+    过期或已登出（token_version 递增）的 token 会被依赖直接拒为 401，无法续期。
+    """
+    token, expires_in = create_access_token(
+        current_user["id"],
+        current_user["username"],
+        current_user["role"],
+        current_user.get("token_version", 1)
+    )
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": expires_in,
+        "user": {
+            "id": current_user["id"],
+            "username": current_user["username"],
+            "email": current_user.get("email"),
+            "role": current_user["role"],
+            "status": current_user["status"],
+        }
+    }
 
 @router.patch("/profile")
 async def update_profile(

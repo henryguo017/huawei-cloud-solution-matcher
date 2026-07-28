@@ -91,6 +91,13 @@ const Config = {
 const AuthManager = {
     STORAGE_KEY: 'hwcloud_auth',
 
+    // === 登录续期（滑动续期 + 到期提示 + 优雅掉线）相关状态 ===
+    renewalTimer: null,        // setInterval 句柄
+    activityBound: false,      // 是否已绑定活动监听
+    lastActivityAt: 0,         // 最近一次用户活动时间戳
+    expireSoonShown: false,    // 临近过期提示条当前是否显示
+    expiredHandled: false,     // 是否已处理过真过期（防重复）
+
     // 初始化：从 localStorage 恢复登录态
     async init() {
         const saved = localStorage.getItem(this.STORAGE_KEY);
@@ -111,6 +118,9 @@ const AuthManager = {
                 this._clearAuth();
             }
         }
+        // 启动登录续期机制（滑动续期 + 到期提示 + 优雅掉线）
+        this._bindActivity();
+        this._startRenewalTimer();
     },
 
     // 获取验证码
@@ -214,6 +224,12 @@ const AuthManager = {
     // 退出
     async logout() {
         const token = this.getToken();
+        // 停止续期定时器并清理提示条/状态
+        this._stopRenewalTimer();
+        this._hideExpireSoonBanner();
+        this._hideExpiredBanner();
+        this.expiredHandled = false;
+        this.expireSoonShown = false;
         // 先立即清除本地 UI 状态，让用户立即感受到退出
         this._clearAuth();
         this._updateUI();
@@ -426,6 +442,152 @@ const AuthManager = {
         // 关闭可能打开的详情弹窗
         const detailModal = document.getElementById('history-detail-modal');
         if (detailModal) detailModal.style.display = 'none';
+    },
+
+    // === 登录续期机制 ===
+
+    // 读取 localStorage 中的认证数据（带容错）
+    _readSaved() {
+        try {
+            const saved = localStorage.getItem(this.STORAGE_KEY);
+            if (!saved) return null;
+            const data = JSON.parse(saved);
+            if (!data || !data.token || !data.expiresAt) return null;
+            return data;
+        } catch (e) { return null; }
+    },
+
+    // 监听用户活动，更新最近活动时间戳（用于判断是否需要滑动续期）
+    _bindActivity() {
+        if (this.activityBound) return;
+        this.activityBound = true;
+        this.lastActivityAt = Date.now();
+        const mark = () => { this.lastActivityAt = Date.now(); };
+        ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'input'].forEach(evt =>
+            window.addEventListener(evt, mark, { passive: true })
+        );
+    },
+
+    // 启动续期定时器（每 30 秒检查一次）
+    _startRenewalTimer() {
+        if (this.renewalTimer) clearInterval(this.renewalTimer);
+        this.renewalTimer = setInterval(() => { this._tick(); }, 30 * 1000);
+        // 启动后 1 秒先跑一次，处理"已在页面停留较久"的情况
+        setTimeout(() => { this._tick(); }, 1000);
+    },
+
+    // 停止续期定时器
+    _stopRenewalTimer() {
+        if (this.renewalTimer) {
+            clearInterval(this.renewalTimer);
+            this.renewalTimer = null;
+        }
+    },
+
+    // 每轮检查：第2层（临近提示）+ 第1层（滑动续期）+ 第3层（过期兜底）
+    async _tick() {
+        const saved = this._readSaved();
+        if (!saved) return; // 根本没登录
+        const remaining = saved.expiresAt - Date.now();
+
+        // 第3层：已过期 → 优雅掉线（保留结果页，仅清登录态 + 提示）
+        if (remaining <= 0) {
+            this._softExpire();
+            return;
+        }
+
+        // 第2层：临近过期（≤10 分钟）→ 黄色提示条
+        if (remaining <= 10 * 60 * 1000) {
+            this._showExpireSoonBanner(Math.max(1, Math.ceil(remaining / 60000)));
+        }
+
+        // 第1层：滑动续期（剩 ≤60 分钟 且 近 30 分钟内有活动）→ 静默换新
+        if (remaining <= 60 * 60 * 1000) {
+            const idleMs = Date.now() - this.lastActivityAt;
+            if (idleMs <= 30 * 60 * 1000) {
+                await this._silentRefresh();
+            }
+        }
+    },
+
+    // 用当前 token 静默换发新 token
+    async _silentRefresh() {
+        try {
+            const resp = await fetch(`${Config.API_BASE_URL}/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${this.getToken()}` }
+            });
+            if (!resp.ok) return; // 服务端拒签（过期/版本失效），交给过期逻辑处理
+            const data = await resp.json();
+            if (data && data.access_token) {
+                this._saveAuth(data.access_token, data.user || State.user, data.expires_in);
+                this._hideExpireSoonBanner(); // 已续期，隐藏临近提示
+            }
+        } catch (e) { /* 网络抖动忽略，下个周期再试 */ }
+    },
+
+    // 第3层：真过期兜底——清登录态但保留结果页，提示重新登录
+    _softExpire() {
+        if (State.isQuickDemo) return;
+        if (this.expiredHandled) return;
+        this.expiredHandled = true;
+        this._hideExpireSoonBanner();
+        // 仅清登录态，不调用 _resetView()，保留当前结果页内容
+        this._clearAuth();
+        this._updateUI();
+        this._showExpiredBanner();
+    },
+
+    // 第2层：临近过期黄色提示条
+    _showExpireSoonBanner(minutes) {
+        if (State.isQuickDemo) return;
+        let bar = document.getElementById('auth-expire-soon-banner');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'auth-expire-soon-banner';
+            bar.className = 'auth-expire-banner auth-expire-soon-banner';
+            bar.innerHTML = `
+                <span class="auth-expire-text"></span>
+                <button type="button" class="auth-expire-keep-btn" id="auth-expire-keep-btn">继续保持登录</button>
+            `;
+            document.body.appendChild(bar);
+            document.getElementById('auth-expire-keep-btn')?.addEventListener('click', () => {
+                this._silentRefresh();
+            });
+        }
+        bar.querySelector('.auth-expire-text').textContent =
+            `登录状态将于 ${minutes} 分钟后过期，点击「继续保持登录」可延续会话`;
+        bar.style.display = 'flex';
+    },
+
+    _hideExpireSoonBanner() {
+        const bar = document.getElementById('auth-expire-soon-banner');
+        if (bar) bar.style.display = 'none';
+    },
+
+    // 第3层：已过期红色提示条
+    _showExpiredBanner() {
+        if (State.isQuickDemo) return;
+        let bar = document.getElementById('auth-expired-banner');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'auth-expired-banner';
+            bar.className = 'auth-expire-banner auth-expired-banner';
+            bar.innerHTML = `
+                <span class="auth-expire-text">登录已过期，请重新登录以继续（当前页面内容已保留）</span>
+                <button type="button" class="auth-expire-login-btn" id="auth-expired-login-btn">重新登录</button>
+            `;
+            document.body.appendChild(bar);
+            document.getElementById('auth-expired-login-btn')?.addEventListener('click', () => {
+                this._openModal();
+            });
+        }
+        bar.style.display = 'flex';
+    },
+
+    _hideExpiredBanner() {
+        const bar = document.getElementById('auth-expired-banner');
+        if (bar) bar.style.display = 'none';
     },
 
     async _verifyToken() {
