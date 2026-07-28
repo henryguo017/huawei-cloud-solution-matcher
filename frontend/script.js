@@ -6679,11 +6679,11 @@ function initEventListeners() {
         }
     });
 
-    document.getElementById('fav-solution-btn')?.addEventListener('click', () => {
+    document.getElementById('fav-solution-btn')?.addEventListener('click', async () => {
         const cached = State.resultCache.solution;
         if (!cached) return;
         const name = (cached.demand || '方案匹配结果').substring(0, 50);
-        FavoriteManager.toggle(name, cached.answer || '', '');
+        await FavoriteManager.toggle(name, cached.answer || '', '');
         FavoriteManager._updateResultBtn('fav-solution-btn', name);
     });
     
@@ -6862,11 +6862,11 @@ function initEventListeners() {
         }
     });
 
-    document.getElementById('fav-competitor-btn')?.addEventListener('click', () => {
+    document.getElementById('fav-competitor-btn')?.addEventListener('click', async () => {
         const cached = State.resultCache.competitor;
         if (!cached) return;
         const name = `华为云 vs ${cached.competitor} 竞争分析报告`;
-        FavoriteManager.toggle(name, cached.answer || '', cached.industry || '');
+        await FavoriteManager.toggle(name, cached.answer || '', cached.industry || '');
         FavoriteManager._updateResultBtn('fav-competitor-btn', name);
     });
     
