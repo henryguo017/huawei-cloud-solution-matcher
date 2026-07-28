@@ -80,6 +80,7 @@ class MatchResponse(BaseModel):
     version: Optional[int] = Field(default=None, description="本次保存的版本号，从 1 开始")
     is_final: Optional[bool] = Field(default=False, description="是否为定稿版本")
     title: Optional[str] = Field(default=None, description="方案分组标题（用于历史面板展示）")
+    client_context_used: Optional[Dict[str, Any]] = Field(default=None, description="本次匹配是否参考了某客户背景与历史方案。为 dict {client_name, history_count} 时表示已参考；无则为 null")
 
 class AnalyzeResponse(BaseModel):
     answer: str = Field(..., description="分析结果（Markdown格式）")

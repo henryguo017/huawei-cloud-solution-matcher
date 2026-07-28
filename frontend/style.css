@@ -1677,6 +1677,18 @@ body::after {
     margin-bottom: var(--spacing-lg);
 }
 
+/* 方案 A：结果页"本次已参考客户背景与历史方案 N 条"小字提示 */
+.client-context-hint {
+    margin: 0 0 var(--spacing-md);
+    padding: 8px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    background: rgba(199, 0, 11, 0.04);
+    border-left: 3px solid var(--primary);
+    border-radius: var(--radius-sm);
+}
+
 /* 快速体验引导条：免登录体验结果顶部，引导注册（品牌红 callout，去「AI 味」渐变） */
 .quick-demo-banner {
     display: none; /* 默认隐藏，script.js 按 State.isQuickDemo 显隐 */

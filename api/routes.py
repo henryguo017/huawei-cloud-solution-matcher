@@ -35,7 +35,7 @@ from api.dependencies import (
     get_competitor_analyzer_for_user,
     _user_kb_cache,
 )
-from app.models.llm import get_llm_response
+from app.models.llm import get_llm_response, get_embedding_vectors
 from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context
 from app.services.usage_logger import UsageLoggerService
 from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY, COMPETITOR_DIRECTORY, SUPPORTED_INDUSTRIES
@@ -296,7 +296,7 @@ async def pricing_products():
     }
 
 
-async def _build_match_response(result: dict, user, request, original_demand: str, user_id: int) -> dict:
+async def _build_match_response(result: dict, user, request, original_demand: str, user_id: int, client_context_meta: Optional[dict] = None) -> dict:
     """标准/向导匹配结果统一后处理：来源文档 + 历史 + 成就 → MatchResponse 字段 dict。
     供 /match 与 /match/stream 共用，单一事实来源避免逻辑分叉。"""
     source_docs = [
@@ -374,6 +374,7 @@ async def _build_match_response(result: dict, user, request, original_demand: st
         "version": _version_meta.get("version"),
         "is_final": _version_meta.get("is_final", False),
         "title": _version_meta.get("title"),
+        "client_context_used": client_context_meta,
     }
 
 
@@ -419,11 +420,18 @@ async def match_solution(
                 )
                 logger.info(f"[匹配] 已并入 {len(request.customer_files)} 个客户资料文件")
 
-        result = await matcher.match(enriched_demand)
+        # 方案 A：关联客户时注入『背景 + 历史方案』上下文（智能相关性选取）
+        client_block, client_meta = "", None
+        if request.client_id and user_id > 0:
+            client_block, client_meta = await _build_client_context_block(
+                request.client_id, user_id, request.demand
+            )
+
+        result = await matcher.match(enriched_demand, client_context=client_block)
 
         logger.info("解决方案匹配成功")
 
-        resp = await _build_match_response(result, user, request, original_demand, user_id)
+        resp = await _build_match_response(result, user, request, original_demand, user_id, client_context_meta=client_meta)
         return MatchResponse(**resp)
     except Exception as e:
         logger.error(f"解决方案匹配失败: {e}")
@@ -462,12 +470,19 @@ async def match_solution_stream(
                 f"{request.demand}"
             )
 
+        # 方案 A：关联客户时注入『背景 + 历史方案』上下文
+        client_block, client_meta = "", None
+        if request.client_id and user_id > 0:
+            client_block, client_meta = await _build_client_context_block(
+                request.client_id, user_id, request.demand
+            )
+
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
 
         async def run_match():
             try:
-                await matcher.match_stream(enriched_demand, queue)
+                await matcher.match_stream(enriched_demand, queue, client_context=client_block)
             except Exception as e:
                 logger.error(f"[match/stream] 执行失败: {e}")
                 await queue.put({"type": "error", "message": str(e)})
@@ -500,7 +515,7 @@ async def match_solution_stream(
                     break
                 if event.get("type") == "result":
                     # 统一后处理（历史/成就/来源文档），与 /match 共用 _build_match_response
-                    payload = await _build_match_response(event["data"], user, request, original_demand, user_id)
+                    payload = await _build_match_response(event["data"], user, request, original_demand, user_id, client_context_meta=client_meta)
                     yield f"event: result\ndata: {json.dumps({'type': 'result', 'data': payload}, ensure_ascii=False, default=_sse_json_default)}\n\n"
                     continue
                 # token / step 透传
@@ -623,7 +638,7 @@ def _resolve_agent_session_id(user: dict, client_id: Optional[int]) -> str:
     return str(user['id'])
 
 
-async def _process_and_emit_agent_result(queue, result: dict, user: dict, original_demand: str, is_quick_demo: bool, group_id=None, client_id=None):
+async def _process_and_emit_agent_result(queue, result: dict, user: dict, original_demand: str, is_quick_demo: bool, group_id=None, client_id=None, client_context_meta: Optional[dict] = None):
     """
     Agent 流式结束后统一处理：保存历史（含版本化）、成就检测、提取来源文档、推送 result 事件。
     供 /agent/match/stream 与 /agent/clarify 共用，单一事实来源避免逻辑分叉。
@@ -708,6 +723,7 @@ async def _process_and_emit_agent_result(queue, result: dict, user: dict, origin
 
     result["newly_unlocked"] = newly_unlocked
     result["history_id"] = history_id
+    result["client_context_used"] = client_context_meta
 
     # 从 tool_calls 中提取 source_documents（与非流式 /agent/match 保持一致）
     _sdocs = []
@@ -757,6 +773,13 @@ async def agent_match_solution(
         agent = get_agent()
         session_id = _resolve_agent_session_id(user, request.client_id)
 
+        # 方案 A：关联客户时构造『背景 + 历史方案』上下文
+        client_block, client_meta = "", None
+        if request.client_id and user_id > 0:
+            client_block, client_meta = await _build_client_context_block(
+                request.client_id, user_id, request.demand
+            )
+
         # 阶段1：把上传的客户文件路径注入 Agent，引导其用 read_customer_file 读取
         extra_context = ""
         if request.customer_files:
@@ -766,6 +789,10 @@ async def agent_match_solution(
                 "再综合生成方案]\n" + file_list
             )
             logger.info(f"[Agent] 注入 {len(request.customer_files)} 个客户资料文件路径")
+
+        # 方案 A：把客户背景上下文拼进 Agent 提示词（不与文件注入冲突）
+        if client_block:
+            extra_context = (extra_context + "\n\n" if extra_context else "") + client_block
 
         result = await agent.run(
             user_input=request.demand,
@@ -847,7 +874,8 @@ async def agent_match_solution(
             source_documents=source_docs,
             solution_json=result.get("solution_json"),
             history_id=history_id,
-            newly_unlocked=achievement_result if user and user.get('id') else None
+            newly_unlocked=achievement_result if user and user.get('id') else None,
+            client_context_used=client_meta,
         )
     except Exception as e:
         logger.error(f"[Agent] 智能匹配失败: {e}")
@@ -897,6 +925,13 @@ async def agent_match_stream(
 
                 agent = get_agent()
 
+                # 方案 A：关联客户时构造『背景 + 历史方案』上下文
+                client_block, client_meta = "", None
+                if request.client_id and user.get('id'):
+                    client_block, client_meta = await _build_client_context_block(
+                        request.client_id, user['id'], request.demand
+                    )
+
                 # 阶段1：注入客户文件路径，引导 Agent 用 read_customer_file 读取
                 extra_context = ""
                 if request.customer_files:
@@ -905,6 +940,10 @@ async def agent_match_stream(
                         "\n\n[用户上传了以下客户资料文件，请务必先用 read_customer_file 工具逐一读取并提取需求要点，"
                         "再综合生成方案]\n" + file_list
                     )
+
+                # 方案 A：把客户背景上下文拼进 Agent 提示词
+                if client_block:
+                    extra_context = (extra_context + "\n\n" if extra_context else "") + client_block
 
                 result = await agent.run(
                     user_input=request.demand,
@@ -922,6 +961,7 @@ async def agent_match_stream(
                     queue, result, user, original_demand, request.is_quick_demo,
                     group_id=request.group_id,
                     client_id=request.client_id,
+                    client_context_meta=client_meta,
                 )
             except Exception as e:
                 logger.error(f"[Agent SSE] 执行失败: {e}")
@@ -1125,6 +1165,165 @@ def _client_row_to_dict(row) -> dict:
     for f in CLIENT_STRUCT_FIELDS:
         d[f] = row[f]
     return d
+
+
+# ============================================================
+# 方案 A：匹配时参考客户「基本信息 + 历史方案」（智能相关性选取）
+# 客户历史方案绝不进向量库/知识库，仅在本条匹配提示词内临时注入，用完即弃。
+# ============================================================
+def _cosine(a, b) -> float:
+    """余弦相似度（纯 Python，零依赖）"""
+    try:
+        import math
+        dot = sum(x * y for x, y in zip(a, b))
+        na = math.sqrt(sum(x * x for x in a))
+        nb = math.sqrt(sum(x * x for x in b))
+        if na == 0 or nb == 0:
+            return 0.0
+        return dot / (na * nb)
+    except Exception:
+        return 0.0
+
+
+def _extract_solution_excerpt(solution: str, maxlen: int = 1200) -> str:
+    """从历史方案正文截取要点摘录（在段落边界尽量截断）"""
+    if not solution:
+        return "（无方案内容）"
+    s = solution.strip()
+    if len(s) <= maxlen:
+        return s
+    cut = s[:maxlen]
+    # 尽量在换行处截断，避免句子被劈半
+    last_nl = cut.rfind("\n")
+    if last_nl > maxlen * 0.6:
+        cut = cut[:last_nl]
+    return cut + "\n…（摘录截断）"
+
+
+async def _select_relevant_client_solutions(new_demand: str, solutions: list, top_k: int = 5) -> list:
+    """用 BGE 嵌入（get_embedding_vectors，全局单例模型）对新需求与各历史方案做余弦相似度排序，取 top-k。
+
+    - 嵌入失败兜底按时间倒序（solutions 已倒序）取前 top_k。
+    - 相似度阈值 0.3 以上才视为『相关』；相关项不足 top_k 用时间倒序补充，保证总有内容。
+    """
+    if not solutions:
+        return []
+    try:
+        cand_texts = []
+        for s in solutions:
+            txt = f"{s.get('demand_text', '')}\n{(s.get('solution', '') or '')[:400]}"
+            cand_texts.append(txt[:800])
+        all_texts = [new_demand[:800]] + cand_texts
+        # 在独立线程跑本地模型推理，避免阻塞事件循环（模型常驻全局单例，无加载开销）
+        vecs = await asyncio.to_thread(get_embedding_vectors, all_texts)
+        if not vecs or len(vecs) != len(all_texts):
+            raise RuntimeError("嵌入返回为空或不完整")
+        q_vec = vecs[0]
+        scored = []
+        for i, s in enumerate(solutions):
+            sim = _cosine(q_vec, vecs[i + 1])
+            scored.append((sim, s))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        above = [s for sim, s in scored if sim >= 0.30]
+        chosen = above[:top_k] if above else solutions[:top_k]
+        if len(chosen) < top_k:
+            extra = [s for s in solutions if s not in chosen]
+            chosen = chosen + extra[:top_k - len(chosen)]
+        return chosen
+    except Exception as e:
+        logger.warning(f"[客户上下文] 嵌入排序失败，回退时间倒序: {e}")
+        return solutions[:top_k]
+
+
+async def _build_client_context_block(client_id: int, user_id: int, new_demand: str):
+    """方案 A 核心：为本次匹配构造『客户背景 + 历史方案摘要』上下文块。
+
+    返回 (block_text, meta)：
+      - block_text: 注入提示词的 Markdown 段落；无有效内容时返回 ("", None)。
+      - meta: dict {client_name, history_count} 供前端小字提示；无则返回 None。
+    严格按 user_id 归属校验，杜绝跨客户读取（物理隔离，绝不串客户）。
+    """
+    if not client_id or not user_id:
+        return "", None
+    try:
+        from app.utils.db_init import get_db_connection
+        # 1. 归属校验：该客户必须属于当前用户
+        uconn = get_db_connection()
+        try:
+            row = uconn.execute(
+                f"SELECT {_CLIENT_SELECT_COLS} FROM clients WHERE id=? AND user_id=?",
+                (client_id, user_id),
+            ).fetchone()
+        finally:
+            uconn.close()
+        if not row:
+            return "", None
+        client = _client_row_to_dict(row)
+        client_name = client.get("name", "")
+
+        # 2. 取该客户历史方案（含正文，上限 50）
+        solutions = get_usage_logger().get_client_solutions_with_body(user_id, client_id, limit=50)
+
+        # 3. 客户档案段落（小字段，始终注入，作为对齐锚点）
+        profile_lines = []
+        def _add(label, val, maxlen=500):
+            if val:
+                s = str(val)
+                if len(s) > maxlen:
+                    s = s[:maxlen] + "…"
+                profile_lines.append(f"- {label}：{s}")
+        _add("行业", client.get("industry"))
+        _add("规模", client.get("company_size"))
+        _add("地区", client.get("region"))
+        _add("商机阶段", client.get("stage"))
+        _add("预算", client.get("budget"))
+        _add("痛点", client.get("pain_points"))
+        _add("决策链", client.get("decision_chain"))
+        _add("标签", client.get("tags"))
+        _add("备注", client.get("note"))
+        profile_block = "\n".join(profile_lines)
+
+        # 4. 历史方案智能选取（BGE 嵌入余弦相似度）
+        selected = await _select_relevant_client_solutions(new_demand, solutions, top_k=5)
+
+        history_block = ""
+        if selected:
+            items = []
+            for idx, s in enumerate(selected, 1):
+                title = s.get("title") or s.get("demand_text") or f"历史方案{idx}"
+                demand = (s.get("demand_text") or "")[:200]
+                excerpt = _extract_solution_excerpt(s.get("solution") or "", maxlen=1200)
+                items.append(
+                    f"### 历史方案 {idx}（{title}）\n"
+                    f"- 当时需求：{demand}\n"
+                    f"- 方案要点摘录：\n{excerpt}"
+                )
+            history_block = "\n\n".join(items)
+
+        # 5. 拼装最终 block
+        parts = [
+            "## 客户背景与历史方案（仅供本次匹配对齐口径，请勿作为公开事实对外陈述）",
+            f"当前匹配关联客户：{client_name}（id={client_id}）",
+        ]
+        if profile_block:
+            parts.append("【客户档案】\n" + profile_block)
+        if history_block:
+            parts.append(
+                f"【该客户历史方案（智能选取最相关的 {len(selected)} / 共 {len(solutions)} 条）】\n"
+                + history_block
+            )
+        parts.append(
+            "【对齐要求】\n"
+            "- 优先复用该客户过往已验证的产品选型与方案思路；与历史冲突时，以本次需求为准。\n"
+            "- 已知信息（行业/痛点/决策链）不重复追问，直接基于其口径展开。\n"
+            "- 客户档案与历史方案为内部参考，对外方案中不出现『该客户历史』等字眼。"
+        )
+        block = "\n\n".join(parts)
+        meta = {"client_name": client_name, "history_count": len(selected)}
+        return block, meta
+    except Exception as e:
+        logger.warning(f"[客户上下文] 构造失败: {e}")
+        return "", None
 
 
 @router.get("/clients", tags=["客户档案"])

@@ -108,7 +108,8 @@ class SolutionMatcherService:
     # Prompt 组装（复用统一增强模块，保证与 Agent 模式一致）
     # ============================================================
     def _build_prompt(self, question: str, context: str, industry: str,
-                       playbook_text: str, demand_analysis: Dict[str, Any]) -> str:
+                       playbook_text: str, demand_analysis: Dict[str, Any],
+                       client_context: str = "") -> str:
         industry_line = build_industry_line(industry)
         analysis_line = build_analysis_line(demand_analysis)
         anti_hallucination = build_anti_hallucination()
@@ -120,6 +121,12 @@ class SolutionMatcherService:
             "你是华为云解决方案专家，为售前场景提供方案建议。\n\n"
             f"{industry_line}"
             f"{analysis_line}"
+        )
+        # 客户背景与历史方案（方案 A）：仅当本次匹配关联了客户时注入，
+        # 作为框架性上下文对齐口径；绝不进入向量库，用完即弃。
+        if client_context:
+            prompt += f"\n{client_context}\n"
+        prompt += (
             f"{playbook_text}\n\n"
             f"客户需求：{question}\n\n"
             f"相关资料：\n{context}\n\n"
@@ -146,6 +153,7 @@ class SolutionMatcherService:
         context: str,
         industry: Optional[str] = None,
         demand_analysis: Optional[Dict[str, Any]] = None,
+        client_context: str = "",
     ) -> Dict[str, Any]:
         """用统一的增强管线生成方案（含来源标注 / 防幻觉 / 话术 / 14章结构）。
 
@@ -154,6 +162,7 @@ class SolutionMatcherService:
             context: 已格式化为 [资料N|来源:...] 的参考材料上下文
             industry: 行业（可选，用于剧本注入）
             demand_analysis: 结构化需求（可选）
+            client_context: 客户背景与历史方案上下文（方案 A，可选）
 
         Returns:
             {"answer": str, "solution_json": List[Dict]}
@@ -165,6 +174,7 @@ class SolutionMatcherService:
             industry=industry or "",
             playbook_text=playbook_text,
             demand_analysis=demand_analysis or {},
+            client_context=client_context,
         )
         answer = await get_llm_response(final_prompt)
         # 追加『参考资料』节：把正文中的 [资料N] 标注映射回真实出处，
@@ -181,7 +191,7 @@ class SolutionMatcherService:
     # ============================================================
     # 主入口
     # ============================================================
-    async def _prepare(self, customer_demand, industry: Optional[str] = None) -> Dict[str, Any]:
+    async def _prepare(self, customer_demand, industry: Optional[str] = None, client_context: str = "") -> Dict[str, Any]:
         """标准/向导检索 + 需求结构化前置（流式与非流式共用，单一事实来源）。
 
         返回 dict 含：kb_empty / competitor_companies / docs / context_content /
@@ -239,7 +249,7 @@ class SolutionMatcherService:
 
         # 知识库为空 → 通用兜底 prompt；否则正常生成 prompt（二者互斥）
         if not docs or not context_content.strip():
-            result["fallback_prompt"] = self._build_fallback_prompt(customer_demand, industry, playbook_text)
+            result["fallback_prompt"] = self._build_fallback_prompt(customer_demand, industry, playbook_text, client_context)
         else:
             result["final_prompt"] = self._build_prompt(
                 question=customer_demand,
@@ -247,15 +257,17 @@ class SolutionMatcherService:
                 industry=industry or "",
                 playbook_text=playbook_text,
                 demand_analysis=demand_analysis,
+                client_context=client_context,
             )
         return result
 
-    async def match(self, customer_demand, industry: Optional[str] = None):
+    async def match(self, customer_demand, industry: Optional[str] = None, client_context: str = ""):
         """
         标准模式匹配（非流式，保留作兜底/兼容）。
         - industry: 可选，由调用方传入（如向导模式采集的行业）；为空则内部复用 analyze_demand 推断。
+        - client_context: 可选，关联客户时注入的背景与历史方案上下文（方案 A）。
         """
-        prep = await self._prepare(customer_demand, industry)
+        prep = await self._prepare(customer_demand, industry, client_context)
         return await self._finalize_answer(prep)
 
     async def _finalize_answer(self, prep: Dict[str, Any]) -> Dict[str, Any]:
@@ -280,7 +292,7 @@ class SolutionMatcherService:
             "solution_json": self._parse_markdown_to_chapters(answer_result),
         }
 
-    async def match_stream(self, customer_demand, queue: asyncio.Queue, industry: Optional[str] = None):
+    async def match_stream(self, customer_demand, queue: asyncio.Queue, industry: Optional[str] = None, client_context: str = ""):
         """标准/向导匹配流式生成（P0-2）。
 
         检索 + 需求结构化复用 _prepare；生成阶段逐 token 推送给 queue。
@@ -291,7 +303,7 @@ class SolutionMatcherService:
           - {"type":"error","message":str}
         """
         try:
-            prep = await self._prepare(customer_demand, industry)
+            prep = await self._prepare(customer_demand, industry, client_context)
         except Exception as e:
             logger.error(f"[match_stream] 预处理失败: {e}")
             await queue.put({"type": "error", "message": str(e)})
@@ -331,15 +343,16 @@ class SolutionMatcherService:
             }
         })
 
-    def _build_fallback_prompt(self, customer_demand: str, industry: str, playbook_text: str) -> str:
+    def _build_fallback_prompt(self, customer_demand: str, industry: str, playbook_text: str, client_context: str = "") -> str:
         """知识库为空时的通用生成 prompt（保留行业/话术/防幻觉约束）"""
         industry_line = f"客户所属行业：{industry}\n" if industry else ""
         anti = build_anti_hallucination()
         audience = build_audience_tone()
+        client_block = f"\n{client_context}\n" if client_context else ""
         return f"""你是华为云资深解决方案专家，拥有15年以上行业解决方案设计经验。客户提出了以下需求：
 
 {customer_demand}
-
+{client_block}
 {industry_line}{playbook_text}
 
 虽然当前知识库中暂时没有相关的华为云解决方案文档，但请你基于华为云的产品体系、技术能力和行业最佳实践，给出专业、深入的建议：

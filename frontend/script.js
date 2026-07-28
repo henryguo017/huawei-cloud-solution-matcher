@@ -5997,6 +5997,18 @@ function initEventListeners() {
         resultContainer.style.display = 'block';
         resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+        // 方案 A：结果页小字提示 —— 本次匹配是否参考了某客户背景与历史方案
+        const ctxHint = document.getElementById('client-context-hint');
+        if (ctxHint) {
+            const ctx = result.client_context_used;
+            if (ctx && ctx.client_name) {
+                ctxHint.textContent = `本次已参考客户「${ctx.client_name}」的背景与历史方案 ${ctx.history_count || 0} 条`;
+                ctxHint.style.display = 'block';
+            } else {
+                ctxHint.style.display = 'none';
+            }
+        }
+
         // 快速体验引导条：仅「匿名 + 体验」时展示（把游客转化为注册用户）
         // 已登录用户用体验时不显示——他们本就拥有保存/历史/向导/Agent 全部能力，无需再推荐登录
         const qdBanner = document.getElementById('quick-demo-banner');

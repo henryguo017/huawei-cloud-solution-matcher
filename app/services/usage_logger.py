@@ -864,6 +864,40 @@ class UsageLoggerService:
             logger.error(f"获取客户方案列表失败: {e}")
             return []
 
+    def get_client_solutions_with_body(self, user_id: int, client_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """获取某客户名下全部匹配历史（含方案正文），供匹配时『智能相关性选取』与摘录使用。
+
+        与 get_client_solutions 的区别：此处额外返回 solution 正文（用于嵌入排序与方案要点摘录），
+        且仅取 type='match'（方案匹配类，不含竞品分析）。
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    SELECT id, demand_text, industry, solution, created_at, title
+                    FROM match_history
+                    WHERE type = 'match' AND user_id = ? AND client_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (user_id, client_id, limit)
+                )
+                rows = cursor.fetchall()
+                return [
+                    {
+                        "id": row["id"],
+                        "demand_text": row["demand_text"] or "",
+                        "industry": row["industry"] or "",
+                        "solution": row["solution"] or "",
+                        "created_at": row["created_at"],
+                        "title": row["title"] or "",
+                    }
+                    for row in rows
+                ]
+        except Exception as e:
+            logger.error(f"获取客户方案(含正文)失败: {e}")
+            return []
+
     def set_match_history_client(self, history_id: int, user_id: int, client_id: Optional[int]) -> bool:
         """改挂 / 解除关联客户（方案历史与客户的后期绑定）
 
