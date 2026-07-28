@@ -470,12 +470,12 @@ async def match_solution_stream(
                 f"{request.demand}"
             )
 
-        # 方案 A：关联客户时注入『背景 + 历史方案』上下文
-        client_block, client_meta = "", None
-        if request.client_id and user_id > 0:
-            client_block, client_meta = await _build_client_context_block(
-                request.client_id, user_id, request.demand
-            )
+    # 方案 A：关联客户时注入『背景 + 历史方案』上下文（必须在 generate() 外层，否则闭包内引用为 free variable）
+    client_block, client_meta = "", None
+    if request.client_id and user_id > 0:
+        client_block, client_meta = await _build_client_context_block(
+            request.client_id, user_id, request.demand
+        )
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
