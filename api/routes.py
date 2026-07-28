@@ -2627,6 +2627,22 @@ async def ai_chat(
 
         # ---- 路由判断 ----
         # 第一优先级：平台使用类问题
+        # 个人知识类问题——已登录时基于用户私有数据作答，置于 usage 之前判定：
+        # 个人关键词均含"我的/我们"等专属指代，不会与 usage 的泛化功能词冲突；
+        # 同时必须在 cloud 之前，否则"我的客户档案"会被 cloud 的泛化"客户"关键词抢走。
+        personal_keywords = [
+            "我的客户", "我的资料", "我的知识库", "我上传", "我的文档",
+            "我记得", "我的偏好", "关于我", "我的信息", "我存的", "我的方案",
+            "我的账号", "我的历史", "我之前", "我整理", "我收集", "个人知识",
+            "我的笔记", "我的需求", "我们客户", "我的项目", "我的经历", "我的记忆",
+            "我这边", "我的客户档案", "我之前做的", "我保存", "我的客户资料",
+        ]
+        is_personal = bool(user) and any(kw in question for kw in personal_keywords)
+        if is_personal:
+            answer = await _answer_personal_question(question, user, history_text)
+            return {"answer": _strip_markdown(answer)}
+
+        # 平台使用类问题（纯 LLM，基于 PLATFORM_GUIDE）
         usage_keywords = [
             "怎么用", "如何使用", "怎么使用", "如何操作",
             "功能怎么用", "功能使用", "功能介绍",
@@ -2651,25 +2667,17 @@ async def ai_chat(
             "功能清单", "所有功能", "能干嘛", "能做什么", "有什么用",
             "客户管理", "CRM", "客户crm", "客户CRM", "客户列表", "客户详情",
             "商机阶段", "客户档案", "名下方案", "客户跟进", "客户归集",
+            "关联客户", "关联到客户", "把方案关联", "把客户关联", "方案关联", "关联方案",
+            "方案怎么关联", "方案如何关联", "方案绑定客户", "指定给客户", "挂给客户",
+            "挂到客户", "归属客户", "归集到客户", "补挂客户", "补挂", "取消关联",
+            "方案归给客户", "方案指定给", "历史方案关联", "怎么把方案", "方案怎么挂",
+            "解除关联", "解除客户", "客户关系", "方案与客户", "方案和客户", "关联方案客户",
+            "成本参考", "成本附表", "报价参考", "报价估算", "成本估算",
         ]
         is_usage = any(kw in question for kw in usage_keywords)
 
         if is_usage:
             answer = await _answer_usage_question(question, history_text)
-            return {"answer": _strip_markdown(answer)}
-
-        # 第二优先级（位于 cloud 之前）：个人知识类问题——已登录时基于用户私有数据作答
-        # 必须在 cloud 之前判定，否则"我的客户档案"等会被 cloud 的泛化"客户"关键词抢走
-        personal_keywords = [
-            "我的客户", "客户档案", "我的资料", "我的知识库", "我上传", "我的文档",
-            "我记得", "我的偏好", "关于我", "我的信息", "我存的", "我的方案",
-            "我的账号", "我的历史", "我之前", "我整理", "我收集", "个人知识",
-            "我的笔记", "我的需求", "我们客户", "我的项目", "我的经历", "我的记忆",
-            "我这边", "我的客户档案", "我之前做的", "我保存", "我的客户资料",
-        ]
-        is_personal = bool(user) and any(kw in question for kw in personal_keywords)
-        if is_personal:
-            answer = await _answer_personal_question(question, user, history_text)
             return {"answer": _strip_markdown(answer)}
 
         # 第三优先级：云计算/IT/技术业务类问题（走 RAG）
