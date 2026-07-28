@@ -4185,7 +4185,7 @@ const FavoriteManager = {
             }
         } else {
             try {
-                const resp = await fetch('/api/auth/favorites/', {
+                const resp = await fetch('/api/auth/favorites', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
