@@ -5648,6 +5648,7 @@ function initEventListeners() {
     function backToClientsList() {
         document.getElementById('client-detail-view').style.display = 'none';
         document.getElementById('clients-list-view').style.display = '';
+        loadClientsPage();  // 重新拉取数据并渲染卡片（确保编辑后的阶段等字段同步更新）
     }
 
     function startMatchForClient(id) {
