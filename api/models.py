@@ -22,7 +22,7 @@ class ClientCreateRequest(BaseModel):
     name: str = Field(..., description="客户名称", min_length=1, max_length=100)
     note: Optional[str] = Field(default=None, description="其他备注（可选）", max_length=500)
     # ===== 结构化字段（2026-07 客户档案升级，全部可选，向后兼容） =====
-    industry: Optional[str] = Field(default=None, description="所属行业", max_length=50)
+    industry: str = Field(..., description="所属行业（必填，须为系统支持行业之一）", max_length=50)
     company_size: Optional[str] = Field(default=None, description="企业规模（如 <100人 / 100-500人 / 500-2000人 / 2000人以上）", max_length=50)
     region: Optional[str] = Field(default=None, description="所在区域", max_length=100)
     contact_name: Optional[str] = Field(default=None, description="联系人姓名", max_length=50)

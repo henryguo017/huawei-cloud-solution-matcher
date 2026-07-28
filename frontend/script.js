@@ -5292,10 +5292,21 @@ function initEventListeners() {
     }
     // ===== 客户档案弹窗（新建 / 编辑，结构化字段） =====
     const CF_FIELDS = ['name', 'industry', 'company_size', 'region', 'contact_name', 'contact_title', 'contact_phone', 'contact_email', 'stage', 'budget', 'pain_points', 'decision_chain', 'tags', 'note'];
+    // 客户行业下拉选项（对齐 KB 支持行业，与 app/config.py SUPPORTED_INDUSTRIES 保持一致）
+    const CLIENT_INDUSTRIES = ["智慧农业","工业互联网","智慧园区","智慧城市","智慧医疗","智慧金融","智慧能源","智慧交通","智慧教育","智慧文旅","制造","政务","零售","汽车","矿山","钢铁冶金","化工","智慧物流","传媒文娱","应急管理","智慧水利","国资云","互联网","游戏","生物医药"];
     function openClientModal(clientId) {
         const modal = document.getElementById('client-modal');
         const form = document.getElementById('client-form');
         if (form) form.reset();
+        // 填充行业下拉（对齐 KB 支持行业，必填）；options.length<=1 时填充，避免重复
+        const indSel = document.getElementById('cf-industry');
+        if (indSel && indSel.options.length <= 1) {
+            CLIENT_INDUSTRIES.forEach(function(ind) {
+                const o = document.createElement('option');
+                o.value = ind; o.textContent = ind;
+                indSel.appendChild(o);
+            });
+        }
         document.getElementById('cf-id').value = clientId || '';
         document.getElementById('client-modal-title').textContent = clientId ? '编辑客户档案' : '新建客户档案';
         CF_FIELDS.forEach(f => { const el = document.getElementById('cf-' + f); if (el) el.value = ''; });
@@ -5329,6 +5340,7 @@ function initEventListeners() {
             payload[f] = v === '' ? null : v;
         });
         if (!payload.name) { UI.showToast('请填写客户名称', 'error'); return; }
+        if (!payload.industry) { UI.showToast('请选择所属行业', 'error'); return; }
         const method = id ? 'PUT' : 'POST';
         const url = id ? `${Config.API_BASE_URL}/clients/${id}` : `${Config.API_BASE_URL}/clients`;
         fetch(url, {

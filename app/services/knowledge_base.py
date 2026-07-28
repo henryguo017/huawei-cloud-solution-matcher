@@ -325,14 +325,42 @@ class KnowledgeBaseService:
             fused = [d for d in fused if (d.metadata or {}).get("_score", 1.0) >= RAG_THRESHOLD]
         return fused[:pool_size]
 
-    def search_huawei(self, query, k=4):
-        """只召回华为云方案文档（主方案落地用）——直接在华为子集上检索，避免被竞品挤出前排"""
+    # 客户行业 → KB 行业映射（兼容旧数据自由填写的值；新数据已限定为 SUPPORTED_INDUSTRIES 下拉）
+    CLIENT_INDUSTRY_ALIASES = {
+        "安防": "智慧园区",
+        "安防监控": "智慧园区",
+        "智慧安防": "智慧园区",
+        "视频监控": "智慧园区",
+        "物联网": "智慧城市",
+        "智慧物联": "智慧城市",
+    }
+
+    def _resolve_kb_industry(self, client_industry: str):
+        """把客户档案的行业对齐到 KB 文档标签体系，用于收敛主检索。
+        直接命中 SUPPORTED_INDUSTRIES 则原样返回；否则走别名映射；都不中返回 None（不过滤）。"""
+        if not client_industry:
+            return None
+        if client_industry in SUPPORTED_INDUSTRIES:
+            return client_industry
+        return self.CLIENT_INDUSTRY_ALIASES.get(client_industry)
+
+    def search_huawei(self, query, k=4, filter_industry=None):
+        """只召回华为云方案文档（主方案落地用）——直接在华为子集上检索，避免被竞品挤出前排。
+        filter_industry: 关联客户时传入的客户行业（已对齐 KB 标签），用于收敛主检索到该客户行业，
+        彻底解决「需求未提行业时拉到无关行业文档」的错配问题。"""
         comp = self._competitor_companies
         results = []
+        kb_industry = self._resolve_kb_industry(filter_industry) if filter_industry else None
         try:
-            results = self.vector_db.similarity_search(
-                query, k=k, filter={"industry": {"$nin": list(comp)}}
-            )
+            if kb_industry:
+                # 命中 KB 行业标签，直接按行业过滤（竞品文档 industry 为厂商名，天然被排除）
+                results = self.vector_db.similarity_search(
+                    query, k=k, filter={"industry": {"$in": [kb_industry]}}
+                )
+            else:
+                results = self.vector_db.similarity_search(
+                    query, k=k, filter={"industry": {"$nin": list(comp)}}
+                )
         except Exception as e:
             logger.warning(f"华为子集检索异常，回退混合池: {e}")
         # 召回不足时在更大混合池中补充华为文档（竞品过多时仍保底）
@@ -340,7 +368,10 @@ class KnowledgeBaseService:
             seen = {d.page_content for d in results}
             pool = self._similarity_pool(query, pool_size=max(k * 4, 40))
             for d in pool:
-                if (d.metadata or {}).get("industry", "") not in comp and d.page_content not in seen:
+                d_ind = (d.metadata or {}).get("industry", "")
+                if d_ind not in comp and d.page_content not in seen:
+                    if kb_industry and d_ind != kb_industry:
+                        continue
                     results.append(d)
                     seen.add(d.page_content)
                     if len(results) >= k:

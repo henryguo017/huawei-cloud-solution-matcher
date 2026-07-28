@@ -427,7 +427,8 @@ async def match_solution(
                 request.client_id, user_id, request.demand
             )
 
-        result = await matcher.match(enriched_demand, client_context=client_block)
+        client_industry = client_meta.get("industry") if client_meta else None
+        result = await matcher.match(enriched_demand, industry=client_industry, client_context=client_block)
 
         logger.info("解决方案匹配成功")
 
@@ -471,18 +472,19 @@ async def match_solution_stream(
             )
 
     # 方案 A：关联客户时注入『背景 + 历史方案』上下文（必须在 generate() 外层，否则闭包内引用为 free variable）
-    client_block, client_meta = "", None
-    if request.client_id and user_id > 0:
-        client_block, client_meta = await _build_client_context_block(
-            request.client_id, user_id, request.demand
-        )
+        client_block, client_meta = "", None
+        if request.client_id and user_id > 0:
+            client_block, client_meta = await _build_client_context_block(
+                request.client_id, user_id, request.demand
+            )
+        client_industry = client_meta.get("industry") if client_meta else None
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
 
         async def run_match():
             try:
-                await matcher.match_stream(enriched_demand, queue, client_context=client_block)
+                await matcher.match_stream(enriched_demand, queue, industry=client_industry, client_context=client_block)
             except Exception as e:
                 logger.error(f"[match/stream] 执行失败: {e}")
                 await queue.put({"type": "error", "message": str(e)})
@@ -1324,7 +1326,7 @@ async def _build_client_context_block(client_id: int, user_id: int, new_demand: 
             "- 客户档案与历史方案为内部参考，对外方案中不出现『该客户历史』等字眼。"
         )
         block = "\n\n".join(parts)
-        meta = {"client_name": client_name, "history_count": len(selected)}
+        meta = {"client_name": client_name, "history_count": len(selected), "industry": client.get("industry") or None}
         return block, meta
     except Exception as e:
         logger.warning(f"[客户上下文] 构造失败: {e}")
@@ -1353,6 +1355,8 @@ async def create_client(req: ClientCreateRequest, user: dict = Depends(require_l
     name = (req.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="客户名称不能为空")
+    if not req.industry or req.industry not in SUPPORTED_INDUSTRIES:
+        raise HTTPException(status_code=400, detail="所属行业为必填项，且须为系统支持行业之一")
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("SELECT id FROM clients WHERE user_id=? AND name=?", (user['id'], name))
@@ -1426,6 +1430,11 @@ async def update_client(client_id: int, req: ClientUpdateRequest, user: dict = D
         v = getattr(req, f)
         if v is not None:
             updates[f] = v
+
+    # 行业合法性校验（部分更新：仅当传入了 industry 时才校验）
+    if "industry" in updates and updates["industry"] not in SUPPORTED_INDUSTRIES:
+        conn.close()
+        raise HTTPException(status_code=400, detail="所属行业须为系统支持行业之一")
 
     if updates:
         set_clause = ", ".join([f"{k}=?" for k in updates]) + ", updated_at=datetime('now', 'localtime')"
