@@ -5476,14 +5476,6 @@ function initEventListeners() {
                     })
                     .catch(() => UI.showToast('删除失败', 'error'));
             });
-            detail.querySelectorAll('.client-solution-item').forEach(el => {
-                el.addEventListener('click', () => {
-                    const sid = Number(el.dataset.id);
-                    closeClientManage();
-                    HistoryUI.currentType = 'match';
-                    HistoryUI.showDetail(sid);
-                });
-            });
         } catch (e) {
             detail.innerHTML = '<div class="client-manage-empty">加载失败</div>';
         }
@@ -5558,9 +5550,6 @@ function initEventListeners() {
                 </div>
             </div>`;
         }).join('');
-        grid.querySelectorAll('.client-card').forEach(el => {
-            el.addEventListener('click', () => showClientDetail(Number(el.dataset.id)));
-        });
     }
 
     async function showClientDetail(id) {
@@ -5634,12 +5623,6 @@ function initEventListeners() {
                     else UI.showToast('更新失败', 'error');
                 } catch { UI.showToast('更新失败', 'error'); }
             });
-            content.querySelectorAll('.client-solution-item').forEach(el => {
-                el.addEventListener('click', () => {
-                    const sid = Number(el.dataset.id);
-                    if (typeof HistoryUI !== 'undefined') { HistoryUI.currentType = 'match'; HistoryUI.showDetail(sid); }
-                });
-            });
         } catch (e) {
             content.innerHTML = '<div class="clients-empty">加载失败</div>';
         }
@@ -5672,6 +5655,7 @@ function initEventListeners() {
         const solItem = e.target.closest('.client-solution-item');
         if (solItem) {
             const sid = Number(solItem.dataset.id);
+            if (typeof closeClientManage === 'function') closeClientManage();
             if (typeof HistoryUI !== 'undefined') { HistoryUI.currentType = 'match'; HistoryUI.showDetail(sid); }
             return;
         }
