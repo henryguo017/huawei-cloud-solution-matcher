@@ -472,19 +472,19 @@ async def match_solution_stream(
             )
 
     # 方案 A：关联客户时注入『背景 + 历史方案』上下文（必须在 generate() 外层，否则闭包内引用为 free variable）
-        client_block, client_meta = "", None
-        if request.client_id and user_id > 0:
-            client_block, client_meta = await _build_client_context_block(
-                request.client_id, user_id, request.demand
-            )
-        client_industry = client_meta.get("industry") if client_meta else None
+    client_block, client_meta = "", None
+    if request.client_id and user_id > 0:
+        client_block, client_meta = await _build_client_context_block(
+            request.client_id, user_id, request.demand
+        )
+    client_industry = client_meta.get("industry") if client_meta else None
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
 
-        async def run_match():
+        async def run_match(ci=client_industry, cb=client_block):
             try:
-                await matcher.match_stream(enriched_demand, queue, industry=client_industry, client_context=client_block)
+                await matcher.match_stream(enriched_demand, queue, industry=ci, client_context=cb)
             except Exception as e:
                 logger.error(f"[match/stream] 执行失败: {e}")
                 await queue.put({"type": "error", "message": str(e)})
