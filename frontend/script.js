@@ -3862,9 +3862,8 @@ const HistoryUI = {
             const cid = sel && sel.value ? Number(sel.value) : null;
             try {
                 await API.updateHistoryClient(item.id, cid);
-                item.client_id = cid;
-                item.client_name = cid ? ((State.clients || []).find(c => c.id === cid) || {}).name || '' : null;
-                this.renderList();
+                // 从服务器重新拉取列表，确保 client_name 由服务端预解析（不依赖 State.clients）
+                await this.loadHistory();
                 UI.showToast(cid ? '已更新关联客户' : '已解除关联客户', 'success');
             } catch (e) {
                 UI.showToast(e.message || '更新失败', 'error');
