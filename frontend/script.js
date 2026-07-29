@@ -2547,7 +2547,7 @@ const UI = {
                             else { break; }
                         }
                         const rowLines = lines.slice(i, j).filter(l => isTableRow(l));
-                        if (rowLines >= 2) {
+                        if (rowLines.length >= 2) {
                             const colCount = parseCells(rowLines[0]).length;
                             const allSameCols = rowLines.every(r => parseCells(r).length === colCount);
                             if (allSameCols && colCount >= 2) {
