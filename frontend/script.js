@@ -1246,6 +1246,29 @@ const PaginationUI = {
     }
 };
 
+// #6 前端超时兜底：SSE 流式生成时，若超过阈值未收到任何字节（含后端 30s 心跳），判定生成卡死并主动中断
+const SSE_STALL_TIMEOUT_MS = 120000;
+function _makeStallGuard(reader) {
+    let lastChunkAt = Date.now();
+    let timer = null;
+    const err = new Error('生成超时：服务器长时间无响应，请检查网络或稍后重试');
+    err.isStall = true;
+    const promise = new Promise((_, reject) => {
+        timer = setInterval(() => {
+            if (Date.now() - lastChunkAt > SSE_STALL_TIMEOUT_MS) {
+                clearInterval(timer);
+                if (reader.cancel) reader.cancel().catch(() => {});
+                reject(err);
+            }
+        }, 10000);
+    });
+    return {
+        promise,
+        touch() { lastChunkAt = Date.now(); },
+        clear() { if (timer) clearInterval(timer); }
+    };
+}
+
 const API = {
     async match(demand, signal, mode = "standard", customerFiles = [], clientId = null) {
         const headers = { 'Content-Type': 'application/json' };
@@ -1300,35 +1323,41 @@ const API = {
         const decoder = new TextDecoder();
         let buffer = '';
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
+        const _stall = _makeStallGuard(reader);
+        try {
+            while (true) {
+                const { done, value } = await Promise.race([reader.read(), _stall.promise]);
+                if (done) break;
+                if (value && value.byteLength > 0) _stall.touch();
+                buffer += decoder.decode(value, { stream: true });
 
-            const parts = buffer.split('\n\n');
-            buffer = parts.pop() || '';
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
 
-            for (const part of parts) {
-                if (!part.trim()) continue;
-                const lines = part.split('\n');
-                let eventType = '';
-                let dataStr = '';
-                for (const line of lines) {
-                    if (line.startsWith('event: ')) {
-                        eventType = line.slice(7).trim();
-                    } else if (line.startsWith('data: ')) {
-                        dataStr = line.slice(6);
+                for (const part of parts) {
+                    if (!part.trim()) continue;
+                    const lines = part.split('\n');
+                    let eventType = '';
+                    let dataStr = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.slice(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            dataStr = line.slice(6);
+                        }
                     }
-                }
-                if (dataStr) {
-                    try {
-                        const data = JSON.parse(dataStr);
-                        onEvent(data);
-                    } catch (e) {
-                        console.warn('[SSE match] JSON 解析失败:', dataStr);
+                    if (dataStr) {
+                        try {
+                            const data = JSON.parse(dataStr);
+                            onEvent(data);
+                        } catch (e) {
+                            console.warn('[SSE match] JSON 解析失败:', dataStr);
+                        }
                     }
                 }
             }
+        } finally {
+            _stall.clear();
         }
     },
 
@@ -1375,36 +1404,42 @@ const API = {
         const decoder = new TextDecoder();
         let buffer = '';
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
+        const _stall = _makeStallGuard(reader);
+        try {
+            while (true) {
+                const { done, value } = await Promise.race([reader.read(), _stall.promise]);
+                if (done) break;
+                if (value && value.byteLength > 0) _stall.touch();
+                buffer += decoder.decode(value, { stream: true });
 
-            // 按 \n\n 分割 SSE 事件块
-            const parts = buffer.split('\n\n');
-            buffer = parts.pop() || '';
+                // 按 \n\n 分割 SSE 事件块
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
 
-            for (const part of parts) {
-                if (!part.trim()) continue;
-                const lines = part.split('\n');
-                let eventType = '';
-                let dataStr = '';
-                for (const line of lines) {
-                    if (line.startsWith('event: ')) {
-                        eventType = line.slice(7).trim();
-                    } else if (line.startsWith('data: ')) {
-                        dataStr = line.slice(6);
+                for (const part of parts) {
+                    if (!part.trim()) continue;
+                    const lines = part.split('\n');
+                    let eventType = '';
+                    let dataStr = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.slice(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            dataStr = line.slice(6);
+                        }
                     }
-                }
-                if (dataStr) {
-                    try {
-                        const data = JSON.parse(dataStr);
-                        onEvent(data);
-                    } catch (e) {
-                        console.warn('[SSE] JSON 解析失败:', dataStr);
+                    if (dataStr) {
+                        try {
+                            const data = JSON.parse(dataStr);
+                            onEvent(data);
+                        } catch (e) {
+                            console.warn('[SSE] JSON 解析失败:', dataStr);
+                        }
                     }
                 }
             }
+        } finally {
+            _stall.clear();
         }
     },
 
@@ -1430,35 +1465,41 @@ const API = {
         const decoder = new TextDecoder();
         let buffer = '';
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
+        const _stall = _makeStallGuard(reader);
+        try {
+            while (true) {
+                const { done, value } = await Promise.race([reader.read(), _stall.promise]);
+                if (done) break;
+                if (value && value.byteLength > 0) _stall.touch();
+                buffer += decoder.decode(value, { stream: true });
 
-            const parts = buffer.split('\n\n');
-            buffer = parts.pop() || '';
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
 
-            for (const part of parts) {
-                if (!part.trim()) continue;
-                const lines = part.split('\n');
-                let eventType = '';
-                let dataStr = '';
-                for (const line of lines) {
-                    if (line.startsWith('event: ')) {
-                        eventType = line.slice(7).trim();
-                    } else if (line.startsWith('data: ')) {
-                        dataStr = line.slice(6);
+                for (const part of parts) {
+                    if (!part.trim()) continue;
+                    const lines = part.split('\n');
+                    let eventType = '';
+                    let dataStr = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.slice(7).trim();
+                        } else if (line.startsWith('data: ')) {
+                            dataStr = line.slice(6);
+                        }
                     }
-                }
-                if (dataStr) {
-                    try {
-                        const data = JSON.parse(dataStr);
-                        onEvent(data);
-                    } catch (e) {
-                        console.warn('[SSE clarify] JSON 解析失败:', dataStr);
+                    if (dataStr) {
+                        try {
+                            const data = JSON.parse(dataStr);
+                            onEvent(data);
+                        } catch (e) {
+                            console.warn('[SSE clarify] JSON 解析失败:', dataStr);
+                        }
                     }
                 }
             }
+        } finally {
+            _stall.clear();
         }
     },
 
