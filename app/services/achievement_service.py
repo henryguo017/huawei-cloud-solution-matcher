@@ -95,8 +95,13 @@ class AchievementService:
     # ── 内部工具 ──────────────────────────────────────────────────
 
     def _get_connection(self):
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=10)
         conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+        except sqlite3.Error:
+            pass
         return conn
 
     def _init_db(self):
@@ -200,7 +205,7 @@ class AchievementService:
             return
 
         try:
-            with sqlite3.connect(usage_db) as uconn:
+            with sqlite3.connect(usage_db, timeout=10) as uconn:
                 uconn.row_factory = sqlite3.Row
                 total = uconn.execute(
                     "SELECT COUNT(*) as cnt FROM usage_logs WHERE user_id = ?", (user_id,)
@@ -285,7 +290,7 @@ class AchievementService:
         if not os.path.exists(usage_db):
             return
         try:
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
                     "SELECT created_at FROM usage_logs WHERE user_id = ?",
@@ -630,7 +635,7 @@ class AchievementService:
         if not os.path.exists(usage_db):
             return 0
         try:
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     "SELECT COUNT(*) as cnt FROM usage_logs WHERE user_id = ? AND action_type = ?",
@@ -646,7 +651,7 @@ class AchievementService:
         if not os.path.exists(usage_db):
             return 0
         try:
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 row = conn.execute(
                     "SELECT COUNT(*) as cnt FROM usage_logs WHERE user_id = ? AND action_type = 'match' AND mode = ?",
@@ -661,7 +666,7 @@ class AchievementService:
         if not os.path.exists(usage_db):
             return set()
         try:
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
                     "SELECT DISTINCT industry FROM match_history WHERE user_id = ? AND industry IS NOT NULL AND industry != ''",
@@ -676,7 +681,7 @@ class AchievementService:
         if not os.path.exists(usage_db):
             return set()
         try:
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
                     "SELECT DISTINCT competitor FROM match_history WHERE user_id = ? AND type = 'analyze' AND competitor IS NOT NULL AND competitor != ''",
@@ -692,7 +697,7 @@ class AchievementService:
         if not os.path.exists(usage_db):
             return 0
         try:
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 # match_history 表存储完整 demand_text，取前50字符做模糊匹配
                 keyword = demand_text[:50].strip()
@@ -712,7 +717,7 @@ class AchievementService:
         if not os.path.exists(usage_db):
             return
         try:
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 # 检查 usage_logs 是否有 mode 字段
                 cursor = conn.execute("PRAGMA table_info(usage_logs)")
@@ -736,7 +741,7 @@ class AchievementService:
         if not os.path.exists(usage_db):
             return
         try:
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.execute("PRAGMA table_info(usage_logs)")
                 columns = {row[1] for row in cursor.fetchall()}
@@ -758,7 +763,7 @@ class AchievementService:
         if not os.path.exists(usage_db):
             return
         try:
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
                     "SELECT DISTINCT DATE(created_at) as d FROM usage_logs WHERE user_id = ? ORDER BY d DESC",
@@ -787,7 +792,7 @@ class AchievementService:
             return
         try:
             from datetime import timedelta
-            with sqlite3.connect(usage_db) as conn:
+            with sqlite3.connect(usage_db, timeout=10) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
                     """SELECT DATE(created_at) as d, COUNT(*) as cnt

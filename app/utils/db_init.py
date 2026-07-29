@@ -8,8 +8,16 @@ def get_db_connection():
     db_path = os.path.join(base_dir, "data", "users.db")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=10)
     conn.row_factory = sqlite3.Row
+    # WAL 模式：读写不互斥，大幅降低并发下 "database is locked" 概率。
+    # journal_mode=WAL 对数据库文件持久生效（每次执行幂等）；
+    # synchronous 是连接级设置，WAL 下 NORMAL 为官方推荐档（掉电不丢库，仅可能丢最后一个事务）。
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+    except sqlite3.Error:
+        pass  # PRAGMA 失败不应阻断业务连接
     return conn
 
 def init_database():

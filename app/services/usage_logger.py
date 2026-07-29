@@ -38,8 +38,13 @@ class UsageLoggerService:
 
     def _get_connection(self):
         """获取数据库连接（每次新建连接以保证线程安全）"""
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=10)
         conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+        except sqlite3.Error:
+            pass
         return conn
 
     def _init_db(self):

@@ -233,6 +233,9 @@ test_api_debug.py
 
 # All SQLite database files (users.db, captcha.db, usage_logs.db, etc.)
 *.db
+# WAL sidecar files (*.db does not match these suffixes)
+*.db-wal
+*.db-shm
 
 # Misplaced data directory inside api/
 api/data/

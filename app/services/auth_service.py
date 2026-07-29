@@ -334,7 +334,7 @@ class AuthService:
         
         if os.path.exists(usage_db_path):
             try:
-                usage_conn = sqlite3.connect(usage_db_path)
+                usage_conn = sqlite3.connect(usage_db_path, timeout=10)
                 usage_conn.row_factory = sqlite3.Row
                 cursor = usage_conn.cursor()
                 
