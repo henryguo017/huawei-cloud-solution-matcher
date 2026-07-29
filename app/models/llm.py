@@ -2,6 +2,7 @@ import json
 import httpx
 import asyncio
 import time
+from contextlib import asynccontextmanager
 import os
 import warnings
 from abc import ABC, abstractmethod
@@ -13,6 +14,27 @@ from app.config import *
 for key in list(os.environ.keys()):
     if "proxy" in key.lower():
         del os.environ[key]
+
+
+# 进程级共享 httpx 异步客户端（懒初始化，复用 TCP 连接池）
+# 避免每次请求都重建 AsyncClient + 连接池；limits 限制并发连接数，防高并发耗尽文件描述符
+_llm_http_client = None
+
+def _get_http_client():
+    """返回进程级共享的 httpx.AsyncClient（带连接池上限），懒初始化保证在事件循环内创建"""
+    global _llm_http_client
+    if _llm_http_client is None:
+        _llm_http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=float(REQUEST_TIMEOUT), write=10.0, pool=10.0),
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        )
+    return _llm_http_client
+
+
+@asynccontextmanager
+async def _http_client_cm():
+    """共享客户端的透明上下文管理器：进入/退出不关闭底层连接池（连接池随进程复用）"""
+    yield _get_http_client()
 
 
 class LLMProvider(ABC):
@@ -70,7 +92,7 @@ class DeepSeekProvider(LLMProvider):
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": temp
             }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=float(REQUEST_TIMEOUT), write=10.0, pool=10.0)) as client:
+            async with _http_client_cm() as client:
                 response = await client.post(url, headers=headers, json=data)
                 response.raise_for_status()
                 return response.json()["choices"][0]["message"]["content"]
@@ -92,7 +114,7 @@ class DeepSeekProvider(LLMProvider):
             "temperature": temp,
             "stream": True
         }
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=float(REQUEST_TIMEOUT), write=10.0, pool=10.0)) as client:
+        async with _http_client_cm() as client:
             async with client.stream("POST", url, headers=headers, json=data) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
@@ -139,7 +161,7 @@ class AliyunProvider(LLMProvider):
                 "input": {"prompt": prompt},
                 "parameters": {"temperature": temp}
             }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=float(REQUEST_TIMEOUT), write=10.0, pool=10.0)) as client:
+            async with _http_client_cm() as client:
                 response = await client.post(url, headers=headers, json=data)
                 response.raise_for_status()
                 result = response.json()
@@ -170,7 +192,7 @@ class BaiduProvider(LLMProvider):
             return self._access_token
 
         url = f"https://aip.baidu.com/oauth/2.0/token?grant_type=client_credentials&client_id={BAIDU_API_KEY}&client_secret={BAIDU_SECRET_KEY}"
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=float(REQUEST_TIMEOUT), write=10.0, pool=10.0)) as client:
+        async with _http_client_cm() as client:
             response = await client.post(url)
             response.raise_for_status()
             result = response.json()
@@ -188,7 +210,7 @@ class BaiduProvider(LLMProvider):
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": temp
             }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=float(REQUEST_TIMEOUT), write=10.0, pool=10.0)) as client:
+            async with _http_client_cm() as client:
                 response = await client.post(url, json=data)
                 response.raise_for_status()
                 return response.json()["result"]
@@ -224,7 +246,7 @@ class OpenAIProvider(LLMProvider):
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": temp
             }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=float(REQUEST_TIMEOUT), write=10.0, pool=10.0)) as client:
+            async with _http_client_cm() as client:
                 response = await client.post(url, headers=headers, json=data)
                 response.raise_for_status()
                 return response.json()["choices"][0]["message"]["content"]

@@ -36,7 +36,7 @@ from api.dependencies import (
     _user_kb_cache,
 )
 from app.models.llm import get_llm_response, get_embedding_vectors
-from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context
+from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context, clear_kb_search_cache
 from app.services.usage_logger import UsageLoggerService
 from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY, COMPETITOR_DIRECTORY, SUPPORTED_INDUSTRIES
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
@@ -1652,6 +1652,7 @@ def _run_rebuild_task(task_id: str):
                 return
             # 刷新全局缓存实例，使后续请求（含匿名标准匹配）使用新向量库
             _kb_deps._global_kb = None
+            clear_kb_search_cache()  # 重建后清空检索缓存，避免命中旧库结果
             _update_task(task_id, status="success", progress=100,
                          message=f"知识库重建完成，共 {count} 个文档片段",
                          result={"count": count})
@@ -1704,6 +1705,7 @@ def _run_sync_task(task_id: str, user_id: int):
             _update_task(task_id, status="success", progress=100,
                          message=f"已同步最新官方方案，并保留你的自定义文档，共 {total} 个文档片段",
                          result={"total_documents": total})
+            clear_kb_search_cache()  # 同步后清空检索缓存，避免命中旧库结果
         finally:
             _rebuild_semaphore.release()
     except Exception as e:

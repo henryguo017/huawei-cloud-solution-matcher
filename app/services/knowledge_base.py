@@ -3,14 +3,44 @@ from app.models.vector_db import get_vector_db
 from app.config import *
 from langchain_core.documents import Document
 import os
+import time
 import logging
 import shutil
 import contextvars
 import re
+from collections import OrderedDict
 from urllib.parse import quote, unquote
 from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
+
+# ===== KB 检索结果 LRU 缓存（带 TTL）=====
+# 相同查询（query/k/filter）在 TTL 内复用向量检索结果，省去重复的 query embedding 计算。
+# TTL 保证 KB 重建/同步后最多 10 分钟内自动失效，无需手动清理；clear_kb_search_cache() 可立即清。
+_KB_CACHE_MAX = 256
+_KB_CACHE_TTL = 600  # 秒
+_kb_search_cache: "OrderedDict[tuple, tuple]" = OrderedDict()
+
+def _kb_cache_get(key):
+    item = _kb_search_cache.get(key)
+    if item is None:
+        return None
+    val, ts = item
+    if time.time() - ts > _KB_CACHE_TTL:
+        _kb_search_cache.pop(key, None)
+        return None
+    _kb_search_cache.move_to_end(key)
+    return val
+
+def _kb_cache_put(key, val):
+    _kb_search_cache[key] = (val, time.time())
+    _kb_search_cache.move_to_end(key)
+    while len(_kb_search_cache) > _KB_CACHE_MAX:
+        _kb_search_cache.popitem(last=False)
+
+def clear_kb_search_cache():
+    """KB 重建/同步后调用，立即清空检索缓存（TTL 之外的安全兜底）"""
+    _kb_search_cache.clear()
 
 # ===== 用户上下文：在线程中传递当前 user_id，供 Agent 工具等无参接口使用 =====
 _kb_current_user_id: contextvars.ContextVar[int] = contextvars.ContextVar('kb_user_id', default=0)
@@ -350,6 +380,10 @@ class KnowledgeBaseService:
         彻底解决「需求未提行业时拉到无关行业文档」的错配问题。"""
         comp = self._competitor_companies
         results = []
+        _cache_key = ("huawei", query, k, filter_industry)
+        _cached = _kb_cache_get(_cache_key)
+        if _cached is not None:
+            return _cached
         kb_industry = self._resolve_kb_industry(filter_industry) if filter_industry else None
         try:
             if kb_industry:
@@ -376,10 +410,15 @@ class KnowledgeBaseService:
                     seen.add(d.page_content)
                     if len(results) >= k:
                         break
+        _kb_cache_put(_cache_key, results[:k])
         return results[:k]
 
     def search_user_uploaded(self, query, k=6):
         """只召回用户真实上传/新建的私有文档（doc_origin=user_uploaded），排除平台默认库副本"""
+        _cache_key = ("user", query, k)
+        _cached = _kb_cache_get(_cache_key)
+        if _cached is not None:
+            return _cached
         results = []
         try:
             results = self.vector_db.similarity_search(
@@ -399,10 +438,15 @@ class KnowledgeBaseService:
                             break
             except Exception as e:
                 logger.warning(f"用户私有文档回退池异常: {e}")
+        _kb_cache_put(_cache_key, results[:k])
         return results[:k]
 
     def search_competitor(self, query, k=2):
         """只召回竞品方案文档（竞品对比章节用）——直接在竞品子集上检索"""
+        _cache_key = ("comp", query, k)
+        _cached = _kb_cache_get(_cache_key)
+        if _cached is not None:
+            return _cached
         comp = self._competitor_companies
         results = []
         try:
@@ -420,6 +464,7 @@ class KnowledgeBaseService:
                     seen.add(d.page_content)
                     if len(results) >= k:
                         break
+        _kb_cache_put(_cache_key, results[:k])
         return results[:k]
 
     def get_stats(self):
