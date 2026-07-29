@@ -17,14 +17,22 @@ from api.share_routes import router as share_router
 from app.config import APP_NAME, APP_VERSION
 from app.core.errors import AppError, app_error_handler
 import logging
+import logging.handlers
 import time
 
+# 日志落到项目根绝对路径（不依赖启动时的 cwd），并启用轮转防止无限增长
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('api.log', encoding='utf-8')
+        logging.handlers.RotatingFileHandler(
+            os.path.join(PROJECT_ROOT, 'api.log'),
+            maxBytes=10 * 1024 * 1024,   # 单文件上限 10MB
+            backupCount=5,               # 额外保留 api.log.1~5，最多 60MB
+            encoding='utf-8'
+        )
     ]
 )
 # 静默 ChromaDB 遥测日志（国内网络无法上报）
