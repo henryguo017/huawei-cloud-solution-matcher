@@ -257,6 +257,23 @@ class KnowledgeBaseService:
             old = self._load_manifest()
             old_files = old.get('files', {})
 
+            # 切分参数指纹：CHUNK_SIZE/CHUNK_OVERLAP 改变会改变 chunk 边界，
+            # 旧向量按旧边界切分，与新向量混排会 silently 拉低检索质量（不报错但劣化）。
+            # 故参数变更时强制全量重建（清掉所有旧向量，全部按新参数重嵌）。
+            cur_chunk_params = f"{CHUNK_SIZE}-{CHUNK_OVERLAP}"
+            old_chunk_params = old.get('chunk_params')
+            if old_chunk_params is not None and old_chunk_params != cur_chunk_params:
+                print(f"[增量][参数变更] 切分参数 {old_chunk_params} → {cur_chunk_params}，"
+                      f"旧 chunk 边界失效，强制全量重建...")
+                try:
+                    existing = self.vector_db.get()
+                    existing_ids = existing.get('ids', [])
+                    if existing_ids:
+                        self.vector_db.delete(ids=existing_ids)
+                except Exception as e:
+                    print(f"[增量][WARN] 参数变更清理失败（忽略）: {e}")
+                old_files = {}  # 全部进入 to_rebuild
+
             # 兼容旧版：无 manifest 但集合已有向量 → 先全量清理（一次性迁移）
             if not old_files:
                 try:
@@ -304,17 +321,22 @@ class KnowledgeBaseService:
                 ids = [f"{base}#{i}" for i in range(len(info['chunks']))]
                 n = len(info['chunks'])
                 batch = 50
-                for s in range(0, n, batch):
-                    seg = info['chunks'][s:s + batch]
-                    self.vector_db.add_documents(seg, ids=ids[s:s + len(seg)])
-                    done += len(seg)
-                    if on_progress:
-                        on_progress(done, total_embed, f"增量生成向量嵌入（{done}/{total_embed}）...")
-                new_files[key] = {"hash": info['hash'], "chunk_ids": ids}
-                print(f"[增量] 重建: {key} ({n} 片段)")
+                try:
+                    for s in range(0, n, batch):
+                        seg = info['chunks'][s:s + batch]
+                        self.vector_db.add_documents(seg, ids=ids[s:s + len(seg)])
+                        done += len(seg)
+                        if on_progress:
+                            on_progress(done, total_embed, f"增量生成向量嵌入（{done}/{total_embed}）...")
+                    new_files[key] = {"hash": info['hash'], "chunk_ids": ids}
+                    print(f"[增量] 重建: {key} ({n} 片段)")
+                except Exception as e:
+                    # 单文件失败隔离：跳过并下次重试，不中断整个重建、不产生中间态崩溃
+                    print(f"[增量][WARN] 文件重建失败（跳过，下次同步重试）: {key}: {e}")
+                    import traceback; traceback.print_exc()
 
-            # 6. 持久化 manifest
-            self._save_manifest({"version": 1, "files": new_files})
+            # 6. 持久化 manifest（含切分参数指纹，供下次检测参数变更）
+            self._save_manifest({"version": 1, "chunk_params": cur_chunk_params, "files": new_files})
 
             # 7. 重建 retriever
             self.retriever = self.vector_db.as_retriever(
