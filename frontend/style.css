@@ -2742,7 +2742,14 @@ body::after {
     padding: 20px 24px; overflow-y: auto; flex: 1;
     display: flex; flex-direction: column; gap: 16px;
 }
-.kb-editor-field { display: flex; flex-direction: column; gap: 6px; }
+.kb-editor-field { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+/* voice-input wrap 后的 .voice-field 必须撑满父级宽度，textarea 铺满 */
+.kb-editor-field > .voice-field {
+    width: 100%; flex: 1; display: flex; align-items: stretch;
+}
+.kb-editor-field > .voice-field > textarea {
+    width: 100%; flex: 1; box-sizing: border-box;
+}
 .kb-editor-field label {
     font-size: var(--font-size-sm); color: var(--text-secondary);
 }
@@ -11493,7 +11500,8 @@ table tbody tr:hover {
 }
 /* 包裹式：为麦克风预留右侧空间，避免文字被遮 */
 .voice-field .textarea-input,
-.voice-field input { padding-right: 42px; }
+.voice-field input,
+.voice-field textarea { padding-right: 42px; }
 /* Agent 输入框内联麦克风（与发送按钮同排，绝对定位不破坏 flex） */
 .ai-input-box { position: relative; }
 .ai-input-box .voice-mic-btn {
