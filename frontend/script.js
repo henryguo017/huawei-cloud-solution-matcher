@@ -1617,21 +1617,6 @@ const API = {
         return await response.json();
     },
 
-    async clearKnowledge() {
-        const headers = {};
-        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
-        const response = await fetch(`${Config.API_BASE_URL}/knowledge/clear`, {
-            method: 'POST',
-            headers
-        });
-
-        if (!response.ok) {
-            throw new Error(`清空失败: ${response.statusText}`);
-        }
-
-        return await response.json();
-    },
-
     async syncMyKnowledge() {
         const headers = {};
         if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
@@ -7123,39 +7108,6 @@ function initEventListeners() {
         }
     });
     
-    const clearKbBtn = document.getElementById('clear-kb-btn');
-    const confirmOverlay = document.getElementById('confirm-clear-overlay');
-    const confirmClearBtn = document.getElementById('confirm-clear-btn');
-    const cancelCloseBtn = document.getElementById('cancel-clear-btn');
-    const cancelCancelBtn = document.getElementById('confirm-cancel-btn');
-
-    const closeConfirm = () => { confirmOverlay.style.display = 'none'; };
-
-    clearKbBtn?.addEventListener('click', () => {
-        if (!AuthManager.isLoggedIn()) {
-            UI.showToast('请先登录后再操作', 'warning');
-            AuthManager._openModal();
-            return;
-        }
-        confirmOverlay.style.display = 'flex';
-    });
-    confirmOverlay?.addEventListener('click', (e) => { if (e.target === confirmOverlay) closeConfirm(); });
-    cancelCancelBtn?.addEventListener('click', closeConfirm);
-    cancelCloseBtn?.addEventListener('click', closeConfirm);
-
-    confirmClearBtn?.addEventListener('click', async () => {
-        try {
-            await API.clearKnowledge();
-            UI.showToast('知识库已清空', 'success');
-            closeConfirm();
-            await KnowledgeUI.loadStats();
-            await KnowledgeUI.loadDocList();
-        } catch (error) {
-            console.error('清空失败:', error);
-            UI.showToast(error.message || '清空失败，请重试', 'error');
-        }
-    });
-
     // ===== 同步最新官方方案（方案B：保留用户自定义内容）=====
     const syncMineBtn = document.getElementById('sync-mine-btn');
     syncMineBtn?.addEventListener('click', async () => {
