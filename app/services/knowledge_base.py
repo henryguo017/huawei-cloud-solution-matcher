@@ -192,6 +192,7 @@ class KnowledgeBaseService:
         m['files'][self._file_manifest_key(file_path, category)] = {
             "hash": _kb_file_sha256(file_path),
             "chunk_ids": list(ids),
+            "origin": "user",
         }
         self._save_manifest(m)
 
@@ -215,6 +216,9 @@ class KnowledgeBaseService:
         try:
             huawei_dir = os.path.abspath(KNOWLEDGE_BASE_DIRECTORY) if use_default_dirs else self._huawei_dir
             competitor_dir = os.path.abspath(COMPETITOR_DIRECTORY) if use_default_dirs else self._competitor_dir
+            # 全局默认目录 = sync 的"源"；用户库里的系统文档都从这两个目录 copytree 而来
+            source_huawei = os.path.abspath(KNOWLEDGE_BASE_DIRECTORY)
+            source_competitor = os.path.abspath(COMPETITOR_DIRECTORY)
 
             # 1. 加载文档（仅文件读取 + 切分，不含 embedding，开销极小）
             huawei_docs = self._load_docs_from_dir(huawei_dir, "华为方案")
@@ -256,6 +260,41 @@ class KnowledgeBaseService:
             # 3. 比对 manifest，划分 保留 / 重建 / 删除
             old = self._load_manifest()
             old_files = old.get('files', {})
+
+            # 3.0 修剪上游已删除的系统文档（仅用户库，user_id>0）
+            # copytree 只覆盖不删多余文件，上游删除某篇官方文档后，用户库里它的磁盘文件
+            # 与旧向量会残留。这里只在「系统是同步来源 且 当前源目录已不存在该相对路径」
+            # 时动手删除磁盘+向量；用户自建文档(origin=user 或源目录本就无此相对路径)
+            # 一律保留，绝误删。
+            if self.user_id > 0:
+                for key, info in list(current.items()):
+                    src_root = source_huawei if key.startswith('h:') else source_competitor
+                    rel_path = key[2:]
+                    in_source = os.path.exists(os.path.join(src_root, rel_path))
+                    was_system = old_files.get(key, {}).get('origin') == 'system'
+                    if (was_system or in_source) and not in_source:
+                        fp = info.get('file_path')
+                        if fp and os.path.exists(fp):
+                            try:
+                                os.remove(fp)
+                                # 清理空父目录（只到分类根目录为止，不越界）
+                                parent = os.path.dirname(fp)
+                                cat_base = self._huawei_dir if key.startswith('h:') else self._competitor_dir
+                                while parent and os.path.abspath(parent) != os.path.abspath(cat_base) \
+                                        and os.path.isdir(parent) and not os.listdir(parent):
+                                    nxt = os.path.dirname(parent)
+                                    os.rmdir(parent)
+                                    parent = nxt
+                            except Exception as e:
+                                print(f"[增量][WARN] 修剪删除磁盘文件失败 {fp}: {e}")
+                        ids = old_files.get(key, {}).get('chunk_ids', [])
+                        if ids:
+                            try:
+                                self.vector_db.delete(ids=ids)
+                            except Exception:
+                                pass
+                        current.pop(key, None)
+                        print(f"[增量] 修剪上游已删除文件: {key}")
 
             # 切分参数指纹：CHUNK_SIZE/CHUNK_OVERLAP 改变会改变 chunk 边界，
             # 旧向量按旧边界切分，与新向量混排会 silently 拉低检索质量（不报错但劣化）。
@@ -304,7 +343,7 @@ class KnowledgeBaseService:
                         print(f"[增量][WARN] 清理失败 {key}: {e}")
 
             # 5. 重建变更 / 新增文件（仅这部分需要 CPU embedding）
-            new_files = {k: old_files[k] for k in to_keep}
+            new_files = {k: dict(old_files[k]) for k in to_keep}
             total_embed = sum(len(i['chunks']) for i in to_rebuild.values())
             done = 0
             if on_progress and total_embed:
@@ -328,8 +367,11 @@ class KnowledgeBaseService:
                         done += len(seg)
                         if on_progress:
                             on_progress(done, total_embed, f"增量生成向量嵌入（{done}/{total_embed}）...")
-                    new_files[key] = {"hash": info['hash'], "chunk_ids": ids}
-                    print(f"[增量] 重建: {key} ({n} 片段)")
+                    in_source = os.path.exists(os.path.join(
+                        source_huawei if key.startswith('h:') else source_competitor, key[2:]))
+                    origin = 'system' if in_source else 'user'
+                    new_files[key] = {"hash": info['hash'], "chunk_ids": ids, "origin": origin}
+                    print(f"[增量] 重建: {key} ({n} 片段, origin={origin})")
                 except Exception as e:
                     # 单文件失败隔离：跳过并下次重试，不中断整个重建、不产生中间态崩溃
                     print(f"[增量][WARN] 文件重建失败（跳过，下次同步重试）: {key}: {e}")
