@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260730c">
+<link rel="stylesheet" href="style.css?v=20260730d">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
@@ -473,11 +473,7 @@
                     <label>文档标题</label>
                     <input type="text" id="kb-editor-doc-title" placeholder="如：华为云智慧畜牧解决方案" maxlength="200">
                 </div>
-                <div class="kb-editor-field">
-                    <label>文档内容（支持 Markdown）</label>
-                    <textarea id="kb-editor-content" rows="14" placeholder="输入文档内容..."></textarea>
-                </div>
-                <div class="kb-editor-field">
+                <div class="kb-editor-field kb-editor-upload-section">
                     <label>或上传文件（自动解析与 OCR 入库）</label>
                     <div class="kb-editor-upload-row">
                         <button type="button" class="btn btn-outline btn-sm" id="kb-editor-upload-btn">选择文件并解析</button>
@@ -485,6 +481,11 @@
                         <span id="kb-editor-upload-name" class="kb-editor-upload-name"></span>
                     </div>
                     <div class="kb-editor-hint">支持 Word / PDF / PPT / TXT / MD / CSV；扫描件 PDF 会自动 OCR 识别文字。上传成功后会自动填入下方标题与内容，你可以在保存前核对修改（docx 表格、pptx 图片暂不在提取范围内）。</div>
+                </div>
+                <div class="kb-editor-divider"><span>或手动输入内容</span></div>
+                <div class="kb-editor-field">
+                    <label>文档内容（支持 Markdown）</label>
+                    <textarea id="kb-editor-content" rows="8" placeholder="输入文档内容..."></textarea>
                 </div>
             </div>
             <div class="kb-editor-footer">

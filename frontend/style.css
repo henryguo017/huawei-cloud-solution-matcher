@@ -2760,7 +2760,7 @@ body::after {
     border-color: rgba(74, 144, 226, 0.5);
     box-shadow: 0 0 8px rgba(74, 144, 226, 0.15);
 }
-.kb-editor-field textarea { resize: vertical; min-height: 200px; }
+.kb-editor-field textarea { resize: vertical; min-height: 140px; }
 .kb-editor-upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .kb-editor-upload-name {
     font-size: var(--font-size-sm); color: var(--text-secondary);
@@ -2770,6 +2770,29 @@ body::after {
     font-size: 12px; line-height: 1.6; color: var(--text-tertiary, #8a8f99);
     background: var(--bg-hover, #f5f6f8); border-left: 3px solid var(--border-color);
     padding: 8px 12px; border-radius: 6px;
+}
+/* 上传区域突出显示 */
+.kb-editor-upload-section {
+    background: var(--bg-hover, #f7f8fa);
+    border: 1px dashed var(--border-color, #d0d5dd);
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+.kb-editor-upload-section .kb-editor-hint {
+    margin-top: 8px;
+}
+/* 分隔线：或手动输入内容 */
+.kb-editor-divider {
+    text-align: center; position: relative; margin: 12px 0 8px;
+}
+.kb-editor-divider::before {
+    content: ''; position: absolute; top: 50%; left: 0; right: 0;
+    height: 1px; background: var(--border-light, #e5e7eb);
+}
+.kb-editor-divider span {
+    position: relative; z-index: 1; padding: 0 12px;
+    font-size: 12px; color: var(--text-tertiary, #8a8f99);
+    background: #fff;
 }
 #kb-editor-upload-btn[disabled] { opacity: .6; cursor: not-allowed; }
 .kb-editor-footer {
