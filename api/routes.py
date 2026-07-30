@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse, FileResponse
-from fastapi import UploadFile, File, BackgroundTasks
+from fastapi import UploadFile, File, BackgroundTasks, Form
 from api.models import (
     MatchRequest, MatchResponse,
     AnalyzeRequest, AnalyzeResponse,
@@ -41,7 +41,7 @@ from app.services.usage_logger import UsageLoggerService
 from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY, COMPETITOR_DIRECTORY, SUPPORTED_INDUSTRIES
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
 from app.config import KB_REBUILD_CONCURRENCY
-from app.agent.parsers.read_file import ALLOWED_EXT
+from app.agent.parsers.read_file import ALLOWED_EXT, extract_text
 from typing import Optional, Dict
 from datetime import datetime, date
 import os
@@ -1891,6 +1891,146 @@ async def create_knowledge_document(
     except Exception as e:
         logger.error(f"创建文档失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# ===== 知识库文件上传（Word/PDF/PPT 等 → 解析/OCR → 入库） =====
+
+# 知识库文件上传支持的扩展名（与前端 accept 保持一致）
+KB_UPLOAD_EXT = {".docx", ".pptx", ".pdf", ".txt", ".md", ".csv"}
+
+
+def _unique_kb_title(kb_service, category: str, industry: str, title: str) -> str:
+    """在目标目录下生成不重复的文档标题，避免 create_document 因同名 .txt 已存在而报错。"""
+    base_dir = kb_service._get_doc_base_dir(category)
+    target_dir = os.path.join(base_dir, industry)
+    candidate = title
+    i = 2
+    while True:
+        if not os.path.exists(os.path.join(target_dir, f"{candidate}.txt")):
+            return candidate
+        candidate = f"{title} ({i})"
+        i += 1
+
+
+def _run_upload_task(task_id: str, user_id: int, tmp_path: str, original_filename: str,
+                      category: str, industry: str):
+    """后台线程：解析上传文件 → 提取纯文本（扫描件走 OCR）→ 写入并向量化入库。"""
+    try:
+        _update_task(task_id, status="queued", progress=0, message="任务已提交，正在等待空闲资源...")
+        acquired = _acquire_slot_with_feedback(task_id)
+        if not acquired:
+            _update_task(task_id, status="failed", progress=0, message="任务排队超时，请稍后重试")
+            return
+        try:
+            _update_task(task_id, status="running", progress=10,
+                         message=f"正在解析文件「{original_filename}」（提取文字 / OCR）...")
+            # extract_text 已在模块顶部导入（app.agent.parsers.read_file）
+            text = extract_text(tmp_path)
+            if text.startswith("Error:"):
+                _update_task(task_id, status="failed", progress=0, message=text)
+                return
+            if not text.strip():
+                _update_task(task_id, status="failed", progress=0,
+                             message="未能从文件中提取到任何文字（可能是空文件，或扫描件 OCR 失败）")
+                return
+
+            kb_service = get_user_knowledge_base(user_id)
+            raw_title = os.path.splitext(os.path.basename(original_filename))[0] or "未命名文档"
+            title = _unique_kb_title(kb_service, category, industry, raw_title)
+
+            _update_task(task_id, status="running", progress=60,
+                         message=f"文字提取完成（{len(text)} 字），正在写入并向量化...")
+            result = kb_service.create_document(category, industry, title, text)
+
+            # 刷新检索缓存，使新入库内容立即可被检索
+            _user_kb_cache.pop(user_id, None)
+            clear_kb_search_cache()
+
+            _update_task(task_id, status="success", progress=100,
+                         message=f"已解析并入库「{title}」，共 {result['chunks']} 个文档片段",
+                         result={
+                             "id": result["id"], "title": title,
+                             "chunks": result["chunks"], "content": text,
+                             "content_length": len(text),
+                         })
+        finally:
+            _rebuild_semaphore.release()
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error(f"[后台上传解析] 用户 {user_id} 失败: {e}")
+        _update_task(task_id, status="failed", progress=0, message=f"上传解析失败: {str(e)}")
+
+
+@router.post("/knowledge/documents/upload", response_model=TaskStatusResponse, status_code=202,
+             tags=["知识库管理"])
+async def upload_knowledge_document_file(
+    file: UploadFile = File(...),
+    category: str = Form("huawei"),
+    industry: str = Form("智慧农业"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    上传文件（Word/PDF/PPT 等）到知识库：解析 + OCR + 向量化入库。
+
+    端点立即返回 task_id（202），重活在后台线程执行（含 CPU 嵌入，受全局并发信号量限流），
+    前端轮询 /api/knowledge/task/{task_id} 获取进度。解析能力复用 app.agent.parsers.read_file.extract_text，
+    支持 .docx/.pptx/.pdf（扫描件自动 OCR）/.txt/.md/.csv。成功后在用户知识库写入 .txt 并索引，
+    doc_origin=user_uploaded（与平台默认库副本区分），manifest 同步更新（增量重建/修剪链路无需改动）。
+    """
+    try:
+        user_id = current_user["id"]
+        original_filename = file.filename or ""
+        ext = os.path.splitext(original_filename)[1].lower()
+        if ext not in KB_UPLOAD_EXT:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"不支持的文件格式: {ext}（仅支持 {', '.join(sorted(KB_UPLOAD_EXT))}）"
+            )
+
+        data = await file.read()
+        max_bytes = 100 * 1024 * 1024
+        if len(data) > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"文件超过 100MB 上限（当前 {len(data) // (1024 * 1024)}MB）"
+            )
+
+        from app.agent.file_security import safe_upload_path, ensure_user_dirs
+        ensure_user_dirs(user_id)
+        # 临时落盘（uuid 前缀避免并发同名覆盖），供 extract_text 读取
+        safe_name = f"{uuid.uuid4().hex}_{original_filename}"
+        save_path = safe_upload_path(user_id, safe_name)
+        with open(save_path, "wb") as f:
+            f.write(data)
+
+        if category not in ("huawei", "competitor"):
+            category = "huawei"
+
+        task_id = str(uuid.uuid4())
+        with _task_store_lock:
+            _task_store[task_id] = {
+                "task_id": task_id, "status": "pending", "progress": 0,
+                "message": "任务已创建，等待执行...", "result": None,
+            }
+        threading.Thread(
+            target=_run_upload_task,
+            args=(task_id, user_id, save_path, original_filename, category, industry),
+            daemon=True,
+        ).start()
+        logger.info(f"用户 {user_id} 提交知识库文件上传任务 {task_id}: {original_filename}")
+        return TaskStatusResponse(
+            task_id=task_id, status="pending", progress=0,
+            message="文件已接收，正在后台解析与入库（可在本页面查看进度）"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[上传] 失败: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"上传失败: {str(e)}")
 
 
 @router.put("/knowledge/documents/{doc_id}", response_model=KBDocumentUpdateResponse, tags=["知识库管理"])

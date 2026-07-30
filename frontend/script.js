@@ -1637,6 +1637,29 @@ const API = {
         return await response.json();
     },
 
+    async uploadKnowledgeFile(file, category, industry) {
+        const headers = {};
+        if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
+        const form = new FormData();
+        form.append('file', file);
+        form.append('category', category);
+        form.append('industry', industry);
+        const response = await fetch(`${Config.API_BASE_URL}/knowledge/documents/upload`, {
+            method: 'POST',
+            headers,
+            body: form
+        });
+        if (!response.ok) {
+            let msg = `上传失败: ${response.statusText}`;
+            try {
+                const err = await response.json();
+                if (err && err.detail) msg = err.detail;
+            } catch (e) { /* ignore */ }
+            throw new Error(msg);
+        }
+        return await response.json();
+    },
+
     async getTaskStatus(taskId) {
         const headers = {};
         if (AuthManager.isLoggedIn()) headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
@@ -3027,6 +3050,47 @@ Object.assign(KnowledgeUI, {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && document.getElementById('kb-editor-overlay')?.style.display !== 'none') {
                 this._hideEditor();
+            }
+        });
+        // 上传文件并解析（Word/PDF/PPT → 解析+OCR → 入库），结果回填编辑器供预览/修改
+        const uploadBtn = document.getElementById('kb-editor-upload-btn');
+        const fileInput = document.getElementById('kb-editor-file');
+        uploadBtn?.addEventListener('click', () => fileInput?.click());
+        fileInput?.addEventListener('change', async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            if (!AuthManager.isLoggedIn()) {
+                UI.showToast('请先登录后再上传', 'warning');
+                AuthManager._openModal();
+                e.target.value = '';
+                return;
+            }
+            const statusEl = document.getElementById('kb-editor-status');
+            const nameEl = document.getElementById('kb-editor-upload-name');
+            const category = document.getElementById('kb-editor-category').value;
+            const industry = document.getElementById('kb-editor-industry').value;
+            nameEl.textContent = file.name;
+            uploadBtn.disabled = true;
+            statusEl.textContent = '上传并解析中...';
+            try {
+                const task = await API.uploadKnowledgeFile(file, category, industry);
+                const final = await pollKbTask(task.task_id, (st) => {
+                    statusEl.textContent = st.message || '解析中...';
+                });
+                const res = final.result || {};
+                // 后端已写入并索引；回填标题与内容供用户核对/修改
+                document.getElementById('kb-editor-doc-title').value = res.title || '';
+                document.getElementById('kb-editor-content').value = res.content || '';
+                this.editingDocId = res.id || null;  // 保存=更新该文档（重新索引修改后内容）
+                document.getElementById('kb-editor-save-btn').querySelector('.btn-text').textContent = '更新';
+                document.getElementById('kb-editor-title-text').textContent = '文档已上传，可核对后点「更新」';
+                UI.showToast(`已解析并入库「${res.title}」，可在下方核对修改`, 'success');
+            } catch (err) {
+                statusEl.textContent = '解析失败: ' + (err.message || '未知错误');
+                UI.showToast('文件解析失败: ' + (err.message || ''), 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                e.target.value = '';  // 允许再次选择同一文件
             }
         });
     },

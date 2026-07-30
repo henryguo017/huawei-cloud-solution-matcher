@@ -477,6 +477,15 @@
                     <label>文档内容（支持 Markdown）</label>
                     <textarea id="kb-editor-content" rows="14" placeholder="输入文档内容..."></textarea>
                 </div>
+                <div class="kb-editor-field">
+                    <label>或上传文件（自动解析与 OCR 入库）</label>
+                    <div class="kb-editor-upload-row">
+                        <button type="button" class="btn btn-outline btn-sm" id="kb-editor-upload-btn">选择文件并解析</button>
+                        <input type="file" id="kb-editor-file" accept=".docx,.pptx,.pdf,.txt,.md,.csv" style="display:none;">
+                        <span id="kb-editor-upload-name" class="kb-editor-upload-name"></span>
+                    </div>
+                    <div class="kb-editor-hint">支持 Word / PDF / PPT / TXT / MD / CSV；扫描件 PDF 会自动 OCR 识别文字。上传成功后会自动填入下方标题与内容，你可以在保存前核对修改（docx 表格、pptx 图片暂不在提取范围内）。</div>
+                </div>
             </div>
             <div class="kb-editor-footer">
                 <span id="kb-editor-status"></span>
@@ -2123,7 +2132,7 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260730a"></script>
+    <script src="script.js?v=20260730c"></script>
     <script src="js/voice-input.js?v=20260726f"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260716f"></script>

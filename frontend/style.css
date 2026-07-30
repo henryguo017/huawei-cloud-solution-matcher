@@ -2761,6 +2761,17 @@ body::after {
     box-shadow: 0 0 8px rgba(74, 144, 226, 0.15);
 }
 .kb-editor-field textarea { resize: vertical; min-height: 200px; }
+.kb-editor-upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.kb-editor-upload-name {
+    font-size: var(--font-size-sm); color: var(--text-secondary);
+    max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.kb-editor-hint {
+    font-size: 12px; line-height: 1.6; color: var(--text-tertiary, #8a8f99);
+    background: var(--bg-hover, #f5f6f8); border-left: 3px solid var(--border-color);
+    padding: 8px 12px; border-radius: 6px;
+}
+#kb-editor-upload-btn[disabled] { opacity: .6; cursor: not-allowed; }
 .kb-editor-footer {
     display: flex; align-items: center; justify-content: flex-end;
     gap: 10px; padding: 16px 24px;
