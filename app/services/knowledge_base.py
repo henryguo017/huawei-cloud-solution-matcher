@@ -4,6 +4,8 @@ from app.config import *
 from langchain_core.documents import Document
 import os
 import time
+import json
+import hashlib
 import logging
 import shutil
 import contextvars
@@ -41,6 +43,22 @@ def _kb_cache_put(key, val):
 def clear_kb_search_cache():
     """KB 重建/同步后调用，立即清空检索缓存（TTL 之外的安全兜底）"""
     _kb_search_cache.clear()
+
+# ===== 增量重建辅助（文件内容哈希 + 确定性向量 id）=====
+def _kb_file_sha256(path):
+    """计算文件内容 sha256（用于判定文档是否变化）"""
+    h = hashlib.sha256()
+    try:
+        with open(path, 'rb') as f:
+            for blk in iter(lambda: f.read(65536), b''):
+                h.update(blk)
+    except Exception:
+        return ""
+    return h.hexdigest()
+
+def _kb_stable_id(seed: str) -> str:
+    """把任意字符串映射为定长、合法的向量库 id（sha1 40 字符）"""
+    return hashlib.sha1(seed.encode('utf-8')).hexdigest()
 
 # ===== 用户上下文：在线程中传递当前 user_id，供 Agent 工具等无参接口使用 =====
 _kb_current_user_id: contextvars.ContextVar[int] = contextvars.ContextVar('kb_user_id', default=0)
@@ -90,8 +108,9 @@ class KnowledgeBaseService:
         self._competitor_companies = self._compute_competitor_companies()
 
     def _load_docs_from_dir(self, directory, dir_label=""):
-        """从指定目录加载文档"""
-        from app.utils.document_loader import load_documents_from_directory
+        """从指定目录加载文档（每个 chunk 注入 _kb_src = 源文件绝对路径，供增量重建定位）"""
+        from app.utils.document_loader import DocumentLoader
+        from app.knowledge.splitters import get_splitter
 
         abs_dir = os.path.abspath(directory)
         if not os.path.exists(abs_dir):
@@ -101,51 +120,104 @@ class KnowledgeBaseService:
         label = f"[{dir_label}]" if dir_label else ""
         print(f"[重建] {label} 加载文档目录: {abs_dir}")
 
-        docs = load_documents_from_directory(
-            directory=abs_dir,
-            chunk_size=CHUNK_SIZE,
-            chunk_overlap=CHUNK_OVERLAP
-        )
+        loader = DocumentLoader()
+        raw_docs = []
+        for root, dirs, files in os.walk(abs_dir):
+            for fname in files:
+                if os.path.splitext(fname)[1].lower() in (".pdf", ".txt", ".md"):
+                    fpath = os.path.abspath(os.path.join(root, fname))
+                    try:
+                        loaded = loader.load_single_file(fpath)
+                        for d in loaded:
+                            d.metadata["_kb_src"] = fpath  # 真实源文件路径（含行业子目录，唯一）
+                        raw_docs.extend(loaded)
+                    except Exception as e:
+                        print(f"[重建] 加载失败 {fpath}: {e}")
 
-        if docs:
-            print(f"[重建] {label} 加载到 {len(docs)} 个文档片段")
+        if raw_docs:
+            print(f"[重建] {label} 加载到 {len(raw_docs)} 个原始文档")
             subdirs = [d for d in os.listdir(abs_dir) if os.path.isdir(os.path.join(abs_dir, d))]
             if subdirs:
                 print(f"[重建] {label} 包含 {len(subdirs)} 个子目录: {', '.join(subdirs[:5])}{'...' if len(subdirs) > 5 else ''}")
         else:
             print(f"[重建] {label} [WARN] 未加载到任何文档片段")
 
+        # 切分为 chunk（与 load_documents_from_directory 行为一致）
+        splitter = get_splitter("recursive", chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+        docs = splitter.split(raw_docs) if raw_docs else []
+        if docs:
+            print(f"[重建] {label} 分割为 {len(docs)} 个文档片段")
+
         return docs
+
+    # ===== 增量重建：manifest 读写 + 确定性 id =====
+    def _manifest_path(self):
+        return os.path.join(self._vector_db_dir, "_kb_manifest.json")
+
+    def _load_manifest(self):
+        p = self._manifest_path()
+        if os.path.exists(p):
+            try:
+                with open(p, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, dict) and 'files' in data:
+                    return data
+            except Exception as e:
+                print(f"[增量][WARN] manifest 解析失败，将走全量重建: {e}")
+        return {"version": 1, "files": {}}
+
+    def _save_manifest(self, data):
+        p = self._manifest_path()
+        tmp = p + ".tmp"
+        try:
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, p)  # 原子替换，避免写一半损坏
+        except Exception as e:
+            print(f"[增量][WARN] manifest 写入失败（不影响本次重建）: {e}")
+
+    def _file_manifest_key(self, file_path, category):
+        base = os.path.abspath(self._get_doc_base_dir(category))
+        rel = os.path.relpath(os.path.abspath(file_path), base)
+        prefix = "h:" if category == 'huawei' else "c:"
+        return prefix + rel
+
+    def _chunk_ids_for_file(self, file_path, category, n):
+        base = _kb_stable_id(self._file_manifest_key(file_path, category))
+        return [f"{base}#{i}" for i in range(n)]
+
+    def _manifest_upsert_file(self, file_path, category, ids):
+        m = self._load_manifest()
+        m.setdefault('files', {})
+        m['files'][self._file_manifest_key(file_path, category)] = {
+            "hash": _kb_file_sha256(file_path),
+            "chunk_ids": list(ids),
+        }
+        self._save_manifest(m)
 
     def build_from_directory(self, use_default_dirs: bool = False,
                               on_progress: Optional[Callable[[int, int, str], None]] = None):
         """
-        从目录重建知识库（含华为方案和竞品方案）
+        从目录【增量】重建知识库（含华为方案和竞品方案）。
+
+        增量策略：基于文件内容哈希（manifest）比对，只对「新增 / 内容变化」的文件重新
+        生成向量嵌入；未变化的文件向量原样保留（不重算、不删除）；已从磁盘移除的文件
+        清理其旧向量。日常「系统新增几篇 + 用户文档不变」的场景，embedding 计算量可
+        降低约两个数量级（分钟级 → 秒级）。
+
+        兼容性：若检测到旧版向量库（无 manifest，且集合内已有向量，多为自动 uuid id），
+        先做一次全量清理再按确定性 id 重建，避免新旧 id 共存产生重复向量。
 
         Args:
-            use_default_dirs: 如果为 True，强制使用全局默认目录（管理员重建全局KB时）
-            on_progress: 可选进度回调，签名 (done, total, stage_text)，用于后台任务实时上报进度
+            use_default_dirs: 为 True 时强制使用全局默认目录（管理员重建全局KB）
+            on_progress: 可选进度回调 (done, total, stage_text)
         """
         try:
             huawei_dir = os.path.abspath(KNOWLEDGE_BASE_DIRECTORY) if use_default_dirs else self._huawei_dir
             competitor_dir = os.path.abspath(COMPETITOR_DIRECTORY) if use_default_dirs else self._competitor_dir
 
-            # 清除现有数据
-            try:
-                all_data = self.vector_db.get()
-                existing_ids = all_data.get("ids", [])
-                if existing_ids:
-                    print(f"[重建] 清除旧数据 ({len(existing_ids)} 条)...")
-                    self.vector_db.delete(ids=existing_ids)
-                else:
-                    print("[重建] 知识库为空，无需清除")
-            except Exception as clear_err:
-                print(f"[重建] [WARN] 清除旧数据时出现异常（可忽略）: {clear_err}")
-
-            # 1. 加载华为云方案文档
+            # 1. 加载文档（仅文件读取 + 切分，不含 embedding，开销极小）
             huawei_docs = self._load_docs_from_dir(huawei_dir, "华为方案")
-
-            # 2. 加载竞品方案文档
             competitor_docs = []
             if os.path.exists(competitor_dir):
                 competitor_docs = self._load_docs_from_dir(competitor_dir, "竞品方案")
@@ -153,33 +225,106 @@ class KnowledgeBaseService:
                 print(f"[重建] [WARN] 竞品目录不存在，跳过: {competitor_dir}")
 
             all_documents = huawei_docs + competitor_docs
-
             if not all_documents:
                 print("[重建] [ERR] 未加载到任何文档！请检查目录结构")
                 return 0
 
-            print(f"[重建] 总计 {len(all_documents)} 个文档片段（华为 {len(huawei_docs)} + 竞品 {len(competitor_docs)}）")
+            # 2. 按源文件分组，计算内容哈希
+            current = {}  # manifest_key -> {rel_path, prefix, file_path, hash, chunks}
+            def _group(docs, root, prefix):
+                for d in docs:
+                    src = d.metadata.get('_kb_src') or d.metadata.get('source')
+                    if src:
+                        ab = os.path.abspath(src)
+                        rel = os.path.relpath(ab, root)
+                    else:
+                        # 无 source 元数据：以内容哈希作为稳定 key，避免重复累积
+                        ab = None
+                        rel = _kb_stable_id(d.page_content)
+                    key = prefix + rel
+                    entry = current.setdefault(key, {
+                        'rel_path': rel, 'prefix': prefix,
+                        'file_path': ab, 'hash': None, 'chunks': []
+                    })
+                    entry['chunks'].append(d)
+            _group(huawei_docs, huawei_dir, "h:")
+            _group(competitor_docs, competitor_dir, "c:")
+            for info in current.values():
+                info['hash'] = _kb_file_sha256(info['file_path']) if info['file_path'] \
+                    else _kb_stable_id(info['chunks'][0].page_content)
 
-            # 分批写入向量库并上报进度（CPU 嵌入耗时较长，分批让前端能看到进度）
-            total = len(all_documents)
-            batch_size = 50
-            if on_progress:
-                on_progress(0, total, f"正在生成向量嵌入（共 {total} 个片段）...")
-            for i in range(0, total, batch_size):
-                chunk = all_documents[i:i + batch_size]
-                self.vector_db.add_documents(chunk)
-                if on_progress:
-                    done = min(i + batch_size, total)
-                    on_progress(done, total, f"正在生成向量嵌入（{done}/{total}）...")
+            # 3. 比对 manifest，划分 保留 / 重建 / 删除
+            old = self._load_manifest()
+            old_files = old.get('files', {})
 
-            print(f"[重建] [OK] 知识库重建完成！共 {total} 个文档片段")
+            # 兼容旧版：无 manifest 但集合已有向量 → 先全量清理（一次性迁移）
+            if not old_files:
+                try:
+                    existing = self.vector_db.get()
+                    existing_ids = existing.get('ids', [])
+                    if existing_ids:
+                        print(f"[增量][迁移] 检测到旧版向量库（{len(existing_ids)} 条），清理后按确定性 id 重建...")
+                        self.vector_db.delete(ids=existing_ids)
+                except Exception as e:
+                    print(f"[增量][WARN] 迁移清理失败（忽略）: {e}")
 
-            # 重建 retriever
+            to_keep, to_rebuild = set(), {}
+            for key, info in current.items():
+                if key in old_files and old_files[key].get('hash') == info['hash']:
+                    to_keep.add(key)
+                else:
+                    to_rebuild[key] = info
+            to_delete = set(old_files.keys()) - set(current.keys())
+
+            # 4. 删除已从磁盘移除的文件的旧向量
+            for key in to_delete:
+                ids = old_files[key].get('chunk_ids', [])
+                if ids:
+                    try:
+                        self.vector_db.delete(ids=ids)
+                        print(f"[增量] 清理已移除文件: {key} ({len(ids)} 片段)")
+                    except Exception as e:
+                        print(f"[增量][WARN] 清理失败 {key}: {e}")
+
+            # 5. 重建变更 / 新增文件（仅这部分需要 CPU embedding）
+            new_files = {k: old_files[k] for k in to_keep}
+            total_embed = sum(len(i['chunks']) for i in to_rebuild.values())
+            done = 0
+            if on_progress and total_embed:
+                on_progress(0, total_embed, f"增量生成向量嵌入（{len(to_rebuild)} 个变更文件 / 共 {total_embed} 片段）...")
+            for key, info in to_rebuild.items():
+                if key in old_files:  # 变化文件：先删旧向量，避免孤儿 / 重复
+                    old_ids = old_files[key].get('chunk_ids', [])
+                    if old_ids:
+                        try:
+                            self.vector_db.delete(ids=old_ids)
+                        except Exception:
+                            pass
+                base = _kb_stable_id(info['prefix'] + info['rel_path'])
+                ids = [f"{base}#{i}" for i in range(len(info['chunks']))]
+                n = len(info['chunks'])
+                batch = 50
+                for s in range(0, n, batch):
+                    seg = info['chunks'][s:s + batch]
+                    self.vector_db.add_documents(seg, ids=ids[s:s + len(seg)])
+                    done += len(seg)
+                    if on_progress:
+                        on_progress(done, total_embed, f"增量生成向量嵌入（{done}/{total_embed}）...")
+                new_files[key] = {"hash": info['hash'], "chunk_ids": ids}
+                print(f"[增量] 重建: {key} ({n} 片段)")
+
+            # 6. 持久化 manifest
+            self._save_manifest({"version": 1, "files": new_files})
+
+            # 7. 重建 retriever
             self.retriever = self.vector_db.as_retriever(
                 search_kwargs={"k": VECTOR_SEARCH_TOP_K}
             )
 
-            return total
+            total_fragments = sum(len(v.get('chunk_ids', [])) for v in new_files.values())
+            print(f"[重建][OK] 增量完成：保留 {len(to_keep)} 个未变文件，重建 {len(to_rebuild)} 个变更文件，"
+                  f"删除 {len(to_delete)} 个已移除文件，当前共 {total_fragments} 个片段")
+            return total_fragments
 
         except ImportError as e:
             print(f"[重建] [ERR] 导入失败: {e}")
@@ -647,7 +792,7 @@ class KnowledgeBaseService:
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
         industry = os.path.basename(os.path.dirname(file_path))
-        self._remove_doc_vectors(file_path)
+        # _index_single_file 内部会先按确定性 id 清理旧向量，无需在此重复删除
         count = self._index_single_file(file_path, category, industry)
         self.retriever = self.vector_db.as_retriever(search_kwargs={"k": VECTOR_SEARCH_TOP_K})
         return {'id': doc_id, 'chunks': count}
@@ -659,7 +804,7 @@ class KnowledgeBaseService:
         file_path = os.path.join(base_dir, rel_path)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
-        removed = self._remove_doc_vectors(file_path)
+        removed = self._remove_doc_vectors(file_path, category=category)
         if delete_file:
             os.remove(file_path)
             parent_dir = os.path.dirname(file_path)
@@ -676,13 +821,13 @@ class KnowledgeBaseService:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
         industry = os.path.basename(os.path.dirname(file_path))
-        self._remove_doc_vectors(file_path)
+        # _index_single_file 内部会先按确定性 id 清理旧向量，无需在此重复删除
         count = self._index_single_file(file_path, category, industry)
         self.retriever = self.vector_db.as_retriever(search_kwargs={"k": VECTOR_SEARCH_TOP_K})
         return {'chunks': count}
 
     def _index_single_file(self, file_path, category, industry):
-        """将单个文件加载并索引到向量库"""
+        """将单个文件加载并索引到向量库（确定性 id + manifest 感知，避免重复向量）"""
         from app.utils.document_loader import load_documents_from_directory
         tmp_dir = os.path.join(os.path.dirname(file_path), '.tmp_index')
         os.makedirs(tmp_dir, exist_ok=True)
@@ -694,14 +839,36 @@ class KnowledgeBaseService:
                 # 标记为「用户真实上传/新建」，与平台默认库副本区分（personal 路由据此只检索真私有资料）
                 for c in chunks:
                     c.metadata["doc_origin"] = "user_uploaded"
-                self.vector_db.add_documents(chunks)
+                    c.metadata["_kb_src"] = os.path.abspath(file_path)
+                # 先清理该文件旧向量（避免重复），再写入确定性 id
+                self._remove_doc_vectors(file_path, category=category)
+                ids = self._chunk_ids_for_file(file_path, category, len(chunks))
+                self.vector_db.add_documents(chunks, ids=ids)
+                self._manifest_upsert_file(file_path, category, ids)
                 print(f"[索引] {os.path.basename(file_path)} → {len(chunks)} 个向量片段")
             return len(chunks)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    def _remove_doc_vectors(self, file_path):
-        """从向量库中移除指定文件的所有向量"""
+    def _remove_doc_vectors(self, file_path, category=None):
+        """从向量库中移除指定文件的所有向量（manifest 优先，basename 兜底兼容旧数据）"""
+        removed = 0
+        if category is not None:
+            key = self._file_manifest_key(file_path, category)
+            m = self._load_manifest()
+            if key in m.get('files', {}):
+                ids = m['files'][key].get('chunk_ids', [])
+                if ids:
+                    try:
+                        self.vector_db.delete(ids=ids)
+                        removed += len(ids)
+                    except Exception as e:
+                        print(f"[索引] 删除向量失败 {file_path}: {e}")
+                m['files'].pop(key, None)
+                self._save_manifest(m)
+                print(f"[索引] 已移除 {os.path.basename(file_path)}: {len(ids)} 个向量（manifest）")
+                return removed
+        # 兜底：按 source 文件名匹配（兼容旧版自动 uuid 向量 / 未传 category 的场景）
         try:
             all_data = self.vector_db.get()
             ids_to_remove = []
@@ -711,8 +878,9 @@ class KnowledgeBaseService:
                     ids_to_remove.append(all_data['ids'][i])
             if ids_to_remove:
                 self.vector_db.delete(ids=ids_to_remove)
+                removed += len(ids_to_remove)
                 print(f"[索引] 已移除 {filename}: {len(ids_to_remove)} 个向量")
-            return len(ids_to_remove)
+            return removed
         except Exception as e:
             print(f"[索引] 移除向量失败 {file_path}: {e}")
-            return 0
+            return removed
