@@ -2468,12 +2468,12 @@ const UI = {
 
     simpleMarkdown(text) {
         if (!text || typeof text !== 'string') return '';
-        let html = text;
+        let html = this._escapeMarkdownText(text);
         // 代码块（优先处理）
         const codeBlocks = [];
         html = html.replace(/```[\s\S]*?```/g, function (m) {
             const idx = codeBlocks.length;
-            const inner = m.replace(/```[\w]*\n?/, '').replace(/```$/, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const inner = m.replace(/```[\w]*\n?/, '').replace(/```$/, '');
             codeBlocks.push('<pre style="background:var(--neutral-300,#F7F8FA);border:1px solid var(--neutral-400,#F2F3F5);color:var(--neutral-900,#1D2129);padding:12px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6;"><code>' + inner + '</code></pre>');
             return '___CODEBLOCK_' + idx + '___';
         });
@@ -2488,7 +2488,9 @@ const UI = {
         // 斜体
         html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
         // 链接
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--primary-color);">$1</a>');
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, label, url) {
+            return '<a href="' + UI._safeMarkdownUrl(url) + '" target="_blank" style="color:var(--primary-color);">' + label + '</a>';
+        });
         // 无序列表
         html = html.replace(/^[\s]*[-*+] (.+)$/gm, '<li>$1</li>');
         html = html.replace(/(<li>.*<\/li>)/s, '<ul style="padding-left:20px;margin:8px 0;">$1</ul>');
@@ -2601,6 +2603,20 @@ const UI = {
             html = html.replace('___CODEBLOCK_' + idx + '___', block);
         });
         return html;
+    },
+
+    _escapeMarkdownText(text) {
+        return String(text == null ? '' : text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+
+    _safeMarkdownUrl(url) {
+        const u = String(url || '').trim().toLowerCase();
+        return /^(https?:|mailto:)/.test(u) ? url : '#';
     },
 
     renderMarkdown(content) {
@@ -5130,6 +5146,8 @@ function initEventListeners() {
                 if (emailDisplayRow) emailDisplayRow.style.display = '';
             }
             document.getElementById('info-role').textContent = userData.role === 'admin' ? '管理员' : '普通用户';
+            const rebuildBtn = document.getElementById('rebuild-btn');
+            if (rebuildBtn) rebuildBtn.style.display = userData.role === 'admin' ? '' : 'none';
 
             // Format dates
             if (userData.created_at) {

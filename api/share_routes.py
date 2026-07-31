@@ -3,11 +3,13 @@
 匿名可用（get_current_user_optional），不暴露任何用户身份或后台入口。
 """
 import logging
+import json
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 
 from api.auth_dependencies import get_current_user_optional
+from api.dependencies import rate_limit
 from app.services.share_service import ShareService
 from app.services.achievement_service import get_achievement_service
 
@@ -18,7 +20,7 @@ _share_service = ShareService()
 
 
 class ShareCreateRequest(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(default=None, max_length=120)
     payload: Dict[str, Any]
 
 
@@ -30,7 +32,14 @@ class ShareResponse(BaseModel):
 
 
 @router.post("/share", response_model=ShareResponse)
-async def create_share(req: ShareCreateRequest, user=Depends(get_current_user_optional)):
+async def create_share(
+    req: ShareCreateRequest,
+    user=Depends(get_current_user_optional),
+    _: None = Depends(rate_limit(60, 60)),
+):
+    raw_payload = json.dumps(req.payload, ensure_ascii=False)
+    if len(raw_payload) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="分享内容过大")
     share_id = _share_service.create_share(req.title, req.payload)
     if not share_id:
         raise HTTPException(status_code=500, detail="创建分享失败，请稍后重试")

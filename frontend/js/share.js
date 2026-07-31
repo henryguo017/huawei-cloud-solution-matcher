@@ -11,6 +11,11 @@
             .replace(/"/g, '&quot;');
     }
 
+    function safeUrl(url) {
+        const u = String(url || '').trim().toLowerCase();
+        return /^(https?:|mailto:)/.test(u) ? url : '#';
+    }
+
     function fmtDate(s) {
         if (!s) return '';
         return String(s).replace('T', ' ').replace(/\.\d+$/, '').slice(0, 19);
@@ -19,11 +24,11 @@
     // 复刻自主站 UI.simpleMarkdown，保证渲染样式一致
     function simpleMarkdown(text) {
         if (!text || typeof text !== 'string') return '';
-        let html = text;
+        let html = escapeHtml(text);
         const codeBlocks = [];
         html = html.replace(/```[\s\S]*?```/g, function (m) {
             const idx = codeBlocks.length;
-            const inner = m.replace(/```[\w]*\n?/, '').replace(/```$/, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const inner = m.replace(/```[\w]*\n?/, '').replace(/```$/, '');
             codeBlocks.push('<pre style="background:var(--neutral-300,#F7F8FA);border:1px solid var(--neutral-400,#F2F3F5);color:var(--neutral-900,#1D2129);padding:12px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6;"><code>' + inner + '</code></pre>');
             return '___CODEBLOCK_' + idx + '___';
         });
@@ -33,7 +38,9 @@
         html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
         html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--primary-color);">$1</a>');
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, label, url) {
+            return '<a href="' + safeUrl(url) + '" target="_blank" style="color:var(--primary-color);">' + label + '</a>';
+        });
         html = html.replace(/^[\s]*[-*+] (.+)$/gm, '<li>$1</li>');
         html = html.replace(/(<li>.*<\/li>)/s, '<ul style="padding-left:20px;margin:8px 0;">$1</ul>');
         html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');

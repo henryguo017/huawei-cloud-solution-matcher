@@ -10,11 +10,14 @@ import logging
 import shutil
 import contextvars
 import re
+from pathlib import Path
 from collections import OrderedDict
 from urllib.parse import quote, unquote
 from typing import Optional, Callable
 
 logger = logging.getLogger(__name__)
+
+_KB_CATEGORIES = {"huawei", "competitor"}
 
 # ===== KB 检索结果 LRU 缓存（带 TTL）=====
 # 相同查询（query/k/filter）在 TTL 内复用向量检索结果，省去重复的 query embedding 计算。
@@ -770,6 +773,25 @@ class KnowledgeBaseService:
         base = os.path.abspath(self._huawei_dir if category == 'huawei' else self._competitor_dir)
         return base
 
+    def _safe_doc_path(self, category, rel_path):
+        """把 doc_id 中的相对路径解析为绝对路径，并强制限制在分类根目录内。"""
+        if category not in _KB_CATEGORIES:
+            raise ValueError(f"无效的知识库分类: {category}")
+        base = Path(self._get_doc_base_dir(category)).resolve()
+        target = (base / rel_path).resolve()
+        if target == base or not target.is_relative_to(base):
+            raise ValueError("无效的文档路径")
+        return str(target)
+
+    @staticmethod
+    def _safe_name_component(value, field):
+        """把会拼进文件路径的字段清洗为安全成分，避免 `..`/分隔符改变目标目录。"""
+        if not value or value in (".", ".."):
+            raise ValueError(f"无效的{field}")
+        if "\x00" in value:
+            raise ValueError(f"{field}包含非法字符")
+        return value.replace("/", "_").replace("\\", "_")
+
     def _encode_doc_id(self, category, rel_path):
         """生成安全的文档ID"""
         raw = f"{category}/{rel_path}"
@@ -816,8 +838,7 @@ class KnowledgeBaseService:
     def get_document(self, doc_id):
         """获取单个文档内容"""
         category, rel_path = self._decode_doc_id(doc_id)
-        base_dir = self._get_doc_base_dir(category)
-        file_path = os.path.join(base_dir, rel_path)
+        file_path = self._safe_doc_path(category, rel_path)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -832,6 +853,11 @@ class KnowledgeBaseService:
 
     def create_document(self, category, industry, title, content):
         """创建新文档并索引"""
+        category = self._safe_name_component(category, "分类")
+        if category not in _KB_CATEGORIES:
+            raise ValueError(f"无效的知识库分类: {category}")
+        industry = self._safe_name_component(industry, "行业")
+        title = self._safe_name_component(title, "标题")
         base_dir = self._get_doc_base_dir(category)
         target_dir = os.path.join(base_dir, industry)
         os.makedirs(target_dir, exist_ok=True)
@@ -849,8 +875,7 @@ class KnowledgeBaseService:
     def update_document(self, doc_id, content):
         """更新文档内容并重新索引"""
         category, rel_path = self._decode_doc_id(doc_id)
-        base_dir = self._get_doc_base_dir(category)
-        file_path = os.path.join(base_dir, rel_path)
+        file_path = self._safe_doc_path(category, rel_path)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
         with open(file_path, 'w', encoding='utf-8') as f:
@@ -864,8 +889,7 @@ class KnowledgeBaseService:
     def delete_document(self, doc_id, delete_file=True):
         """删除文档及其向量"""
         category, rel_path = self._decode_doc_id(doc_id)
-        base_dir = self._get_doc_base_dir(category)
-        file_path = os.path.join(base_dir, rel_path)
+        file_path = self._safe_doc_path(category, rel_path)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
         removed = self._remove_doc_vectors(file_path, category=category)
@@ -880,8 +904,7 @@ class KnowledgeBaseService:
     def reindex_document(self, doc_id):
         """重新索引单个文档"""
         category, rel_path = self._decode_doc_id(doc_id)
-        base_dir = self._get_doc_base_dir(category)
-        file_path = os.path.join(base_dir, rel_path)
+        file_path = self._safe_doc_path(category, rel_path)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
         industry = os.path.basename(os.path.dirname(file_path))

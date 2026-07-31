@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from api.models import ExportRequest
 from app.models.export_models import ExportResult, TaskStatus
 from app.services.report_generator import ReportGeneratorService
+from api.dependencies import rate_limit
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,10 @@ report_generator = ReportGeneratorService()
 
 
 @router.post("/export/report", tags=["报告导出"])
-async def export_report(request: ExportRequest):
+async def export_report(
+    request: ExportRequest,
+    _: None = Depends(rate_limit(30, 60)),
+):
     """
     导出报告
     

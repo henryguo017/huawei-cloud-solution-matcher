@@ -274,7 +274,7 @@ async def main():
               f"status={r.status_code}")
 
         r = await c.post("/api/knowledge/rebuild", headers=auth_a)
-        check("12.3 rebuild已登录可调用", r.status_code in [200, 201],
+        check("12.3 普通用户rebuild被拒绝", r.status_code in [401, 403],
               f"status={r.status_code}")
 
         # ============================================================

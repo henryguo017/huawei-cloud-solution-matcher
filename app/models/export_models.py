@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from enum import Enum
 from datetime import datetime
@@ -32,11 +32,11 @@ class ExportRequest(BaseModel):
 
 
 class ExportTask(BaseModel):
-    task_id: str = str(uuid.uuid4())
+    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     status: TaskStatus = TaskStatus.PENDING
     format: ExportFormat
     report_type: ReportType
-    create_time: datetime = datetime.now()
+    create_time: datetime = Field(default_factory=datetime.now)
     complete_time: Optional[datetime] = None
     file_path: Optional[str] = None
     file_name: Optional[str] = None

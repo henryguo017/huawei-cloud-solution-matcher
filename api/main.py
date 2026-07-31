@@ -1,5 +1,6 @@
 import sys
 import os
+from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 关闭 ChromaDB 遥测（国内网络无法上报，避免日志噪音）
@@ -40,6 +41,21 @@ logging.getLogger('chromadb.telemetry').setLevel(logging.CRITICAL)
 
 logger = logging.getLogger(__name__)
 
+# 内容安全策略（纵深防御）：本应用大量使用内联 style 与 onclick 处理器，故 script/style
+# 放行 'unsafe-inline'；重点收紧 connect-src / frame-ancestors / base-uri / object-src，
+# 限制外域资源加载与数据外泄、点击劫持、<base> 劫持。markdown 渲染已在源头转义，CSP 仅作兜底。
+CSP_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "font-src 'self'; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'self'; "
+    "object-src 'none'"
+)
+
 app = FastAPI(
     title=APP_NAME,
     version=APP_VERSION,
@@ -76,20 +92,20 @@ app.add_middleware(
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     
-    logger.info(f"请求开始: {request.method} {request.url}")
+    logger.info("请求开始: %s %s", request.method, request.url.path)
     
     try:
         response = await call_next(request)
         
         process_time = time.time() - start_time
         logger.info(
-            f"请求完成: {request.method} {request.url} "
-            f"- 状态码: {response.status_code} "
-            f"- 耗时: {process_time:.3f}s"
+            "请求完成: %s %s - 状态码: %d - 耗时: %.3fs",
+            request.method, request.url.path, response.status_code, process_time
         )
         
         response.headers["X-Process-Time"] = str(process_time)
-        
+        response.headers["Content-Security-Policy"] = CSP_POLICY
+
         # 所有前端静态资源禁止浏览器缓存（解决切换账号后页面不更新的问题）
         path = request.url.path
         if path == "/" or path == "/index.html" or path.endswith(('.html', '.css', '.js', '.svg', '.png', '.jpg', '.ico', '.json', '.woff', '.woff2')):
@@ -99,7 +115,7 @@ async def log_requests(request: Request, call_next):
         
         return response
     except Exception as e:
-        logger.error(f"请求异常: {request.method} {request.url} - 错误: {e}")
+        logger.error(f"请求异常: {request.method} {request.url.path} - 错误: {e}")
         raise
 
 @app.exception_handler(Exception)
@@ -108,8 +124,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={
-            "detail": "服务器内部错误",
-            "error": str(exc)
+            "detail": "服务器内部错误"
         }
     )
 
@@ -123,6 +138,7 @@ app.include_router(achievement_router, prefix="/api")
 app.include_router(share_router, prefix="/api")
 
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
+js_root = (Path(frontend_path) / "js").resolve()
 if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
     logger.info(f"静态文件目录: {frontend_path}")
@@ -191,7 +207,9 @@ async def serve_js(filename: str):
     """
     返回 js/ 目录下的脚本文件
     """
-    js_path = os.path.join(frontend_path, "js", filename)
+    js_path = (js_root / filename).resolve()
+    if not js_path.is_relative_to(js_root) or not js_path.is_file():
+        raise HTTPException(status_code=404)
     if os.path.exists(js_path):
         media_type = "application/javascript"
         if filename.endswith(".css"): media_type = "text/css"

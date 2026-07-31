@@ -1,4 +1,6 @@
 from typing import Dict
+import time
+from fastapi import Request, HTTPException
 from app.services.solution_matcher import SolutionMatcherService
 from app.services.competitor_analyzer import CompetitorAnalyzerService
 from app.services.knowledge_base import KnowledgeBaseService
@@ -6,6 +8,32 @@ from app.services.usage_logger import UsageLoggerService, get_usage_logger as _g
 # re-export：供其它路由 `from api.dependencies import get_current_user[_optional]` 使用
 # 注意：这两个名字在本文件内看似未使用，但被 achievement_routes 等模块引用，autoflake 勿删
 from api.auth_dependencies import get_current_user, get_current_user_optional  # noqa: F401
+
+
+_ratelimit_buckets: Dict[str, list] = {}
+
+
+def _rate_limit_key(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def rate_limit(limit: int = 120, window: int = 60):
+    """简单的单进程 IP/用户限流；多 worker 部署时应替换为 Redis 等共享存储。"""
+    async def dependency(request: Request):
+        now = time.time()
+        key = _rate_limit_key(request)
+        bucket = _ratelimit_buckets.setdefault(key, [])
+        bucket[:] = [t for t in bucket if t > now - window]
+        if len(bucket) >= limit:
+            raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
+        bucket.append(now)
+        if len(_ratelimit_buckets) > 10000:
+            for k in [k for k, v in _ratelimit_buckets.items() if not v]:
+                _ratelimit_buckets.pop(k, None)
+    return dependency
 
 # ===== 全局知识库单例（仅用于健康检查、管理员全局重建等系统级操作） =====
 _global_kb: KnowledgeBaseService = None

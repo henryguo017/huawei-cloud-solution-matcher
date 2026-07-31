@@ -87,17 +87,10 @@ async def require_login(request: Request) -> dict:
     - 有令牌但失效/过期 → 沿用 get_current_user 的 401 文案（令牌已失效，请重新登录等）
     """
     auth_header = request.headers.get('Authorization', '')
-    # 诊断日志：记录后端实际收到的 Authorization 头（排查"浏览器未带 token"问题）
     if auth_header:
-        logger.warning(
-            '[AUTH-DEBUG] require_login 收到 Authorization: 前缀=%r 长度=%d 前20位=%r',
-            auth_header[:7], len(auth_header), auth_header[:20]
-        )
+        logger.debug('[AUTH] require_login 收到 Authorization，长度=%d', len(auth_header))
     else:
-        logger.warning(
-            '[AUTH-DEBUG] require_login 未收到 Authorization 头! 全部headers=%s',
-            dict(request.headers)
-        )
+        logger.debug('[AUTH] require_login 未收到 Authorization 头')
 
     if not auth_header.startswith('Bearer '):
         raise HTTPException(

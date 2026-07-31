@@ -34,6 +34,7 @@ from api.dependencies import (
     get_solution_matcher_for_user,
     get_competitor_analyzer_for_user,
     _user_kb_cache,
+    rate_limit,
 )
 from app.models.llm import get_llm_response, get_embedding_vectors
 from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context, clear_kb_search_cache
@@ -54,7 +55,7 @@ import shutil
 import threading
 import uuid
 
-from api.auth_dependencies import get_current_user, get_current_user_optional, require_login
+from api.auth_dependencies import get_current_user, get_current_user_optional, require_admin, require_login
 import api.dependencies as _kb_deps  # 用于后台重建后刷新全局 KB 缓存（_global_kb）
 
 # Agent 模块导入
@@ -81,23 +82,23 @@ def _sse_json_default(obj):
 
 router = APIRouter()
 
-@router.get("/debug/echo-headers", tags=["调试"])
-async def debug_echo_headers(request: Request):
-    """
-    临时诊断端点：回显后端实际收到的全部请求头。
-    用于在浏览器登录后访问 https://www.cloudsol.cn/api/debug/echo-headers
-    确认 Authorization 头是否真正到达后端（排查"刚登录即401"问题）。
-    """
-    headers = dict(request.headers)
-    auth = headers.get('authorization', '(无)')
-    return {
-        "authorization_present": auth != '(无)',
-        "authorization_preview": (auth[:30] + '...') if auth != '(无)' else None,
-        "authorization_length": len(auth) if auth != '(无)' else 0,
-        "origin": headers.get('origin', '(无)'),
-        "host": headers.get('host', '(无)'),
-        "all_header_keys": sorted(headers.keys()),
-    }
+if os.getenv("ENABLE_DEBUG_ENDPOINTS", "false").lower() == "true":
+    @router.get("/debug/echo-headers", tags=["调试"])
+    async def debug_echo_headers(request: Request):
+        """
+        临时诊断端点：回显后端实际收到的全部请求头。
+        默认关闭，生产环境请勿开启。
+        """
+        headers = dict(request.headers)
+        auth = headers.get('authorization', '(无)')
+        return {
+            "authorization_present": auth != '(无)',
+            "authorization_preview": (auth[:30] + '...') if auth != '(无)' else None,
+            "authorization_length": len(auth) if auth != '(无)' else 0,
+            "origin": headers.get('origin', '(无)'),
+            "host": headers.get('host', '(无)'),
+            "all_header_keys": sorted(headers.keys()),
+        }
 
 @router.get("/health", response_model=HealthResponse, tags=["系统"])
 async def health_check():
@@ -381,7 +382,8 @@ async def _build_match_response(result: dict, user, request, original_demand: st
 @router.post("/match", response_model=MatchResponse, tags=["解决方案匹配"])
 async def match_solution(
     request: MatchRequest,
-    user: Optional[dict] = Depends(get_current_user_optional)
+    user: Optional[dict] = Depends(get_current_user_optional),
+    _: None = Depends(rate_limit(120, 60))
 ):
     """
     解决方案智能匹配接口（匿名可用）
@@ -444,7 +446,8 @@ async def match_solution(
 @router.post("/match/stream", tags=["解决方案匹配"])
 async def match_solution_stream(
     request: MatchRequest,
-    user: Optional[dict] = Depends(get_current_user_optional)
+    user: Optional[dict] = Depends(get_current_user_optional),
+    _: None = Depends(rate_limit(120, 60))
 ):
     """
     标准/向导模式 SSE 流式匹配接口（匿名可用，与 /match 同源）。
@@ -1477,7 +1480,8 @@ async def delete_client(client_id: int, user: dict = Depends(require_login)):
 @router.post("/analyze", response_model=AnalyzeResponse, tags=["竞争对手分析"])
 async def analyze_competitor(
     request: AnalyzeRequest,
-    user: Optional[dict] = Depends(get_current_user_optional)
+    user: Optional[dict] = Depends(get_current_user_optional),
+    _: None = Depends(rate_limit(120, 60))
 ):
     """
     竞争对手方案分析接口
@@ -1717,10 +1721,10 @@ def _run_sync_task(task_id: str, user_id: int):
 
 @router.post("/knowledge/rebuild", response_model=TaskStatusResponse, status_code=202, tags=["知识库管理"])
 async def rebuild_knowledge(
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_admin)
 ):
     """
-    后台重建全局知识库（需登录）
+    后台重建全局知识库（需管理员）
 
     端点立即返回 task_id，重活在后台线程执行；前端轮询 /api/knowledge/task/{task_id} 获取进度。
     这样不会阻塞单 worker，多用户并发互不卡死。
@@ -1729,6 +1733,7 @@ async def rebuild_knowledge(
     with _task_store_lock:
         _task_store[task_id] = {
             "task_id": task_id,
+            "user_id": current_user["id"],
             "status": "pending",
             "progress": 0,
             "message": "任务已创建，等待执行...",
@@ -1745,11 +1750,11 @@ async def rebuild_knowledge(
 
 @router.post("/knowledge/clear", response_model=ClearResponse, tags=["知识库管理"])
 async def clear_knowledge(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
     kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
 ):
     """
-    清空全局知识库（需登录）
+    清空全局知识库（需管理员）
     
     删除全局向量数据库中的所有文档
     """
@@ -1793,6 +1798,7 @@ async def sync_my_knowledge_base(
     with _task_store_lock:
         _task_store[task_id] = {
             "task_id": task_id,
+            "user_id": user_id,
             "status": "pending",
             "progress": 0,
             "message": "任务已创建，等待执行...",
@@ -1810,14 +1816,23 @@ async def sync_my_knowledge_base(
 # ===== 后台任务进度查询 =====
 
 @router.get("/knowledge/task/{task_id}", response_model=TaskStatusResponse, tags=["知识库管理"])
-async def get_knowledge_task_status(task_id: str):
-    """查询后台知识库任务（重建/同步）的进度与结果。"""
+async def get_knowledge_task_status(
+    task_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """查询后台知识库任务（重建/同步/上传）的进度与结果，仅限任务发起者或管理员。"""
     with _task_store_lock:
         task = _task_store.get(task_id)
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="任务不存在或已过期（服务重启后任务记录会清空，请重新发起操作）"
+        )
+    owner_id = task.get("user_id")
+    if owner_id != current_user["id"] and current_user["role"] != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权查看该任务"
         )
     return TaskStatusResponse(
         task_id=task["task_id"],
@@ -1854,6 +1869,8 @@ async def get_knowledge_document(
         return kb_service.get_document(doc_id)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"获取文档失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -1888,6 +1905,8 @@ async def create_knowledge_document(
         return KBDocumentCreateResponse(**result)
     except FileExistsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"创建文档失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -1901,6 +1920,7 @@ KB_UPLOAD_EXT = {".docx", ".pptx", ".pdf", ".txt", ".md", ".csv"}
 
 def _unique_kb_title(kb_service, category: str, industry: str, title: str) -> str:
     """在目标目录下生成不重复的文档标题，避免 create_document 因同名 .txt 已存在而报错。"""
+    industry = kb_service._safe_name_component(industry, "行业")
     base_dir = kb_service._get_doc_base_dir(category)
     target_dir = os.path.join(base_dir, industry)
     candidate = title
@@ -2015,6 +2035,7 @@ async def upload_knowledge_document_file(
             _task_store[task_id] = {
                 "task_id": task_id, "status": "pending", "progress": 0,
                 "message": "任务已创建，等待执行...", "result": None,
+                "user_id": user_id,
             }
         threading.Thread(
             target=_run_upload_task,
@@ -2046,6 +2067,8 @@ async def update_knowledge_document(
         return KBDocumentUpdateResponse(**result)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"更新文档失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -2063,6 +2086,8 @@ async def delete_knowledge_document(
         return KBDocumentDeleteResponse(success=True, **result)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"删除文档失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -2089,6 +2114,8 @@ async def reindex_knowledge_document(
         return KBDocumentReindexResponse(**result)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"重新索引失败: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -2789,7 +2816,10 @@ async def get_competitor_history_detail(
         )
 
 @router.post("/solution/refine", response_model=RefineSolutionResponse, tags=["解决方案优化"])
-async def refine_solution(request: RefineSolutionRequest):
+async def refine_solution(
+    request: RefineSolutionRequest,
+    _: None = Depends(rate_limit(30, 60))
+):
     """方案追问优化接口 - 基于原始需求+当前方案+用户追问，生成优化方案"""
     try:
         # 构造对话历史上下文
@@ -2838,7 +2868,10 @@ async def refine_solution(request: RefineSolutionRequest):
         )
 
 @router.post("/competitor/refine", response_model=RefineCompetitorResponse, tags=["竞品分析优化"])
-async def refine_competitor_analysis(request: RefineCompetitorRequest):
+async def refine_competitor_analysis(
+    request: RefineCompetitorRequest,
+    _: None = Depends(rate_limit(30, 60))
+):
     """竞品分析追问优化接口 - 基于竞品+行业+当前分析+用户追问，生成优化分析报告"""
     try:
         # 构造对话历史上下文
@@ -2954,7 +2987,8 @@ def _strip_markdown(text: str) -> str:
 @router.post("/ai/chat", tags=["AI 助手"])
 async def ai_chat(
     request: dict,
-    user: Optional[dict] = Depends(get_current_user_optional)
+    user: Optional[dict] = Depends(get_current_user_optional),
+    _: None = Depends(rate_limit(30, 60))
 ):
     """
     AI 智能助手 - 四路自由问答

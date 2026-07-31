@@ -109,6 +109,7 @@ class UsageLoggerService:
             except:
                 pass  # 列已存在
             conn.execute("CREATE INDEX IF NOT EXISTS idx_history_user ON match_history(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_history_user_type_date ON match_history(user_id, type, created_at)")
 
             # 下载状态（v=20260715 — 历史方案下载标记）
             try:
@@ -472,7 +473,7 @@ class UsageLoggerService:
                     )
                 )
                 conn.commit()
-                self._trim_match_history(conn, record_type='match')
+                self._trim_match_history(conn, record_type='match', user_id=user_id)
                 return cursor.lastrowid
         except Exception as e:
             logger.error(f"保存匹配历史记录失败: {e}")
@@ -1020,7 +1021,7 @@ class UsageLoggerService:
                     )
                 )
                 conn.commit()
-                self._trim_match_history(conn, record_type='analyze')
+                self._trim_match_history(conn, record_type='analyze', user_id=user_id)
                 return cursor.lastrowid
         except Exception as e:
             logger.error(f"保存竞品分析历史记录失败: {e}")
@@ -1103,14 +1104,37 @@ class UsageLoggerService:
             logger.error(f"获取竞品分析历史记录失败: {e}")
             return None
 
-    def _trim_match_history(self, conn, record_type: str = 'match'):
+    def _trim_match_history(self, conn, record_type: str = 'match', user_id: Optional[int] = None):
         """
-        清理超限的历史记录（按类型分别保留最新的 MAX_MATCH_HISTORY 条）
+        清理超限的历史记录（按用户+类型分别保留最新的 MAX_MATCH_HISTORY 条）
         """
         try:
+            if user_id is None:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) AS cnt FROM match_history WHERE type = ?",
+                    (record_type,)
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    return
+                count = row["cnt"]
+                if count > MAX_MATCH_HISTORY:
+                    conn.execute("""
+                        DELETE FROM match_history
+                        WHERE type = ?
+                          AND id NOT IN (
+                            SELECT id FROM match_history
+                            WHERE type = ?
+                            ORDER BY created_at DESC
+                            LIMIT ?
+                          )
+                    """, (record_type, record_type, MAX_MATCH_HISTORY))
+                    logger.info(f"历史记录自动清理(type={record_type})：{count} → {MAX_MATCH_HISTORY} 条")
+                return
+
             cursor = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM match_history WHERE type = ?",
-                (record_type,)
+                "SELECT COUNT(*) AS cnt FROM match_history WHERE type = ? AND user_id = ?",
+                (record_type, user_id)
             )
             row = cursor.fetchone()
             if row is None:
@@ -1119,15 +1143,15 @@ class UsageLoggerService:
             if count > MAX_MATCH_HISTORY:
                 conn.execute("""
                     DELETE FROM match_history
-                    WHERE type = ?
+                    WHERE type = ? AND user_id = ?
                       AND id NOT IN (
                         SELECT id FROM match_history
-                        WHERE type = ?
+                        WHERE type = ? AND user_id = ?
                         ORDER BY created_at DESC
                         LIMIT ?
                       )
-                """, (record_type, record_type, MAX_MATCH_HISTORY))
-                logger.info(f"历史记录自动清理(type={record_type})：{count} → {MAX_MATCH_HISTORY} 条")
+                """, (record_type, user_id, record_type, user_id, MAX_MATCH_HISTORY))
+                logger.info(f"历史记录自动清理(type={record_type}, user={user_id})：{count} → {MAX_MATCH_HISTORY} 条")
         except Exception as e:
             logger.warning(f"历史记录清理失败（不影响保存）: {e}")
 

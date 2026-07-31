@@ -1,6 +1,10 @@
 import sqlite3
 import os
-from app.utils.auth_utils import hash_password
+import logging
+from app.config import ADMIN_INITIAL_PASSWORD
+from app.utils.auth_utils import hash_password, verify_password
+
+logger = logging.getLogger(__name__)
 
 def get_db_connection():
     # 使用绝对路径，防止工作目录切换导致加载错误的数据库
@@ -222,13 +226,29 @@ def init_database():
 def init_admin_user():
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT id FROM users WHERE username = ?", ("admin",))
-    if cursor.fetchone():
+    admin_password = ADMIN_INITIAL_PASSWORD.strip()
+
+    cursor.execute("SELECT id, password_hash FROM users WHERE username = ?", ("admin",))
+    row = cursor.fetchone()
+    if row:
+        if admin_password and verify_password("admin123", row["password_hash"]):
+            cursor.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (hash_password(admin_password), row["id"]),
+            )
+            conn.commit()
+            logger.warning("[SECURITY] 已轮换默认 admin 密码")
+        elif not admin_password and verify_password("admin123", row["password_hash"]):
+            logger.warning("[SECURITY] admin 仍在使用默认密码，请设置 ADMIN_INITIAL_PASSWORD 后重启")
         conn.close()
         return
-    
-    password_hash = hash_password("admin123")
+
+    if not admin_password:
+        logger.warning("[SECURITY] 未设置 ADMIN_INITIAL_PASSWORD，跳过自动创建 admin")
+        conn.close()
+        return
+
+    password_hash = hash_password(admin_password)
     
     cursor.execute("""
         INSERT INTO users (username, email, password_hash, role, status)
@@ -238,9 +258,7 @@ def init_admin_user():
     conn.commit()
     conn.close()
     
-    print("[OK] Default admin account created")
-    print("[INFO] Username: admin, Password: admin123")
-    print("[WARN] Please change default password in production!")
+    logger.info("[OK] Default admin account created")
 
 if __name__ == "__main__":
     init_database()

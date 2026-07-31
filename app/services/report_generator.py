@@ -29,6 +29,20 @@ class ReportGeneratorService:
         self.export_dir.mkdir(parents=True, exist_ok=True)
         
         self.tasks: Dict[str, ExportTask] = {}
+        self.max_tasks = 50
+
+    def _prune_tasks(self):
+        """限制内存任务与导出文件数量，防止匿名导出长期占用磁盘。"""
+        if len(self.tasks) <= self.max_tasks:
+            return
+        expired = sorted(self.tasks.keys(), key=lambda tid: self.tasks[tid].create_time)[:-self.max_tasks]
+        for task_id in expired:
+            task = self.tasks.pop(task_id, None)
+            if task and task.file_path:
+                try:
+                    Path(task.file_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
     
     def _parse_markdown_content(self, content: str) -> List[Dict[str, Any]]:
         """解析Markdown内容为章节结构"""
@@ -102,6 +116,7 @@ class ReportGeneratorService:
                          file_prefix: str,
                          cost_reference: Dict[str, Any] = None) -> ExportTask:
         """根据报告数据渲染并保存为 Word/PDF，返回完成任务"""
+        self._prune_tasks()
         task = ExportTask(format=format, report_type=report_type)
         self.tasks[task.task_id] = task
         try:
