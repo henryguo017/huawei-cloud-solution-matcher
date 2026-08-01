@@ -574,14 +574,18 @@ def _parse_aiww_events(html: str) -> list:
         now = datetime.now()
         if (y, mo, d) < (now.year, now.month, now.day):
             continue  # 只保留未来活动
-        am = _re.search(r'地点[：:]\s*([^，。\s]+(?:会展|中心|酒店|场馆|博览)[^，。]*)', desc)
+        am = _re.search(r'地点[：:]\s*([^，。；、\s]+(?:会展|中心|酒店|场馆|博览)[^，。；、主题]*)', desc)
+        # note：提取描述里"时间/地点"之后的简短说明，截到主题关键词或 60 字
+        note = desc.split('主题')[0].strip()
+        if len(note) > 60:
+            note = note[:60] + '…'
         items.append({
             "name": name,
             "city": "",
             "date_range": f"{y}-{mo:02d}-{d}",
             "location": (am.group(1).strip() if am else ""),
             "url": url if url.startswith("http") else f"https://www.aiww.com{url}",
-            "note": desc[:80],
+            "note": note,
             "source": "AIWW",
         })
     return items
@@ -602,7 +606,7 @@ def _parse_idctalk_events(html: str) -> list:
         now = datetime.now()
         if (y, mo, d) < (now.year, now.month, now.day):
             continue
-        am = _re.search(r'活动地址[：:]\s*([^ 主办]+)', excerpt)
+        am = _re.search(r'活动地址[：:]\s*([^ 主办，。；、]+)', excerpt)
         om = _re.search(r'主办单位[：:]\s*([^ ]+)', excerpt)
         items.append({
             "name": name,
