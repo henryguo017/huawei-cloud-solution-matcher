@@ -10194,23 +10194,6 @@ select:focus {
     background: rgba(255,255,255,0.7);
     flex-shrink: 0;
 }
-.update-ticker-close {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: rgba(255,255,255,0.65);
-    cursor: pointer;
-    border-radius: 6px;
-    padding: 0;
-    transition: color var(--transition-fast), background var(--transition-fast);
-}
-.update-ticker-close:hover { color: #fff; background: rgba(255,255,255,0.14); }
-.update-ticker-close .icon { width: 0.95rem; height: 0.95rem; }
 @keyframes update-ticker-scroll {
     from { transform: translateX(0); }
     to { transform: translateX(-50%); }

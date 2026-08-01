@@ -7555,16 +7555,7 @@ const UpdateTicker = {
     init() {
         const ticker = document.getElementById('update-ticker');
         const track = document.getElementById('update-ticker-track');
-        const closeBtn = document.getElementById('update-ticker-close');
         if (!ticker || !track) return;
-
-        // 用户关闭过则隐藏（记住选择）
-        let closed = false;
-        try { closed = localStorage.getItem('updateTickerClosed') === '1'; } catch (_) {}
-        if (closed) {
-            ticker.style.display = 'none';
-            return;
-        }
 
         // 无缝滚动：内容渲染两遍，动画 translateX(-50%) 循环
         if (track.childElementCount === 0) {
@@ -7572,13 +7563,6 @@ const UpdateTicker = {
                 return '<span class="update-ticker-item"><span class="update-ticker-dot"></span>' + t + '</span>';
             }).join('');
             track.innerHTML = html + html;
-        }
-
-        if (closeBtn) {
-            closeBtn.addEventListener('click', function() {
-                ticker.style.display = 'none';
-                try { localStorage.setItem('updateTickerClosed', '1'); } catch (_) {}
-            });
         }
     }
 };
