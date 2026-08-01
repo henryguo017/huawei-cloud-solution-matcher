@@ -2887,6 +2887,8 @@ Object.assign(KnowledgeUI, {
             document.getElementById('kb-editor-doc-title').value = doc.filename.replace('.txt', '');
             document.getElementById('kb-editor-doc-title').disabled = true;
             document.getElementById('kb-editor-content').value = doc.content;
+            // 未保存内容保护：记录打开时的初始值快照
+            this._editorSnapshot = { title: doc.filename.replace('.txt', ''), content: doc.content || '' };
             document.getElementById('kb-editor-save-btn').querySelector('.btn-text').textContent = '更新';
             this._showEditor();
         } catch (e) {
@@ -2936,6 +2938,14 @@ Object.assign(KnowledgeUI, {
         this.editingDocId = null;
     },
 
+    // 是否有未保存的编辑内容（点击遮罩 / ESC 时的防误关保护）
+    _editorDirty() {
+        const s = this._editorSnapshot || { title: '', content: '' };
+        const t = document.getElementById('kb-editor-doc-title')?.value || '';
+        const c = document.getElementById('kb-editor-content')?.value || '';
+        return t !== s.title || c !== s.content;
+    },
+
     _resetEditor() {
         document.getElementById('kb-editor-title-text').textContent = '新增文档';
         document.getElementById('kb-editor-category').disabled = false;
@@ -2947,6 +2957,8 @@ Object.assign(KnowledgeUI, {
         document.getElementById('kb-editor-content').value = '';
         document.getElementById('kb-editor-save-btn').querySelector('.btn-text').textContent = '保存';
         document.getElementById('kb-editor-status').textContent = '';
+        // 未保存内容保护：快照=打开时的初始值，用于判断用户是否修改过
+        this._editorSnapshot = { title: '', content: '' };
     },
 
     async _saveDocument() {
@@ -3058,13 +3070,22 @@ Object.assign(KnowledgeUI, {
                 this.renderDocList();
             });
         });
-        // 点击弹窗遮罩关闭（mousedown 防止拖选文字出界时误触发关闭）
+        // 点击弹窗遮罩关闭（mousedown 防拖选误关；有未保存内容时阻止关闭）
         document.getElementById('kb-editor-overlay')?.addEventListener('mousedown', (e) => {
-            if (e.target === document.getElementById('kb-editor-overlay')) this._hideEditor();
+            if (e.target !== document.getElementById('kb-editor-overlay')) return;
+            if (this._editorDirty()) {
+                UI.showToast('有未保存的修改，请先点「保存/更新」，或点右上角 ✕ 放弃', 'warning');
+                return;
+            }
+            this._hideEditor();
         });
-        // ESC关闭
+        // ESC关闭（同样受未保存保护，防止误丢编辑内容）
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && document.getElementById('kb-editor-overlay')?.style.display !== 'none') {
+                if (this._editorDirty()) {
+                    UI.showToast('有未保存的修改，请先点「保存/更新」，或点右上角 ✕ 放弃', 'warning');
+                    return;
+                }
                 this._hideEditor();
             }
         });
@@ -4864,8 +4885,23 @@ function initEventListeners() {
     document.getElementById('auth-modal-close')?.addEventListener('click', () => {
         AuthManager._closeModal();
     });
+    // 登录/注册表单非空保护：已有输入时点遮罩不关闭（防填一半误关丢内容）
+    function authFormDirty() {
+        const ids = ['login-username', 'login-password', 'login-captcha',
+                     'register-username', 'register-email', 'register-password',
+                     'register-password-confirm', 'register-captcha'];
+        return ids.some(id => {
+            const el = document.getElementById(id);
+            return el && el.value.trim() !== '';
+        });
+    }
     document.getElementById('auth-modal-overlay')?.addEventListener('mousedown', (e) => {
-        if (e.target === e.currentTarget) AuthManager._closeModal();
+        if (e.target !== e.currentTarget) return;
+        if (authFormDirty()) {
+            UI.showToast('登录/注册表单已有输入，请完成操作或点右上角 ✕ 关闭', 'warning');
+            return;
+        }
+        AuthManager._closeModal();
     });
 
     // Tab 切换
@@ -5562,6 +5598,14 @@ function initEventListeners() {
     }
     // ===== 客户档案弹窗（新建 / 编辑，结构化字段） =====
     const CF_FIELDS = ['name', 'industry', 'company_size', 'region', 'contact_name', 'contact_title', 'contact_phone', 'contact_email', 'stage', 'budget', 'pain_points', 'decision_chain', 'tags', 'note'];
+    // 客户表单未保存保护：打开时记录初始值快照，遮罩点击对比是否有改动
+    let clientFormSnapshot = {};
+    function clientFormDirty() {
+        return CF_FIELDS.some(f => {
+            const el = document.getElementById('cf-' + f);
+            return el && el.value.trim() !== (clientFormSnapshot[f] || '');
+        });
+    }
     // 客户行业下拉选项（对齐 KB 支持行业，与 app/config.py SUPPORTED_INDUSTRIES 保持一致）
     const CLIENT_INDUSTRIES = ["智慧农业","工业互联网","智慧园区","智慧城市","智慧医疗","智慧金融","智慧能源","智慧交通","智慧教育","智慧文旅","制造","政务","零售","汽车","矿山","钢铁冶金","化工","智慧物流","传媒文娱","应急管理","智慧水利","国资云","互联网","游戏","生物医药"];
     function openClientModal(clientId) {
@@ -5580,6 +5624,8 @@ function initEventListeners() {
         document.getElementById('cf-id').value = clientId || '';
         document.getElementById('client-modal-title').textContent = clientId ? '编辑客户档案' : '新建客户档案';
         CF_FIELDS.forEach(f => { const el = document.getElementById('cf-' + f); if (el) el.value = ''; });
+        // 未保存保护：新建模式初始快照为空（用户填了任意字段即视为 dirty）
+        clientFormSnapshot = {};
         if (clientId) {
             fetch(`${Config.API_BASE_URL}/clients/${clientId}`, {
                 headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` }
@@ -5589,6 +5635,12 @@ function initEventListeners() {
                     CF_FIELDS.forEach(f => {
                         const el = document.getElementById('cf-' + f);
                         if (el && c[f] != null) el.value = c[f];
+                    });
+                    // 未保存保护：编辑模式记录服务器返回的初始值，未改动则不视为 dirty
+                    clientFormSnapshot = {};
+                    CF_FIELDS.forEach(f => {
+                        const el = document.getElementById('cf-' + f);
+                        clientFormSnapshot[f] = el ? el.value : '';
                     });
                 })
                 .catch(() => {});
@@ -5658,7 +5710,12 @@ function initEventListeners() {
     document.getElementById('client-modal-cancel')?.addEventListener('click', closeClientModal);
     document.getElementById('client-modal-save')?.addEventListener('click', saveClientModal);
     document.getElementById('client-modal')?.addEventListener('mousedown', (e) => {
-        if (e.target === document.getElementById('client-modal')) closeClientModal();
+        if (e.target !== document.getElementById('client-modal')) return;
+        if (clientFormDirty()) {
+            UI.showToast('客户信息有未保存的修改，请先点「保存」，或点「取消」关闭', 'warning');
+            return;
+        }
+        closeClientModal();
     });
     // 初始化：登录态就绪后显示客户栏（三模式通用，方案挂客户）
     setTimeout(() => { ensureClientBar(); }, 300);
