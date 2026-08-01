@@ -311,6 +311,78 @@ def _normalize_title(t: str) -> str:
     return s[:40]
 
 
+# 资讯相关性过滤：与平台定位（华为云 ToB 售前/云计算/AI 方案）沾边的才展示
+# 白名单命中 ≥ 1 个 且 不命中黑名单 才视为相关
+_RELEVANT_KEYWORDS = (
+    # AI 与大模型
+    "AI", "人工智能", "大模型", "LLM", "Agent", "智能体", "大语言模型",
+    "ChatGPT", "GPT", "Claude", "Gemini", "Llama", "Sora", "盘古", "通义", "混元", "Kimi", "DeepSeek", "豆包", "文心",
+    "模型", "训练", "微调", "推理", "算力", "参数", "token", "RAG", "向量",
+    # 云厂商与云服务
+    "华为云", "阿里云", "腾讯云", "百度云", "京东云", "金山云", "天翼云", "移动云", "联通云",
+    "AWS", "Azure", "GCP", "Google Cloud", "IBM 云", "Oracle", "Salesforce",
+    "云原生", "云服务", "云计算", "公有云", "私有云", "混合云", "多云",
+    "IaaS", "PaaS", "SaaS", "Serverless", "微服务", "容器", "Kubernetes", "K8s", "Docker",
+    "数据库", "向量数据库", "数据仓库", "数据湖",
+    # 芯片/算力/基础设施
+    "芯片", "处理器", "GPU", "NPU", "TPU", "服务器", "数据中心", "IDC", "边缘计算", "物联网", "IoT",
+    # 数字化/智能化转型
+    "数字化", "数智化", "智能化", "智慧城市", "智慧园区", "智慧交通", "智慧医疗", "智慧金融",
+    "智慧农业", "智慧能源", "智慧水务", "智慧政务", "智慧教育", "智慧楼宇", "智慧社区",
+    "工业互联网", "智能制造", "车联网", "数字孪生",
+    # 行业方案相关
+    "信创", "国产化", "ToB", "企业服务", "数字化转型", "行业方案", "上云", "解决方案",
+    # 安全
+    "网络安全", "数据安全", "信息安全", "隐私计算", "零信任", "等保",
+    # 开源工具/中间件（仅与云/AI 生态相关的）
+    "开源", "PostgreSQL", "MySQL", "MongoDB", "Redis", "Kafka", "Spark", "Flink", "Elasticsearch",
+    "PyTorch", "TensorFlow", "Hugging Face", "LangChain", "LlamaIndex",
+    # 科技公司动态
+    "华为", "阿里", "腾讯", "百度", "字节", "京东", "美团", "小米", "苹果", "Apple", "Google", "微软",
+    "Microsoft", "Meta", "英伟达", "NVIDIA", "Intel", "AMD", "高通", "Qualcomm",
+    "OpenAI", "Anthropic", "马斯克", "Musk", "OpenAI", "Sam Altman",
+    # 行业与人物（科技相关）
+    "营收", "财报", "融资", "IPO", "上市", "估值",
+)
+_IRRELEVANT_KEYWORDS = (
+    # 婚恋情感
+    "结婚", "相亲", "彩礼", "离婚", "分手", "恋情", "恋爱", "出轨",
+    # 游戏
+    "游戏", "电竞", "Steam", "Switch", "PlayStation", "PS5", "Xbox", "手游", "端游",
+    "DOTA", "英雄联盟", "原神", "王者", "吃鸡", "和平精英", "三角洲", "米哈游",
+    # 影视娱乐
+    "电影", "电视剧", "综艺", "明星", "网红", "八卦", "娱乐", "演员", "歌手", "演唱会",
+    "票房", "剧集", "开播", "定档",
+    # 健身/美容/养生
+    "健身", "减肥", "瑜伽", "美容", "美妆", "护肤", "化妆", "医美",
+    # 美食
+    "美食", "菜谱", "小吃", "外卖", "餐厅",
+    # 旅行
+    "旅行", "民宿", "酒店", "景区", "签证",
+    # 教育（除非 AI 教育）
+    "高考", "中考", "考研", "考公", "四六级", "雅思", "托福",
+    # 数码评测/消费（消费电子开箱/真机/首发评测不算 ToB 沾边）
+    "手机评测", "真机", "开箱", "上手体验", "跑分", "首发体验", "iPhone", "配色", "新机", "发售价",
+    # 财经不沾科技
+    "A股", "港股", "美股", "基金", "股票", "期货", "外汇", "黄金", "原油",
+    # 体育
+    "国足", "世界杯", "NBA", "CBA", "奥运", "欧洲杯",
+    # 其他
+    "消费券", "补贴", "促销活动", "优惠",
+    "老年", "退休", "养老金",
+    "防汛", "台风", "地震", "救援",
+)
+
+
+def _is_news_relevant(title: str) -> bool:
+    """判断资讯标题是否与本平台相关（华为云 ToB 售前/云计算/AI 解决方案）。
+    白名单命中 ≥ 1 个相关词 且 不命中黑名单词。"""
+    t = title.lower()
+    hit_white = any(kw.lower() in t for kw in _RELEVANT_KEYWORDS)
+    hit_black = any(kw.lower() in t for kw in _IRRELEVANT_KEYWORDS)
+    return hit_white and not hit_black
+
+
 @router.get("/news", tags=["资讯"])
 async def tech_news():
     """
@@ -340,6 +412,19 @@ async def tech_news():
             data["stale"] = True
             return data
         return {"ok": False, "items": [], "msg": "资讯抓取失败，请稍后重试"}
+
+    # 相关性过滤：只保留与平台（华为云 ToB 售前/云计算/AI 方案）沾边的资讯
+    before = len(all_items)
+    all_items = [it for it in all_items if _is_news_relevant(it["title"])]
+    filtered_out = before - len(all_items)
+    logger.info(f"资讯相关性过滤: {before} → {len(all_items)}（过滤 {filtered_out} 条无关）")
+    if not all_items:
+        # 全部被过滤：降级返回旧缓存
+        if _NEWS_CACHE["data"] is not None:
+            data = dict(_NEWS_CACHE["data"])
+            data["stale"] = True
+            return data
+        return {"ok": False, "items": [], "msg": "今日暂无相关资讯，请稍后重试"}
 
     # 跨源标题去重（保留最早抓到的）
     seen = set()
