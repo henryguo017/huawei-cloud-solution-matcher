@@ -10273,10 +10273,17 @@ select:focus {
     border: none;
     background: transparent;
     outline: none;
+    outline-color: transparent;
     width: 100%;
     font-size: 0.8rem;
     font-family: var(--font-family);
     color: var(--text-primary, #222);
+}
+.weather-panel-search input:focus,
+.weather-panel-search input:focus-visible {
+    outline: none;
+    outline-color: transparent;
+    box-shadow: none;
 }
 .weather-panel-search input::placeholder { color: var(--text-secondary, #666); }
 .weather-panel-hot { margin-bottom: 8px; }
