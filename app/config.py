@@ -64,10 +64,12 @@ QWEATHER_TIMEOUT = float(os.getenv("QWEATHER_TIMEOUT", "5"))
 # 源均为公开 RSS 2.0，单源失败自动跳过不影响整体；源变更直接改这个列表即可。
 NEWS_FEEDS = [
     {"name": "IT之家", "url": "https://www.ithome.com/rss/", "category": "云科技"},
-    {"name": "36氪", "url": "https://36kr.com/feed", "category": "云科技"},
+    {"name": "36氪", "url": "https://36kr.com/feed", "category": "科技"},
     {"name": "量子位", "url": "https://www.qbitai.com/feed", "category": "AI"},
     {"name": "InfoQ", "url": "https://www.infoq.cn/feed", "category": "AI"},
     {"name": "开源中国", "url": "https://www.oschina.net/news/rss", "category": "云科技"},
+    {"name": "爱范儿", "url": "https://www.ifanr.com/feed", "category": "科技"},
+    {"name": "极客公园", "url": "https://www.geekpark.net/rss", "category": "科技"},
 ]
 NEWS_TTL_SECONDS = int(os.getenv("NEWS_TTL_SECONDS", str(24 * 3600)))  # 默认 24h
 NEWS_TOP_N = int(os.getenv("NEWS_TOP_N", "10"))
