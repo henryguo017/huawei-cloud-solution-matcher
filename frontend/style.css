@@ -10279,11 +10279,12 @@ select:focus {
     font-family: var(--font-family);
     color: var(--text-primary, #222);
 }
+/* 覆盖项目全局 input:focus-visible 华为红 outline（项目 a11y 默认行为） */
 .weather-panel-search input:focus,
 .weather-panel-search input:focus-visible {
-    outline: none;
-    outline-color: transparent;
-    box-shadow: none;
+    outline: none !important;
+    outline-color: transparent !important;
+    box-shadow: none !important;
 }
 .weather-panel-search input::placeholder { color: var(--text-secondary, #666); }
 .weather-panel-hot { margin-bottom: 8px; }
