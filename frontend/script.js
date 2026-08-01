@@ -7853,15 +7853,23 @@ const NewsModal = {
             item.href = it.url;
             item.target = '_blank';
             item.rel = 'noopener noreferrer';
-            const timeStr = it.pub_date ? String(it.pub_date).match(/^(\d{4})-(\d{2})-(\d{2})/)[0] : '';
+            // 日期显示为 MM-DD（杂志风短日期）
+            let timeStr = '';
+            if (it.pub_date) {
+                const m = String(it.pub_date).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (m) timeStr = m[1] + '-' + m[2] + '-' + m[3];
+            }
+            const num = String(idx + 1).padStart(2, '0');
             item.innerHTML =
-                '<span class="news-item-meta">' +
-                    '<span class="news-source-tag">' + window._crEsc(it.source) + '</span>' +
-                '</span>' +
-                '<span class="news-item-main">' +
+                '<div class="news-item-row">' +
+                    '<span class="news-item-num">' + num + '</span>' +
                     '<span class="news-item-title">' + window._crEsc(it.title) + '</span>' +
-                    (timeStr ? '<div class="news-item-time">' + timeStr + '</div>' : '') +
-                '</span>';
+                '</div>' +
+                '<div class="news-item-meta">' +
+                    '<span class="news-source-tag">' + window._crEsc(it.source) + '</span>' +
+                    (timeStr ? '<span class="news-meta-dot">·</span><span class="news-item-time">' + timeStr + '</span>' : '') +
+                    '<span class="news-meta-read">阅读 →</span>' +
+                '</div>';
             self.listEl.appendChild(item);
         });
     }
