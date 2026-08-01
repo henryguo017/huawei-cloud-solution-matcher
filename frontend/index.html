@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260730e">
+<link rel="stylesheet" href="style.css?v=20260801a">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
@@ -320,7 +320,21 @@
                     </div>
                 </div>
             </header>
-    
+
+            <!-- 最新更新滚动横幅（顶栏下方，随皮肤主题联动） -->
+            <div class="update-ticker" id="update-ticker">
+                <div class="update-ticker-label">
+                    <svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
+                    <span>更新</span>
+                </div>
+                <div class="update-ticker-viewport">
+                    <div class="update-ticker-track" id="update-ticker-track"></div>
+                </div>
+                <button class="update-ticker-close" id="update-ticker-close" title="关闭更新提示" aria-label="关闭更新提示">
+                    <svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg>
+                </button>
+            </div>
+
     <!-- 移动端底部导航栏（5 Tab：匹配/竞品/仪表盘/知识库/我的） -->
     <nav class="mobile-bottom-nav" id="mobile-menu">
         <button class="mobile-nav-item active" data-page="solution">
@@ -1210,7 +1224,7 @@
                 <div class="dashboard-info-bar">
                     <div class="info-item">
                         <span class="info-label">系统版本</span>
-                        <span class="info-value" id="dash-version">v1.0.0</span>
+                        <span class="info-value" id="dash-version">v2.4.0</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">运行时间</span>
@@ -1515,7 +1529,7 @@
                     <div class="settings-info-grid">
                         <div class="settings-info-item">
                             <span class="settings-info-label">系统版本</span>
-                            <span class="settings-info-value" id="settings-version">v1.0.0</span>
+                            <span class="settings-info-value" id="settings-version">v2.4.0</span>
                         </div>
                         <div class="settings-info-item">
                             <span class="settings-info-label">API 状态</span>
@@ -2133,7 +2147,7 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260801b"></script>
+    <script src="script.js?v=20260801d"></script>
     <script src="js/voice-input.js?v=20260726f"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260801a"></script>

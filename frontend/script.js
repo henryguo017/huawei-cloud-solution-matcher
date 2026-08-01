@@ -1,4 +1,4 @@
-// [版本] 20260531w — 移除3D产品架构弹窗(ArchTree3D)功能，保留产品图谱页面(ProductGraph)
+// [版本] v2.4.0 — 顶栏新增最新更新滚动横幅；DeepSeek 推理优化匹配提速至 ~12s；知识库增量重建/同步秒级
 // 成本卡片工具函数（提到顶层，确保历史详情等路径也能访问，不再依赖 renderAgentResult 先执行）
 window._crEsc = function _crEsc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -864,8 +864,8 @@ const SettingsManager = {
             const apiStatus = document.getElementById('settings-api-status');
             const apiIndicator = document.getElementById('settings-api-indicator');
 
-            if (versionEl) versionEl.textContent = data.version || 'v1.0.0';
-            if (updateEl) updateEl.textContent = `API版本: ${data.version || 'v1.0.0'}`;
+            if (versionEl) versionEl.textContent = data.version || 'v2.4.0';
+            if (updateEl) updateEl.textContent = `API版本: ${data.version || 'v2.4.0'}`;
             if (apiStatus) apiStatus.textContent = data.status === 'healthy' ? '服务运行正常' : '服务异常';
             if (apiIndicator) {
                 if (data.status === 'healthy') {
@@ -3447,7 +3447,7 @@ const DashboardUI = {
         const uptimeEl = document.getElementById('dash-uptime');
         const updateEl = document.getElementById('dash-last-update');
 
-        if (versionEl) versionEl.textContent = stats.version || 'v1.0.0';
+        if (versionEl) versionEl.textContent = stats.version || 'v2.4.0';
         if (uptimeEl) uptimeEl.textContent = stats.system_uptime || '--';
         if (updateEl) updateEl.textContent = stats.last_update || '--';
     }
@@ -7543,15 +7543,56 @@ const CompetitorFollowUpUI = {
     }
 };
 
+/* ==================== 最新更新滚动横幅 ==================== */
+const UpdateTicker = {
+    items: [
+        '<b>v2.4 知识库增量重建上线</b>：同步官方方案提速至秒级',
+        '<b>方案匹配提速</b>：DeepSeek 推理优化后 12 秒出结果',
+        '<b>文档上传解析</b>：Word / PPT / PDF 自动解析 + 扫描件 OCR 入库',
+        '<b>产品图谱 + 报告导出</b>：50 节点 / 53 项价目参考，方案 / 竞品报告 Word / PDF 一键导出'
+    ],
+
+    init() {
+        const ticker = document.getElementById('update-ticker');
+        const track = document.getElementById('update-ticker-track');
+        const closeBtn = document.getElementById('update-ticker-close');
+        if (!ticker || !track) return;
+
+        // 用户关闭过则隐藏（记住选择）
+        let closed = false;
+        try { closed = localStorage.getItem('updateTickerClosed') === '1'; } catch (_) {}
+        if (closed) {
+            ticker.style.display = 'none';
+            return;
+        }
+
+        // 无缝滚动：内容渲染两遍，动画 translateX(-50%) 循环
+        if (track.childElementCount === 0) {
+            const html = this.items.map(function(t) {
+                return '<span class="update-ticker-item"><span class="update-ticker-dot"></span>' + t + '</span>';
+            }).join('');
+            track.innerHTML = html + html;
+        }
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function() {
+                ticker.style.display = 'none';
+                try { localStorage.setItem('updateTickerClosed', '1'); } catch (_) {}
+            });
+        }
+    }
+};
+
 function init() {
     try {
-        console.log('[Init] 华为云方案匹配系统 v20260531n 正在初始化...');
+        console.log('[Init] 华为云方案匹配系统 v2.4.0 正在初始化...');
         const canvas = document.getElementById('particle-canvas');
         if (canvas) {
             new ParticleSystem(canvas);
         }
 
         initEventListeners();
+        UpdateTicker.init();
         DemandWizard.init();
         HistoryUI.init();
         FollowUpUI.init();

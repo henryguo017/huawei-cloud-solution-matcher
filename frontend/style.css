@@ -10130,6 +10130,92 @@ select:focus {
 .topbar .user-avatar-icon { color: rgba(255,255,255,0.92); }
 .topbar .dropdown-arrow { color: rgba(255,255,255,0.7); font-size: 0.7rem; }
 
+/* ---------- 最新更新滚动横幅（顶栏下方，随皮肤主题联动） ---------- */
+.update-ticker {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 32px;
+    padding: 0 12px 0 16px;
+    /* 与顶栏同色系加深一档（叠加黑色半透明），皮肤切换自动联动 */
+    background: linear-gradient(rgba(0,0,0,0.14), rgba(0,0,0,0.14)), var(--topbar-bg, var(--frame-bg));
+    color: rgba(255,255,255,0.92);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.8rem;
+    overflow: hidden;
+    position: relative;
+    z-index: 999;
+}
+[data-skin] .update-ticker {
+    background: linear-gradient(rgba(0,0,0,0.14), rgba(0,0,0,0.14)), var(--topbar-bg) !important;
+}
+.update-ticker-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.5px;
+}
+.update-ticker-label .icon { width: 0.95rem; height: 0.95rem; flex-shrink: 0; }
+.update-ticker-viewport {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+}
+.update-ticker-track {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    will-change: transform;
+    animation: update-ticker-scroll 70s linear infinite;
+}
+.update-ticker:hover .update-ticker-track,
+.update-ticker-viewport:hover .update-ticker-track { animation-play-state: paused; }
+.update-ticker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 28px;
+    color: rgba(255,255,255,0.9);
+}
+.update-ticker-item b { font-weight: 600; color: #fff; }
+.update-ticker-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.7);
+    flex-shrink: 0;
+}
+.update-ticker-close {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.65);
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 0;
+    transition: color var(--transition-fast), background var(--transition-fast);
+}
+.update-ticker-close:hover { color: #fff; background: rgba(255,255,255,0.14); }
+.update-ticker-close .icon { width: 0.95rem; height: 0.95rem; }
+@keyframes update-ticker-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
 /* 覆盖旧固定 navbar 留下的顶部留白 */
 .main-content { padding-top: var(--spacing-xl); }
 
