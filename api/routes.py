@@ -267,7 +267,7 @@ def _parse_rss_datetime(s: str):
 
 
 def _fetch_news_sync(feed: dict) -> list:
-    """抓取单个 RSS 源并解析为 [{title, source, category, url, pub_date, ts}]，失败返回 []。"""
+    """抓取单个 RSS 源并解析为 [{title, source, url, pub_date, ts}]，失败返回 []。"""
     import httpx
     import xml.etree.ElementTree as ET
     try:
@@ -285,7 +285,7 @@ def _fetch_news_sync(feed: dict) -> list:
                 if not title or not link:
                     continue
                 ts = _parse_rss_datetime(it.findtext("pubDate") or "")
-                items.append({"title": title, "source": feed["name"], "category": feed["category"],
+                items.append({"title": title, "source": feed["name"],
                               "url": link, "pub_date": ts.isoformat() if ts else "", "ts": ts})
         elif root.tag in ("feed", "{http://www.w3.org/2005/Atom}feed"):
             for it in root.findall("{http://www.w3.org/2005/Atom}entry"):
@@ -295,7 +295,7 @@ def _fetch_news_sync(feed: dict) -> list:
                 if not title or not link:
                     continue
                 ts = _parse_rss_datetime(it.findtext("{http://www.w3.org/2005/Atom}updated") or "")
-                items.append({"title": title, "source": feed["name"], "category": feed["category"],
+                items.append({"title": title, "source": feed["name"],
                               "url": link, "pub_date": ts.isoformat() if ts else "", "ts": ts})
         return items
     except Exception as e:
@@ -357,7 +357,7 @@ async def tech_news():
 
     data = {
         "ok": True,
-        "items": [{"title": it["title"], "source": it["source"], "category": it["category"],
+        "items": [{"title": it["title"], "source": it["source"],
                    "url": it["url"], "pub_date": it["pub_date"]} for it in top],
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "stale": False,

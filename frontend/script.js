@@ -7853,17 +7853,10 @@ const NewsModal = {
             item.href = it.url;
             item.target = '_blank';
             item.rel = 'noopener noreferrer';
-            // 时间显示（mm-dd）
-            let timeStr = '';
-            if (it.pub_date) {
-                const m = String(it.pub_date).match(/^(\d{4})-(\d{2})-(\d{2})/);
-                if (m) timeStr = m[1] + '-' + m[2] + '-' + m[3];
-            }
-            const catLabel = it.category === 'AI' ? 'AI' : (it.category === '云科技' ? '云科技' : '科技');
+            const timeStr = it.pub_date ? String(it.pub_date).match(/^(\d{4})-(\d{2})-(\d{2})/)[0] : '';
             item.innerHTML =
                 '<span class="news-item-meta">' +
                     '<span class="news-source-tag">' + window._crEsc(it.source) + '</span>' +
-                    '<span class="news-item-cat">' + catLabel + '</span>' +
                 '</span>' +
                 '<span class="news-item-main">' +
                     '<span class="news-item-title">' + window._crEsc(it.title) + '</span>' +

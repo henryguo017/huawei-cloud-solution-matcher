@@ -10407,10 +10407,6 @@ select:focus {
     background: rgba(199, 0, 11, 0.08);
     color: var(--primary-color);
 }
-.news-item-cat {
-    font-size: 0.62rem;
-    color: var(--text-tertiary);
-}
 .news-item-main {
     flex: 1;
     min-width: 0;
