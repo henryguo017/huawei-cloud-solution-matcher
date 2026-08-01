@@ -7634,11 +7634,27 @@ const SolutionSummary = {
             }
             if (!firstPara && bullets.length === 0) return '';
 
+            // 价值主张段落按句末标点（。！？）分多个 <br>，让长段落视觉分行
+            //   例：'xx。yy。zz。' → 'xx。<br>yy。<br>zz。'
+            //   保留标点本身（lookbehind），空段过滤
+            const splitSentences = function(s) {
+                if (!s) return [];
+                return s.split(/(?<=[。！？])/).map(function(t) { return t.trim(); }).filter(Boolean);
+            };
+
             const esc = window._crEsc || function(s) { return String(s); };
             let html = '<div class="solution-summary-card">';
             html += '<div class="solution-summary-head"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg><span>方案摘要</span></div>';
             html += '<div class="solution-summary-body">';
-            if (firstPara) html += '<p class="solution-summary-value">' + esc(firstPara) + '</p>';
+            if (firstPara) {
+                const sentences = splitSentences(firstPara);
+                // 价值主张不强加 (1)(2)，但用 <br> 分行
+                if (sentences.length > 1) {
+                    html += '<p class="solution-summary-value">' + sentences.map(function(s) { return esc(s); }).join('<br>') + '</p>';
+                } else {
+                    html += '<p class="solution-summary-value">' + esc(firstPara) + '</p>';
+                }
+            }
             if (bullets.length) {
                 html += '<ul class="solution-summary-bullets">';
                 bullets.forEach(function(b) {

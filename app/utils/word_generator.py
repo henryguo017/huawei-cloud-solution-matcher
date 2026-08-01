@@ -191,11 +191,13 @@ class WordGenerator:
                 self._set_cell(cells[c], row[c] if c < len(row) else '')
         self.doc.add_paragraph()
 
-    def _add_list_item(self, text: str, numbered: bool = False):
+    def _add_list_item(self, text: str, numbered: bool = False, index: int = 0):
         # 不用 'List Bullet'/'List Number' 内置样式（带圆点/编号符号，与网页端无圆点风格不一致）
-        # 改为普通段落 + 左缩进，保持列表层级感但无任何前缀符号
+        # 改为普通段落 + 左缩进 + 前缀 "(1) " 编号（与网页端括号编号风格统一）
         para = self.doc.add_paragraph()
         para.paragraph_format.left_indent = Pt(18)
+        prefix = f'({index}) '
+        para.add_run(prefix).bold = False
         self._add_inline_md(para, text)
 
     def _render_markdown(self, content: str):
@@ -203,6 +205,7 @@ class WordGenerator:
         lines = (content or "").split("\n")
         i = 0
         n = len(lines)
+        list_idx = 0  # 每章节重置列表编号
         while i < n:
             line = lines[i]
             stripped = line.strip()
@@ -236,14 +239,16 @@ class WordGenerator:
             # 无序列表
             m = re.match(r'^([\*\-])\s+(.*)', stripped)
             if m:
-                self._add_list_item(m.group(2), numbered=False)
+                list_idx += 1
+                self._add_list_item(m.group(2), numbered=False, index=list_idx)
                 i += 1
                 continue
 
             # 有序列表
             m = re.match(r'^(\d+)\.\s+(.*)', stripped)
             if m:
-                self._add_list_item(m.group(2), numbered=True)
+                list_idx += 1
+                self._add_list_item(m.group(2), numbered=True, index=list_idx)
                 i += 1
                 continue
 

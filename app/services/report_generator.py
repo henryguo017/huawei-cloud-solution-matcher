@@ -315,11 +315,17 @@ class ReportGeneratorService:
                 story.append(Spacer(1, 10))
                 
                 content = chapter.get('content', '')
+                list_idx = 0
                 for para in content.split('\n'):
-                    if para.strip():
-                        # 去掉行首列表符号（- * • 等），与网页端无圆点风格一致
-                        cleaned = re.sub(r'^[-*•·]\s+', '', para.strip())
-                        story.append(Paragraph(cleaned, body_style))
+                    if not para.strip():
+                        continue
+                    # 列表项：去掉行首 [-*•·] 符号并加 (1)/(2) 编号，与网页端括号编号风格一致
+                    m = re.match(r'^[-*•·]\s+(.*)', para.strip())
+                    if m:
+                        list_idx += 1
+                        story.append(Paragraph(f'({list_idx}) {m.group(1)}', body_style))
+                    else:
+                        story.append(Paragraph(para.strip(), body_style))
             
             # ===== 成本参考附表（原生表格，避免 Markdown 乱码） =====
             if cost_reference:

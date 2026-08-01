@@ -1939,14 +1939,38 @@ body::after {
     margin-bottom: var(--spacing-md);
 }
 
-/* 方案/竞品正文列表去掉圆点（匹配页/分享页/导出统一无圆点），保留缩进层级感 */
+/* 方案/竞品正文列表去掉圆点（匹配页/分享页/导出统一无圆点），保留缩进层级感，并加 (1)(2) 括号编号 */
 .result-content ul {
     list-style: none;
     padding-left: 1.2em;
+    counter-reset: list-item;
 }
 .result-content ul li {
     position: relative;
     padding-left: 0;
+    counter-increment: list-item;
+}
+.result-content ul li::before {
+    content: '(' counter(list-item) ') ';
+    color: var(--primary-color);
+    font-weight: 600;
+    margin-right: 0.4em;
+}
+
+/* 摘要卡片要点同样加 (1)(2) 括号编号 */
+.solution-summary-bullets {
+    counter-reset: list-item;
+}
+.solution-summary-bullets li {
+    counter-increment: list-item;
+    position: relative;
+    padding-left: 0;
+}
+.solution-summary-bullets li::before {
+    content: '(' counter(list-item) ') ';
+    color: var(--primary-color);
+    font-weight: 600;
+    margin-right: 0.4em;
 }
 
 .result-content li {
