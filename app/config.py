@@ -28,6 +28,14 @@ MATCH_LLM_MODEL = os.getenv("MATCH_LLM_MODEL", "deepseek-v4-flash")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 DEEPSEEK_TEMPERATURE = float(os.getenv("DEEPSEEK_TEMPERATURE", "0.1"))
 
+# DeepSeek V4 thinking 模式控制（2026-07-31 V4-Flash-0731 正式版起默认开启思考！
+# 思考模式下：①每次请求先无上限输出 reasoning_content，匹配耗时从 ~50s 飙到 140-170s；
+# ②temperature/top_p 等参数被静默忽略不生效。本项目生成"方案文本"无需深度推理，
+# 默认 disabled 关闭思考；确需推理再在服务器 .env 设 DEEPSEEK_THINKING=enabled）。
+DEEPSEEK_THINKING = os.getenv("DEEPSEEK_THINKING", "disabled")
+# LLM 单次输出 token 上限（防 thinking/长文无上限拖慢响应；OpenAI 格式兼容字段）
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
+
 # 阿里云百炼配置 (国内推荐)
 ALIYUN_API_KEY = os.getenv("ALIYUN_API_KEY", "")
 ALIYUN_MODEL_NAME = os.getenv("ALIYUN_MODEL_NAME", "qwen-turbo")

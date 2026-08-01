@@ -90,7 +90,12 @@ class DeepSeekProvider(LLMProvider):
             data = {
                 "model": model_name,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": temp
+                "temperature": temp,
+                # V4-Flash-0731 正式版起 thinking 默认 enabled（无上限思考→匹配 140-170s）。
+                # 本项目生成方案文本无需深度推理，默认 disabled；确需思考在 .env 设 DEEPSEEK_THINKING=enabled。
+                "thinking": {"type": DEEPSEEK_THINKING},
+                # 输出 token 上限，防无上限长文/思考拖慢响应
+                "max_tokens": LLM_MAX_TOKENS,
             }
             async with _http_client_cm() as client:
                 response = await client.post(url, headers=headers, json=data)
@@ -112,6 +117,9 @@ class DeepSeekProvider(LLMProvider):
             "model": model_name,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": temp,
+            # 与 chat() 一致：默认关闭 V4 思考模式，控制匹配耗时（见 chat 内注释）
+            "thinking": {"type": DEEPSEEK_THINKING},
+            "max_tokens": LLM_MAX_TOKENS,
             "stream": True
         }
         async with _http_client_cm() as client:
