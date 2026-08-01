@@ -278,7 +278,7 @@ const DemoManager = {
             this.hideSelector();
         });
         
-        overlay?.addEventListener('click', () => {
+        overlay?.addEventListener('mousedown', () => {
             this.hideSelector();
         });
         

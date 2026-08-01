@@ -3058,8 +3058,8 @@ Object.assign(KnowledgeUI, {
                 this.renderDocList();
             });
         });
-        // 点击弹窗遮罩关闭
-        document.getElementById('kb-editor-overlay')?.addEventListener('click', (e) => {
+        // 点击弹窗遮罩关闭（mousedown 防止拖选文字出界时误触发关闭）
+        document.getElementById('kb-editor-overlay')?.addEventListener('mousedown', (e) => {
             if (e.target === document.getElementById('kb-editor-overlay')) this._hideEditor();
         });
         // ESC关闭
@@ -4352,11 +4352,11 @@ const HistoryUI = {
             });
         }
 
-        // 点击遮罩关闭
-        document.getElementById('history-detail-modal')?.addEventListener('click', (e) => {
+        // 点击遮罩关闭（mousedown 防止拖选文字出界误关）
+        document.getElementById('history-detail-modal')?.addEventListener('mousedown', (e) => {
             if (e.target === e.currentTarget) this.closeDetail();
         });
-        document.getElementById('history-compare-panel')?.addEventListener('click', (e) => {
+        document.getElementById('history-compare-panel')?.addEventListener('mousedown', (e) => {
             if (e.target === e.currentTarget) this.closeCompare();
         });
 
@@ -4848,7 +4848,7 @@ function initEventListeners() {
             document.body.style.overflow = '';
         }
     });
-    document.getElementById('product-modal-overlay')?.addEventListener('click', (e) => {
+    document.getElementById('product-modal-overlay')?.addEventListener('mousedown', (e) => {
         if (e.target === e.currentTarget) {
             e.target.style.display = 'none';
             document.body.style.overflow = '';
@@ -4864,7 +4864,7 @@ function initEventListeners() {
     document.getElementById('auth-modal-close')?.addEventListener('click', () => {
         AuthManager._closeModal();
     });
-    document.getElementById('auth-modal-overlay')?.addEventListener('click', (e) => {
+    document.getElementById('auth-modal-overlay')?.addEventListener('mousedown', (e) => {
         if (e.target === e.currentTarget) AuthManager._closeModal();
     });
 
@@ -5090,7 +5090,7 @@ function initEventListeners() {
 
     // 关闭个人中心
     document.getElementById('close-profile')?.addEventListener('click', closeProfilePanel);
-    document.getElementById('profile-backdrop')?.addEventListener('click', closeProfilePanel);
+    document.getElementById('profile-backdrop')?.addEventListener('mousedown', closeProfilePanel);
 
     function closeProfilePanel() {
         document.getElementById('profile-panel').style.display = 'none';
@@ -5657,7 +5657,7 @@ function initEventListeners() {
     document.getElementById('client-modal-close')?.addEventListener('click', closeClientModal);
     document.getElementById('client-modal-cancel')?.addEventListener('click', closeClientModal);
     document.getElementById('client-modal-save')?.addEventListener('click', saveClientModal);
-    document.getElementById('client-modal')?.addEventListener('click', (e) => {
+    document.getElementById('client-modal')?.addEventListener('mousedown', (e) => {
         if (e.target === document.getElementById('client-modal')) closeClientModal();
     });
     // 初始化：登录态就绪后显示客户栏（三模式通用，方案挂客户）
@@ -5764,7 +5764,7 @@ function initEventListeners() {
     document.getElementById('client-manage-btn')?.addEventListener('click', openClientManage);
     document.getElementById('client-manage-close')?.addEventListener('click', closeClientManage);
     document.getElementById('client-manage-new')?.addEventListener('click', () => { closeClientManage(); openClientModal(); });
-    document.getElementById('client-manage-modal')?.addEventListener('click', (e) => {
+    document.getElementById('client-manage-modal')?.addEventListener('mousedown', (e) => {
         if (e.target === document.getElementById('client-manage-modal')) closeClientManage();
     });
 
@@ -7585,7 +7585,7 @@ const AIAssistant = {
         var newChatBtn = document.getElementById('ai-new-chat-btn');
         if (newChatBtn) newChatBtn.addEventListener('click', () => this.newChat());
         var overlay = document.getElementById('ai-assistant-overlay');
-        if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) this.close(); });
+        if (overlay) overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) this.close(); });
 
         // 快捷建议卡片
         document.querySelectorAll('.ai-quick-card').forEach(card => {
