@@ -1,13 +1,5 @@
 [
   {
-    "name": "2026 AGIC 深圳国际通用人工智能大会暨产业博览会",
-    "city": "深圳",
-    "date_range": "2026-08-26 ~ 2026-08-28",
-    "location": "深圳国际会展中心（宝安）",
-    "url": "https://www.agicexpo.com/",
-    "note": "全球面积最大的机器人+AI主题专业展；参观免费，建议官网提前登记（官网已发布 2026 届信息）"
-  },
-  {
     "name": "华为全联接大会（HUAWEI CONNECT）",
     "city": "上海",
     "date_range": "2026年9月（以官方发布为准）",
@@ -30,13 +22,5 @@
     "location": "深圳（以官方发布为准）",
     "url": "https://des.cloud.tencent.com/",
     "note": "腾讯年度生态大会。官网当前为 2025 届页面，2026 届官网发布后更新链接与时间"
-  },
-  {
-    "name": "2026 中国 AI 智能体大会（AgenticAICon 2026）",
-    "city": "杭州",
-    "date_range": "2026年7月2日-3日（已举办，下届关注）",
-    "location": "杭州君悦酒店",
-    "url": "https://zhidx.com/p/561769.html",
-    "note": "智东西/智猩猩主办，Agent 主题大会（已举办；智东西官网持续更新后续大会动态）"
   }
 ]

@@ -649,6 +649,44 @@ def _load_industry_events() -> list:
         return []
 
 
+def _event_end_date(date_range: str) -> datetime | None:
+    """
+    从 date_range 提取"结束日期"（用于判断是否已过期）。
+    兼容格式：'2026-08-26 ~ 2026-08-28' / '2026年9月（以官方发布为准）' /
+              '2026年9月下旬' / '2026年7月2日-3日' / '2026年9月中旬'。
+    提取不到明确日期返回 None（不过滤，保持原样）。
+    """
+    import re as _re
+    s = date_range or ""
+    # 1) 完整日期范围：2026-08-26 ~ 2026-08-28（取结束）
+    m = _re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})\s*[~至-]\s*(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        return datetime(int(m.group(4)), int(m.group(5)), int(m.group(6)))
+    # 2) 单个完整日期：2026-08-26
+    m = _re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    # 3) 中文日期范围：2026年7月2日-3日（取结束日）
+    m = _re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日\s*[-至]\s*(\d{1,2})日", s)
+    if m:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(4)))
+    # 4) 中文单个日期：2026年7月2日
+    m = _re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", s)
+    if m:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    # 5) 仅年月：2026年9月（下旬/中旬/以官方为准）→ 取当月最后一天
+    m = _re.search(r"(\d{4})年(\d{1,2})月", s)
+    if m:
+        return _month_end(int(m.group(1)), int(m.group(2)))
+    return None
+
+
+def _month_end(y: int, mo: int) -> datetime:
+    """当月最后一天"""
+    import calendar as _cal
+    return datetime(y, mo, _cal.monthrange(y, mo)[1])
+
+
 @router.get("/events", tags=["资讯"])
 async def industry_events():
     """
@@ -678,7 +716,13 @@ async def industry_events():
         merged.append(it)
 
     # 合并人工 JSON（兜底：聚合站没抓到的年度大会，如华为/云栖）
+    today = datetime.now().date()
     for it in _load_industry_events():
+        # 过期自动过滤：date_range 的结束日期 < 今天 → 已结束，不显示
+        end = _event_end_date(it.get("date_range", ""))
+        if end is not None and end.date() < today:
+            logger.info(f"展会已结束自动隐藏: {it.get('name', '')} (date_range={it.get('date_range', '')})")
+            continue
         key = _normalize_title(it.get("name", ""))
         if key and key not in seen:
             seen.add(key)
