@@ -74,6 +74,59 @@
         .share-title { font-size: 24px; font-weight: 700; margin: 0 0 8px; line-height: 1.35; }
         .share-meta { color: var(--text-muted); font-size: 13px; margin-bottom: 4px; }
         .share-meta span { margin-right: 16px; }
+
+        /* ---- 方案摘要卡片（分享页置顶，与主站一致风格） ---- */
+        .share-summary-card {
+            background: linear-gradient(135deg, #FFF8F8 0%, #FFFFFF 60%);
+            border: 1px solid rgba(199, 0, 11, 0.16);
+            border-left: 4px solid #C7000B;
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin: 18px 0;
+            box-shadow: 0 2px 12px rgba(199, 0, 11, 0.05);
+        }
+        .share-summary-head {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #C7000B;
+            margin-bottom: 10px;
+        }
+        .share-summary-head svg { color: #C7000B; }
+        .share-summary-body { font-size: 14px; line-height: 1.7; }
+        .share-summary-value {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1D2129;
+            line-height: 1.7;
+            margin: 0 0 10px;
+        }
+        .share-summary-bullets {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+        }
+        .share-summary-bullets li {
+            position: relative;
+            padding-left: 16px;
+            margin-bottom: 8px;
+            color: #4E5969;
+            line-height: 1.6;
+        }
+        .share-summary-bullets li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0.55em;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #C7000B;
+            opacity: 0.7;
+        }
+
         .share-section-label {
             display: inline-block;
             font-size: 13px;

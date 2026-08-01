@@ -141,6 +141,46 @@
         }
     }
 
+    // 从方案 answer 提取「执行摘要」章节 → 摘要卡片 HTML（与主站卡片样式一致）
+    function buildSummaryCard(markdown) {
+        try {
+            if (!markdown) return '';
+            const lines = String(markdown).split('\n');
+            let inSummary = false;
+            const contentLines = [];
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (/^##\s+.*执行摘要/.test(line)) { inSummary = true; continue; }
+                if (inSummary && /^##\s+/.test(line)) { break; }
+                if (inSummary) contentLines.push(line);
+            }
+            const raw = contentLines.map(function(l) { return l.trim(); }).filter(Boolean);
+            if (!raw.length) return '';
+            const stripMd = function(s) { return s.replace(/\*\*/g, '').replace(/__/g, '').trim(); };
+            const firstPara = stripMd(raw[0]);
+            const bullets = [];
+            for (let i = 1; i < raw.length; i++) {
+                let l = raw[i].replace(/^[-*•]\s*/, '').replace(/^\d+[.、]\s*/, '').trim();
+                if (l) bullets.push(stripMd(l));
+            }
+            if (!firstPara && bullets.length === 0) return '';
+            let html = '<div class="share-summary-card">';
+            html += '<div class="share-summary-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg><span>方案摘要</span></div>';
+            html += '<div class="share-summary-body">';
+            if (firstPara) html += '<p class="share-summary-value">' + escapeHtml(firstPara) + '</p>';
+            if (bullets.length) {
+                html += '<ul class="share-summary-bullets">';
+                bullets.forEach(function(b) { html += '<li>' + escapeHtml(b) + '</li>'; });
+                html += '</ul>';
+            }
+            html += '</div></div>';
+            return html;
+        } catch (e) {
+            console.warn('[share] 摘要卡片渲染失败:', e);
+            return '';
+        }
+    }
+
     function render(data, el) {
         const p = data.payload || {};
         const isAnalyze = p.kind === 'analyze';
@@ -154,6 +194,7 @@
         if (meta) html += '<div class="share-meta">' + meta + '</div>';
         if (p.demand) html += '<div class="share-section-label">客户需求</div><div class="share-demand-box">' + escapeHtml(p.demand) + '</div>';
         const sol = p.solution || p.answer || '';
+        if (sol && !isAnalyze) html += buildSummaryCard(sol);
         if (sol) html += '<div class="share-section-label">' + (isAnalyze ? '分析报告' : '解决方案') + '</div><div class="result-content">' + simpleMarkdown(sol) + '</div>';
         if (p.sources && p.sources.length) html += '<div class="share-section-label">参考文档</div><div class="share-sources">' + buildSources(p.sources) + '</div>';
         el.innerHTML = html;
