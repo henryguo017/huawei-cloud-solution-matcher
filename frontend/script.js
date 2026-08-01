@@ -7655,7 +7655,8 @@ const WeatherBar = {
             this.resultsEl.innerHTML = '';
             this.emptyEl.style.display = 'block';
             this.emptyEl.textContent = '输入城市名开始搜索';
-            setTimeout(function() { self.searchInput.focus(); }, 30);
+            // 箭头函数自动绑定 this，避免 setTimeout 回调里访问未声明的 self
+            setTimeout(() => { if (this.searchInput) this.searchInput.focus(); }, 30);
         } else {
             this._closePanel();
         }
