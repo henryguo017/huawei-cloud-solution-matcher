@@ -1939,6 +1939,16 @@ body::after {
     margin-bottom: var(--spacing-md);
 }
 
+/* 方案/竞品正文列表去掉圆点（匹配页/分享页/导出统一无圆点），保留缩进层级感 */
+.result-content ul {
+    list-style: none;
+    padding-left: 1.2em;
+}
+.result-content ul li {
+    position: relative;
+    padding-left: 0;
+}
+
 .result-content li {
     color: var(--text-primary);
     line-height: 1.8;

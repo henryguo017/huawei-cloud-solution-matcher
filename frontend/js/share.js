@@ -42,7 +42,7 @@
             return '<a href="' + safeUrl(url) + '" target="_blank" style="color:var(--primary-color);">' + label + '</a>';
         });
         html = html.replace(/^[\s]*[-*+] (.+)$/gm, '<li>$1</li>');
-        html = html.replace(/(<li>.*<\/li>)/s, '<ul style="padding-left:20px;margin:8px 0;">$1</ul>');
+        html = html.replace(/(<li>.*<\/li>)/s, '<ul style="list-style:none;padding-left:16px;margin:8px 0;">$1</ul>');
         html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
         html = (function () {
             const lines = html.split('\n');

@@ -192,11 +192,10 @@ class WordGenerator:
         self.doc.add_paragraph()
 
     def _add_list_item(self, text: str, numbered: bool = False):
-        style = 'List Number' if numbered else 'List Bullet'
-        try:
-            para = self.doc.add_paragraph(style=style)
-        except Exception:
-            para = self.doc.add_paragraph()
+        # 不用 'List Bullet'/'List Number' 内置样式（带圆点/编号符号，与网页端无圆点风格不一致）
+        # 改为普通段落 + 左缩进，保持列表层级感但无任何前缀符号
+        para = self.doc.add_paragraph()
+        para.paragraph_format.left_indent = Pt(18)
         self._add_inline_md(para, text)
 
     def _render_markdown(self, content: str):

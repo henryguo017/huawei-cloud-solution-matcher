@@ -1,4 +1,5 @@
 import time
+import re
 from datetime import datetime
 from typing import Dict, Any, List
 from pathlib import Path
@@ -316,7 +317,9 @@ class ReportGeneratorService:
                 content = chapter.get('content', '')
                 for para in content.split('\n'):
                     if para.strip():
-                        story.append(Paragraph(para.strip(), body_style))
+                        # 去掉行首列表符号（- * • 等），与网页端无圆点风格一致
+                        cleaned = re.sub(r'^[-*•·]\s+', '', para.strip())
+                        story.append(Paragraph(cleaned, body_style))
             
             # ===== 成本参考附表（原生表格，避免 Markdown 乱码） =====
             if cost_reference:
