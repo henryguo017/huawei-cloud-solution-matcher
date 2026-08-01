@@ -43,7 +43,7 @@ from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
 from app.config import KB_REBUILD_CONCURRENCY
 from app.config import NEWS_FEEDS, NEWS_TTL_SECONDS, NEWS_TOP_N, NEWS_FETCH_TIMEOUT
-from app.config import HUAWEI_FEEDS, HUAWEI_TOP_N, INDUSTRY_EVENTS_FILE
+from app.config import HUAWEI_BLOG_URL, HUAWEI_TOP_N, INDUSTRY_EVENTS_FILE
 from app.agent.parsers.read_file import ALLOWED_EXT, extract_text
 from typing import Optional, Dict
 from datetime import datetime, date
@@ -454,55 +454,60 @@ async def tech_news():
 
 
 # ==================== 华为云官方动态（顶栏资讯·第二标签页） ====================
-# 只聚合华为云官方渠道（产品发布/版本更新/优惠活动/认证考试）。
-# 复用 _parse_rss_datetime/_normalize_title；【不做】相关性过滤。
+# 数据源：华为云社区博客 https://bbs.huaweicloud.com/blogs（华为云自家域名）。
+# 官网 www.huaweicloud.com 是 JS 动态渲染 + WAF 防护抓不了；社区博客服务端渲染 HTML 可抓。
+# 【不做】相关性过滤——本身就是官方内容，全相关。
 _HUAWEI_CACHE: dict = {"data": None, "ts": 0.0}
 
 
-def _fetch_huawei_sync(feed: dict) -> list:
-    """抓取华为云官方 RSS 源（带更强 UA + Referer，CSDN 反爬需要），失败返回 []。"""
+def _fetch_huawei_blogs_sync() -> list:
+    """抓取华为云社区博客列表页 HTML，解析出 [{title, source, url, pub_date, ts}]，失败返回 []。"""
     import httpx
-    import xml.etree.ElementTree as ET
+    import re as _re
     try:
-        r = httpx.get(feed["url"], timeout=NEWS_FETCH_TIMEOUT, follow_redirects=True,
+        r = httpx.get(HUAWEI_BLOG_URL, timeout=NEWS_FETCH_TIMEOUT, follow_redirects=True,
                       headers={
                           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-                          "Referer": "https://blog.csdn.net/",
-                          "Accept": "application/rss+xml, application/xml, text/xml, */*",
+                          "Accept": "text/html,application/xhtml+xml,*/*",
                       })
         r.raise_for_status()
-        root = ET.fromstring(r.content)
+        html = r.text
         items = []
-        if root.tag == "rss":
-            channel = root.find("channel")
-            for it in (channel.findall("item") if channel is not None else []):
-                title = (it.findtext("title") or "").strip()
-                link = (it.findtext("link") or "").strip()
-                if not title or not link:
-                    continue
-                ts = _parse_rss_datetime(it.findtext("pubDate") or "")
-                items.append({"title": title, "source": feed["name"],
-                              "url": link, "pub_date": ts.isoformat() if ts else "", "ts": ts})
-        elif root.tag in ("feed", "{http://www.w3.org/2005/Atom}feed"):
-            for it in root.findall("{http://www.w3.org/2005/Atom}entry"):
-                title = (it.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
-                link_el = it.find("{http://www.w3.org/2005/Atom}link")
-                link = (link_el.get("href") if link_el is not None else "").strip()
-                if not title or not link:
-                    continue
-                ts = _parse_rss_datetime(it.findtext("{http://www.w3.org/2005/Atom}updated") or "")
-                items.append({"title": title, "source": feed["name"],
-                              "url": link, "pub_date": ts.isoformat() if ts else "", "ts": ts})
+        # 标准模式：<a class="blogs-title ..." title="标题" ... href="/blogs/数字">
+        for m in _re.finditer(r'class="blogs-title[^"]*" title="([^"]+)"[^>]*href="(/blogs/\d+)"', html):
+            title = m.group(1).strip()
+            href = m.group(2)
+            if not title:
+                continue
+            # 从该位置向后找发布日期（blogs-create-time）
+            seg = html[m.end():m.end() + 3000]
+            dm = _re.search(r'blogs-create-time">([^<]+)<', seg)
+            date_str = dm.group(1).strip() if dm else ""
+            ts = None
+            # 日期格式 2026/07/09
+            dm2 = _re.match(r'(\d{4})/(\d{1,2})/(\d{1,2})', date_str)
+            if dm2:
+                try:
+                    ts = datetime(int(dm2.group(1)), int(dm2.group(2)), int(dm2.group(3)))
+                except Exception:
+                    ts = None
+            items.append({
+                "title": title,
+                "source": "华为云社区",
+                "url": f"https://bbs.huaweicloud.com{href}",
+                "pub_date": ts.isoformat() if ts else "",
+                "ts": ts,
+            })
         return items
     except Exception as e:
-        logger.warning(f"华为云动态源 {feed.get('name')} 抓取失败: {e}")
+        logger.warning(f"华为云社区博客抓取失败: {e}")
         return []
 
 
 @router.get("/huawei-news", tags=["资讯"])
 async def huawei_news():
     """
-    华为云官方动态聚合（CSDN 官方博客 RSS，日更）。
+    华为云官方动态聚合（华为云社区博客 bbs.huaweicloud.com，自家域名）。
     返回结构与 /news 兼容：{ok, items:[{title, source, url, pub_date}], updated_at, stale}。
     """
     global _HUAWEI_CACHE
@@ -511,10 +516,8 @@ async def huawei_news():
         return _HUAWEI_CACHE["data"]
 
     import asyncio as _asyncio
-    results = await _asyncio.gather(*[_asyncio.to_thread(_fetch_huawei_sync, f) for f in HUAWEI_FEEDS])
-    all_items = []
-    for items in results:
-        all_items.extend(items or [])
+    results = await _asyncio.gather(_asyncio.to_thread(_fetch_huawei_blogs_sync))
+    all_items = results[0] or []
 
     if not all_items:
         if _HUAWEI_CACHE["data"] is not None:

@@ -78,14 +78,12 @@ NEWS_TTL_SECONDS = int(os.getenv("NEWS_TTL_SECONDS", str(24 * 3600)))  # 默认 
 NEWS_TOP_N = int(os.getenv("NEWS_TOP_N", "10"))
 NEWS_FETCH_TIMEOUT = float(os.getenv("NEWS_FETCH_TIMEOUT", "8"))
 
-# ==================== 华为云官方动态聚合（RSS 源） ====================
-# 顶栏「资讯」弹窗第二个标签页。只聚合华为云官方渠道（产品发布/版本更新/优惠活动/认证考试），
-# 复用 NEWS 的 RSS 抓取/解析/去重逻辑（_fetch_news_sync/_parse_rss_datetime/_normalize_title）。
-# 注意：与 NEWS_FEEDS 不同，官方动态【不做】相关性过滤——本身就是官方内容，全相关。
-HUAWEI_FEEDS = [
-    # 华为云官方博客（CSDN 官方号，日更，覆盖公共云/大模型/产品发布/高校活动/认证考试）
-    {"name": "华为云官方博客", "url": "https://blog.csdn.net/devcloud/rss/list"},
-]
+# ==================== 华为云官方动态聚合（华为云自家社区博客） ====================
+# 顶栏「资讯」弹窗第二个标签页。只聚合华为云官方渠道（产品发布/版本更新/优惠活动/认证考试/技术博客）。
+# 数据源：华为云社区博客 https://bbs.huaweicloud.com/blogs（华为云自家域名，服务端渲染 HTML，可抓取）。
+# 注意：官网 www.huaweicloud.com/news 是 JS 动态渲染 + WAF 防护（非浏览器 UA 返回 JS 挑战页），无法稳定抓取；
+# 社区博客 bbs.huaweicloud.com 服务端渲染，无 WAF 拦截，是华为云官方动态最可靠的抓取渠道。
+HUAWEI_BLOG_URL = os.getenv("HUAWEI_BLOG_URL", "https://bbs.huaweicloud.com/blogs")
 HUAWEI_TOP_N = int(os.getenv("HUAWEI_TOP_N", "10"))
 
 # ==================== 向量数据库配置 ====================

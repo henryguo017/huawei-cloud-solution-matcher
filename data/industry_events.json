@@ -4,8 +4,8 @@
     "city": "深圳",
     "date_range": "2026-08-26 ~ 2026-08-28",
     "location": "深圳国际会展中心（宝安）",
-    "url": "https://www.aiww.cn/aievent",
-    "note": "AGI/多模态/人形机器人/物理 AI 落地；参观免费，专业论坛收费"
+    "url": "https://www.agicexpo.com/",
+    "note": "全球面积最大的机器人+AI主题专业展；参观免费，建议官网提前登记"
   },
   {
     "name": "华为全联接大会（HUAWEI CONNECT）",
@@ -32,19 +32,11 @@
     "note": "腾讯年度生态大会；普通开发者免费预约，闭门产业论坛付费"
   },
   {
-    "name": "2026 深圳人工智能与机器人产业链展览会",
-    "city": "深圳",
-    "date_range": "2026-11-26 ~ 2026-11-28",
-    "location": "深圳国际会展中心（宝安）",
-    "url": "https://www.zhanxun.cn/news/8400.html",
-    "note": "人工智能与机器人产业链展会"
-  },
-  {
     "name": "2026 中国 AI 智能体大会（AgenticAICon 2026）",
     "city": "杭州",
     "date_range": "2026年7月2日-3日（已举办，下届关注）",
     "location": "杭州君悦酒店",
-    "url": "http://www.idctalk.com/huodong",
+    "url": "https://zhidx.com/p/561769.html",
     "note": "智东西/智猩猩主办，Agent 主题大会（可关注下届动态）"
   }
 ]
