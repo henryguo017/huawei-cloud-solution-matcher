@@ -6332,6 +6332,21 @@ function initEventListeners() {
         if (!resultContainer || !resultContent) return;
 
         try {
+            // 方案摘要卡片：从 solution_json 提取「执行摘要」章节，视觉增强置顶。
+            // 卡片插在 solution-content 之外（避免被 .result-content * 规则污染样式）。
+            const summaryCardHtml = SolutionSummary.buildCard(result.solution_json);
+            const existingCard = document.getElementById('solution-summary-card-wrap');
+            if (summaryCardHtml) {
+                let wrap = existingCard;
+                if (!wrap) {
+                    wrap = document.createElement('div');
+                    wrap.id = 'solution-summary-card-wrap';
+                    resultContent.parentNode.insertBefore(wrap, resultContent);
+                }
+                wrap.innerHTML = summaryCardHtml;
+            } else if (existingCard) {
+                existingCard.innerHTML = '';
+            }
             resultContent.innerHTML = UI.renderMarkdown(result.answer);
         } catch (e) {
             resultContent.innerHTML = '<div class="result-content"><p>方案已生成，但渲染失败，请尝试下载方案文档查看。</p></div>';
@@ -7585,6 +7600,54 @@ const CompetitorFollowUpUI = {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+};
+
+/* ==================== 方案摘要卡片 ==================== */
+const SolutionSummary = {
+    /**
+     * 从 solution_json 提取「执行摘要」章节并渲染成置顶摘要卡片。
+     * solution_json 结构：[{title, content, sections}]，第一章 title 含「执行摘要」。
+     * 提取失败返回 ''（前端照常渲染完整 markdown，不影响任何功能）。
+     */
+    buildCard(solutionJson) {
+        try {
+            if (!solutionJson || !Array.isArray(solutionJson) || !solutionJson.length) return '';
+            const chapter = solutionJson.find(function(c) {
+                return c && c.title && c.title.indexOf('执行摘要') !== -1;
+            });
+            if (!chapter) return '';
+            const raw = (chapter.content || '').trim();
+            if (!raw) return '';
+
+            // 摘要正文第一段为价值主张，后续要点按行拆分（去掉 **加粗** 与编号符号）
+            const lines = raw.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+            const firstPara = lines[0] || '';
+            const bullets = [];
+            for (let i = 1; i < lines.length; i++) {
+                let l = lines[i].replace(/^[-*•]\s*/, '').replace(/^\d+[.、]\s*/, '').trim();
+                if (l) bullets.push(l);
+            }
+            if (!firstPara && bullets.length === 0) return '';
+
+            const esc = window._crEsc || function(s) { return String(s); };
+            let html = '<div class="solution-summary-card">';
+            html += '<div class="solution-summary-head"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg><span>方案摘要</span></div>';
+            html += '<div class="solution-summary-body">';
+            if (firstPara) html += '<p class="solution-summary-value">' + esc(firstPara) + '</p>';
+            if (bullets.length) {
+                html += '<ul class="solution-summary-bullets">';
+                bullets.forEach(function(b) {
+                    html += '<li>' + esc(b) + '</li>';
+                });
+                html += '</ul>';
+            }
+            html += '</div></div>';
+            return html;
+        } catch (e) {
+            console.warn('[SolutionSummary] 摘要卡片渲染失败:', e);
+            return '';
+        }
     }
 };
 
