@@ -34,7 +34,9 @@ DEEPSEEK_TEMPERATURE = float(os.getenv("DEEPSEEK_TEMPERATURE", "0.1"))
 # 默认 disabled 关闭思考；确需推理再在服务器 .env 设 DEEPSEEK_THINKING=enabled）。
 DEEPSEEK_THINKING = os.getenv("DEEPSEEK_THINKING", "disabled")
 # LLM 单次输出 token 上限（防 thinking/长文无上限拖慢响应；OpenAI 格式兼容字段）
-LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
+# 4096 实测对一般方案够，但个别长方案"参考资料"段可能被截断，调到 8000 保险。
+# 注意：max_tokens 是上限不是目标长度，调大不会让模型输出变长，也不会拖慢正常匹配。
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "8000"))
 
 # 阿里云百炼配置 (国内推荐)
 ALIYUN_API_KEY = os.getenv("ALIYUN_API_KEY", "")
