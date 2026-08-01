@@ -7777,6 +7777,103 @@ const WeatherBar = {
     }
 };
 
+/* ==================== 科技资讯弹窗（RSS 每日聚合） ==================== */
+const NewsModal = {
+    _loaded: false,
+
+    init() {
+        this.modal = document.getElementById('news-modal');
+        this.btn = document.getElementById('news-btn');
+        this.closeBtn = document.getElementById('news-modal-close');
+        this.listEl = document.getElementById('news-list');
+        this.updatedEl = document.getElementById('news-updated');
+        this.refreshBtn = document.getElementById('news-refresh-btn');
+        if (!this.modal || !this.btn) return;
+
+        const self = this;
+        this.btn.addEventListener('click', function() {
+            self.open();
+        });
+        this.closeBtn.addEventListener('click', function() {
+            self.close();
+        });
+        // 点遮罩关闭（mousedown，防拖选误关——项目通用约定）
+        this.modal.addEventListener('mousedown', function(e) {
+            if (e.target === self.modal) self.close();
+        });
+        this.refreshBtn.addEventListener('click', function() {
+            self._fetch(true);
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && self.modal.style.display !== 'none') self.close();
+        });
+    },
+
+    open() {
+        this.modal.style.display = 'flex';
+        if (!this._loaded) this._fetch(false);
+    },
+
+    close() {
+        this.modal.style.display = 'none';
+    },
+
+    _fetch(force) {
+        const self = this;
+        this.listEl.innerHTML = '<div class="news-loading">资讯加载中…</div>';
+        fetch(Config.API_BASE_URL + '/news' + (force ? '?force=1' : ''))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                self._loaded = true;
+                if (!data || !data.ok || !data.items || data.items.length === 0) {
+                    self.listEl.innerHTML = '<div class="news-error">资讯暂不可用，请稍后重试</div>';
+                    if (self.updatedEl) self.updatedEl.textContent = '';
+                    return;
+                }
+                self._render(data.items);
+                if (self.updatedEl) {
+                    self.updatedEl.textContent = '更新于 ' + (data.updated_at || '--') + (data.stale ? '（缓存）' : '');
+                }
+            })
+            .catch(function() {
+                self.listEl.innerHTML = '<div class="news-error">网络异常，请稍后重试</div>';
+            });
+    },
+
+    _render(items) {
+        const self = this;
+        if (!items.length) {
+            this.listEl.innerHTML = '<div class="news-empty">暂无资讯</div>';
+            return;
+        }
+        this.listEl.innerHTML = '';
+        items.forEach(function(it, idx) {
+            const item = document.createElement('a');
+            item.className = 'news-item';
+            item.href = it.url;
+            item.target = '_blank';
+            item.rel = 'noopener noreferrer';
+            // 时间显示（mm-dd）
+            let timeStr = '';
+            if (it.pub_date) {
+                const m = String(it.pub_date).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (m) timeStr = m[1] + '-' + m[2] + '-' + m[3];
+            }
+            const catLabel = it.category === 'AI' ? 'AI' : '云·科技';
+            item.innerHTML =
+                '<span class="news-item-meta">' +
+                    '<span class="news-source-tag">' + window._crEsc(it.source) + '</span>' +
+                    '<span class="news-item-cat">' + catLabel + '</span>' +
+                '</span>' +
+                '<span class="news-item-main">' +
+                    '<span class="news-item-title">' + window._crEsc(it.title) + '</span>' +
+                    (timeStr ? '<div class="news-item-time">' + timeStr + '</div>' : '') +
+                '</span>';
+            self.listEl.appendChild(item);
+        });
+    }
+};
+
 function init() {
     try {
         console.log('[Init] 华为云方案匹配系统 v2.4.0 正在初始化...');
@@ -7788,6 +7885,7 @@ function init() {
         initEventListeners();
         UpdateTicker.init();
         WeatherBar.init();
+        NewsModal.init();
         DemandWizard.init();
         HistoryUI.init();
         FollowUpUI.init();

@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260801f">
+<link rel="stylesheet" href="style.css?v=20260801g">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
@@ -321,6 +321,10 @@
                     </div>
                 </div>
                 <div class="topbar-right">
+                    <button id="news-btn" class="topbar-icon-btn" title="科技资讯 - 每日更新">
+                        <span class="news-icon"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg></span>
+                        <span class="news-text">资讯</span>
+                    </button>
                     <button id="quick-demo-btn" class="topbar-icon-btn" title="快速体验 Demo">
                         <span class="demo-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></span>
                         <span class="demo-text">体验</span>
@@ -2165,8 +2169,26 @@
         </div>
     </div>
 
+    <!-- 科技资讯弹窗（顶栏「资讯」按钮，RSS 每日聚合 10 条） -->
+    <div id="news-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content news-modal-content">
+            <button class="modal-close" id="news-modal-close" aria-label="关闭">×</button>
+            <h3 class="news-modal-title">科技资讯 · 每日更新</h3>
+            <p class="news-modal-tip" id="news-modal-tip">聚合 AI / 云 / 科技前沿动态，点击条目跳转原文阅读</p>
+            <div class="news-modal-body">
+                <div class="news-list" id="news-list">
+                    <div class="news-loading">资讯加载中…</div>
+                </div>
+            </div>
+            <div class="news-modal-footer">
+                <span class="news-updated" id="news-updated"></span>
+                <button class="btn btn-ghost btn-sm" id="news-refresh-btn">刷新</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260801g"></script>
+    <script src="script.js?v=20260801h"></script>
     <script src="js/voice-input.js?v=20260726f"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260801a"></script>

@@ -42,6 +42,7 @@ from app.services.usage_logger import UsageLoggerService
 from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY, COMPETITOR_DIRECTORY, SUPPORTED_INDUSTRIES
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
 from app.config import KB_REBUILD_CONCURRENCY
+from app.config import NEWS_FEEDS, NEWS_TTL_SECONDS, NEWS_TOP_N, NEWS_FETCH_TIMEOUT
 from app.agent.parsers.read_file import ALLOWED_EXT, extract_text
 from typing import Optional, Dict
 from datetime import datetime, date
@@ -239,6 +240,131 @@ async def weather_city_search(q: str = ""):
             "level": tp,
         })
     return {"ok": True, "cities": cities}
+
+
+# ==================== 科技资讯聚合（RSS，24h 缓存） ====================
+# 顶栏「资讯」按钮数据源：并行抓取多个 RSS 源 → 标准库 xml 解析 → 跨源标题去重
+# → 按时间倒序 → 取最新 NEWS_TOP_N 条。进程内 TTL 缓存（默认 24h），单源失败跳过。
+_NEWS_CACHE: dict = {"data": None, "ts": 0.0}
+
+
+def _parse_rss_datetime(s: str):
+    """兼容 RSS pubDate 的两种常见格式：RFC822 与 'YYYY-MM-DD HH:MM:SS +0800'。解析失败返回 None。"""
+    if not s:
+        return None
+    s = s.strip()
+    try:
+        from email.utils import parsedate_to_datetime
+        return parsedate_to_datetime(s).replace(tzinfo=None)
+    except Exception:
+        pass
+    for fmt in ("%Y-%m-%d %H:%M:%S %z", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(s, fmt).replace(tzinfo=None)
+        except Exception:
+            continue
+    return None
+
+
+def _fetch_news_sync(feed: dict) -> list:
+    """抓取单个 RSS 源并解析为 [{title, source, category, url, pub_date, ts}]，失败返回 []。"""
+    import httpx
+    import xml.etree.ElementTree as ET
+    try:
+        r = httpx.get(feed["url"], timeout=NEWS_FETCH_TIMEOUT, follow_redirects=True,
+                      headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        # 兼容 RSS 2.0 (<rss><channel><item>) 与 Atom (<feed><entry>)
+        items = []
+        if root.tag == "rss":
+            channel = root.find("channel")
+            for it in (channel.findall("item") if channel is not None else []):
+                title = (it.findtext("title") or "").strip()
+                link = (it.findtext("link") or "").strip()
+                if not title or not link:
+                    continue
+                ts = _parse_rss_datetime(it.findtext("pubDate") or "")
+                items.append({"title": title, "source": feed["name"], "category": feed["category"],
+                              "url": link, "pub_date": ts.isoformat() if ts else "", "ts": ts})
+        elif root.tag in ("feed", "{http://www.w3.org/2005/Atom}feed"):
+            for it in root.findall("{http://www.w3.org/2005/Atom}entry"):
+                title = (it.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
+                link_el = it.find("{http://www.w3.org/2005/Atom}link")
+                link = (link_el.get("href") if link_el is not None else "").strip()
+                if not title or not link:
+                    continue
+                ts = _parse_rss_datetime(it.findtext("{http://www.w3.org/2005/Atom}updated") or "")
+                items.append({"title": title, "source": feed["name"], "category": feed["category"],
+                              "url": link, "pub_date": ts.isoformat() if ts else "", "ts": ts})
+        return items
+    except Exception as e:
+        logger.warning(f"RSS 源 {feed.get('name')} 抓取失败: {e}")
+        return []
+
+
+def _normalize_title(t: str) -> str:
+    """标题去重归一化：剥离【】[]（）()包裹的标记（含内容）→ 去空白/标点/表情 → 仅留核心字符截前 40。"""
+    import re as _re
+    s = _re.sub(r"【[^】]*】|\[[^\]]*\]|（[^）]*）|\([^)]*\)", "", t)
+    s = _re.sub(r"[^\w\u4e00-\u9fff]", "", s.lower())
+    return s[:40]
+
+
+@router.get("/news", tags=["资讯"])
+async def tech_news():
+    """
+    科技资讯聚合（顶栏「资讯」按钮）。
+    并行抓取配置的 RSS 源 → 跨源标题去重 → 按发布时间倒序 → 返回最新 NEWS_TOP_N 条。
+    进程内 24h 缓存；全部源失败返回 ok=False（前端降级提示，不阻塞）。
+    """
+    global _NEWS_CACHE
+    now = time.time()
+    # 缓存命中（24h 内）
+    if _NEWS_CACHE["data"] is not None and (now - _NEWS_CACHE["ts"]) < NEWS_TTL_SECONDS:
+        return _NEWS_CACHE["data"]
+
+    # 并行抓取所有源
+    import asyncio as _asyncio
+    feeds = NEWS_FEEDS
+    results = await _asyncio.gather(*[_asyncio.to_thread(_fetch_news_sync, f) for f in feeds])
+
+    all_items = []
+    for items in results:
+        all_items.extend(items or [])
+
+    if not all_items:
+        # 抓取失败：若有旧缓存仍返回旧数据（标注过期），否则返回 ok=False
+        if _NEWS_CACHE["data"] is not None:
+            data = dict(_NEWS_CACHE["data"])
+            data["stale"] = True
+            return data
+        return {"ok": False, "items": [], "msg": "资讯抓取失败，请稍后重试"}
+
+    # 跨源标题去重（保留最早抓到的）
+    seen = set()
+    unique = []
+    for it in all_items:
+        key = _normalize_title(it["title"])
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(it)
+
+    # 按时间倒序（无时间戳的排最后）
+    unique.sort(key=lambda x: x["ts"] or datetime.min, reverse=True)
+    top = unique[:NEWS_TOP_N]
+
+    data = {
+        "ok": True,
+        "items": [{"title": it["title"], "source": it["source"], "category": it["category"],
+                   "url": it["url"], "pub_date": it["pub_date"]} for it in top],
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "stale": False,
+    }
+    _NEWS_CACHE["data"] = data
+    _NEWS_CACHE["ts"] = now
+    return data
 
 
 # ==================== 成本参考（方案成本估算器基础数据） ====================
