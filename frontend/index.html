@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260801h">
+<link rel="stylesheet" href="style.css?v=20260801i">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
@@ -883,27 +883,24 @@
                 <div class="content-card">
                     <div class="select-row">
                         <div class="form-group">
-                            <label class="form-label">选择竞争对手</label>
-                            <select id="competitor-select" class="select-input">
-                                <optgroup label="国内主流云服务商">
-                                    <option value="阿里云">阿里云</option>
-                                    <option value="腾讯云">腾讯云</option>
-                                    <option value="字节跳动火山引擎">字节跳动火山引擎</option>
-                                    <option value="天翼云">天翼云</option>
-                                    <option value="移动云">移动云</option>
-                                    <option value="联通云">联通云</option>
-                                </optgroup>
-                                <optgroup label="国际主流云服务商">
-                                    <option value="AWS">AWS</option>
-                                    <option value="微软Azure">微软Azure</option>
-                                    <option value="Google Cloud">Google Cloud</option>
-                                    <option value="Oracle Cloud">Oracle Cloud</option>
-                                </optgroup>
-                                <optgroup label="行业解决方案提供商">
-                                    <option value="西门子">西门子</option>
-                                    <option value="施耐德电气">施耐德电气</option>
-                                </optgroup>
-                            </select>
+                            <label class="form-label">选择竞争对手<span class="multi-tip">（可多选，最多 2 家，与华为云三方横评）</span></label>
+                            <div class="competitor-chips" id="competitor-chips">
+                                <span class="chip-group-label">国内主流云服务商</span>
+                                <button type="button" class="competitor-chip" data-comp="阿里云">阿里云</button>
+                                <button type="button" class="competitor-chip" data-comp="腾讯云">腾讯云</button>
+                                <button type="button" class="competitor-chip" data-comp="字节跳动火山引擎">火山引擎</button>
+                                <button type="button" class="competitor-chip" data-comp="天翼云">天翼云</button>
+                                <button type="button" class="competitor-chip" data-comp="移动云">移动云</button>
+                                <button type="button" class="competitor-chip" data-comp="联通云">联通云</button>
+                                <span class="chip-group-label">国际主流云服务商</span>
+                                <button type="button" class="competitor-chip" data-comp="AWS">AWS</button>
+                                <button type="button" class="competitor-chip" data-comp="微软Azure">微软 Azure</button>
+                                <button type="button" class="competitor-chip" data-comp="Google Cloud">Google Cloud</button>
+                                <button type="button" class="competitor-chip" data-comp="Oracle Cloud">Oracle Cloud</button>
+                                <span class="chip-group-label">行业解决方案提供商</span>
+                                <button type="button" class="competitor-chip" data-comp="西门子">西门子</button>
+                                <button type="button" class="competitor-chip" data-comp="施耐德电气">施耐德电气</button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">选择行业</label>
@@ -2188,7 +2185,7 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260801k"></script>
+    <script src="script.js?v=20260801l"></script>
     <script src="js/voice-input.js?v=20260726f"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260801a"></script>

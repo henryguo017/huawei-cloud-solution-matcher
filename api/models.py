@@ -53,7 +53,8 @@ class ClientUpdateRequest(BaseModel):
     tags: Optional[str] = Field(default=None, max_length=200)
 
 class AnalyzeRequest(BaseModel):
-    competitor: str = Field(..., description="竞争对手名称")
+    competitor: Optional[str] = Field(default=None, description="竞争对手名称（单竞品模式，与 competitors 二选一）")
+    competitors: Optional[List[str]] = Field(default=None, description="竞争对手列表（多竞品横评，最多 2 家，与 competitor 二选一）")
     industry: str = Field(..., description="行业名称")
     is_quick_demo: bool = Field(default=False, description="是否来自快速体验/Demo，为true时不触发成就")
     
@@ -87,6 +88,8 @@ class AnalyzeResponse(BaseModel):
     source_documents: List[SourceDocument] = Field(default_factory=list, description="参考文档列表")
     history_id: Optional[int] = Field(default=None, description="本次分析的历史记录ID")
     newly_unlocked: Optional[List[dict]] = Field(default=None, description="新解锁的成就列表（前端用于弹窗提示）")
+    # 多竞品横评：结构化对比表（competitors 为 2 家时返回）
+    comparison: Optional[Dict[str, Any]] = Field(default=None, description="三方对比表 {headers: [...], rows: [[...], ...]}，单竞品时为 None")
 
 class KnowledgeStatsResponse(BaseModel):
     total_documents: int = Field(..., description="总文档片段数")

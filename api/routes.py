@@ -1806,16 +1806,26 @@ async def analyze_competitor(
     """
     竞争对手方案分析接口
     
-    - **competitor**: 竞争对手名称
+    - **competitor**: 竞争对手名称（单竞品模式）
+    - **competitors**: 竞争对手列表（多竞品三方横评，最多 2 家）
     - **industry**: 行业名称
     """
     try:
         # 使用用户独立知识库（登录用户）；匿名用户使用全局知识库
         user_id = user.get('id') if user else 0
         analyzer = get_competitor_analyzer_for_user(user_id) if user_id > 0 else get_competitor_analyzer()
-        logger.info(f"开始分析竞争对手: {request.competitor}, 行业: {request.industry}")
-        
-        result = await analyzer.analyze(request.competitor, request.industry)
+        competitors = request.competitors or ([request.competitor] if request.competitor else [])
+        is_multi = len(competitors) >= 2
+
+        if is_multi:
+            # 多竞品三方横评（华为云 vs 竞品1 vs 竞品2）
+            competitors = competitors[:2]
+            logger.info(f"开始三方横评: 华为云 vs {' vs '.join(competitors)}, 行业: {request.industry}")
+            result = await analyzer.compare(competitors[0], competitors[1], request.industry)
+        else:
+            comp = competitors[0] if competitors else ""
+            logger.info(f"开始分析竞争对手: {comp}, 行业: {request.industry}")
+            result = await analyzer.analyze(comp, request.industry)
         
         source_docs = [
             SourceDocument(
@@ -1832,9 +1842,10 @@ async def analyze_competitor(
         if user and user.get('id'):
             try:
                 usage_logger = get_usage_logger()
-                usage_logger.log_analyze(request.competitor, request.industry, user_id=user['id'])
+                comp_label = " + ".join(competitors) if is_multi else (competitors[0] if competitors else "")
+                usage_logger.log_analyze(comp_label, request.industry, user_id=user['id'])
                 history_id = usage_logger.save_competitor_history(
-                    competitor=request.competitor,
+                    competitor=comp_label,
                     industry=request.industry,
                     analysis=result["answer"],
                     sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in result.get("source_documents", []) if hasattr(d, "metadata")],
@@ -1850,7 +1861,7 @@ async def analyze_competitor(
                 achievement_svc = get_achievement_service_dep()
                 achievement_result = achievement_svc.check_after_analyze(
                     user_id=user['id'],
-                    competitor=request.competitor,
+                    competitor=" + ".join(competitors) if is_multi else (competitors[0] if competitors else ""),
                 )
             except Exception as ach_err:
                 logger.warning(f"成就检测失败: {ach_err}")
@@ -1859,7 +1870,8 @@ async def analyze_competitor(
             answer=result["answer"],
             source_documents=source_docs,
             history_id=history_id,
-            newly_unlocked=achievement_result if user and user.get('id') else None
+            newly_unlocked=achievement_result if user and user.get('id') else None,
+            comparison=result.get("comparison") if is_multi else None
         )
     except Exception as e:
         logger.error(f"竞争对手分析失败: {e}")

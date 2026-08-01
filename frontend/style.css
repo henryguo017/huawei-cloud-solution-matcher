@@ -819,6 +819,107 @@ body::after {
     margin-bottom: var(--spacing-lg);
 }
 
+/* ---- 竞品多选 chips ---- */
+.multi-tip {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--text-tertiary);
+    margin-left: 6px;
+}
+.competitor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-card);
+    min-height: 44px;
+}
+.chip-group-label {
+    flex-basis: 100%;
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    margin-top: 4px;
+}
+.chip-group-label:first-child { margin-top: 0; }
+.competitor-chip {
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 0.78rem;
+    font-family: var(--font-family);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.competitor-chip:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+.competitor-chip.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+}
+
+/* ---- 三方对比表 ---- */
+.comparison-table-wrap {
+    margin-bottom: 16px;
+    padding: 16px;
+}
+.comparison-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.comparison-table-scroll {
+    overflow-x: auto;
+}
+.comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    min-width: 560px;
+}
+.comparison-table th,
+.comparison-table td {
+    border: 1px solid var(--border-color);
+    padding: 9px 12px;
+    text-align: left;
+    vertical-align: top;
+    line-height: 1.5;
+}
+.comparison-table thead th {
+    background: rgba(199, 0, 11, 0.06);
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+.comparison-table thead th:first-child {
+    background: var(--bg-elevated);
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+.comparison-table tbody tr:nth-child(even) {
+    background: var(--bg-elevated);
+}
+.comparison-table td:first-child {
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    background: var(--bg-card);
+}
+.comparison-table tbody tr:hover td {
+    background: rgba(199, 0, 11, 0.03);
+}
+
 .btn {
     position: relative;
     display: inline-flex;

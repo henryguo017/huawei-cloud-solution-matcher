@@ -149,3 +149,109 @@ class CompetitorAnalyzerService:
             "answer": answer_result,
             "source_documents": all_docs
         }
+
+    async def compare(self, competitor1, competitor2, industry):
+        """多竞品三方横评：华为云 vs 竞品1 vs 竞品2，返回 Markdown 分析 + 结构化对比表"""
+        import logging
+        log = logging.getLogger(__name__)
+
+        # 检索华为云 + 两家竞品资料
+        try:
+            stats = self.kb_service.get_stats()
+            kb_empty = (stats.get("total_documents", 0) == 0)
+        except Exception:
+            kb_empty = True
+
+        hw_docs, c1_docs, c2_docs = [], [], []
+        if not kb_empty:
+            hw_query = f"华为云在{industry}行业的解决方案 竞争优势 成功案例"
+            try:
+                hw_docs = await asyncio.to_thread(self.kb_service.search, hw_query)
+            except Exception as e:
+                log.warning(f"华为云方案检索异常，跳过: {e}")
+
+            for name, container in ((competitor1, "c1"), (competitor2, "c2")):
+                try:
+                    docs = await asyncio.to_thread(self.kb_service.search, f"{name}在{industry}行业的解决方案 产品 优势 案例")
+                    if container == "c1":
+                        c1_docs = docs
+                    else:
+                        c2_docs = docs
+                except Exception as e:
+                    log.warning(f"竞品 {name} 检索异常，跳过: {e}")
+
+        hw_context = "\n---\n".join([d.page_content for d in hw_docs]) if hw_docs else "（知识库中暂无华为云该行业方案资料）"
+        c1_context = "\n---\n".join([d.page_content for d in c1_docs]) if c1_docs else f"（知识库中暂无{competitor1}在{industry}行业的详细资料，请基于公开信息分析）"
+        c2_context = "\n---\n".join([d.page_content for d in c2_docs]) if c2_docs else f"（知识库中暂无{competitor2}在{industry}行业的详细资料，请基于公开信息分析）"
+
+        compare_prompt = f"""你是华为云资深竞争分析专家。请对华为云、{competitor1}、{competitor2}三家在{industry}行业进行三方横向对比分析。
+
+【华为云方案资料】
+{hw_context}
+
+【{competitor1}方案资料】
+{c1_context}
+
+【{competitor2}方案资料】
+{c2_context}
+
+请按以下格式输出：
+
+## 一、三方横向对比表（必须用 Markdown 表格，格式如下）
+| 对比维度 | 华为云 | {competitor1} | {competitor2} |
+| --- | --- | --- | --- |
+| 产品能力 | ... | ... | ... |
+| 价格策略 | ... | ... | ... |
+| 生态建设 | ... | ... | ... |
+| 安全合规 | ... | ... | ... |
+| 行业案例 | ... | ... | ... |
+| 服务支持 | ... | ... | ... |
+（对比维度至少 6 个，可自行补充；每格内容要具体，避免空泛套话）
+
+## 二、华为云 vs {competitor1} 差异化优势
+列出 2-3 个华为云相对{competitor1}的差异化优势
+
+## 三、华为云 vs {competitor2} 差异化优势
+列出 2-3 个华为云相对{competitor2}的差异化优势
+
+## 四、三方竞争格局判断
+说明在当前行业下，华为云与两家竞品各自的竞争位置和应对策略
+
+## 五、销售话术
+针对客户"三家怎么选"的疑问，给出华为云的推荐话术（至少 3 条）
+
+要求：客观、具体、有数据支撑。如果某方面信息不足，如实指出。"""
+
+        answer_result = await get_llm_response(compare_prompt)
+
+        # 结构化对比表：请求模型额外输出 JSON（供前端渲染真表格）
+        import json as _json
+        table_prompt = f"""你是数据整理专家。根据下面的三方对比分析，提取成结构化对比表格 JSON。
+
+【三方对比分析】
+{answer_result}
+
+要求：
+1. 输出严格 JSON（不要任何其他文字），格式：{{"headers": ["对比维度", "华为云", "{competitor1}", "{competitor2}"], "rows": [["产品能力", "内容", "内容", "内容"], ...]}}
+2. 每格内容精简到 40 字以内，可直接展示
+3. 至少 6 行对比维度（产品能力/价格策略/生态建设/安全合规/行业案例/服务支持等）
+4. 单元格内不要用竖线 | 和换行符"""
+        table_text = ""
+        try:
+            table_text = await get_llm_response(table_prompt)
+            # 提取 JSON（可能被 ```json 包裹）
+            import re as _re
+            m = _re.search(r"\{.*\}", table_text, _re.DOTALL)
+            comparison = _json.loads(m.group(0)) if m else {}
+            if not comparison.get("headers") or not comparison.get("rows"):
+                comparison = None
+        except Exception as e:
+            log.warning(f"对比表 JSON 提取失败: {e}")
+            comparison = None
+
+        all_docs = hw_docs + c1_docs + c2_docs
+        return {
+            "answer": answer_result,
+            "source_documents": all_docs,
+            "comparison": comparison,
+        }

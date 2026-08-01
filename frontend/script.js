@@ -1508,10 +1508,14 @@ const API = {
         if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
             headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
         }
+        // 兼容多竞品：competitors 数组（2 家）优先；否则单竞品字符串
+        const body = Array.isArray(competitor)
+            ? { competitors: competitor, industry, is_quick_demo: State.isQuickDemo }
+            : { competitor, industry, is_quick_demo: State.isQuickDemo };
         const response = await fetch(`${Config.API_BASE_URL}/analyze`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ competitor, industry, is_quick_demo: State.isQuickDemo }),
+            body: JSON.stringify(body),
             signal
         });
 
@@ -7014,6 +7018,26 @@ function initEventListeners() {
         FavoriteManager._updateResultBtn('fav-solution-btn', name);
     });
     
+    // 竞品多选 chips（最多选 2 家，与华为云三方横评）
+    const competitorChips = document.querySelectorAll('.competitor-chip');
+    competitorChips.forEach(function(chip) {
+        chip.addEventListener('click', function() {
+            const active = document.querySelectorAll('.competitor-chip.active');
+            if (chip.classList.contains('active')) {
+                chip.classList.remove('active');
+                return;
+            }
+            if (active.length >= 2) {
+                UI.showToast('最多选择 2 家竞争对手，可与华为云三方横评', 'warning');
+                return;
+            }
+            chip.classList.add('active');
+        });
+    });
+    document.getElementById('clear-competitor-btn')?.addEventListener('click', function() {
+        document.querySelectorAll('.competitor-chip.active').forEach(function(c) { c.classList.remove('active'); });
+    });
+
     const analyzeBtn = document.getElementById('analyze-btn');
     const analyzeBtnText = analyzeBtn?.querySelector('.btn-text');
 
@@ -7033,8 +7057,14 @@ function initEventListeners() {
             return;
         }
 
-        const competitor = document.getElementById('competitor-select').value;
+        // 读取多选 chips 或单竞品
+        const selectedChips = Array.from(document.querySelectorAll('.competitor-chip.active')).map(c => c.dataset.comp);
+        const competitor = selectedChips.length ? (selectedChips.length > 1 ? selectedChips : selectedChips[0]) : (document.getElementById('competitor-select')?.value || '');
         const industry = document.getElementById('industry-select').value;
+        if (!competitor) {
+            UI.showToast('请先选择至少一个竞争对手', 'warning');
+            return;
+        }
         
         // 隐藏之前的结果
         document.getElementById('competitor-result').style.display = 'none';
@@ -7099,7 +7129,8 @@ function initEventListeners() {
                     if (dlBtn) dlBtn.addEventListener('click', function() {
                         if (State.resultCache.competitor) {
                             var r = State.resultCache.competitor;
-                            UI.downloadFile(r.answer, '华为云_vs_' + (r.competitor || '竞品') + '_竞争分析报告.md');
+                            var compLabel = Array.isArray(r.competitor) ? r.competitor.join('_') : (r.competitor || '竞品');
+                            UI.downloadFile(r.answer, '华为云_vs_' + compLabel + '_竞争分析报告.md');
                         }
                     });
                 }
@@ -7125,7 +7156,20 @@ function initEventListeners() {
             
             // 安全渲染 Markdown，防止 marked.parse() 异常导致空白
             try {
-                resultContent.innerHTML = UI.renderMarkdown(result.answer);
+                // 多竞品：先渲染三方对比表（如果有结构化 comparison）
+                let comparisonHtml = '';
+                if (result.comparison && result.comparison.headers && result.comparison.rows && result.comparison.rows.length) {
+                    const comp = result.comparison;
+                    comparisonHtml = '<div class="comparison-table-wrap content-card"><h4 class="comparison-title">三方横向对比表</h4><div class="comparison-table-scroll"><table class="comparison-table"><thead><tr>' +
+                        comp.headers.map(function(h) { return '<th>' + window._crEsc(h) + '</th>'; }).join('') +
+                        '</tr></thead><tbody>' +
+                        comp.rows.map(function(row) {
+                            return '<tr>' + row.map(function(cell) { return '<td>' + window._crEsc(cell) + '</td>'; }).join('') + '</tr>';
+                        }).join('') +
+                        '</tbody></table></div></div>';
+                }
+                // answer 中如含 Markdown 表格，保留原样；对比表放最上方
+                resultContent.innerHTML = comparisonHtml + UI.renderMarkdown(result.answer);
             } catch (renderErr) {
                 console.error('[CompetitorAnalysis] Markdown渲染失败:', renderErr);
                 const escapedText = (result.answer || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -7141,7 +7185,8 @@ function initEventListeners() {
             
             State.resultCache.competitor = { ...result, competitor, industry };
             // 更新收藏按钮状态
-            const compFavName = `华为云 vs ${competitor} 竞争分析报告`;
+            const compLabelName = Array.isArray(competitor) ? competitor.join(' & ') : competitor;
+            const compFavName = `华为云 vs ${compLabelName} 竞争分析报告`;
             FavoriteManager._updateResultBtn('fav-competitor-btn', compFavName);
             
             UI.showToast('分析完成！', 'success');
