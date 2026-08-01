@@ -51,11 +51,13 @@ BAIDU_MODEL_NAME = os.getenv("BAIDU_MODEL_NAME", "ernie-bot")
 BAIDU_BASE_URL = os.getenv("BAIDU_BASE_URL", "https://aip.baidubce.com/rpc/2.0/ai_custom/v1")
 BAIDU_TEMPERATURE = float(os.getenv("BAIDU_TEMPERATURE", "0.1"))
 
-# ==================== 天气查询（高德开放平台） ====================
-# key 放服务端 .env（AMAP_WEATHER_KEY），绝不写进前端代码。
-# 免费个人开发者额度：天气 100 次/天、地理编码 100 次/天，够演示用。
-AMAP_WEATHER_KEY = os.getenv("AMAP_WEATHER_KEY", "")
-AMAP_WEATHER_TIMEOUT = float(os.getenv("AMAP_WEATHER_TIMEOUT", "5"))
+# ==================== 天气查询（和风天气） ====================
+# key 放服务端 .env（QWEATHER_API_KEY），绝不写进前端代码。
+# 注册：https://console.qweather.com/（免费版约 1000 次/天，比高德 5000/月 大 6 倍）
+# QWEATHER_API_HOST 为控制台项目里的专属域名（形如 abcdef.qweatherapi.com），每个项目不同。
+QWEATHER_API_KEY = os.getenv("QWEATHER_API_KEY", "")
+QWEATHER_API_HOST = os.getenv("QWEATHER_API_HOST", "")
+QWEATHER_TIMEOUT = float(os.getenv("QWEATHER_TIMEOUT", "5"))
 
 # ==================== 向量数据库配置 ====================
 # 支持的向量数据库：chroma (华为云GaussDB后续添加)
