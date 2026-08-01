@@ -7567,6 +7567,215 @@ const UpdateTicker = {
     }
 };
 
+/* ==================== 顶栏天气条（高德天气） ==================== */
+const WeatherBar = {
+    HOT_CITIES: ['北京', '上海', '广州', '深圳', '成都', '杭州'],
+    STORAGE_KEY: 'weatherCity',
+    _searchTimer: null,
+
+    init() {
+        this.widget = document.getElementById('weather-widget');
+        this.bar = document.getElementById('weather-bar');
+        this.cityEl = document.getElementById('weather-city');
+        this.tempEl = document.getElementById('weather-temp');
+        this.descEl = document.getElementById('weather-desc');
+        this.panel = document.getElementById('weather-panel');
+        this.searchInput = document.getElementById('weather-search-input');
+        this.hotList = document.getElementById('weather-hot-list');
+        this.resultsEl = document.getElementById('weather-panel-results');
+        this.emptyEl = document.getElementById('weather-panel-empty');
+        if (!this.widget || !this.bar) return;
+
+        this._renderHotCities();
+        this._bindEvents();
+
+        // 优先用记忆城市，其次浏览器定位
+        let saved = null;
+        try { saved = localStorage.getItem(this.STORAGE_KEY); } catch (_) {}
+        if (saved) {
+            this._loadCity(saved);
+        } else {
+            this._locate();
+        }
+    },
+
+    _bindEvents() {
+        const self = this;
+        // 点击天气条：开/关面板
+        this.bar.addEventListener('click', function(e) {
+            e.stopPropagation();
+            self._togglePanel();
+        });
+        // 点面板内部不关闭（避免冒泡到 document）
+        this.panel.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+        // 点击外部任意处关闭面板
+        document.addEventListener('mousedown', function(e) {
+            if (!self.widget.contains(e.target)) self._closePanel();
+        });
+        // 搜索输入（防抖 350ms）
+        this.searchInput.addEventListener('input', function() {
+            clearTimeout(self._searchTimer);
+            self._searchTimer = setTimeout(function() {
+                self._search(self.searchInput.value);
+            }, 350);
+        });
+        this.searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                clearTimeout(self._searchTimer);
+                self._search(self.searchInput.value);
+            }
+        });
+        // ESC 关闭面板
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') self._closePanel();
+        });
+    },
+
+    _renderHotCities() {
+        const self = this;
+        this.hotList.innerHTML = '';
+        this.HOT_CITIES.forEach(function(city) {
+            const chip = document.createElement('button');
+            chip.className = 'weather-hot-chip';
+            chip.type = 'button';
+            chip.textContent = city;
+            chip.addEventListener('click', function() {
+                self._loadCity(city);
+                self._closePanel();
+            });
+            self.hotList.appendChild(chip);
+        });
+    },
+
+    _togglePanel() {
+        if (this.panel.style.display === 'none') {
+            this.panel.style.display = 'block';
+            this.widget.classList.add('open');
+            this.searchInput.value = '';
+            this.resultsEl.innerHTML = '';
+            this.emptyEl.style.display = 'block';
+            this.emptyEl.textContent = '输入城市名开始搜索';
+            setTimeout(function() { self.searchInput.focus(); }, 30);
+        } else {
+            this._closePanel();
+        }
+    },
+
+    _closePanel() {
+        this.panel.style.display = 'none';
+        if (this.widget) this.widget.classList.remove('open');
+    },
+
+    _search(q) {
+        const kw = (q || '').trim();
+        if (!kw) {
+            this.resultsEl.innerHTML = '';
+            this.emptyEl.style.display = 'block';
+            this.emptyEl.textContent = '输入城市名开始搜索';
+            return;
+        }
+        const self = this;
+        this.emptyEl.style.display = 'none';
+        fetch(Config.API_BASE_URL + '/weather/search?q=' + encodeURIComponent(kw))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data || !data.ok || !data.cities || data.cities.length === 0) {
+                    self.resultsEl.innerHTML = '';
+                    self.emptyEl.style.display = 'block';
+                    self.emptyEl.textContent = '未找到匹配城市，试试：北京 / 杭州';
+                    return;
+                }
+                self.emptyEl.style.display = 'none';
+                self.resultsEl.innerHTML = '';
+                data.cities.forEach(function(c) {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'weather-result-item';
+                    item.innerHTML = '<span class="wr-name">' + window._crEsc(c.name) + '</span><span class="wr-province">' + window._crEsc(c.province || '') + '</span>';
+                    item.addEventListener('click', function() {
+                        self._loadCity(c.name);
+                        self._closePanel();
+                    });
+                    self.resultsEl.appendChild(item);
+                });
+            })
+            .catch(function() {
+                self.resultsEl.innerHTML = '';
+                self.emptyEl.style.display = 'block';
+                self.emptyEl.textContent = '搜索失败，请稍后重试';
+            });
+    },
+
+    _loadCity(city) {
+        const self = this;
+        this._setLoading(city);
+        fetch(Config.API_BASE_URL + '/weather?city=' + encodeURIComponent(city))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.ok) {
+                    self._render(data);
+                    try { localStorage.setItem(self.STORAGE_KEY, city); } catch (_) {}
+                } else {
+                    self._setError(city, (data && data.msg) || '天气加载失败');
+                }
+            })
+            .catch(function() {
+                self._setError(city, '服务暂不可用');
+            });
+    },
+
+    _locate() {
+        const self = this;
+        this._setLoading('定位中');
+        if (!navigator.geolocation) {
+            this._setError('定位不可用', '浏览器不支持定位');
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                fetch(Config.API_BASE_URL + '/weather?lat=' + lat + '&lng=' + lng)
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data && data.ok) {
+                            self._render(data);
+                            try { localStorage.setItem(self.STORAGE_KEY, data.city); } catch (_) {}
+                        } else {
+                            self._setError('定位不可用', '天气服务异常');
+                        }
+                    })
+                    .catch(function() { self._setError('定位不可用', '天气服务异常'); });
+            },
+            function() {
+                self._setError('定位不可用', '点击选择城市');
+            },
+            { timeout: 8000, maximumAge: 600000 }
+        );
+    },
+
+    _setLoading(city) {
+        if (this.cityEl) this.cityEl.textContent = city;
+        if (this.tempEl) { this.tempEl.textContent = '--°'; this.tempEl.classList.remove('error'); }
+        if (this.descEl) this.descEl.textContent = '';
+        this.bar.classList.add('loading');
+    },
+
+    _setError(city, msg) {
+        if (this.cityEl) this.cityEl.textContent = city;
+        if (this.tempEl) { this.tempEl.textContent = '--°'; this.tempEl.classList.add('error'); }
+        if (this.descEl) this.descEl.textContent = msg;
+        this.bar.classList.remove('loading');
+    },
+
+    _render(data) {
+        if (this.cityEl) this.cityEl.textContent = data.city;
+        if (this.tempEl) { this.tempEl.textContent = (data.temperature || '--') + '°'; this.tempEl.classList.remove('error'); }
+        if (this.descEl) this.descEl.textContent = data.weather || '';
+        this.bar.classList.remove('loading');
+    }
+};
+
 function init() {
     try {
         console.log('[Init] 华为云方案匹配系统 v2.4.0 正在初始化...');
@@ -7577,6 +7786,7 @@ function init() {
 
         initEventListeners();
         UpdateTicker.init();
+        WeatherBar.init();
         DemandWizard.init();
         HistoryUI.init();
         FollowUpUI.init();

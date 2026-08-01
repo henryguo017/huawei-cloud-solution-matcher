@@ -132,6 +132,115 @@ async def health_check():
             }
         )
 
+# ==================== 天气查询（高德代理，key 不出后端） ====================
+# 前端只调本站 /api/weather*，高德 key 由后端持有（app/config.py AMAP_WEATHER_KEY）。
+# 免费个人版额度：天气 100 次/天、地理编码 100 次/天；失败/超时一律静默降级返回 502 式空壳，不阻塞页面。
+_AMAP_BASE = "https://restapi.amap.com/v3"
+
+def _amap_get(path: str, params: dict) -> dict:
+    """调高德 REST 接口，统一异常兜底。返回 {"ok": True, "data": {...}} 或 {"ok": False, "msg": "..."}"""
+    import httpx
+    key = os.getenv("AMAP_WEATHER_KEY", "")
+    if not key:
+        return {"ok": False, "msg": "AMAP_WEATHER_KEY 未配置"}
+    try:
+        params = dict(params)
+        params["key"] = key
+        r = httpx.get(f"{_AMAP_BASE}{path}", params=params, timeout=float(os.getenv("AMAP_WEATHER_TIMEOUT", "5")))
+        r.raise_for_status()
+        data = r.json()
+        if data.get("status") != "1":
+            return {"ok": False, "msg": data.get("info", "高德返回异常")}
+        return {"ok": True, "data": data}
+    except Exception as e:
+        logger.warning(f"高德天气接口调用失败: {e}")
+        return {"ok": False, "msg": str(e)}
+
+
+@router.get("/weather", tags=["天气"])
+async def weather_query(city: Optional[str] = None, lat: Optional[float] = None, lng: Optional[float] = None):
+    """
+    天气查询代理（高德）。
+    二选一入参：
+    - city: 城市名（如 杭州/北京），走地理编码拿到 adcode 再查天气；
+    - lat+lng: 经纬度（浏览器定位），走逆地理编码拿 adcode 再查天气。
+    返回统一结构：{ok, city, adcode, weather, temperature, humidity, wind, report_time, source:"amap"}
+    失败时返回 ok=False（前端静默降级，不阻塞页面）。
+    """
+    adcode = None
+    resolved_city = city or ""
+    # 1) 解析 adcode：优先经纬度逆地理编码；否则城市名地理编码
+    if lat is not None and lng is not None:
+        geo = _amap_get("/geocode/regeo", {"location": f"{lng},{lat}"})
+        if not geo["ok"]:
+            return {"ok": False, "msg": geo["msg"]}
+        rc = geo["data"].get("regeocode", {})
+        ac = rc.get("addressComponent", {})
+        adcode = ac.get("adcode") or ac.get("citycode")
+        resolved_city = (ac.get("city") or [""])[0] if isinstance(ac.get("city"), list) else (ac.get("city") or ac.get("province") or "未知")
+    elif city:
+        geo = _amap_get("/geocode/geo", {"address": city})
+        if not geo["ok"]:
+            return {"ok": False, "msg": geo["msg"]}
+        gs = geo["data"].get("geocodes") or []
+        if not gs:
+            return {"ok": False, "msg": f"未找到城市: {city}"}
+        adcode = gs[0].get("adcode")
+        resolved_city = gs[0].get("city") or gs[0].get("province") or city
+    else:
+        return {"ok": False, "msg": "缺少 city 或 lat+lng 参数"}
+
+    # 2) 查天气
+    if not adcode:
+        return {"ok": False, "msg": "无法解析城市编码"}
+    wx = _amap_get("/weather/weatherInfo", {"city": adcode, "extensions": "base"})
+    if not wx["ok"]:
+        return {"ok": False, "msg": wx["msg"]}
+    lives = wx["data"].get("lives") or []
+    if not lives:
+        return {"ok": False, "msg": "天气数据为空"}
+    lv = lives[0]
+    return {
+        "ok": True,
+        "city": lv.get("city") or resolved_city,
+        "adcode": lv.get("adcode") or adcode,
+        "province": lv.get("province", ""),
+        "weather": lv.get("weather", ""),
+        "temperature": lv.get("temperature", ""),
+        "humidity": lv.get("humidity", ""),
+        "winddirection": lv.get("winddirection", ""),
+        "windpower": lv.get("windpower", ""),
+        "report_time": lv.get("reporttime", ""),
+        "source": "amap",
+    }
+
+
+@router.get("/weather/search", tags=["天气"])
+async def weather_city_search(q: str = ""):
+    """
+    国内城市搜索（高德地理编码，模糊匹配）。
+    返回 [{name, adcode, province, level}]，最多 8 条。
+    """
+    if not q.strip():
+        return {"ok": True, "cities": []}
+    geo = _amap_get("/geocode/geo", {"address": q.strip(), "offset": 8})
+    if not geo["ok"]:
+        return {"ok": False, "msg": geo["msg"]}
+    cities = []
+    for g in geo["data"].get("geocodes") or []:
+        level = g.get("level", "")
+        # 只保留行政区划级别（省/市/区县），过滤 POI/道路等
+        if level not in ("省", "市", "区县", "省级行政区", "地级市", "区县级行政区"):
+            continue
+        cities.append({
+            "name": g.get("city") or g.get("province") or g.get("formatted_address", ""),
+            "adcode": g.get("adcode", ""),
+            "province": g.get("province", ""),
+            "level": level,
+        })
+    return {"ok": True, "cities": cities}
+
+
 # ==================== 成本参考（方案成本估算器基础数据） ====================
 # 数据文件 data/pricing_reference.json 被 gitignore，部署时需单独 scp 到服务器 data/ 目录。
 # 进程内缓存 + 文件 mtime 重载，避免每次请求读盘。

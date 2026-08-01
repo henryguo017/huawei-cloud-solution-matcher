@@ -51,6 +51,12 @@ BAIDU_MODEL_NAME = os.getenv("BAIDU_MODEL_NAME", "ernie-bot")
 BAIDU_BASE_URL = os.getenv("BAIDU_BASE_URL", "https://aip.baidubce.com/rpc/2.0/ai_custom/v1")
 BAIDU_TEMPERATURE = float(os.getenv("BAIDU_TEMPERATURE", "0.1"))
 
+# ==================== 天气查询（高德开放平台） ====================
+# key 放服务端 .env（AMAP_WEATHER_KEY），绝不写进前端代码。
+# 免费个人开发者额度：天气 100 次/天、地理编码 100 次/天，够演示用。
+AMAP_WEATHER_KEY = os.getenv("AMAP_WEATHER_KEY", "")
+AMAP_WEATHER_TIMEOUT = float(os.getenv("AMAP_WEATHER_TIMEOUT", "5"))
+
 # ==================== 向量数据库配置 ====================
 # 支持的向量数据库：chroma (华为云GaussDB后续添加)
 # 项目根目录（绝对路径，防止工作目录切换导致加载错误路径的向量库）
