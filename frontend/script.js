@@ -7630,7 +7630,10 @@ const SolutionSummary = {
             const bullets = [];
             for (let i = 1; i < lines.length; i++) {
                 let l = lines[i].replace(/^[-*•·]\s*/, '').replace(/^\d+[.、]\s*/, '').trim();
-                if (l) bullets.push(stripMd(l));
+                if (!l) continue;
+                // 跳过「核心要点：」这类标签行（不把它当要点显示）
+                if (/^(核心要点|要点|关键要点|核心价值)[：:]\s*$/.test(l)) continue;
+                bullets.push(stripMd(l));
             }
             if (!firstPara && bullets.length === 0) return '';
 
