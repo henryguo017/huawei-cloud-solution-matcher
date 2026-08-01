@@ -156,7 +156,9 @@
             }
             const raw = contentLines.map(function(l) { return l.trim(); }).filter(Boolean);
             if (!raw.length) return '';
-            const stripMd = function(s) { return s.replace(/\*\*/g, '').replace(/__/g, '').trim(); };
+            const stripMd = function(s) {
+                return s.replace(/\*\*+/g, '').replace(/__+/g, '').replace(/[_*](?=[_*])/g, '').replace(/\s\*\s/g, ' ').replace(/^\*|\*$/g, '').replace(/^_|_$/g, '').trim();
+            };
             const firstPara = stripMd(raw[0]);
             const bullets = [];
             for (let i = 1; i < raw.length; i++) {

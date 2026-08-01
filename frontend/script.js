@@ -7622,12 +7622,14 @@ const SolutionSummary = {
 
             // 摘要正文第一段为价值主张，后续要点按行拆分（去掉 **加粗**、列表符、编号）
             const lines = raw.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
-            // 清理 markdown 标记：**加粗** → 加粗（保留文字），去掉行内的 ** 
-            const stripMd = function(s) { return s.replace(/\*\*/g, '').replace(/__/g, '').trim(); };
+            // 强力清洗 markdown 标记：**加粗**、*斜体*、__加粗__、_斜体_、行首 / 末 / 单独
+            const stripMd = function(s) {
+                return s.replace(/\*\*+/g, '').replace(/__+/g, '').replace(/[_*](?=[_*])/g, '').replace(/\s\*\s/g, ' ').replace(/^\*|\*$/g, '').replace(/^_|_$/g, '').trim();
+            };
             const firstPara = stripMd(lines[0] || '');
             const bullets = [];
             for (let i = 1; i < lines.length; i++) {
-                let l = lines[i].replace(/^[-*•]\s*/, '').replace(/^\d+[.、]\s*/, '').trim();
+                let l = lines[i].replace(/^[-*•·]\s*/, '').replace(/^\d+[.、]\s*/, '').trim();
                 if (l) bullets.push(stripMd(l));
             }
             if (!firstPara && bullets.length === 0) return '';
