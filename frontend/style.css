@@ -870,6 +870,12 @@ body::after {
     margin-bottom: 16px;
     padding: 16px;
 }
+.comparison-table-wrap::before {
+    display: none !important;
+}
+.comparison-table-wrap:hover::before {
+    display: none !important;
+}
 .comparison-title {
     font-size: 0.9rem;
     font-weight: 600;
@@ -2494,6 +2500,7 @@ body::after {
     background: var(--primary-color);
     opacity: 0;
 }
+.progress-panel.success::before,
 .progress-panel.fade-out::before {
     display: none;
 }
