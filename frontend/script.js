@@ -8025,7 +8025,7 @@ const NewsModal = {
                         '<span class="news-item-title event-name">' + esc(it.name || '') + '</span>' +
                     '</div>' +
                     '<div class="news-item-meta">' +
-                        '<span class="news-source-tag event-city">' + esc(it.city || '') + '</span>' +
+                        '<span class="news-source-tag event-city">' + esc(it.source || it.city || '') + '</span>' +
                         (it.date_range ? '<span class="news-meta-dot">·</span><span class="news-item-time">' + esc(it.date_range) + '</span>' : '') +
                         '<span class="news-meta-read">详情 →</span>' +
                     '</div>' +

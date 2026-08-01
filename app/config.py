@@ -97,6 +97,16 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 链接真实可核对，不编造。格式：[{name, city, date_range, location, url, note}]
 INDUSTRY_EVENTS_FILE = os.path.join(BASE_DIR, "data", "industry_events.json")
 
+# ==================== 行业展会自动聚合源 ====================
+# 2026-08-02 起：展会 = 自动抓聚合站（AIWW + IDCTalk，24h 懒加载） + 人工 JSON 补充。
+# 聚合站链接指向聚合站条目页（用户选 B 方案，接受聚合站链接，换取内容自动更新）；
+# 人工 JSON 里的年度大会（华为/云栖等）作为兜底（链接=官网）。
+EVENTS_FEEDS = [
+    {"name": "AIWW", "url": "https://www.aiww.cn/aievent"},
+    {"name": "IDCTalk", "url": "http://www.idctalk.com/huodong"},
+]
+EVENTS_TTL_SECONDS = int(os.getenv("EVENTS_TTL_SECONDS", str(24 * 3600)))  # 与资讯一致 24h
+
 def _resolve_data_path(p):
     """相对路径统一基于项目根目录解析，避免工作目录(cwd)切换导致加载错误路径的库"""
     return p if os.path.isabs(p) else os.path.join(BASE_DIR, p.lstrip("./\\"))

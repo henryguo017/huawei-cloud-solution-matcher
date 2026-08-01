@@ -43,7 +43,7 @@ from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
 from app.config import KB_REBUILD_CONCURRENCY
 from app.config import NEWS_FEEDS, NEWS_TTL_SECONDS, NEWS_TOP_N, NEWS_FETCH_TIMEOUT
-from app.config import HUAWEI_BLOG_URL, HUAWEI_TOP_N, INDUSTRY_EVENTS_FILE
+from app.config import HUAWEI_BLOG_URL, HUAWEI_TOP_N, INDUSTRY_EVENTS_FILE, EVENTS_FEEDS, EVENTS_TTL_SECONDS
 from app.agent.parsers.read_file import ALLOWED_EXT, extract_text
 from typing import Optional, Dict
 from datetime import datetime, date
@@ -551,24 +551,95 @@ async def huawei_news():
 
 
 # ==================== 行业展会 / 活动日历（顶栏资讯·第三标签页） ====================
-# 人工维护 JSON（data/industry_events.json），git 跟踪随部署更新。
-# 展会信息无统一 RSS 源，人工维护保证链接真实可核对（不编造）。
-_EVENTS_CACHE: dict = {"data": None, "mtime": 0.0}
+# 2026-08-02 起改为自动聚合：AIWW + IDCTalk 聚合站（24h TTL 懒加载，内容自动更新）
+# + 人工 JSON（data/industry_events.json）作为补充兜底。
+# 聚合站链接指向聚合站条目页（用户选 B 方案，接受聚合站链接换取自动更新）；
+# 人工 JSON 里的年度大会链接=官网（保留）。
+_EVENTS_CACHE: dict = {"data": None, "ts": 0.0}
+_IGNORE_TITLE_KW = ("重磅", "启动", "邀请", "携手", "亮相", "盛典", "报名", "评选", "榜单", "回顾", "圆满", "收官")
 
 
-def _load_industry_events(force: bool = False) -> list:
-    """读取 data/industry_events.json（mtime 缓存）。文件缺失/解析失败返回 []，不抛 500。"""
+def _parse_aiww_events(html: str) -> list:
+    """解析 AIWW 活动列表页：card-name(标题) + news-desc(时间/地点) + 链接。只保留未来活动。"""
+    import re as _re
+    items = []
+    for m in _re.finditer(r'<a class="card-body img-hover" href="([^"]+)"[^>]*>\s*<div class="news-text">\s*<div class="news-title">\s*<div class="card-name overflowClip_1">([^<]+)</div>\s*<div class="news-desc overflowClip_3">([^<]+)', html):
+        url, name, desc = m.group(1), m.group(2).strip(), m.group(3).strip()
+        if not name or any(k in name for k in _IGNORE_TITLE_KW):
+            continue
+        dm = _re.search(r'(20\d{2})\s*年?\s*(\d{1,2})\s*月?\s*(\d{1,2})', desc)
+        if not dm:
+            continue
+        y, mo, d = int(dm.group(1)), int(dm.group(2)), int(dm.group(3))
+        now = datetime.now()
+        if (y, mo, d) < (now.year, now.month, now.day):
+            continue  # 只保留未来活动
+        am = _re.search(r'地点[：:]\s*([^，。\s]+(?:会展|中心|酒店|场馆|博览)[^，。]*)', desc)
+        items.append({
+            "name": name,
+            "city": "",
+            "date_range": f"{y}-{mo:02d}-{d}",
+            "location": (am.group(1).strip() if am else ""),
+            "url": url if url.startswith("http") else f"https://www.aiww.com{url}",
+            "note": desc[:80],
+            "source": "AIWW",
+        })
+    return items
+
+
+def _parse_idctalk_events(html: str) -> list:
+    """解析 IDCTalk 活动列表页：h2>a(标题) + post-excerpt(时间/地址/主办)。只保留未来活动。"""
+    import re as _re
+    items = []
+    for m in _re.finditer(r'<h2><a href="([^"]+)">([^<]+)</a></h2>\s*<div class="post-excerpt">\s*([^<]+)', html):
+        url, name, excerpt = m.group(1), m.group(2).strip(), m.group(3).strip()
+        if not name or any(k in name for k in _IGNORE_TITLE_KW):
+            continue
+        dm = _re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', excerpt)
+        if not dm:
+            continue
+        y, mo, d = int(dm.group(1)), int(dm.group(2)), int(dm.group(3))
+        now = datetime.now()
+        if (y, mo, d) < (now.year, now.month, now.day):
+            continue
+        am = _re.search(r'活动地址[：:]\s*([^ 主办]+)', excerpt)
+        om = _re.search(r'主办单位[：:]\s*([^ ]+)', excerpt)
+        items.append({
+            "name": name,
+            "city": "",
+            "date_range": f"{y}-{mo:02d}-{d}",
+            "location": (am.group(1).strip() if am else ""),
+            "url": url,
+            "note": (f"主办方：{om.group(1).strip()}" if om else ""),
+            "source": "IDCTalk",
+        })
+    return items
+
+
+def _fetch_events_sync(feed: dict) -> list:
+    """抓取单个展会聚合源并解析，失败返回 []。"""
+    import httpx
     try:
-        mt = os.path.getmtime(INDUSTRY_EVENTS_FILE)
-        if not force and _EVENTS_CACHE["data"] is not None and mt == _EVENTS_CACHE["mtime"]:
-            return _EVENTS_CACHE["data"]
+        r = httpx.get(feed["url"], timeout=NEWS_FETCH_TIMEOUT, follow_redirects=True,
+                      headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0"})
+        r.raise_for_status()
+        if feed["name"] == "AIWW":
+            return _parse_aiww_events(r.text)
+        if feed["name"] == "IDCTalk":
+            return _parse_idctalk_events(r.text)
+        return []
+    except Exception as e:
+        logger.warning(f"展会聚合源 {feed.get('name')} 抓取失败: {e}")
+        return []
+
+
+def _load_industry_events() -> list:
+    """读取人工维护 JSON（兜底展会）。文件缺失/解析失败返回 []，不抛 500。"""
+    try:
         import json as _json
         with open(INDUSTRY_EVENTS_FILE, "r", encoding="utf-8") as f:
             data = _json.load(f)
-        events = data if isinstance(data, list) else data.get("events", [])
-        _EVENTS_CACHE["data"] = events
-        _EVENTS_CACHE["mtime"] = mt
-        return events
+        return data if isinstance(data, list) else data.get("events", [])
     except Exception as e:
         logger.warning(f"行业展会 JSON 读取失败: {e}")
         return []
@@ -576,9 +647,50 @@ def _load_industry_events(force: bool = False) -> list:
 
 @router.get("/events", tags=["资讯"])
 async def industry_events():
-    """行业展会/活动日历。返回 {ok, items:[{name, city, date_range, location, url, note}]}。"""
-    events = _load_industry_events()
-    return {"ok": True, "items": events or []}
+    """
+    行业展会/活动日历（自动聚合 + 人工兜底）。
+    聚合 AIWW / IDCTalk 聚合站（24h 缓存），只保留未来活动；再合并人工 JSON。
+    返回 {ok, items:[{name, city, date_range, location, url, note, source}]}。
+    """
+    global _EVENTS_CACHE
+    now = time.time()
+    if _EVENTS_CACHE["data"] is not None and (now - _EVENTS_CACHE["ts"]) < EVENTS_TTL_SECONDS:
+        return _EVENTS_CACHE["data"]
+
+    import asyncio as _asyncio
+    results = await _asyncio.gather(*[_asyncio.to_thread(_fetch_events_sync, f) for f in EVENTS_FEEDS])
+    auto_items = []
+    for items in results:
+        auto_items.extend(items or [])
+
+    # 自动抓取的去重（按名称）
+    seen = set()
+    merged = []
+    for it in auto_items:
+        key = _normalize_title(it["name"])
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        merged.append(it)
+
+    # 合并人工 JSON（兜底：聚合站没抓到的年度大会，如华为/云栖）
+    for it in _load_industry_events():
+        key = _normalize_title(it.get("name", ""))
+        if key and key not in seen:
+            seen.add(key)
+            it.setdefault("source", "精选")
+            merged.append(it)
+
+    # 按日期排序（无日期排最后）
+    def _dkey(it):
+        dm = re.match(r"(\d{4})-(\d{1,2})-(\d{1,2})", it.get("date_range", ""))
+        return datetime(*map(int, dm.groups())) if dm else datetime.min
+    merged.sort(key=_dkey)
+
+    data = {"ok": True, "items": merged, "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M")}
+    _EVENTS_CACHE["data"] = data
+    _EVENTS_CACHE["ts"] = now
+    return data
 
 
 # ==================== 成本参考（方案成本估算器基础数据） ====================
