@@ -10532,6 +10532,49 @@ select:focus {
     color: var(--text-tertiary);
     margin-bottom: 12px;
 }
+/* 资讯弹窗标签页（行业资讯 / 华为云动态 / 行业展会） */
+.news-tabs {
+    display: flex;
+    gap: 8px;
+    margin: 10px 0 12px;
+    padding: 3px;
+    background: var(--neutral-200, #F2F3F5);
+    border-radius: 8px;
+    width: fit-content;
+}
+.news-tab {
+    padding: 5px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    cursor: pointer;
+    transition: color var(--transition-fast), background var(--transition-fast);
+    font-family: var(--font-family);
+}
+.news-tab:hover { color: var(--primary-color); }
+.news-tab.active {
+    background: #fff;
+    color: var(--primary-color);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    font-weight: 600;
+}
+/* 展会条目 */
+.event-item .event-icon { font-size: 0.95rem; margin-right: 6px; }
+.event-item .event-name { font-size: 0.86rem; }
+.event-item .event-city { background: rgba(199, 0, 11, 0.08); color: var(--primary-color); }
+.event-item .event-location,
+.event-item .event-note {
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    margin-top: 3px;
+    padding-left: 2px;
+    line-height: 1.5;
+}
+.event-item.no-link { cursor: default; }
+.event-item.no-link:hover .news-item-title { color: var(--text-primary); }
 .news-modal-body {
     flex: 1;
     min-height: 0;

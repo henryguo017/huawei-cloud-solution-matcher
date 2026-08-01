@@ -78,10 +78,26 @@ NEWS_TTL_SECONDS = int(os.getenv("NEWS_TTL_SECONDS", str(24 * 3600)))  # 默认 
 NEWS_TOP_N = int(os.getenv("NEWS_TOP_N", "10"))
 NEWS_FETCH_TIMEOUT = float(os.getenv("NEWS_FETCH_TIMEOUT", "8"))
 
+# ==================== 华为云官方动态聚合（RSS 源） ====================
+# 顶栏「资讯」弹窗第二个标签页。只聚合华为云官方渠道（产品发布/版本更新/优惠活动/认证考试），
+# 复用 NEWS 的 RSS 抓取/解析/去重逻辑（_fetch_news_sync/_parse_rss_datetime/_normalize_title）。
+# 注意：与 NEWS_FEEDS 不同，官方动态【不做】相关性过滤——本身就是官方内容，全相关。
+HUAWEI_FEEDS = [
+    # 华为云官方博客（CSDN 官方号，日更，覆盖公共云/大模型/产品发布/高校活动/认证考试）
+    {"name": "华为云官方博客", "url": "https://blog.csdn.net/devcloud/rss/list"},
+]
+HUAWEI_TOP_N = int(os.getenv("HUAWEI_TOP_N", "10"))
+
 # ==================== 向量数据库配置 ====================
 # 支持的向量数据库：chroma (华为云GaussDB后续添加)
 # 项目根目录（绝对路径，防止工作目录切换导致加载错误路径的向量库）
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# ==================== 行业展会 / 活动日历（人工维护 JSON） ====================
+# 顶栏「资讯」弹窗第三个标签页。行业展会信息分散在各大会官网、无统一 RSS 源，
+# 采用人工维护 JSON（data/industry_events.json，git 跟踪随部署更新）——
+# 链接真实可核对，不编造。格式：[{name, city, date_range, location, url, note}]
+INDUSTRY_EVENTS_FILE = os.path.join(BASE_DIR, "data", "industry_events.json")
 
 def _resolve_data_path(p):
     """相对路径统一基于项目根目录解析，避免工作目录(cwd)切换导致加载错误路径的库"""

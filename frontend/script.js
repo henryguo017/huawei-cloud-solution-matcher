@@ -7910,7 +7910,8 @@ const WeatherBar = {
 
 /* ==================== 科技资讯弹窗（RSS 每日聚合） ==================== */
 const NewsModal = {
-    _loaded: false,
+    _loaded: {},
+    _currentTab: 'industry',
 
     init() {
         this.modal = document.getElementById('news-modal');
@@ -7919,6 +7920,8 @@ const NewsModal = {
         this.listEl = document.getElementById('news-list');
         this.updatedEl = document.getElementById('news-updated');
         this.refreshBtn = document.getElementById('news-refresh-btn');
+        this.tabsEl = document.getElementById('news-tabs');
+        this.tipEl = document.getElementById('news-modal-tip');
         if (!this.modal || !this.btn) return;
 
         const self = this;
@@ -7935,14 +7938,41 @@ const NewsModal = {
         this.refreshBtn.addEventListener('click', function() {
             self._fetch(true);
         });
+        // 标签页切换
+        if (this.tabsEl) {
+            this.tabsEl.addEventListener('click', function(e) {
+                const tab = e.target.closest('.news-tab');
+                if (!tab || !self._loaded) return;
+                self._switchTab(tab.getAttribute('data-tab'));
+            });
+        }
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && self.modal.style.display !== 'none') self.close();
         });
     },
 
+    // 各标签页配置：接口 + 提示文案 + 数据字段
+    _tabsConfig: {
+        industry: { endpoint: '/news', tip: '聚合 AI / 云 / 科技前沿动态，点击条目跳转原文阅读' },
+        huawei:   { endpoint: '/huawei-news', tip: '华为云官方动态：产品发布 / 版本更新 / 优惠活动 / 认证考试' },
+        events:   { endpoint: '/events', tip: '行业展会 / 活动日历，点击查看活动详情（以官方为准）' }
+    },
+
+    _switchTab(tabName) {
+        if (!this._tabsConfig[tabName]) return;
+        this._currentTab = tabName;
+        if (this.tabsEl) {
+            this.tabsEl.querySelectorAll('.news-tab').forEach(function(t) {
+                t.classList.toggle('active', t.getAttribute('data-tab') === tabName);
+            });
+        }
+        if (this.tipEl) this.tipEl.textContent = this._tabsConfig[tabName].tip;
+        this._fetch(false);
+    },
+
     open() {
         this.modal.style.display = 'flex';
-        if (!this._loaded) this._fetch(false);
+        if (!this._loaded[this._currentTab]) this._fetch(false);
     },
 
     close() {
@@ -7951,19 +7981,20 @@ const NewsModal = {
 
     _fetch(force) {
         const self = this;
-        this.listEl.innerHTML = '<div class="news-loading">资讯加载中…</div>';
-        fetch(Config.API_BASE_URL + '/news' + (force ? '?force=1' : ''))
+        const cfg = this._tabsConfig[this._currentTab] || this._tabsConfig.industry;
+        this.listEl.innerHTML = '<div class="news-loading">加载中…</div>';
+        fetch(Config.API_BASE_URL + cfg.endpoint + (force ? '?force=1' : ''))
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                self._loaded = true;
+                self._loaded[self._currentTab] = true;
                 if (!data || !data.ok || !data.items || data.items.length === 0) {
-                    self.listEl.innerHTML = '<div class="news-error">资讯暂不可用，请稍后重试</div>';
+                    self.listEl.innerHTML = '<div class="news-error">暂不可用，请稍后重试</div>';
                     if (self.updatedEl) self.updatedEl.textContent = '';
                     return;
                 }
                 self._render(data.items);
                 if (self.updatedEl) {
-                    self.updatedEl.textContent = '更新于 ' + (data.updated_at || '--') + (data.stale ? '（缓存）' : '');
+                    self.updatedEl.textContent = (data.updated_at ? '更新于 ' + data.updated_at + (data.stale ? '（缓存）' : '') : '');
                 }
             })
             .catch(function() {
@@ -7974,10 +8005,37 @@ const NewsModal = {
     _render(items) {
         const self = this;
         if (!items.length) {
-            this.listEl.innerHTML = '<div class="news-empty">暂无资讯</div>';
+            this.listEl.innerHTML = '<div class="news-empty">暂无内容</div>';
             return;
         }
         this.listEl.innerHTML = '';
+        // 展会标签页：特殊渲染（名称/城市/时间/地点/说明）
+        if (this._currentTab === 'events') {
+            items.forEach(function(it) {
+                const item = document.createElement('a');
+                item.className = 'news-item event-item';
+                item.href = it.url || '#';
+                item.target = '_blank';
+                item.rel = 'noopener noreferrer';
+                if (!it.url) item.classList.add('no-link');
+                const esc = window._crEsc || function(s) { return String(s); };
+                item.innerHTML =
+                    '<div class="news-item-row">' +
+                        '<span class="event-icon">&#128197;</span>' +
+                        '<span class="news-item-title event-name">' + esc(it.name || '') + '</span>' +
+                    '</div>' +
+                    '<div class="news-item-meta">' +
+                        '<span class="news-source-tag event-city">' + esc(it.city || '') + '</span>' +
+                        (it.date_range ? '<span class="news-meta-dot">·</span><span class="news-item-time">' + esc(it.date_range) + '</span>' : '') +
+                        '<span class="news-meta-read">详情 →</span>' +
+                    '</div>' +
+                    (it.location ? '<div class="event-location">' + esc(it.location) + '</div>' : '') +
+                    (it.note ? '<div class="event-note">' + esc(it.note) + '</div>' : '');
+                self.listEl.appendChild(item);
+            });
+            return;
+        }
+        // 资讯 / 华为云动态：杂志风列表
         items.forEach(function(it, idx) {
             const item = document.createElement('a');
             item.className = 'news-item';

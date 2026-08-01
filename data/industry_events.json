@@ -1,0 +1,50 @@
+[
+  {
+    "name": "2026 AGIC 深圳国际通用人工智能大会暨产业博览会",
+    "city": "深圳",
+    "date_range": "2026-08-26 ~ 2026-08-28",
+    "location": "深圳国际会展中心（宝安）",
+    "url": "https://www.aiww.cn/aievent",
+    "note": "AGI/多模态/人形机器人/物理 AI 落地；参观免费，专业论坛收费"
+  },
+  {
+    "name": "华为全联接大会（HUAWEI CONNECT）",
+    "city": "上海",
+    "date_range": "2026年9月（以官网为准）",
+    "location": "上海（以官网为准）",
+    "url": "https://www.huawei.com/cn/events",
+    "note": "华为年度旗舰大会，开发者免费报名，政企闭门峰会收费"
+  },
+  {
+    "name": "2026 云栖大会（阿里云年度峰会）",
+    "city": "杭州",
+    "date_range": "2026年9月下旬（以官网为准）",
+    "location": "杭州云栖小镇",
+    "url": "https://yunqi.aliyun.com/",
+    "note": "阿里云年度技术大会；基础观展免费，深度技术分论坛收费"
+  },
+  {
+    "name": "2026 腾讯全球数字生态大会",
+    "city": "深圳",
+    "date_range": "2026年9月中旬（以官网为准）",
+    "location": "深圳（以官网为准）",
+    "url": "https://digitalecosystem.tencent.com/",
+    "note": "腾讯年度生态大会；普通开发者免费预约，闭门产业论坛付费"
+  },
+  {
+    "name": "2026 深圳人工智能与机器人产业链展览会",
+    "city": "深圳",
+    "date_range": "2026-11-26 ~ 2026-11-28",
+    "location": "深圳国际会展中心（宝安）",
+    "url": "https://www.zhanxun.cn/news/8400.html",
+    "note": "人工智能与机器人产业链展会"
+  },
+  {
+    "name": "2026 中国 AI 智能体大会（AgenticAICon 2026）",
+    "city": "杭州",
+    "date_range": "2026年7月2日-3日（已举办，下届关注）",
+    "location": "杭州君悦酒店",
+    "url": "http://www.idctalk.com/huodong",
+    "note": "智东西/智猩猩主办，Agent 主题大会（可关注下届动态）"
+  }
+]

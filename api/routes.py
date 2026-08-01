@@ -43,6 +43,7 @@ from app.config import APP_VERSION, USER_DOCS_BASE_DIR, KNOWLEDGE_BASE_DIRECTORY
 from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
 from app.config import KB_REBUILD_CONCURRENCY
 from app.config import NEWS_FEEDS, NEWS_TTL_SECONDS, NEWS_TOP_N, NEWS_FETCH_TIMEOUT
+from app.config import HUAWEI_FEEDS, HUAWEI_TOP_N, INDUSTRY_EVENTS_FILE
 from app.agent.parsers.read_file import ALLOWED_EXT, extract_text
 from typing import Optional, Dict
 from datetime import datetime, date
@@ -450,6 +451,131 @@ async def tech_news():
     _NEWS_CACHE["data"] = data
     _NEWS_CACHE["ts"] = now
     return data
+
+
+# ==================== 华为云官方动态（顶栏资讯·第二标签页） ====================
+# 只聚合华为云官方渠道（产品发布/版本更新/优惠活动/认证考试）。
+# 复用 _parse_rss_datetime/_normalize_title；【不做】相关性过滤。
+_HUAWEI_CACHE: dict = {"data": None, "ts": 0.0}
+
+
+def _fetch_huawei_sync(feed: dict) -> list:
+    """抓取华为云官方 RSS 源（带更强 UA + Referer，CSDN 反爬需要），失败返回 []。"""
+    import httpx
+    import xml.etree.ElementTree as ET
+    try:
+        r = httpx.get(feed["url"], timeout=NEWS_FETCH_TIMEOUT, follow_redirects=True,
+                      headers={
+                          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+                          "Referer": "https://blog.csdn.net/",
+                          "Accept": "application/rss+xml, application/xml, text/xml, */*",
+                      })
+        r.raise_for_status()
+        root = ET.fromstring(r.content)
+        items = []
+        if root.tag == "rss":
+            channel = root.find("channel")
+            for it in (channel.findall("item") if channel is not None else []):
+                title = (it.findtext("title") or "").strip()
+                link = (it.findtext("link") or "").strip()
+                if not title or not link:
+                    continue
+                ts = _parse_rss_datetime(it.findtext("pubDate") or "")
+                items.append({"title": title, "source": feed["name"],
+                              "url": link, "pub_date": ts.isoformat() if ts else "", "ts": ts})
+        elif root.tag in ("feed", "{http://www.w3.org/2005/Atom}feed"):
+            for it in root.findall("{http://www.w3.org/2005/Atom}entry"):
+                title = (it.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
+                link_el = it.find("{http://www.w3.org/2005/Atom}link")
+                link = (link_el.get("href") if link_el is not None else "").strip()
+                if not title or not link:
+                    continue
+                ts = _parse_rss_datetime(it.findtext("{http://www.w3.org/2005/Atom}updated") or "")
+                items.append({"title": title, "source": feed["name"],
+                              "url": link, "pub_date": ts.isoformat() if ts else "", "ts": ts})
+        return items
+    except Exception as e:
+        logger.warning(f"华为云动态源 {feed.get('name')} 抓取失败: {e}")
+        return []
+
+
+@router.get("/huawei-news", tags=["资讯"])
+async def huawei_news():
+    """
+    华为云官方动态聚合（CSDN 官方博客 RSS，日更）。
+    返回结构与 /news 兼容：{ok, items:[{title, source, url, pub_date}], updated_at, stale}。
+    """
+    global _HUAWEI_CACHE
+    now = time.time()
+    if _HUAWEI_CACHE["data"] is not None and (now - _HUAWEI_CACHE["ts"]) < NEWS_TTL_SECONDS:
+        return _HUAWEI_CACHE["data"]
+
+    import asyncio as _asyncio
+    results = await _asyncio.gather(*[_asyncio.to_thread(_fetch_huawei_sync, f) for f in HUAWEI_FEEDS])
+    all_items = []
+    for items in results:
+        all_items.extend(items or [])
+
+    if not all_items:
+        if _HUAWEI_CACHE["data"] is not None:
+            data = dict(_HUAWEI_CACHE["data"])
+            data["stale"] = True
+            return data
+        return {"ok": False, "items": [], "msg": "华为云动态抓取失败，请稍后重试"}
+
+    # 跨源去重 + 按时间倒序
+    seen = set()
+    unique = []
+    for it in all_items:
+        key = _normalize_title(it["title"])
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(it)
+    unique.sort(key=lambda x: x["ts"] or datetime.min, reverse=True)
+    top = unique[:HUAWEI_TOP_N]
+
+    data = {
+        "ok": True,
+        "items": [{"title": it["title"], "source": it["source"],
+                   "url": it["url"], "pub_date": it["pub_date"]} for it in top],
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "stale": False,
+    }
+    _HUAWEI_CACHE["data"] = data
+    _HUAWEI_CACHE["ts"] = now
+    return data
+
+
+# ==================== 行业展会 / 活动日历（顶栏资讯·第三标签页） ====================
+# 人工维护 JSON（data/industry_events.json），git 跟踪随部署更新。
+# 展会信息无统一 RSS 源，人工维护保证链接真实可核对（不编造）。
+_EVENTS_CACHE: dict = {"data": None, "mtime": 0.0}
+
+
+def _load_industry_events(force: bool = False) -> list:
+    """读取 data/industry_events.json（mtime 缓存）。文件缺失/解析失败返回 []，不抛 500。"""
+    try:
+        mt = os.path.getmtime(INDUSTRY_EVENTS_FILE)
+        if not force and _EVENTS_CACHE["data"] is not None and mt == _EVENTS_CACHE["mtime"]:
+            return _EVENTS_CACHE["data"]
+        import json as _json
+        with open(INDUSTRY_EVENTS_FILE, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        events = data if isinstance(data, list) else data.get("events", [])
+        _EVENTS_CACHE["data"] = events
+        _EVENTS_CACHE["mtime"] = mt
+        return events
+    except Exception as e:
+        logger.warning(f"行业展会 JSON 读取失败: {e}")
+        return []
+
+
+@router.get("/events", tags=["资讯"])
+async def industry_events():
+    """行业展会/活动日历。返回 {ok, items:[{name, city, date_range, location, url, note}]}。"""
+    events = _load_industry_events()
+    return {"ok": True, "items": events or []}
 
 
 # ==================== 成本参考（方案成本估算器基础数据） ====================
@@ -3389,6 +3515,9 @@ async def ai_chat(
             "天气", "天气预报", "天气条", "天气怎么", "天气在哪里", "天气怎么用",
             "更新横幅", "横幅", "滚动条", "顶部滚动", "最新动态",
             "资讯", "新闻", "科技资讯", "行业新闻", "资讯按钮", "新闻按钮", "资讯怎么", "资讯是什么", "每日资讯",
+            # 资讯弹窗三个标签页
+            "华为云动态", "华为云官方", "华为云产品", "产品发布", "版本更新", "优惠活动", "认证考试",
+            "行业展会", "展会", "展会日历", "活动日历", "行业活动", "行业大会", "行业会议",
             "客户管理", "CRM", "客户crm", "客户CRM", "客户列表", "客户详情",
             "商机阶段", "客户档案", "名下方案", "客户跟进", "客户归集",
             "关联客户", "关联到客户", "把方案关联", "把客户关联", "方案关联", "关联方案",
