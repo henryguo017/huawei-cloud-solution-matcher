@@ -138,40 +138,26 @@
         .result-content h3 { font-size: 18px; margin: 18px 0 10px; }
         .result-content h4 { font-size: 16px; margin: 16px 0 8px; }
         .result-content p { margin: 8px 0; }
-        /* 列表去掉圆点 + 加 (1)(2) 括号编号 */
+        /* 列表去掉圆点、无编号，保留缩进层级感 */
         .result-content ul {
             list-style: none;
             padding-left: 1.2em;
             margin: 8px 0;
-            counter-reset: list-item;
         }
         .result-content ul li {
-            counter-increment: list-item;
             position: relative;
             padding-left: 0;
             margin-bottom: 6px;
             line-height: 1.6;
         }
-        .result-content ul li::before {
-            content: '(' counter(list-item) ') ';
-            color: #C7000B;
-            font-weight: 600;
-            margin-right: 0.4em;
-        }
-        /* 分享页摘要卡片要点同样加 (1)(2) */
+        /* 分享页摘要卡片要点同正文风格 */
         .share-summary-bullets {
-            counter-reset: list-item;
-        }
-        .share-summary-bullets li {
-            counter-increment: list-item;
-            position: relative;
+            list-style: none;
             padding-left: 0;
         }
-        .share-summary-bullets li::before {
-            content: '(' counter(list-item) ') ';
-            color: #C7000B;
-            font-weight: 600;
-            margin-right: 0.4em;
+        .share-summary-bullets li {
+            position: relative;
+            padding-left: 0;
         }
         .markdown-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: var(--font-size-sm, 14px); border: 1px solid #d9d9d9; }
         .markdown-table th {
