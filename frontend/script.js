@@ -4015,6 +4015,7 @@ const HistoryUI = {
         }
     },
 
+
     _openDetailModal(item, type) {
         const modal = document.getElementById('history-detail-modal');
         const body = document.getElementById('detail-body');
@@ -4022,6 +4023,12 @@ const HistoryUI = {
         this.currentDetail = item;
         this.currentDetailType = type;
         this._pendingRefined = null;
+        // ★ 打开 modal 时清理历史 toast / 错误横幅，避免「加载详情失败」等残留提示与成功渲染的 modal 并存造成视觉割裂
+        try {
+            const tc = document.getElementById('toast-container');
+            if (tc) tc.innerHTML = '';
+            if (typeof ErrorHandler !== 'undefined' && ErrorHandler.hideInline) ErrorHandler.hideInline();
+        } catch (_) {}
         body.innerHTML = this.renderDetailBody(item, type);
         this.bindDetailEvents(item, type);
         modal.style.display = 'flex';
