@@ -5,6 +5,7 @@
 - [生产环境部署](#生产环境部署)
 - [华为云部署](#华为云部署)
 - [常见问题](#常见问题)
+- [顶栏数据源配置（天气 / 资讯 / 展会）](#顶栏数据源配置天气--资讯--展会)
 
 ---
 
@@ -279,3 +280,36 @@ curl http://localhost:8000/api/health
 htop
 df -h
 ```
+
+---
+
+## 顶栏数据源配置（天气 / 资讯 / 展会）
+
+顶栏的天气、资讯、展会功能，除天气外**无需额外配置**（资讯/展会/华为云动态为公开 RSS / HTML 抓取，开箱即用）。天气需要配 1 个 key：
+
+### 天气（和风天气）
+
+| 环境变量 | 说明 | 获取方式 |
+|---------|------|---------|
+| `QWEATHER_API_KEY` | 和风天气 API Key | https://console.qweather.com/ 注册 → 创建项目 → 凭据选 **API KEY** |
+| `QWEATHER_API_HOST` | 项目专属域名（形如 `xxxxx.re.qweatherapi.com`） | 控制台 → **设置**页（不是项目管理页），三层域名 |
+
+```bash
+# 服务器 .env 追加
+echo "QWEATHER_API_KEY=你的key" >> /var/www/huawei-cloud-solution-matcher/.env
+echo "QWEATHER_API_HOST=你的host" >> /var/www/huawei-cloud-solution-matcher/.env
+systemctl restart huawei-cloud-api
+```
+
+> ⚠️ **API Host 是账号级唯一**（控制台-设置页，三层域名），不是项目 ID 拼出来的。key 类型必须选「API KEY」而非 JWT，否则 401。免费额度约 1000 次/天（≈3 万/月），顶栏足够用。
+
+### 展会维护（可选）
+
+- 自动源：AIWW / IDCTalk 聚合站（后端 24h 抓取，无需维护）。
+- 人工精选兜底：`data/industry_events.json`（华为全联接 / 云栖 / 腾讯数字生态等年度大会，链接指向官网）。改它之前先跑校验：
+
+```bash
+python scripts/validate_events.py   # 检查 JSON 字段 / 链接可访问 / 标题年份（防往届冒充本届）
+```
+
+- 已结束的展会自动从列表清理（按日期判断），无需手动删。
