@@ -52,39 +52,43 @@ REACT_SYSTEM_PROMPT_BASE = """你是一个智能解决方案匹配助手，帮�
 3. 如果用户提到竞品，调用 search_competitor 进行对比
 4. 收集足够信息后，输出 Final Answer（内容依意图而定，见下方「意图识别与工具选择」）
 
-## 意图识别与工具选择（关键：先判意图，再选工具链）
+## 意图识别与工具选择（关键：先判意图，再选工具链，完成后立即终止）
 
-请先判断用户输入的主意图，再选择对应工具链：
+请先判断用户输入的主意图，再选择对应工具链。**每类意图完成其工具链后必须立即输出 Final Answer，禁止继续调用其他工具。**
 
 【A. 方案推荐】用户想要解决方案 / 架构建议 / 技术选型（未要求生成文件）
   特征词：方案、解决、架构、推荐、怎么上云、xx行业云、怎么做、规划
   工具链：analyze_demand → search_kb → （提及竞品时）search_competitor → Final Answer
   输出：完整方案报告（系统会增强为结构化方案）
+  ★ 完成标志：search_kb 返回结果后即可 Final Answer，不要继续调其他工具
 
 【B. 竞品对比】用户要对比不同厂商的优劣
   特征词：对比、vs、竞品、阿里云、腾讯云、AWS、谁好、优劣、差异
-  工具链：search_competitor → Final Answer
-  输出：对比分析 + 关键维度对比
+  工具链：search_competitor → **立即** Final Answer
+  输出：对比分析（2-4 段精炼总结 + 关键维度对比表）
+  ★★★ 绝对禁止：search_competitor 完成后禁止调 analyze_demand / search_kb / query_pricing！那会变成完整方案，不是用户要的竞品对比！
 
 【C. 报价 / 价目】用户问价格、费用、成本、预算
   特征词：多少钱、报价、价格、费用、成本、TCO、预算、包月、包年
-  工具链：query_pricing → （需精确多产品测算时）run_code → Final Answer
-  输出：价目清单 + （可选）测算结果
+  工具链：query_pricing → **立即** Final Answer
+  输出：价目清单 + 简要说明（2-3 段）
+  ★★★ 绝对禁止：query_pricing 完成后禁止调 analyze_demand / search_kb / search_competitor！
 
 【D. 文件生成】用户明确要求生成文件（Excel / PPT / Word / 图表 / 报表 / 大纲文件）
   特征词：生成、做、写、导出、Excel、PPT、报表、xlsx、pptx、图表、大纲文件
-  ★ 工具链：直接 run_code（写代码生成文件），**不要调用 search_kb / search_competitor**
-  ★ 输出：简要说明已生成的文件名、内容、如何下载（不要写完整 14 章方案报告）
-  ★ 若用户同时要方案又要文件（如"做个方案并导出Word"）：
-    先走 A 链出方案，再追加 run_code 导出该方案为文件
+  ★ 工具链：直接 run_code（写代码生成文件），**不要调用 search_kb / search_competitor / analyze_demand**
+  ★ 输出：简要说明已生成的文件名、内容、如何下载（3-5 句话，不要写完整方案报告）
+  ★★★ run_code 成功生成文件后立即 Final Answer，禁止再调任何检索工具！
 
 【E. 混合意图】同时包含多种（如"做个政务云方案，对比阿里云，算3年TCO"）
   工具链：按 A→B→C 顺序分多轮调用，最后整合到 Final Answer
+  ⚠️ 混合意图的输出应**精炼聚焦**（总长度控制在合理范围），不要机械拼接导致冗长
 
-注意：
-- 意图 D 的纯文件生成请求，**禁止先调 search_kb**（那只是方案推荐意图才做的）
-- 同一轮只输出一个 Action；混合意图用多轮逐步完成
-- 若不确定意图，优先按方案推荐（A）处理
+## ⚠️ 核心纪律（违反会导致体验极差）
+1. **识别意图后只走该意图的工具链，不走别的**
+2. **工具链完成 = 立即 Final Answer，不追加额外工具**
+3. **意图 B/C/D 的 Final Answer 应该简短精炼（几段话/一个表），不是 14 章方案文档**
+4. 如果你发现自己在非方案意图上调了 analyze_demand 或 search_kb → **立即停止，直接 Final Answer**
 
 ## 可用工具
 {tools}
@@ -129,9 +133,10 @@ Clarify: [{{"question": "这个项目的主要业务领域是？", "options": ["
 - 如果你已向用户提过 **2 次以上** 问、且用户已补充了基本信息，请基于已有信息给出 Final Answer；仅当补充后仍有**致命缺失**（如完全无法判断方案方向）时才允许第 3 轮追问，之后必须出方案"""
 
 
-# Final Answer 增强指南：与标准模式共用 14 章结构 + 防幻觉 + 话术
+# Final Answer 增强指南：仅适用于方案推荐意图（A/E），其他意图忽略此节
 REACT_FINAL_GUIDE = (
-    "\n\n【Final Answer 报告结构要求（务必覆盖以下全部章节）】\n"
+    "\n\n【Final Answer 报告结构要求 —— 仅当你的意图是「方案推荐(A)」或「混合意图(E)含方案部分」时才需遵守以下章节结构。"
+    "若你的意图是竞品对比(B)/价目查询(C)/文件生成(D)，请完全忽略此节，按对应意图的输出要求给出精炼回答。】\n"
     + build_format_block()
     + "\n"
     + build_anti_hallucination()
@@ -425,14 +430,15 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                         "tool": tool_name,
                     })
 
-                    # 将 Observation 追加到 Prompt，进入下一轮
+                    # 将 Observation 追加到 Prompt，进入下一轮（意图感知的续行提示）
+                    _nudge = self._build_intent_nudge(tool_calls_log, tool_name)
                     current_prompt += f"""
 
 {llm_response}
 
 Observation: {observation}
 
-请继续分析。如果信息足够，请输出 Final Answer。"""
+{_nudge}"""
 
                 else:
                     # 解析失败。如果已有工具调用结果，直接把 LLM 输出当最终答案
@@ -728,15 +734,54 @@ Final Answer: [完整方案]）"""
         context = "\n\n".join(parts)
         return context, industry, demand_analysis
 
-    async def _finalize_answer(self, user_input: str, draft: str, tool_calls: list) -> str:
-        """用统一增强管线重写最终答案（与标准模式一致：来源标注/防幻觉/话术/14章）。
+    def _detect_intent(self, tool_calls: list) -> str:
+        """根据已调用工具链判断用户意图类型。
 
-        失败（如 LLM 异常）时回退到 Agent 的草稿，保证不阻断主流程。
+        返回值：
+        - 'solution' : 调用了 analyze_demand 或 search_kb（方案推荐/混合方案部分）
+        - 'competitor': 仅调了 search_competitor（纯竞品对比）
+        - 'pricing'  : 仅调了 query_pricing（纯价目查询）
+        - 'filegen'  : 仅调了 run_code（纯文件生成）
+        - 'mixed'    : 多种工具组合（含竞品+价目等非方案工具）
+        - 'unknown'  : 无法判断（无工具调用或异常）
         """
+        tools_used = set(tc.get("tool", "") for tc in tool_calls)
+        has_kb = bool(tools_used & {"analyze_demand", "search_kb"})
+        has_comp = "search_competitor" in tools_used
+        has_price = "query_pricing" in tools_used
+        has_code = "run_code" in tools_used
+
+        if has_kb:
+            return "solution"
+        if has_comp and not has_price and not has_code and len(tools_used) == 1:
+            return "competitor"
+        if has_price and not has_comp and not has_code and len(tools_used) == 1:
+            return "pricing"
+        if has_code and not has_kb and not has_comp and not has_price:
+            return "filegen"
+        if len(tools_used) > 1:
+            return "mixed"
+        return "unknown"
+
+    async def _finalize_answer(self, user_input: str, draft: str, tool_calls: list) -> str:
+        """意图感知的最终答案增强。
+
+        - 方案意图(solution/mixed含KB)：走完整 14 章增强管线（来源标注/防幻觉/话术）
+        - 非方案意图(competitor/pricing/filegen)：直接用 Agent 草稿，不做 14 章重写
+        - 失败时回退到 Agent 的草稿，保证不阻断主流程
+        """
+        intent = self._detect_intent(tool_calls)
+        self._log("system", f"[_finalize_answer] 检测意图={intent}, 工具={[tc.get('tool') for tc in tool_calls]}")
+
+        # 非方案意图 → 直接返回 Agent 草稿，不走 14 章增强
+        if intent in ("competitor", "pricing", "filegen"):
+            self._log("system", f"非方案意图({intent})，跳过14章增强，使用Agent草稿(len={len(draft)})")
+            return draft
+
+        # 方案意图 / mixed 含 KB → 走完整增强管线
         try:
             context, industry, demand_analysis = self._collect_context_and_demand(tool_calls)
             if not context.strip():
-                # 没有检索到任何资料 → 不二次生成，直接用草稿
                 self._log("system", "Agent 未检索到资料，跳过统一增强，使用草稿")
                 return draft
             matcher = SolutionMatcherService()
@@ -773,9 +818,41 @@ Final Answer: [完整方案]）"""
 
     # ---- 结果组装 ----
 
+    def _build_intent_nudge(self, tool_calls_log: list, last_tool: str) -> str:
+        """根据已调用工具链生成意图感知的续行提示，防止非方案意图越界调用其他工具。"""
+        tools_used = [tc.get("tool", "") for tc in tool_calls_log]
+        # 判断当前意图倾向
+        has_kb = any(t in ("analyze_demand", "search_kb") for t in tools_used)
+        has_comp = "search_competitor" in tools_used
+        has_price = "query_pricing" in tools_used
+        has_code = "run_code" in tools_used
+
+        # 纯竞品意图：search_competitor 完成后强制 Final Answer
+        if last_tool == "search_competitor" and not has_kb and not has_code:
+            return ("竞品信息已获取完毕。请立即输出 Final Answer（精炼的竞品对比分析，2-4段+对比表），"
+                    "禁止再调 analyze_demand / search_kb / query_pricing！")
+
+        # 纯价目意图：query_pricing 完成后强制 Final Answer
+        if last_tool == "query_pricing" and not has_kb and not has_comp and not has_code:
+            return ("价目信息已获取完毕。请立即输出 Final Answer（精炼的价目说明，2-3段），"
+                    "禁止再调 analyze_demand / search_kb / search_competitor！")
+
+        # 文件生成意图：run_code 完成后强制 Final Answer
+        if last_tool == "run_code" and not has_kb:
+            return ("文件已生成完毕。请立即输出 Final Answer（简要说明文件名和内容，3-5句话），"
+                    "禁止再调 analyze_demand / search_kb / search_competitor / query_pricing！")
+
+        # 方案意图或混合：标准续行提示
+        if has_kb:
+            if has_comp and not has_price:
+                return "方案和竞品信息都已收集。如果信息足够，请输出 Final Answer（整合方案+竞品对比）。"
+            return "请继续分析。如果方案信息足够（已有 KB 检索结果），请输出 Final Answer。"
+
+        # 首步工具刚完成（如 analyze_demand），继续下一步
+        return "请继续分析。如果信息足够，请输出 Final Answer。"
+
     def _make_result(
         self,
-        answer: str,
         tool_calls: list,
         success: bool,
         paused: bool = False,
