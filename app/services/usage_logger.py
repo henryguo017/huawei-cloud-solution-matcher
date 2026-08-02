@@ -332,7 +332,10 @@ class UsageLoggerService:
                     try:
                         detail = json.loads(row["detail"])
                         competitor = detail.get("competitor", "未知")
-                        freq[competitor] = freq.get(competitor, 0) + 1
+                        # 多竞品组合（如 "阿里云 + 腾讯云"）拆开分别累加，避免组合类别无限膨胀
+                        parts = [p.strip() for p in str(competitor).split("+") if p.strip()]
+                        for part in parts:
+                            freq[part] = freq.get(part, 0) + 1
                     except (json.JSONDecodeError, AttributeError):
                         continue
                 return freq
