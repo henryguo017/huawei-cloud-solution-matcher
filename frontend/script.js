@@ -6414,6 +6414,19 @@ function initEventListeners() {
 .artifact-meta { font-size:12px; color:#6b7280; margin-top:2px; }
 .artifact-dl { flex:none; padding:6px 14px; border-radius:8px; background:#C7000B; color:#fff; text-decoration:none; font-size:13px; font-weight:600; }
 .artifact-dl:hover { opacity:.9; }
+.price-card { padding:8px 12px; margin:6px 0; border:1px solid #e3e6ea; border-left:3px solid #BA7517; border-radius:8px; background:#fffaf2; }
+.price-row { display:flex; justify-content:space-between; gap:12px; padding:3px 0; font-size:13px; }
+.price-name { font-weight:600; color:#1a1a1a; }
+.price-val { color:#BA7517; font-weight:600; white-space:nowrap; }
+.price-spec { color:#6b7280; font-size:12px; margin-top:1px; }
+.comp-card { padding:8px 12px; margin:6px 0; border:1px solid #e3e6ea; border-left:3px solid #D85A30; border-radius:8px; background:#fff7f3; }
+.comp-title { font-weight:600; color:#1a1a1a; margin-bottom:4px; }
+.comp-snippet { font-size:12px; color:#444; white-space:pre-wrap; word-break:break-word; }
+.comp-snippet b { color:#D85A30; }
+.sol-card { padding:8px 12px; margin:6px 0; border:1px solid #e3e6ea; border-left:3px solid #0F6E56; border-radius:8px; background:#f1faf5; }
+.sol-industry { display:inline-block; font-size:12px; color:#0F6E56; background:#d8f0e6; padding:1px 8px; border-radius:10px; margin-bottom:4px; }
+.sol-preview { font-size:13px; color:#1a1a1a; white-space:pre-wrap; word-break:break-word; }
+.sol-meta { font-size:12px; color:#6b7280; margin-top:2px; }
 `;
         document.head.appendChild(st);
     }
@@ -6438,6 +6451,54 @@ function initEventListeners() {
         if (!window.__agentArtifacts.some(a => a.path === art.path)) {
             window.__agentArtifacts.push(art);
         }
+    }
+
+    // S0.5：价目卡片（query_pricing 事件）
+    function appendPricingCard(ev) {
+        _ensureArtifactStyles();
+        const ts = document.getElementById('thinking-entries');
+        if (!ts) return;
+        const items = (ev.items || []).slice(0, 6).map(it => {
+            let val;
+            if (it.free) val = '免费';
+            else if (it.business_only) val = (it.note || '商务报价，请咨询华为云销售');
+            else val = it.ref_price + ' 元' + (it.unit_label ? ' / ' + it.unit_label : '');
+            const spec = it.spec ? `<div class="price-spec">${_esc(it.spec)}</div>` : '';
+            return `<div class="price-row"><span class="price-name">${_esc(it.product)}</span><span class="price-val">${_esc(String(val))}</span></div>${spec}`;
+        }).join('');
+        const d = document.createElement('div');
+        d.className = 'think-entry price-card';
+        d.innerHTML = `<div class="comp-title">价目参考${ev.query ? '：' + _esc(ev.query) : ''}</div>${items}`;
+        ts.appendChild(d);
+        ts.scrollTop = ts.scrollHeight;
+    }
+
+    // S0.5：竞品对比卡片（competitor_table 事件）
+    function appendCompetitorCard(ev) {
+        _ensureArtifactStyles();
+        const ts = document.getElementById('thinking-entries');
+        if (!ts) return;
+        const hw = ev.huawei_snippet ? `<div class="comp-snippet"><b>华为云</b>：${_esc(ev.huawei_snippet)}</div>` : '';
+        const cp = ev.competitor_snippet ? `<div class="comp-snippet"><b>${_esc(ev.competitor || '竞品')}</b>：${_esc(ev.competitor_snippet)}</div>` : '';
+        const d = document.createElement('div');
+        d.className = 'think-entry comp-card';
+        d.innerHTML = `<div class="comp-title">竞品对比：${_esc(ev.competitor || '')}${ev.industry ? '（' + _esc(ev.industry) + '）' : ''}</div>${hw}${cp}`;
+        ts.appendChild(d);
+        ts.scrollTop = ts.scrollHeight;
+    }
+
+    // S0.5：方案摘要卡片（solution_card 事件）
+    function appendSolutionCard(ev) {
+        _ensureArtifactStyles();
+        const ts = document.getElementById('thinking-entries');
+        if (!ts) return;
+        const ind = ev.industry ? `<span class="sol-industry">${_esc(ev.industry)}</span>` : '';
+        const meta = ev.word_count ? `<div class="sol-meta">约 ${ev.word_count} 字</div>` : '';
+        const d = document.createElement('div');
+        d.className = 'think-entry sol-card';
+        d.innerHTML = `${ind}<div class="sol-preview">${_esc((ev.preview || '').slice(0, 160))}</div>${meta}`;
+        ts.appendChild(d);
+        ts.scrollTop = ts.scrollHeight;
     }
 
     function injectAgentArtifacts() {
@@ -6513,6 +6574,16 @@ function initEventListeners() {
                 break;
             case 'file_created':
                 appendArtifactCard(event);
+                break;
+            // ===== S0.5 统一 Agent：结构化卡片嵌入对话流 =====
+            case 'pricing_info':
+                appendPricingCard(event);
+                break;
+            case 'competitor_table':
+                appendCompetitorCard(event);
+                break;
+            case 'solution_card':
+                appendSolutionCard(event);
                 break;
             default:
                 break;
