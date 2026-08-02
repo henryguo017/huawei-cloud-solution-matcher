@@ -10216,6 +10216,17 @@ select:focus {
     transition: color var(--transition-fast);
 }
 .sidebar-item .nav-icon .icon { width: 1.25rem; height: 1.25rem; }
+.sidebar-item .nav-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 6px;
+    font-size: 10px;
+    line-height: 16px;
+    color: var(--frame-text-dim);
+    background: rgba(255,255,255,0.12);
+    border-radius: 8px;
+    vertical-align: middle;
+}
 .sidebar-item:hover { background: var(--frame-hover); color: #fff; }
 .sidebar-item:hover .nav-icon { color: #fff; }
 .sidebar-item.active {
