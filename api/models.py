@@ -183,6 +183,17 @@ class RefineSolutionResponse(BaseModel):
     refined_solution: str = Field(..., description="优化后的方案（Markdown格式）")
     follow_up: str = Field(..., description="本次追问内容")
 
+class RefineChapterRequest(BaseModel):
+    original_demand: str = Field(..., description="原始客户需求")
+    current_solution: str = Field(..., description="当前完整方案（Markdown）")
+    chapter_title: str = Field(..., description="要精修的章节标题（如 '## 9. 投资回报分析'）")
+    chapter_content: str = Field(..., description="该章节当前内容（不含标题）")
+    follow_up: str = Field(..., description="用户的精修要求（如 'ROI 再详细一点'）")
+
+class RefineChapterResponse(BaseModel):
+    chapter_title: str = Field(..., description="精修的章节标题")
+    refined_content: str = Field(..., description="精修后的章节内容（不含标题，Markdown）")
+
 class RefineCompetitorRequest(BaseModel):
     original_competitor: str = Field(..., description="原始竞品名称")
     original_industry: str = Field(..., description="原始行业名称")

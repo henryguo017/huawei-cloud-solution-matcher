@@ -11,6 +11,7 @@ from api.models import (
     MatchHistoryListResponse, MatchHistoryItem, MatchHistoryDetail, CompareRequest, CompareResponse,
     CompareSummaryRequest, CompareSummaryResponse,
     RefineSolutionRequest, RefineSolutionResponse,
+    RefineChapterRequest, RefineChapterResponse,
     UpdateSolutionRequest, UpdateSolutionResponse,
     RefineCompetitorRequest, RefineCompetitorResponse,
     CompetitorHistoryListResponse, CompetitorHistoryItem, CompetitorHistoryDetail,
@@ -3486,6 +3487,56 @@ async def refine_solution(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"方案优化失败: {str(e)}"
+        )
+
+
+@router.post("/solution/refine-chapter", response_model=RefineChapterResponse, tags=["解决方案优化"])
+async def refine_solution_chapter(
+    request: RefineChapterRequest,
+    _: None = Depends(rate_limit(30, 60))
+):
+    """
+    章节级定向精修接口 - 只重写方案中的某一章，其他章节原样保留。
+    LLM 只输出该章的新内容，由后端替换回原方案，避免整篇重跑引入不一致。
+    """
+    try:
+        refine_prompt = f"""你是华为云解决方案资深专家。请针对客户需求，对方案中指定的【单个章节】进行精修。
+
+## 原始客户需求
+{request.original_demand}
+
+## 当前方案（Markdown格式，供你理解上下文，不要改动其他章节）
+{request.current_solution}
+
+## 需要精修的章节标题
+{request.chapter_title}
+
+## 该章节当前内容
+{request.chapter_content}
+
+## 本次精修要求
+{request.follow_up}
+
+---
+**任务要求**：
+1. 只输出「{request.chapter_title}」这一章的【新内容】，不要输出章节标题（标题会由系统保留），不要输出其他章节，不要输出解释性文字
+2. 基于客户需求和当前方案上下文，针对性提升该章质量
+3. 涉及价格/成本时给出具体计费参考（华为云官方价格体系，标注『具体以华为云官方报价为准』）
+4. 涉及竞品对比时突出华为云差异化优势
+5. 保持与方案其他章节的专业性和一致性（语气、格式、引用规范）
+6. 直接输出精修后的章节正文（Markdown），结构清晰
+
+请用中文输出，格式规范、专业简练。"""
+        refined = await get_llm_response(refine_prompt)
+        return RefineChapterResponse(
+            chapter_title=request.chapter_title,
+            refined_content=refined.strip()
+        )
+    except Exception as e:
+        logger.error(f"章节精修失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"章节精修失败: {str(e)}"
         )
 
 @router.post("/competitor/refine", response_model=RefineCompetitorResponse, tags=["竞品分析优化"])

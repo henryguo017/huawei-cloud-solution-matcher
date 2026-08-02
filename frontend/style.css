@@ -1927,6 +1927,72 @@ body::after {
 .result-content h2 { font-size: var(--font-size-xl); }
 .result-content h3 { font-size: var(--font-size-lg); }
 
+/* 章节级定向精修：章节标题旁的精修按钮 + 精修面板 */
+.chapter-refine-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 8px;
+    padding: 1px 8px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--primary-color, #C7000B);
+    background: rgba(199, 0, 11, 0.06);
+    border: 1px solid rgba(199, 0, 11, 0.2);
+    border-radius: 4px;
+    cursor: pointer;
+    vertical-align: middle;
+    font-family: var(--font-family);
+    transition: background var(--transition-fast), color var(--transition-fast);
+    opacity: 0;
+}
+.result-content h3:hover .chapter-refine-btn,
+.chapter-refine-btn:hover {
+    opacity: 1;
+}
+.chapter-refine-btn:hover {
+    background: var(--primary-color, #C7000B);
+    color: #fff;
+}
+.chapter-refine-btn .icon { width: 11px; height: 11px; }
+/* 精修面板 */
+.chapter-refine-panel {
+    margin: 4px 0 16px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color, #E5E6EB);
+    border-left: 3px solid var(--primary-color, #C7000B);
+    border-radius: 8px;
+    background: var(--bg-elevated, #fff);
+}
+.chapter-refine-panel-head {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+.chapter-refine-input {
+    width: 100%;
+    min-height: 56px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    border: 1px solid var(--border-color, #E5E6EB);
+    border-radius: 6px;
+    background: var(--bg-default, #fff);
+    color: var(--text-primary);
+    resize: vertical;
+    font-family: var(--font-family);
+}
+.chapter-refine-input:focus {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 0;
+}
+.chapter-refine-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
 .result-content p {
     color: var(--text-primary);
     line-height: 1.8;

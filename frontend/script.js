@@ -1828,6 +1828,22 @@ const API = {
         return await response.json();
     },
 
+    async refineChapter(originalDemand, currentSolution, chapterTitle, chapterContent, followUp) {
+        const response = await fetch(`${Config.API_BASE_URL}/solution/refine-chapter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                original_demand: originalDemand,
+                current_solution: currentSolution,
+                chapter_title: chapterTitle,
+                chapter_content: chapterContent,
+                follow_up: followUp
+            })
+        });
+        if (!response.ok) throw new Error(`章节精修失败: ${response.statusText}`);
+        return await response.json();
+    },
+
     async refineCompetitorAnalysis(originalCompetitor, originalIndustry, currentAnalysis, followUp, conversationHistory) {
         const headers = { 'Content-Type': 'application/json' };
         if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
@@ -6396,6 +6412,8 @@ function initEventListeners() {
         } catch (e) {
             resultContent.innerHTML = '<div class="result-content"><p>方案已生成，但渲染失败，请尝试下载方案文档查看。</p></div>';
         }
+        // 渲染完成后：给章节标题挂「精修」按钮（章节级定向精修）
+        try { SolutionChapterRefine.bind(); } catch (e) { console.warn('[ChapterRefine] 挂载失败:', e); }
         UI.renderSources(document.getElementById('solution-sources'), result.source_documents);
         resultContainer.style.display = 'block';
         resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -6471,6 +6489,172 @@ function initEventListeners() {
             renderAgentResult(cached, cached.demand || '');
         }
     };
+
+    // ==================== 章节级定向精修 ====================
+    // 给方案正文每个 ## 章节标题挂「精修」按钮：只重写该章，其他章节不动
+    const SolutionChapterRefine = {
+        // 在方案渲染完成后调用：为 #solution-content 里的 h3(## 章节) 挂精修按钮
+        bind() {
+            const contentEl = document.getElementById('solution-content');
+            if (!contentEl) return;
+            // 避免重复绑定（先清理旧的）
+            contentEl.querySelectorAll('.chapter-refine-btn').forEach(b => b.remove());
+            const cached = State.resultCache && State.resultCache.solution;
+            if (!cached || !cached.answer) return;
+            // 排除摘要卡片区域（在 solution-content 外，不会命中）
+            contentEl.querySelectorAll('h3').forEach(h3 => {
+                if (h3.closest('.result-content') !== contentEl) return;
+                const title = (h3.textContent || '').trim();
+                if (!title) return;
+                // 跳过已被挂按钮的
+                if (h3.querySelector('.chapter-refine-btn')) return;
+                const btn = document.createElement('button');
+                btn.className = 'chapter-refine-btn';
+                btn.type = 'button';
+                btn.title = '只精修这一章，其他章节不变';
+                btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>精修';
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    SolutionChapterRefine._openPanel(title, h3);
+                });
+                h3.appendChild(btn);
+            });
+        },
+
+        // 提取某个章节标题对应的 markdown 原文内容（从缓存 answer 里按 ## 切分）
+        _extractChapterContent(title, fullAnswer) {
+            const lines = (fullAnswer || '').split('\n');
+            const target = title.replace(/^#+\s*/, '').trim();
+            let inChapter = false;
+            let content = [];
+            for (const line of lines) {
+                const isH2 = /^##\s+/.test(line);
+                if (isH2) {
+                    const currentTitle = line.replace(/^##\s*/, '').trim();
+                    if (currentTitle === target) { inChapter = true; continue; }
+                    if (inChapter) break;  // 下一个 ## 结束
+                }
+                if (inChapter) content.push(line);
+            }
+            return content.join('\n').trim();
+        },
+
+        // 弹出精修输入面板
+        _openPanel(chapterTitle, h3) {
+            const demand = (State.resultCache.solution && State.resultCache.solution.demand) || '';
+            const fullAnswer = State.resultCache.solution && State.resultCache.solution.answer;
+            const currentContent = this._extractChapterContent(chapterTitle, fullAnswer);
+            if (!currentContent) {
+                UI.showToast('未能定位该章节内容', 'warning');
+                return;
+            }
+            // 简单内联面板：在标题下方插入输入框
+            const esc = (typeof window._crEsc === 'function') ? window._crEsc : function(s) { return String(s); };
+            const panel = document.createElement('div');
+            panel.className = 'chapter-refine-panel';
+            panel.innerHTML =
+                '<div class="chapter-refine-panel-head">精修「' + esc(chapterTitle) + '」</div>' +
+                '<textarea class="chapter-refine-input" placeholder="输入精修要求，例如：ROI 计算再详细一点、补充 3 年回收期测算"></textarea>' +
+                '<div class="chapter-refine-actions">' +
+                    '<button class="btn btn-ghost btn-sm chapter-refine-cancel" type="button">取消</button>' +
+                    '<button class="btn btn-primary btn-sm chapter-refine-ok" type="button">开始精修</button>' +
+                '</div>';
+            // 关闭已有面板
+            document.querySelectorAll('.chapter-refine-panel').forEach(p => p.remove());
+            if (h3.nextSibling && h3.nextSibling.classList && h3.nextSibling.classList.contains('chapter-refine-panel')) {
+                h3.nextSibling.remove();
+            }
+            h3.insertAdjacentElement('afterend', panel);
+            const input = panel.querySelector('.chapter-refine-input');
+            if (input) input.focus();
+            const self = this;
+            panel.querySelector('.chapter-refine-cancel').addEventListener('click', () => panel.remove());
+            panel.querySelector('.chapter-refine-ok').addEventListener('click', () => {
+                const text = (input && input.value.trim()) || '';
+                if (!text) { UI.showToast('请输入精修要求', 'warning'); return; }
+                self._refineChapter(chapterTitle, currentContent, text, panel, h3);
+            });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const text = (input && input.value.trim()) || '';
+                    if (!text) { UI.showToast('请输入精修要求', 'warning'); return; }
+                    self._refineChapter(chapterTitle, currentContent, text, panel, h3);
+                }
+            });
+        },
+
+        // 调用后端精修 + 替换章节 DOM + 更新缓存
+        async _refineChapter(chapterTitle, currentContent, followUp, panel, h3) {
+            const cached = State.resultCache.solution;
+            if (!cached || !cached.answer) return;
+            panel.querySelector('.chapter-refine-ok').disabled = true;
+            panel.querySelector('.chapter-refine-ok').textContent = '精修中…';
+            try {
+                const data = await API.refineChapter(
+                    cached.demand || '',
+                    cached.answer,
+                    chapterTitle,
+                    currentContent,
+                    followUp
+                );
+                const refinedContent = (data.refined_content || '').trim();
+                if (!refinedContent) { UI.showToast('精修结果为空，请重试', 'warning'); return; }
+                // 1. 替换缓存 answer 中该章节内容（保持缓存一致，导出/追问用）
+                const titleClean = chapterTitle.replace(/^#+\s*/, '').trim();
+                cached.answer = replaceChapterInMarkdown(cached.answer, titleClean, refinedContent);
+                // 2. 更新 solution_json 对应章节（如果有）
+                if (cached.solution_json && Array.isArray(cached.solution_json)) {
+                    cached.solution_json.forEach(ch => {
+                        if (ch.title && ch.title.trim() === titleClean) ch.content = refinedContent;
+                    });
+                }
+                // 3. 重新渲染整篇方案（章节标题会带按钮，精修结果自动显示）
+                const contentEl = document.getElementById('solution-content');
+                if (contentEl) contentEl.innerHTML = UI.renderMarkdown(cached.answer);
+                SolutionChapterRefine.bind();
+                panel.remove();
+                UI.showToast('章节精修完成！', 'success');
+            } catch (error) {
+                console.error('章节精修失败:', error);
+                UI.showToast('章节精修失败: ' + (error.message || '请重试'), 'error');
+            } finally {
+                const okBtn = panel.querySelector('.chapter-refine-ok');
+                if (okBtn) { okBtn.disabled = false; okBtn.textContent = '开始精修'; }
+            }
+        }
+    };
+
+    // 工具：在 markdown 原文中替换指定章节内容（## 标题 → 下一个 ## 前）
+    function replaceChapterInMarkdown(markdown, chapterTitle, newContent) {
+        const lines = markdown.split('\n');
+        const target = chapterTitle.trim();
+        let out = [];
+        let inChapter = false;
+        let replaced = false;
+        for (const line of lines) {
+            const isH2 = /^##\s+/.test(line);
+            if (isH2) {
+                const t = line.replace(/^##\s*/, '').trim();
+                if (t === target) {
+                    inChapter = true;
+                    out.push(line);  // 保留标题行
+                    out.push(newContent);  // 插入新内容
+                    replaced = true;
+                    continue;
+                }
+                if (inChapter) {
+                    inChapter = false;
+                    out.push(line);
+                    continue;
+                }
+            }
+            if (inChapter) continue;  // 跳过旧内容
+            out.push(line);
+        }
+        return out.join('\n');
+    }
+
 
     // ==================== 成本参考卡片（方案成本估算器） ====================
     // 状态挂在 window.__crState，避免与文件其它作用域的 const 冲突
