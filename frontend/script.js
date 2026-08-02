@@ -3993,26 +3993,53 @@ const HistoryUI = {
     },
 
     async showDetail(id) {
+        // 防重复触发：modal 已在打开中/已打开同一条记录时忽略（双击、列表刷新竞态都会造成并发请求）
+        const modal = document.getElementById('history-detail-modal');
+        const alreadyOpen = modal && modal.style.display === 'flex' && this.currentDetail && this.currentDetail.id === id;
+        if (alreadyOpen || this._detailLoading) return;
+        this._detailLoading = true;
+        let item = null;
         try {
             if (this.currentType === 'analyze') {
-                return this.showCompetitorDetail(id);
+                // 竞品详情走专用接口；此处不用 return await，避免外层锁被内层锁拦截
+                item = await API.getCompetitorHistoryDetail(id);
+            } else {
+                item = await API.getHistoryDetail(id);
             }
-            const item = await API.getHistoryDetail(id);
-            this._openDetailModal(item, 'match');
         } catch (error) {
             console.error('加载详情失败:', error);
-            UI.showToast('加载详情失败', 'warning');
+            // 若 modal 已经打开了同一条记录（上次成功渲染），失败不弹 toast（避免「内容能看 + 弹失败」并存）
+            const m = document.getElementById('history-detail-modal');
+            if (!(m && m.style.display === 'flex' && this.currentDetail && this.currentDetail.id === id)) {
+                UI.showToast('加载详情失败', 'warning');
+            }
+            return;
+        } finally {
+            this._detailLoading = false;
         }
+        // 渲染阶段与 fetch 分离：_openDetailModal 内部错误（如精修按钮挂载）不再冒泡成「加载详情失败」toast
+        this._openDetailModal(item, this.currentType === 'analyze' ? 'analyze' : 'match');
     },
 
     async showCompetitorDetail(id) {
+        const modal = document.getElementById('history-detail-modal');
+        const alreadyOpen = modal && modal.style.display === 'flex' && this.currentDetail && this.currentDetail.id === id;
+        if (alreadyOpen || this._detailLoading) return;
+        this._detailLoading = true;
+        let item = null;
         try {
-            const item = await API.getCompetitorHistoryDetail(id);
-            this._openDetailModal(item, 'analyze');
+            item = await API.getCompetitorHistoryDetail(id);
         } catch (error) {
             console.error('加载竞品详情失败:', error);
-            UI.showToast('加载详情失败', 'warning');
+            const m = document.getElementById('history-detail-modal');
+            if (!(m && m.style.display === 'flex' && this.currentDetail && this.currentDetail.id === id)) {
+                UI.showToast('加载详情失败', 'warning');
+            }
+            return;
+        } finally {
+            this._detailLoading = false;
         }
+        this._openDetailModal(item, 'analyze');
     },
 
 
@@ -4029,8 +4056,18 @@ const HistoryUI = {
             if (tc) tc.innerHTML = '';
             if (typeof ErrorHandler !== 'undefined' && ErrorHandler.hideInline) ErrorHandler.hideInline();
         } catch (_) {}
-        body.innerHTML = this.renderDetailBody(item, type);
-        this.bindDetailEvents(item, type);
+        // 渲染主体（renderDetailBody / bindDetailEvents 任一步出错都不能中断 modal 显示，也不能冒泡成「加载详情失败」toast）
+        try {
+            body.innerHTML = this.renderDetailBody(item, type);
+        } catch (renderErr) {
+            console.error('历史详情渲染失败:', renderErr);
+            body.innerHTML = '<div class="detail-error">详情渲染失败，请重试</div>';
+        }
+        try {
+            this.bindDetailEvents(item, type);
+        } catch (bindErr) {
+            console.error('历史详情事件绑定失败:', bindErr);
+        }
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
         // 历史方案匹配详情：补渲染成本参考卡片（只读，不绑定编辑/导出，独立 id 避免冲突）
@@ -4039,14 +4076,18 @@ const HistoryUI = {
         }
         // 历史详情页：把方案正文同步到缓存，让章节精修按钮可点（只读方案不可改）
         if (type === 'match' && item && item.solution) {
-            State.resultCache.solution = {
-                answer: item.solution,
-                demand: item.demand_text || '',
-                solution_json: null,
-                source_documents: [],
-                history_id: item.id
-            };
-            SolutionChapterRefine.bind();
+            try {
+                State.resultCache.solution = {
+                    answer: item.solution,
+                    demand: item.demand_text || '',
+                    solution_json: null,
+                    source_documents: [],
+                    history_id: item.id
+                };
+                SolutionChapterRefine.bind();
+            } catch (e) {
+                console.warn('历史详情精修按钮挂载失败（不影响查看）:', e);
+            }
         }
     },
 
@@ -4156,11 +4197,15 @@ const HistoryUI = {
     },
 
     renderConversation(conv) {
+        // 防御：后端可能返回字符串（JSON）而非数组；非数组一律按空对话处理
+        if (!Array.isArray(conv)) {
+            try { conv = JSON.parse(conv); } catch (_) { conv = null; }
+        }
         if (!conv || !conv.length) {
             return '<div class="followup-empty">暂无追问记录。输入你的问题，AI 会基于当前方案继续优化并保存到本记录。</div>';
         }
         return conv.map(m => {
-            if (m.role === 'user') {
+            if (m && m.role === 'user') {
                 return `<div class="followup-msg user"><div class="followup-role">你</div><div class="followup-text">${this.escapeHtml(m.content || '')}</div></div>`;
             }
             return `<div class="followup-msg assistant"><div class="followup-role">AI</div><div class="followup-text followup-ai-summary">已根据上方追问优化方案（更新于上方方案正文）</div></div>`;
