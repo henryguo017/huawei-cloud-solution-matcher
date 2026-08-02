@@ -3555,13 +3555,16 @@ const PageTransition = {
         this._updateNav(pageName);
         State.currentPage = pageName;
 
-        // 2. 动画关闭时无需防抖，直接释放锁
+        // 2. 切页后钩子：从缓存恢复/其他页级恢复逻辑（与业务 handler 解耦）
+        try { this._afterSwitch(pageName); } catch (e) { console.warn('[PageTransition] _afterSwitch 失败:', e); }
+
+        // 3. 动画关闭时无需防抖，直接释放锁
         if (!State.settings.animations) {
             this.isTransitioning = false;
             return;
         }
 
-        // 3. 仅用防抖锁阻止短时间重复点击，不阻塞数据加载
+        // 4. 仅用防抖锁阻止短时间重复点击，不阻塞数据加载
         setTimeout(() => { this.isTransitioning = false; }, this.duration);
     },
 
@@ -3578,6 +3581,44 @@ const PageTransition = {
         document.querySelectorAll('.mobile-nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === mobileActive);
         });
+    },
+
+    // 切到竞品页时自动从缓存恢复结果（修复：切走切回结果丢失/页面变白的 bug）
+    _restoreCompetitorResult() {
+        const resultContainer = document.getElementById('competitor-result');
+        const resultContent = document.getElementById('competitor-content');
+        if (!resultContainer || !resultContent) return;
+        const cached = State.resultCache && State.resultCache.competitor;
+        if (!cached || !cached.answer) return;
+        // 如果当前容器为空或隐藏，从缓存恢复渲染
+        if (resultContainer.style.display === 'none' || !resultContent.innerHTML.trim()) {
+            resultContainer.style.display = 'block';
+            // 重新渲染 markdown（结构化对比表 + 正文）
+            try {
+                let comparisonHtml = '';
+                if (cached.comparison && cached.comparison.headers && cached.comparison.rows) {
+                    const comp = cached.comparison;
+                    comparisonHtml = '<div class="comparison-table-wrap content-card"><h4 class="comparison-title">三方横向对比表</h4><div class="comparison-table-scroll"><table class="comparison-table"><thead><tr>' +
+                        comp.headers.map(h => '<th>' + window._crEsc(h) + '</th>').join('') +
+                        '</tr></thead><tbody>' +
+                        comp.rows.map(row => '<tr>' + row.map(cell => '<td>' + window._crEsc(cell) + '</td>').join('') + '</tr>').join('') +
+                        '</tbody></table></div></div>';
+                }
+                resultContent.innerHTML = comparisonHtml + UI.renderMarkdown(cached.answer);
+            } catch (e) {
+                console.warn('[PageTransition] 恢复竞品结果失败:', e);
+            }
+            if (cached.source_documents) {
+                const sourcesContainer = document.getElementById('competitor-sources');
+                if (sourcesContainer) UI.renderSources(sourcesContainer, cached.source_documents);
+            }
+        }
+    },
+
+    // 切页后统一钩子（所有页面切换都触发，便于做"切回时恢复缓存结果"等）
+    _afterSwitch(pageName) {
+        // 切到竞品页：从缓存恢复（竞品分析 DOM 可能被异常清空，但缓存完好）
+        if (pageName === 'competitor') this._restoreCompetitorResult();
     }
 };
 
@@ -7197,7 +7238,9 @@ function initEventListeners() {
             // ★ 匹配完成：隐藏思考流面板（释放占用的空间，尤其移动端）
             const tsDone = document.getElementById('thinking-stream');
             if (tsDone) { tsDone.style.display = 'none'; }
-            
+            // ★ 立即主动隐藏竞品分析进度面板（防止用户切走页面后，进度面板的 setTimeout 残留到下次切回时显示残影）
+            AnalyzeProgress.hide();
+
             State.resultCache.competitor = { ...result, competitor, industry };
             // 更新收藏按钮状态
             const compLabelName = Array.isArray(competitor) ? competitor.join(' & ') : competitor;
