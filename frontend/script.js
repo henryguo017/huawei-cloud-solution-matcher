@@ -4023,6 +4023,17 @@ const HistoryUI = {
         if (type === 'match') {
             try { window.renderCostReferenceReadOnly(item); } catch (e) { console.warn('历史成本卡片渲染失败', e); }
         }
+        // 历史详情页：把方案正文同步到缓存，让章节精修按钮可点（只读方案不可改）
+        if (type === 'match' && item && item.solution) {
+            State.resultCache.solution = {
+                answer: item.solution,
+                demand: item.demand_text || '',
+                solution_json: null,
+                source_documents: [],
+                history_id: item.id
+            };
+            SolutionChapterRefine.bind();
+        }
     },
 
     renderDetailBody(item, type) {
@@ -6495,29 +6506,32 @@ function initEventListeners() {
     const SolutionChapterRefine = {
         // 在方案渲染完成后调用：为 #solution-content 里的 h3(## 章节) 挂精修按钮
         bind() {
-            const contentEl = document.getElementById('solution-content');
-            if (!contentEl) return;
-            // 避免重复绑定（先清理旧的）
-            contentEl.querySelectorAll('.chapter-refine-btn').forEach(b => b.remove());
             const cached = State.resultCache && State.resultCache.solution;
             if (!cached || !cached.answer) return;
-            // 排除摘要卡片区域（在 solution-content 外，不会命中）
-            contentEl.querySelectorAll('h3').forEach(h3 => {
-                if (h3.closest('.result-content') !== contentEl) return;
-                const title = (h3.textContent || '').trim();
-                if (!title) return;
-                // 跳过已被挂按钮的
-                if (h3.querySelector('.chapter-refine-btn')) return;
-                const btn = document.createElement('button');
-                btn.className = 'chapter-refine-btn';
-                btn.type = 'button';
-                btn.title = '只精修这一章，其他章节不变';
-                btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>精修';
-                btn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    SolutionChapterRefine._openPanel(title, h3);
+            // 支持方案匹配页 (#solution-content) + 历史详情页 (#detail-solution-content)
+            const containers = [
+                document.getElementById('solution-content'),
+                document.getElementById('detail-solution-content')
+            ].filter(Boolean);
+            containers.forEach(contentEl => {
+                // 避免重复绑定（先清理旧的）
+                contentEl.querySelectorAll('.chapter-refine-btn').forEach(b => b.remove());
+                contentEl.querySelectorAll('h3').forEach(h3 => {
+                    if (h3.closest('.result-content') !== contentEl) return;
+                    const title = (h3.textContent || '').trim();
+                    if (!title) return;
+                    if (h3.querySelector('.chapter-refine-btn')) return;
+                    const btn = document.createElement('button');
+                    btn.className = 'chapter-refine-btn';
+                    btn.type = 'button';
+                    btn.title = '只精修这一章，其他章节不变';
+                    btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>精修';
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        SolutionChapterRefine._openPanel(title, h3, contentEl);
+                    });
+                    h3.appendChild(btn);
                 });
-                h3.appendChild(btn);
             });
         },
 
@@ -6539,8 +6553,8 @@ function initEventListeners() {
             return content.join('\n').trim();
         },
 
-        // 弹出精修输入面板
-        _openPanel(chapterTitle, h3) {
+        // 弹出精修输入面板（container 是所属结果容器：方案页 #solution-content 或历史详情 #detail-solution-content）
+        _openPanel(chapterTitle, h3, container) {
             const demand = (State.resultCache.solution && State.resultCache.solution.demand) || '';
             const fullAnswer = State.resultCache.solution && State.resultCache.solution.answer;
             const currentContent = this._extractChapterContent(chapterTitle, fullAnswer);
@@ -6572,20 +6586,20 @@ function initEventListeners() {
             panel.querySelector('.chapter-refine-ok').addEventListener('click', () => {
                 const text = (input && input.value.trim()) || '';
                 if (!text) { UI.showToast('请输入精修要求', 'warning'); return; }
-                self._refineChapter(chapterTitle, currentContent, text, panel, h3);
+                self._refineChapter(chapterTitle, currentContent, text, panel, h3, container);
             });
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     const text = (input && input.value.trim()) || '';
                     if (!text) { UI.showToast('请输入精修要求', 'warning'); return; }
-                    self._refineChapter(chapterTitle, currentContent, text, panel, h3);
+                    self._refineChapter(chapterTitle, currentContent, text, panel, h3, container);
                 }
             });
         },
 
         // 调用后端精修 + 替换章节 DOM + 更新缓存
-        async _refineChapter(chapterTitle, currentContent, followUp, panel, h3) {
+        async _refineChapter(chapterTitle, currentContent, followUp, panel, h3, container) {
             const cached = State.resultCache.solution;
             if (!cached || !cached.answer) return;
             panel.querySelector('.chapter-refine-ok').disabled = true;
@@ -6610,7 +6624,7 @@ function initEventListeners() {
                     });
                 }
                 // 3. 重新渲染整篇方案（章节标题会带按钮，精修结果自动显示）
-                const contentEl = document.getElementById('solution-content');
+                const contentEl = container || document.getElementById('solution-content');
                 if (contentEl) contentEl.innerHTML = UI.renderMarkdown(cached.answer);
                 SolutionChapterRefine.bind();
                 panel.remove();
@@ -7649,6 +7663,45 @@ const FollowUpUI = {
         if (input) input.value = '';
         this.showLoading(true);
         try {
+            // 语法糖：输入 "@第N章 ..." 自动路由到章节精修（避免和整篇追问混用）
+            const chapterMatch = text.match(/^@第(\d+)\s*章\s*(.*)$/);
+            if (chapterMatch) {
+                const idx = parseInt(chapterMatch[1], 10) - 1;
+                const userText = chapterMatch[2].trim() || '精修该章节';
+                const cached = State.resultCache && State.resultCache.solution;
+                if (cached && cached.answer) {
+                    // 解析 ## 章节，按索引匹配
+                    const sections = (cached.answer.match(/^##\s+(.+)$/gm) || []).map(s => s.replace(/^##\s+/, '').trim());
+                    if (idx >= 0 && idx < sections.length) {
+                        const chapterTitle = sections[idx];
+                        const chapterContent = SolutionChapterRefine._extractChapterContent(chapterTitle, cached.answer);
+                        const data = await API.refineChapter(
+                            cached.demand || '', cached.answer, chapterTitle, chapterContent, userText
+                        );
+                        const refined = (data.refined_content || '').trim();
+                        if (refined) {
+                            cached.answer = replaceChapterInMarkdown(cached.answer, chapterTitle, refined);
+                            if (cached.solution_json && Array.isArray(cached.solution_json)) {
+                                cached.solution_json.forEach(ch => {
+                                    if (ch.title && ch.title.trim() === chapterTitle.trim()) ch.content = refined;
+                                });
+                            }
+                            // 重新渲染整篇（章节按钮重新挂载）
+                            const container = document.getElementById('solution-content');
+                            if (container) container.innerHTML = UI.renderMarkdown(cached.answer);
+                            SolutionChapterRefine.bind();
+                            this.currentSolution = cached.answer;  // 同步追问侧缓存
+                            this.history.push({ role: 'ai', content: `已精修第${idx + 1}章「${chapterTitle}」：` + refined });
+                            this.renderHistory();
+                            UI.showToast(`已精修第 ${idx + 1} 章`, 'success');
+                            return;
+                        }
+                    }
+                }
+                UI.showToast(`未找到第 ${idx + 1} 章，请检查章节编号`, 'warning');
+                return;
+            }
+            // 否则按原追问：整篇优化
             const data = await API.refineSolution(
                 this.originalDemand,
                 this.currentSolution,

@@ -1944,7 +1944,7 @@ body::after {
     vertical-align: middle;
     font-family: var(--font-family);
     transition: background var(--transition-fast), color var(--transition-fast);
-    opacity: 0;
+    opacity: 0.55;  /* 默认半透明可见——hover 才完全显示，避免被忽略 */
 }
 .result-content h3:hover .chapter-refine-btn,
 .chapter-refine-btn:hover {
