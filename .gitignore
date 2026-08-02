@@ -297,3 +297,7 @@ UI_OPTIMIZATION_PLAN.md
 
 # Rotated log files (api.log.1 ~ api.log.5 produced by RotatingFileHandler)
 api.log.*
+
+# Local tools / private docs (never push to GitHub)
+.arts/
+面试准备-cloudsol.md
