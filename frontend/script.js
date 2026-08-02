@@ -3617,6 +3617,10 @@ const PageTransition = {
 
     // 切页后统一钩子（所有页面切换都触发，便于做"切回时恢复缓存结果"等）
     _afterSwitch(pageName) {
+        // 切到方案匹配页：从缓存恢复（renderAgentResult 已挂到 window）
+        if (pageName === 'solution') {
+            try { if (window._restoreSolutionFromCache) window._restoreSolutionFromCache(); } catch (e) { console.warn('[PageTransition] 恢复方案结果失败:', e); }
+        }
         // 切到竞品页：从缓存恢复（竞品分析 DOM 可能被异常清空，但缓存完好）
         if (pageName === 'competitor') this._restoreCompetitorResult();
     }
@@ -6456,6 +6460,17 @@ function initEventListeners() {
             setTimeout(() => AchievementUI.showUnlockToast(result.newly_unlocked), 500);
         }
     }
+
+    // 暴露给 PageTransition._afterSwitch 用于切回时从缓存恢复方案结果
+    window._restoreSolutionFromCache = function _restoreSolutionFromCache() {
+        const cached = State.resultCache && State.resultCache.solution;
+        const resultContainer = document.getElementById('solution-result');
+        const resultContent = document.getElementById('solution-content');
+        if (!cached || !cached.answer || !resultContainer || !resultContent) return;
+        if (resultContainer.style.display === 'none' || !resultContent.innerHTML.trim()) {
+            renderAgentResult(cached, cached.demand || '');
+        }
+    };
 
     // ==================== 成本参考卡片（方案成本估算器） ====================
     // 状态挂在 window.__crState，避免与文件其它作用域的 const 冲突
