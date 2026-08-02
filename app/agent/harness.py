@@ -853,6 +853,7 @@ Final Answer: [完整方案]）"""
 
     def _make_result(
         self,
+        answer: str,
         tool_calls: list,
         success: bool,
         paused: bool = False,
