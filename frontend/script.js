@@ -2503,6 +2503,13 @@ const UI = {
         html = html.replace(/^### (.+)$/gm, '<h4 style="color:var(--text-primary,#1D2129);margin:16px 0 8px;">$1</h4>');
         html = html.replace(/^## (.+)$/gm, '<h3 style="color:var(--text-primary,#1D2129);margin:18px 0 10px;">$1</h3>');
         html = html.replace(/^# (.+)$/gm, '<h2 style="color:var(--text-primary,#1D2129);margin:20px 0 12px;">$1</h2>');
+        // 图片兜底（防止 LLM 偶发输出 ![图](url) 被当链接渲染成乱码/外部图）
+        // 渲染成安全占位文本，不加载外部图片（AI 生成的图片 URL 多为假/失效）
+        html = html.replace(/!\[([^\]]*)\]\(([^)]*)\)/g, function (_, alt, url) {
+            const desc = (alt || url || '图片').substring(0, 40);
+            const safe = desc.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return '<span class="md-image-placeholder" title="AI 生成的图片引用已替换为文本占位">📊 ' + safe + '</span>';
+        });
         // 加粗
         html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
         // 斜体
@@ -7629,6 +7636,34 @@ const FollowUpUI = {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     this.sendFollowUp();
+                    return;
+                }
+                // Tab 键：若章节选择器开着，选中高亮项并填入
+                if (e.key === 'Tab' && this._chapterPickerVisible()) {
+                    e.preventDefault();
+                    this._chapterPickerSelect();
+                    return;
+                }
+                // Esc 关闭章节选择器
+                if (e.key === 'Escape' && this._chapterPickerVisible()) {
+                    e.preventDefault();
+                    this._chapterPickerHide();
+                }
+            });
+            // 输入 @ 触发章节选择器（用 selectionStart 判断光标前是否是 @）
+            input.addEventListener('input', () => {
+                const pos = input.selectionStart || 0;
+                const before = input.value.substring(0, pos);
+                if (/@$/.test(before)) {
+                    this._chapterPickerShow(input);
+                } else if (this._chapterPickerVisible()) {
+                    this._chapterPickerHide();
+                }
+            });
+            // 点击空白处关闭
+            document.addEventListener('click', (e) => {
+                if (this._chapterPickerVisible() && !e.target.closest('#follow-up-chapter-picker') && e.target !== input) {
+                    this._chapterPickerHide();
                 }
             });
         }
@@ -7636,6 +7671,78 @@ const FollowUpUI = {
 
         const applyBtn = document.getElementById('apply-refined-btn');
         if (applyBtn) applyBtn.addEventListener('click', () => this.applyRefined());
+    },
+
+    // ===== 章节选择器（输入 @ 弹出，Tab/点击选章节） =====
+    _chapterList: [],
+    _chapterPickIdx: -1,
+
+    _chapterPickerVisible() {
+        return !!document.getElementById('follow-up-chapter-picker');
+    },
+
+    _chapterPickerShow(input) {
+        // 从缓存方案解析 ## 章节
+        const cached = State.resultCache && State.resultCache.solution;
+        if (!cached || !cached.answer) return;
+        const titles = (cached.answer.match(/^##\s+(.+)$/gm) || []).map(s => s.replace(/^##\s+/, '').trim());
+        if (!titles.length) return;
+        this._chapterList = titles;
+        this._chapterPickIdx = 0;
+        // 构建选择器
+        let old = document.getElementById('follow-up-chapter-picker');
+        if (old) old.remove();
+        const picker = document.createElement('div');
+        picker.id = 'follow-up-chapter-picker';
+        picker.className = 'follow-up-chapter-picker';
+        picker.innerHTML =
+            '<div class="fup-picker-tip">选择要精修的章节（Tab 或 点击选中）</div>' +
+            '<div class="fup-picker-list">' + titles.map((t, i) =>
+                `<div class="fup-picker-item${i === 0 ? ' active' : ''}" data-idx="${i}">第${i + 1}章 · ${this.escapeHtml(t)}</div>`
+            ).join('') + '</div>';
+        // 定位：输入框下方
+        const rect = input.getBoundingClientRect();
+        picker.style.position = 'fixed';
+        picker.style.top = (rect.bottom + 6) + 'px';
+        picker.style.left = rect.left + 'px';
+        picker.style.width = Math.min(rect.width, 420) + 'px';
+        document.body.appendChild(picker);
+        // 点击选中
+        const self = this;
+        picker.querySelectorAll('.fup-picker-item').forEach(item => {
+            item.addEventListener('click', () => {
+                self._chapterPickIdx = parseInt(item.dataset.idx, 10);
+                self._chapterPickerSelect();
+            });
+            item.addEventListener('mouseenter', () => {
+                picker.querySelectorAll('.fup-picker-item').forEach(x => x.classList.toggle('active', x === item));
+                self._chapterPickIdx = parseInt(item.dataset.idx, 10);
+            });
+        });
+    },
+
+    _chapterPickerSelect() {
+        const input = document.getElementById('follow-up-input');
+        if (!input) return;
+        const idx = this._chapterPickIdx;
+        if (idx < 0 || idx >= this._chapterList.length) return;
+        // 替换光标处的 @ 为 @第N章（支持输入中段已有文字时）
+        const pos = input.selectionStart || input.value.length;
+        const before = input.value.substring(0, pos);
+        const after = input.value.substring(pos);
+        // 把光标前的末尾 @（或 @xxx）替换为 @第N章
+        const newBefore = before.replace(/@\S*$/, `@第${idx + 1}章 `);
+        input.value = newBefore + after;
+        const newPos = newBefore.length;
+        input.setSelectionRange(newPos, newPos);
+        input.focus();
+        this._chapterPickerHide();
+    },
+
+    _chapterPickerHide() {
+        const p = document.getElementById('follow-up-chapter-picker');
+        if (p) p.remove();
+        this._chapterPickIdx = -1;
     },
 
     show(originalDemand, currentSolution, historyId) {
