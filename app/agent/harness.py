@@ -50,7 +50,41 @@ REACT_SYSTEM_PROMPT_BASE = """你是一个智能解决方案匹配助手，帮�
    - 如果关键信息齐全 → 调用 analyze_demand 分析需求，再 search_kb 检索，必要时 search_competitor 对比，最后 Final Answer。
 2. 根据分析结果，调用 search_kb 检索华为云方案（换关键词可多次调用）
 3. 如果用户提到竞品，调用 search_competitor 进行对比
-4. 收集足够信息后，直接输出 Final Answer 即完整方案报告
+4. 收集足够信息后，输出 Final Answer（内容依意图而定，见下方「意图识别与工具选择」）
+
+## 意图识别与工具选择（关键：先判意图，再选工具链）
+
+请先判断用户输入的主意图，再选择对应工具链：
+
+【A. 方案推荐】用户想要解决方案 / 架构建议 / 技术选型（未要求生成文件）
+  特征词：方案、解决、架构、推荐、怎么上云、xx行业云、怎么做、规划
+  工具链：analyze_demand → search_kb → （提及竞品时）search_competitor → Final Answer
+  输出：完整方案报告（系统会增强为结构化方案）
+
+【B. 竞品对比】用户要对比不同厂商的优劣
+  特征词：对比、vs、竞品、阿里云、腾讯云、AWS、谁好、优劣、差异
+  工具链：search_competitor → Final Answer
+  输出：对比分析 + 关键维度对比
+
+【C. 报价 / 价目】用户问价格、费用、成本、预算
+  特征词：多少钱、报价、价格、费用、成本、TCO、预算、包月、包年
+  工具链：query_pricing → （需精确多产品测算时）run_code → Final Answer
+  输出：价目清单 + （可选）测算结果
+
+【D. 文件生成】用户明确要求生成文件（Excel / PPT / Word / 图表 / 报表 / 大纲文件）
+  特征词：生成、做、写、导出、Excel、PPT、报表、xlsx、pptx、图表、大纲文件
+  ★ 工具链：直接 run_code（写代码生成文件），**不要调用 search_kb / search_competitor**
+  ★ 输出：简要说明已生成的文件名、内容、如何下载（不要写完整 14 章方案报告）
+  ★ 若用户同时要方案又要文件（如"做个方案并导出Word"）：
+    先走 A 链出方案，再追加 run_code 导出该方案为文件
+
+【E. 混合意图】同时包含多种（如"做个政务云方案，对比阿里云，算3年TCO"）
+  工具链：按 A→B→C 顺序分多轮调用，最后整合到 Final Answer
+
+注意：
+- 意图 D 的纯文件生成请求，**禁止先调 search_kb**（那只是方案推荐意图才做的）
+- 同一轮只输出一个 Action；混合意图用多轮逐步完成
+- 若不确定意图，优先按方案推荐（A）处理
 
 ## 可用工具
 {tools}
@@ -79,7 +113,7 @@ Clarify: [{{"question": "这个项目的主要业务领域是？", "options": ["
 - 如果工具返回错误，尝试调整参数重试一次，再失败就基于已有信息回答
 - 最多执行 {max_steps} 步
 - 不要调用 generate_report 工具——你直接用 Final Answer 输出报告即可
-- 【代码沙箱 run_code】当需要**精确数值计算**（如三年 TCO、ROI、成本对比）或**生成真实文件**（Excel 报表/数据表/PPT 图表）时，调用 run_code 在隔离沙箱运行 Python。可用库：pandas、openpyxl、python-pptx（无需联网）。脚本须独立可跑，结果用 openpyxl/pptx 写入当前目录文件，关键结论用 print() 输出；严禁联网。执行过程会实时回传日志，报错请自行修改脚本重试（最多 2 次）。生成文件后在 Final Answer 中告知用户可下载。
+- 【代码沙箱 run_code】当需要**精确数值计算**（如三年 TCO、ROI、成本对比）或**生成真实文件**（Excel 报表/数据表/PPT 图表）时，调用 run_code 在隔离沙箱运行 Python。可用库：pandas、openpyxl、python-pptx（无需联网）。脚本须独立可跑，结果用 openpyxl/pptx 写入当前目录文件，关键结论用 print() 输出；严禁联网。执行过程会实时回传日志，报错请自行修改脚本重试（最多 2 次）。生成文件后在 Final Answer 中告知用户可下载。**注意：当用户只说要生成文件（如「生成PPT大纲」「做一份Excel报表」）时，直接调用 run_code 生成，不要先检索知识库（那是方案推荐意图才做的）。**
 - 【智能跳过澄清】如果用户原始需求已经包含以下 **全部 3 项**信息，说明需求足够详细，**请直接调用工具链（analyze_demand → search_kb → Final Answer），不要再用 Clarify 提问**：
   ① 行业或业务领域（如「制造」「政务」「零售」等大类即可，不需要精确到细分）
   ② 核心业务场景或目标（如「设备预测性维护」「数据上云」「智慧园区管理」）
@@ -121,7 +155,7 @@ class AgentHarness:
         self,
         tools: ToolRegistry,
         memory: ConversationMemory,
-        max_steps: int = 8,
+        max_steps: int = 12,
         timeout: float = 120.0,
         verbose: bool = True,
     ):
@@ -287,6 +321,30 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                         "step": self._step_count,
                         "elapsed": round(time.time() - self._start_time, 2),
                     })
+                    # 方案意图：发 solution_card 事件（前端渲染方案摘要卡，嵌入对话流）
+                    if event_callback:
+                        _used_kb = any(
+                            tc.get("tool") in ("analyze_demand", "search_kb")
+                            for tc in tool_calls_log
+                        )
+                        if _used_kb:
+                            _industry = ""
+                            for tc in tool_calls_log:
+                                if tc.get("tool") == "analyze_demand":
+                                    try:
+                                        _d = json.loads(tc.get("result", "{}"))
+                                        _industry = _d.get("industry", "")
+                                    except Exception:
+                                        pass
+                            try:
+                                await event_callback({
+                                    "type": "solution_card",
+                                    "industry": _industry,
+                                    "preview": final_answer[:200],
+                                    "word_count": len(final_answer),
+                                })
+                            except Exception as e:
+                                logger.warning(f"[solution_card] 事件回调失败: {e}")
                     return self._make_result(final_answer, tool_calls_log, success=True)
 
                 elif parse_result["type"] == "clarify":
