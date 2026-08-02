@@ -257,6 +257,22 @@ async def _tool_search_competitor(competitor: str, industry: str = "") -> str:
                 "results": []
             }, ensure_ascii=False, indent=2)
 
+        # 发 competitor_table 事件（前端渲染竞品对比卡片，嵌入 Agent 对话流）
+        cb = get_agent_event_callback()
+        if cb:
+            try:
+                await cb({
+                    "type": "competitor_table",
+                    "competitor": competitor,
+                    "industry": industry,
+                    "huawei_count": len(hw_docs),
+                    "competitor_count": len(comp_docs),
+                    "huawei_snippet": (hw_docs[0].page_content[:200] if hw_docs else ""),
+                    "competitor_snippet": (comp_docs[0].page_content[:200] if comp_docs else ""),
+                })
+            except Exception as e:
+                logger.warning(f"[search_competitor] 事件回调失败: {e}")
+
         return json.dumps({
             "status": "ok",
             "competitor": competitor,
