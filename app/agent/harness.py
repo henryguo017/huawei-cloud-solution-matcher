@@ -79,6 +79,7 @@ Clarify: [{{"question": "这个项目的主要业务领域是？", "options": ["
 - 如果工具返回错误，尝试调整参数重试一次，再失败就基于已有信息回答
 - 最多执行 {max_steps} 步
 - 不要调用 generate_report 工具——你直接用 Final Answer 输出报告即可
+- 【代码沙箱 run_code】当需要**精确数值计算**（如三年 TCO、ROI、成本对比）或**生成真实文件**（Excel 报表/数据表/PPT 图表）时，调用 run_code 在隔离沙箱运行 Python。可用库：pandas、openpyxl、python-pptx（无需联网）。脚本须独立可跑，结果用 openpyxl/pptx 写入当前目录文件，关键结论用 print() 输出；严禁联网。执行过程会实时回传日志，报错请自行修改脚本重试（最多 2 次）。生成文件后在 Final Answer 中告知用户可下载。
 - 【智能跳过澄清】如果用户原始需求已经包含以下 **全部 3 项**信息，说明需求足够详细，**请直接调用工具链（analyze_demand → search_kb → Final Answer），不要再用 Clarify 提问**：
   ① 行业或业务领域（如「制造」「政务」「零售」等大类即可，不需要精确到细分）
   ② 核心业务场景或目标（如「设备预测性维护」「数据上云」「智慧园区管理」）
@@ -173,6 +174,7 @@ class AgentHarness:
         self._step_count = 0
         self._start_time = time.time()
         self._logs = []
+        self._event_callback = event_callback  # 供 _execute_tool 注入工具上下文
         tool_calls_log = []
         self._clarify_round = 0
 
@@ -435,6 +437,13 @@ Final Answer: [完整方案]）"""
         tool = self.tools.get(tool_name)
         if not tool:
             return f"错误：工具 '{tool_name}' 不存在。可用工具：{self.tools.get_tool_names()}"
+
+        # 注入事件回调到工具上下文（如 run_code 沙箱需要实时透传 stdout）
+        try:
+            from app.agent.tools import set_agent_event_callback
+            set_agent_event_callback(getattr(self, "_event_callback", None))
+        except Exception:
+            pass
 
         try:
             return await tool.execute(**tool_input)

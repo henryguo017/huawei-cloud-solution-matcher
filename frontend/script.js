@@ -6362,6 +6362,7 @@ function initEventListeners() {
             
             // 统一渲染结果（首轮与澄清续跑共用；含暂停/过期守卫）
             renderAgentResult(result, demand);
+            injectAgentArtifacts();  // 把沙箱生成的产物卡片挂到结果区（S0）
         } catch (error) {
             if (error.name === 'AbortError') {
                 // 用户主动取消，不报错
@@ -6394,6 +6395,78 @@ function initEventListeners() {
         return 2;
     }
 
+    // ===== Agent 代码沙箱（S0）：raw 执行流 + 产物卡片 =====
+    const _esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    function _ensureArtifactStyles() {
+        if (document.getElementById('agent-artifact-styles')) return;
+        const st = document.createElement('style');
+        st.id = 'agent-artifact-styles';
+        st.textContent = `
+.think-text code.exec-cmd, .think-text code.exec-line { display:block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; white-space:pre-wrap; word-break:break-all; color:#0b3d0b; background:#f3f7f3; padding:2px 6px; border-radius:4px; }
+.think-text code.exec-line.exec-err { color:#9b1c1c; background:#fdf0f0; }
+.artifact-entry { background:#0d1117; border-radius:8px; margin:6px 0; padding:0; }
+.agent-artifacts-box { margin-top:18px; padding:14px 16px; border:1px solid var(--border-color,#e3e6ea); border-radius:12px; background:var(--card-bg,#fafbfc); }
+.artifacts-title { margin:0 0 10px; font-size:15px; color:var(--text,#1a1a1a); }
+.artifact-card { display:flex; align-items:center; gap:12px; padding:10px 12px; margin:8px 0; border:1px solid #e3e6ea; border-radius:10px; background:#fff; }
+.artifact-info { flex:1; min-width:0; }
+.artifact-name { font-weight:600; color:#1a1a1a; word-break:break-all; }
+.artifact-meta { font-size:12px; color:#6b7280; margin-top:2px; }
+.artifact-dl { flex:none; padding:6px 14px; border-radius:8px; background:#C7000B; color:#fff; text-decoration:none; font-size:13px; font-weight:600; }
+.artifact-dl:hover { opacity:.9; }
+`;
+        document.head.appendChild(st);
+    }
+
+    function appendArtifactCard(art) {
+        _ensureArtifactStyles();
+        const link = `/api/agent/artifact?path=${encodeURIComponent(art.path)}`;
+        const cardHTML =
+            `<div class="artifact-info"><div class="artifact-name">${_esc(art.name)}</div>` +
+            `<div class="artifact-meta">${(art.kind || '').toUpperCase()} · ${((art.size || 0) / 1024).toFixed(1)} KB</div></div>` +
+            `<a class="artifact-dl" href="${link}" target="_blank" download>下载</a>`;
+        // 实时：先出现在思考流面板（看它产出文件）
+        const ts = document.getElementById('thinking-entries');
+        if (ts) {
+            const d = document.createElement('div');
+            d.className = 'think-entry artifact-entry';
+            d.innerHTML = cardHTML;
+            ts.appendChild(d);
+            ts.scrollTop = ts.scrollHeight;
+        }
+        window.__agentArtifacts = window.__agentArtifacts || [];
+        if (!window.__agentArtifacts.some(a => a.path === art.path)) {
+            window.__agentArtifacts.push(art);
+        }
+    }
+
+    function injectAgentArtifacts() {
+        const arts = window.__agentArtifacts || [];
+        if (!arts.length) return;
+        const content = document.getElementById('solution-content');
+        if (!content) return;
+        let box = document.getElementById('agent-artifacts-box');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'agent-artifacts-box';
+            box.className = 'agent-artifacts-box';
+            box.innerHTML = '<div class="artifacts-title">📎 Agent 生成的产物</div>';
+            content.appendChild(box);
+        }
+        arts.forEach(art => {
+            if (box.querySelector(`[data-art="${_esc(art.path)}"]`)) return;
+            const link = `/api/agent/artifact?path=${encodeURIComponent(art.path)}`;
+            const card = document.createElement('div');
+            card.className = 'artifact-card';
+            card.setAttribute('data-art', art.path);
+            card.innerHTML =
+                `<div class="artifact-info"><div class="artifact-name">${_esc(art.name)}</div>` +
+                `<div class="artifact-meta">${(art.kind || '').toUpperCase()} · ${((art.size || 0) / 1024).toFixed(1)} KB</div></div>` +
+                `<a class="artifact-dl" href="${link}" target="_blank" download>下载</a>`;
+            box.appendChild(card);
+        });
+    }
+
     // 处理 SSE 进度事件：更新思考流面板 + 进度条（首轮与澄清续跑共用）
     function applyAgentProgressEvents(event) {
         if (!event || !event.type) return;
@@ -6412,6 +6485,7 @@ function initEventListeners() {
         switch (event.type) {
             case 'step':
                 if (tsBadge) tsBadge.textContent = `Step ${event.step}`;
+                window.__agentArtifacts = [];  // 新一轮开始，清空上次产物
                 break;
             case 'thought':
                 addThinkEntry('thought', 'think', '<svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg>', '思考', event.text || '');
@@ -6426,6 +6500,19 @@ function initEventListeners() {
             case 'final':
                 MatchProgress.setStep(2);
                 addThinkEntry('final', 'final', '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>', '完成', '方案生成完成');
+                break;
+            // ===== S0 代码沙箱：raw 执行流（对标 Codex「看它干活」）=====
+            case 'exec_cmd':
+                addThinkEntry('exec', 'tool', '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>', '运行代码', `<code class="exec-cmd">${_esc(event.cmd || '')}</code>`);
+                break;
+            case 'exec_stdout':
+                addThinkEntry('exec', 'tool', '<svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>', '输出', `<code class="exec-line">${_esc(event.line || '')}</code>`);
+                break;
+            case 'exec_stderr':
+                addThinkEntry('error', 'error', '<svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg>', '错误', `<code class="exec-line exec-err">${_esc(event.line || '')}</code>`);
+                break;
+            case 'file_created':
+                appendArtifactCard(event);
                 break;
             default:
                 break;
@@ -7111,6 +7198,7 @@ function initEventListeners() {
             }
 
             renderAgentResult(result, State.lastAgentDemand);
+            injectAgentArtifacts();  // 把沙箱生成的产物卡片挂到结果区（S0）
         } catch (error) {
             if (error.name === 'AbortError') {
                 const ts = document.getElementById('thinking-stream');

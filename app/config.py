@@ -157,6 +157,19 @@ COMPETITOR_DIRECTORY = _resolve_data_path(os.getenv("COMPETITOR_DIRECTORY", os.p
 # 用户独立知识库根目录（注册时自动创建 data/user_docs/{user_id}/ 子目录）
 USER_DOCS_BASE_DIR = _resolve_data_path(os.getenv("USER_DOCS_BASE_DIR", os.path.join(BASE_DIR, "data", "user_docs")))
 
+# ==================== Agent 代码沙箱（S0：subprocess 隔离运行用户代码） ====================
+# 2026-08-02 新增：让 Agent 在隔离沙箱里跑 Python 生成真实 PPTX/Excel（售前垂直 Codex 第一步）。
+# 沙箱 = data/user_docs/{uid}/generated_solutions/sb_{uuid}/，复用 file_security.safe_resolve 做 jail。
+# 生产以 www-data 低权限运行（subprocess 继承），Linux 上用 preexec_fn 设 RLIMIT + unshare 禁网。
+SANDBOX_ENABLED = os.getenv("SANDBOX_ENABLED", "true").lower() == "true"
+SANDBOX_TIMEOUT = float(os.getenv("SANDBOX_TIMEOUT", "30"))          # 单次执行硬超时（秒）
+SANDBOX_MAX_OUTPUT = int(os.getenv("SANDBOX_MAX_OUTPUT", "8192"))    # 单条 stdout/stderr 截断（字节）
+SANDBOX_NET_OFF = os.getenv("SANDBOX_NET_OFF", "true").lower() == "true"  # Linux 禁网（unshare CLONE_NEWNET）
+# 资源硬限（仅 Linux preexec_fn 生效；Windows 开发环境自动跳过）
+SANDBOX_CPU = int(os.getenv("SANDBOX_CPU", "30"))                    # CPU 时间秒
+SANDBOX_MEM = int(os.getenv("SANDBOX_MEM", "536870912"))             # 地址空间上限 512MB
+SANDBOX_NPROC = int(os.getenv("SANDBOX_NPROC", "64"))                # 进程数上限（防 fork bomb）
+
 # ==================== 支持的行业列表 ====================
 SUPPORTED_INDUSTRIES = [
     "智慧农业",

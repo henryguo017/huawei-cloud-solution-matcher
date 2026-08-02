@@ -12,11 +12,24 @@ import os
 import json
 import asyncio
 import logging
+import contextvars
 from typing import Any, Callable, Dict, List, Optional
 
 from app.services.knowledge_base import get_kb_user_context
 
 logger = logging.getLogger(__name__)
+
+# Agent 事件回调上下文（harness 在 _execute_tool 前注入，工具内部读取，避免改动所有工具的 execute 签名）
+_AGENT_EVENT_CB: contextvars.ContextVar = contextvars.ContextVar("agent_event_cb", default=None)
+
+
+def set_agent_event_callback(cb) -> None:
+    if cb is not None:
+        _AGENT_EVENT_CB.set(cb)
+
+
+def get_agent_event_callback():
+    return _AGENT_EVENT_CB.get()
 
 
 def _get_kb():
@@ -338,6 +351,66 @@ def USER_DOCS_BASE_SAFE():
 
 
 # ============================================================
+# S0 新增：代码沙箱工具（让 Agent 在隔离环境跑 Python 生成真实产物）
+# ============================================================
+
+def _format_sandbox_observation(result: Dict[str, Any]) -> str:
+    """把沙箱执行结果整理成给 LLM 看的 Observation 字符串。"""
+    if not result.get("ok"):
+        err = result.get("error", "未知错误")
+        stderr = result.get("stderr", "")[:1500]
+        return json.dumps({
+            "status": "error",
+            "error": err,
+            "stderr_tail": stderr,
+            "message": "代码执行失败。请检查报错、修改脚本后重新调用 run_code。",
+        }, ensure_ascii=False, indent=2)
+
+    files = result.get("files", [])
+    summary = {
+        "status": "ok",
+        "stdout": result.get("stdout", "")[:1500],
+        "files": [
+            {"name": f["name"], "kind": f["kind"], "size": f["size"],
+             "download_path": f["path"]}
+            for f in files
+        ],
+    }
+    if files:
+        summary["message"] = (
+            "已生成真实文件。请在 Final Answer 中告知用户可在界面下载，"
+            "并列出文件名与用途；下载地址由前端根据 download_path 自动生成。"
+        )
+    else:
+        summary["message"] = "代码执行成功但未生成文件（仅 print 了计算结果）。"
+    return json.dumps(summary, ensure_ascii=False, indent=2)
+
+
+async def _tool_run_code(code: str) -> str:
+    """
+    工具: run_code
+    作用: 在隔离沙箱里运行 Python 代码，生成真实文件（Excel/PPT 等）或做精确计算。
+    实现: 调用 sandbox.run_code，经 file_security jail 隔离；user_id 取自 kb 上下文，
+          event_callback 取自 contextvar（由 harness 注入），实现 raw 流式透传。
+    """
+    from app.agent.sandbox import run_code
+    from app.services.knowledge_base import get_kb_user_context
+
+    user_id = get_kb_user_context()
+    if user_id <= 0:
+        return json.dumps({"status": "error", "error": "未登录用户不可使用代码沙箱"}, ensure_ascii=False)
+
+    event_cb = get_agent_event_callback()
+    try:
+        result = await run_code(code=code, user_id=user_id, event_callback=event_cb)
+    except Exception as e:
+        logger.error(f"[run_code] 沙箱调用异常: {e}")
+        return json.dumps({"status": "error", "error": str(e)}, ensure_ascii=False)
+
+    return _format_sandbox_observation(result)
+
+
+# ============================================================
 # 工厂函数：创建默认工具集
 # ============================================================
 
@@ -431,6 +504,30 @@ def create_default_tools() -> ToolRegistry:
             }
         },
         func=_tool_list_dir,
+    ))
+
+    # 6. run_code — 代码沙箱（S0：让 Agent 动手生成真实产物）
+    registry.register(Tool(
+        name="run_code",
+        description=(
+            "在隔离沙箱里运行 Python 代码，用于精确计算（如 TCO/ROI 测算、成本对比）"
+            "或生成真实文件（Excel 报表、数据表、PPT 等）。"
+            "可用库：pandas、openpyxl、python-pptx（无需联网）。"
+            "规则：脚本须独立可跑；结果用 openpyxl/pptx 写入当前工作目录的文件；"
+            "关键结论用 print() 输出到 stdout 作为摘要；严禁联网（不要 urllib/requests 外部请求）。"
+            "执行过程的 stdout/stderr 会实时回传，报错请自行修改脚本后重试。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": "要执行的完整 Python 代码（字符串）。例如用 openpyxl 生成 cost.xlsx 并 print 总成本分项。"
+                }
+            },
+            "required": ["code"]
+        },
+        func=_tool_run_code,
     ))
 
     return registry

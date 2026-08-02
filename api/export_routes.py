@@ -4,7 +4,9 @@ from api.models import ExportRequest
 from app.models.export_models import ExportResult, TaskStatus
 from app.services.report_generator import ReportGeneratorService
 from api.dependencies import rate_limit
+from api.auth_dependencies import require_login
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -125,4 +127,40 @@ async def download_report(task_id: str):
         path=file_path,
         filename=task.file_name,
         media_type="application/octet-stream"
+    )
+
+
+# ============================================================
+# Agent 代码沙箱产物下载（S0）
+# ============================================================
+# 沙箱生成的 .pptx/.xlsx 等落在 data/user_docs/{uid}/generated_solutions/sb_*/ 内，
+# 经 file_security.safe_resolve 校验确保只落在当前登录用户的根目录内（防越权/穿越）。
+_ALLOWED_ARTIFACT_EXTS = (".pptx", ".xlsx", ".png", ".csv", ".json", ".txt", ".md", ".html")
+
+
+@router.get("/agent/artifact", tags=["Agent"])
+async def agent_artifact(path: str, user: dict = Depends(require_login)):
+    """
+    下载 Agent 沙箱生成的产物文件。
+
+    - **path**: 相对路径（如 generated_solutions/sb_xxx/cost.xlsx），由 run_code 事件回传。
+      经 safe_resolve 强制落在当前用户 uid 根目录内，杜绝越权访问他人文件。
+    """
+    from app.agent.file_security import safe_resolve
+
+    try:
+        abs_path = safe_resolve(user["id"], path)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"非法路径: {e}")
+
+    if not os.path.isfile(abs_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在或已清理")
+
+    if not abs_path.lower().endswith(_ALLOWED_ARTIFACT_EXTS):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不支持的文件类型")
+
+    return FileResponse(
+        path=abs_path,
+        filename=os.path.basename(abs_path),
+        media_type="application/octet-stream",
     )
