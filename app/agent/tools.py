@@ -269,6 +269,106 @@ async def _tool_search_competitor(competitor: str, industry: str = "") -> str:
         return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
 
+async def _tool_query_pricing(query: str = "") -> str:
+    """
+    工具: query_pricing
+    作用: 查询华为云产品参考价目（按产品名/规格/行业关键词模糊匹配）
+    实现: 读取 data/pricing_reference.json 的 all_items 扁平列表；
+          命中后通过 event_callback 发 pricing_info 事件供前端渲染价目卡片。
+    """
+    # 优先复用 routes 的带缓存加载器；失败则直接读 JSON 兜底
+    try:
+        from api.routes import _load_pricing_reference
+        data = _load_pricing_reference()
+    except Exception:
+        import json as _json
+        _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        _path = os.path.join(_root, "data", "pricing_reference.json")
+        try:
+            with open(_path, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+        except Exception as e:
+            return json.dumps({"status": "error", "message": f"价目表读取失败: {e}"}, ensure_ascii=False)
+
+    all_items = data.get("all_items") or []
+    if not all_items:
+        # 旧版 JSON 兼容：遍历行业 profiles + 商务定价项
+        for prof in data.get("profiles", {}).values():
+            all_items.extend(prof.get("items", []))
+        all_items.extend(data.get("business_only_products", []))
+
+    if not all_items:
+        return json.dumps({
+            "status": "empty",
+            "message": "价目表为空，无法查询价格。",
+            "items": []
+        }, ensure_ascii=False)
+
+    q = (query or "").strip().lower()
+    matched = []
+    for it in all_items:
+        if isinstance(it, dict):
+            name = it.get("product", "")
+            spec = it.get("spec", "")
+        else:
+            name = str(it)
+            spec = ""
+        if not q or q in name.lower() or q in spec.lower():
+            matched.append({
+                "product": name,
+                "spec": spec,
+                "billing": it.get("billing", "") if isinstance(it, dict) else "",
+                "unit_label": it.get("unit_label", "") if isinstance(it, dict) else "",
+                "ref_price": it.get("ref_price", 0) if isinstance(it, dict) else 0,
+                "free": bool(it.get("free", False)) if isinstance(it, dict) else False,
+                "business_only": bool(it.get("business_only", False)) if isinstance(it, dict) else False,
+                "note": it.get("note", "") if isinstance(it, dict) else "",
+            })
+
+    # 无 query 时返回前 10 条作为概览；有 query 时最多 8 条
+    matched = (matched[:10] if not q else matched[:8])
+
+    if not matched:
+        return json.dumps({
+            "status": "no_match",
+            "query": query,
+            "message": (
+                f"未找到与「{query}」匹配的价目产品。可尝试更宽泛的产品名"
+                "（如：ECS、OBS、CDN、数据库、带宽）。"
+            ),
+            "items": []
+        }, ensure_ascii=False)
+
+    # 发 pricing_info 事件（前端渲染价目卡片，嵌入 Agent 对话流）
+    cb = get_agent_event_callback()
+    if cb:
+        try:
+            await cb({
+                "type": "pricing_info",
+                "query": query,
+                "items": [{
+                    "product": m["product"],
+                    "spec": m["spec"],
+                    "billing": m["billing"],
+                    "unit_label": m["unit_label"],
+                    "ref_price": m["ref_price"],
+                    "free": m["free"],
+                    "business_only": m["business_only"],
+                    "note": m["note"],
+                } for m in matched],
+            })
+        except Exception as e:
+            logger.warning(f"[query_pricing] 事件回调失败: {e}")
+
+    return json.dumps({
+        "status": "ok",
+        "query": query,
+        "total": len(matched),
+        "items": matched,
+        "message": "已找到价目信息。请在 Final Answer 中列出具体产品、规格、计费方式与参考价格。"
+    }, ensure_ascii=False, indent=2)
+
+
 # ============================================================
 # 阶段1 新增：文件交互工具（读取/落盘/列举）
 # ============================================================
@@ -528,6 +628,30 @@ def create_default_tools() -> ToolRegistry:
             "required": ["code"]
         },
         func=_tool_run_code,
+    ))
+
+    # 7. query_pricing — 价目查询（S0.5 统一 Agent 新增能力）
+    registry.register(Tool(
+        name="query_pricing",
+        description=(
+            "查询华为云产品的参考价格与计费方式。当用户询问价格、费用、成本、报价、"
+            "包月/包年费用、预算时调用。输入为产品名或价格相关关键词"
+            "（如 'ECS'、'OBS存储'、'CDN'、'云数据库'、'带宽'）。"
+            "返回匹配产品的规格、计费方式、参考价格（免费产品标注免费，"
+            "商务报价产品提示咨询华为云销售）。如需多产品总成本精确测算，"
+            "可结合 run_code 调用。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "产品名或价格相关关键词，如 'ECS'、'OBS'、'CDN流量'、'云数据库'"
+                }
+            },
+            "required": ["query"]
+        },
+        func=_tool_query_pricing,
     ))
 
     return registry
