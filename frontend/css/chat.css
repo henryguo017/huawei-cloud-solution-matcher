@@ -399,6 +399,40 @@
     overflow-y: auto;
     flex: 1;
 }
+
+/* ---- M3 侧边栏精简：分区标签 + 工作区折叠 ---- */
+.sidebar-section-label {
+    font-size: 11px;
+    color: var(--text-muted, #8890A4);
+    padding: 10px 16px 4px;
+    letter-spacing: 1px;
+}
+.sidebar-workspace {
+    margin-top: 2px;
+    border-top: 1px dashed var(--border-color, rgba(0,0,0,.08));
+}
+.sidebar-workspace-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--text-secondary, #4A5067);
+    cursor: pointer;
+    user-select: none;
+}
+.sidebar-workspace-toggle:hover { color: var(--primary-color, #C7000B); }
+.sidebar-workspace-toggle:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+.ws-arrow { font-size: 10px; transition: transform .15s; }
+.sidebar-workspace[open] .ws-arrow { transform: rotate(180deg); }
+.sidebar-workspace .sidebar-item.ws-item {
+    padding-left: 28px;
+}
+
 @media (max-width: 768px) {
     .chat-sidebar { display: none; }
 }

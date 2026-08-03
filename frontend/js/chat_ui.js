@@ -587,6 +587,23 @@
         // M2：加载会话列表
         loadConversations();
 
+        // M3：首次进入提示（竞品/历史/客户已并入对话）
+        try {
+            if (!localStorage.getItem('chat_ui_hint_shown')) {
+                setTimeout(() => {
+                    try {
+                        const box = document.createElement('div');
+                        box.id = 'chat-hint-toast';
+                        box.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.82);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;max-width:90vw;box-shadow:0 4px 16px rgba(0,0,0,.3);';
+                        box.textContent = '💬 竞品分析/历史记录/客户管理已并入对话窗口——直接说出需求即可，如「对比华为云和阿里云」「我最近做过哪些方案」「记个客户」。老功能在工作区▾里可找。';
+                        document.body.appendChild(box);
+                        setTimeout(() => box.remove(), 4000);
+                    } catch (e) { /* ignore */ }
+                }, 800);
+                localStorage.setItem('chat_ui_hint_shown', '1');
+            }
+        } catch (e) { /* ignore */ }
+
         // 暴露全局（供 script.js 或调试使用）
         window.ChatUI = {
             send: (t) => send(t),
