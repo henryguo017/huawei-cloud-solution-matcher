@@ -6168,6 +6168,10 @@ function initEventListeners() {
 
         // 客户档案栏：三模式通用，登录后始终显示并加载
         ensureClientBar();
+        // D1 轻量改造：Agent 模式下隐藏客户档案栏（客户管理改由对话完成——manage_client 工具），
+        // 输入区更聚焦更像对话；标准/向导模式恢复显示
+        const clientBar = document.getElementById('client-bar');
+        if (clientBar) clientBar.style.display = (newMode === 'agent') ? 'none' : (AuthManager.isLoggedIn() ? '' : 'none');
 
         // 向导模式的显示/隐藏
         const demandInput = document.getElementById('demand-input');
@@ -6456,6 +6460,13 @@ function initEventListeners() {
 .sol-preview { font-size:13px; color:#1a1a1a; white-space:pre-wrap; word-break:break-word; }
 .sol-meta { font-size:12px; color:#6b7280; margin-top:2px; }
 .agent-clear-chat-btn { float:right; font-size:12px; padding:2px 10px; border-radius:6px; }
+.hist-card { padding:8px 12px; margin:6px 0; border:1px solid #e3e6ea; border-left:3px solid #1E6FD9; border-radius:8px; background:#f4f8fd; }
+.hist-row { display:flex; justify-content:space-between; gap:10px; padding:3px 0; font-size:13px; }
+.hist-title { font-weight:600; color:#1a1a1a; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hist-time { color:#6b7280; font-size:12px; white-space:nowrap; }
+.hist-ver { color:#1E6FD9; font-size:12px; white-space:nowrap; }
+.export-card { padding:8px 12px; margin:6px 0; border:1px solid #e3e6ea; border-left:3px solid #0F6E56; border-radius:8px; background:#f1faf5; }
+.export-name { font-size:13px; color:#1a1a1a; margin:4px 0; word-break:break-all; }
 `;
         document.head.appendChild(st);
     }
@@ -6526,6 +6537,41 @@ function initEventListeners() {
         const d = document.createElement('div');
         d.className = 'think-entry sol-card';
         d.innerHTML = `${ind}<div class="sol-preview">${_esc((ev.preview || '').slice(0, 160))}</div>${meta}`;
+        ts.appendChild(d);
+        ts.scrollTop = ts.scrollHeight;
+    }
+
+    // M2：历史方案列表卡片（蓝左条）
+    function appendHistoryCard(ev) {
+        _ensureArtifactStyles();
+        const ts = document.getElementById('thinking-entries');
+        if (!ts) return;
+        const items = (ev.items || []).slice(0, 10);
+        if (!items.length) return;
+        const rows = items.map(it => {
+            const title = it.title || it.demand_text || ('方案 #' + it.id);
+            const t = it.created_at ? `<span class="hist-time">${_esc(String(it.created_at).slice(0, 16))}</span>` : '';
+            const v = it.version > 1 ? `<span class="hist-ver">v${it.version}${it.is_final ? ' · 已定稿' : ''}</span>` : '';
+            return `<div class="hist-row"><span class="hist-title">${_esc(title)}</span>${t}${v}</div>`;
+        }).join('');
+        const d = document.createElement('div');
+        d.className = 'think-entry hist-card';
+        d.innerHTML = `<div class="comp-title">📋 我的历史方案（${ev.total || items.length}）</div><div class="hist-list">${rows}</div>`;
+        ts.appendChild(d);
+        ts.scrollTop = ts.scrollHeight;
+    }
+
+    // M2：导出就绪卡片（绿左条，带下载链接）
+    function appendExportCard(ev) {
+        _ensureArtifactStyles();
+        const ts = document.getElementById('thinking-entries');
+        if (!ts) return;
+        const link = ev.download_url || '';
+        const d = document.createElement('div');
+        d.className = 'think-entry export-card';
+        d.innerHTML = `<div class="comp-title">📄 报告已生成</div>` +
+            `<div class="export-name">${_esc(ev.file_name || '报告文件')}</div>` +
+            (link ? `<a class="artifact-dl" href="${_esc(link)}" target="_blank" download>下载报告</a>` : '');
         ts.appendChild(d);
         ts.scrollTop = ts.scrollHeight;
     }
@@ -6613,6 +6659,13 @@ function initEventListeners() {
                 break;
             case 'solution_card':
                 appendSolutionCard(event);
+                break;
+            // ===== M2 平台操作：历史列表 / 导出就绪 卡片 =====
+            case 'history_list':
+                appendHistoryCard(event);
+                break;
+            case 'export_ready':
+                appendExportCard(event);
                 break;
             default:
                 break;
@@ -6721,8 +6774,13 @@ function initEventListeners() {
         const favName = (demand || '方案匹配结果').substring(0, 50);
         FavoriteManager._updateResultBtn('fav-solution-btn', favName);
 
-        // 成本参考卡片：按行业拉公开价目骨架，渲染可编辑 BOM
-        renderCostReference(result);
+        // 成本参考卡片：仅「方案类」结果（有 solution_json）才渲染；竞品/价目/文件/问答不出（F1）
+        if (result.solution_json) {
+            renderCostReference(result);
+        } else {
+            const _crCard = document.getElementById('cost-reference-card');
+            if (_crCard) _crCard.style.display = 'none';
+        }
 
         MatchProgress.success('匹配完成！');
         UI.showToast('匹配完成！', 'success');
@@ -8715,10 +8773,12 @@ function init() {
         }
 
         initEventListeners();
-        // 清空对话按钮：默认 Agent 模式显示（F2）
+        // D1 轻量：默认 Agent 模式——清空对话按钮显示 + 隐藏客户档案栏（对话式管理）
         (function () {
             const cbtn = document.getElementById('agent-clear-chat-btn');
             if (cbtn) cbtn.style.display = (State.matchMode === 'agent') ? '' : 'none';
+            const cbar = document.getElementById('client-bar');
+            if (cbar && State.matchMode === 'agent') cbar.style.display = 'none';
         })();
         UpdateTicker.init();
         WeatherBar.init();
