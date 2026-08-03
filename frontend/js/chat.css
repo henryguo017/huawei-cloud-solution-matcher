@@ -501,9 +501,9 @@
     color: #FFFFFF;
 }
 .sidebar-mine .sidebar-item.ws-item.active {
-    background: var(--frame-active-bg, rgba(199,0,11,.16));
-    border-left-color: var(--frame-active-bar, #C7000B);
-    color: var(--frame-active-text, #FFFFFF);
+    background: rgba(199,0,11,.16) !important;
+    border-left-color: #C7000B !important;
+    color: #FFFFFF !important;
 }
 
 /* ---- 任务 details（紧贴「我的」下方，命名从「我的对话记录」改为「任务」）---- */
@@ -607,9 +607,9 @@
 }
 .sidebar-conv-item:hover { background: var(--frame-hover, rgba(255,255,255,.08)); color: #FFFFFF; }
 .sidebar-conv-item.active {
-    background: var(--frame-active-bg, rgba(199,0,11,.16));
-    border-left-color: var(--frame-active-bar, #C7000B);
-    color: var(--frame-active-text, #FFFFFF);
+    background: rgba(199,0,11,.16) !important;
+    border-left-color: #C7000B !important;
+    color: #FFFFFF !important;
     font-weight: 600;
 }
 .sidebar-conv-item:focus-visible {
@@ -756,9 +756,9 @@
 }
 .sidebar-conv-item:hover { background: var(--frame-hover, rgba(255,255,255,.08)); color: #FFFFFF; }
 .sidebar-conv-item.active {
-    background: var(--frame-active-bg, rgba(199,0,11,.16));
-    border-left-color: var(--frame-active-bar, #C7000B);
-    color: var(--frame-active-text, #FFFFFF);
+    background: rgba(199,0,11,.16) !important;
+    border-left-color: #C7000B !important;
+    color: #FFFFFF !important;
     font-weight: 600;
 }
 .sidebar-conv-item:focus-visible {
