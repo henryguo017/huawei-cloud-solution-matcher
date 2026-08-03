@@ -501,7 +501,7 @@
     color: #FFFFFF;
 }
 .sidebar-mine .sidebar-item.ws-item.active {
-    background: rgba(199,0,11,.16) !important;
+    background: rgba(199,0,11,.30) !important;
     border-left-color: #C7000B !important;
     color: #FFFFFF !important;
 }
@@ -607,7 +607,7 @@
 }
 .sidebar-conv-item:hover { background: var(--frame-hover, rgba(255,255,255,.08)); color: #FFFFFF; }
 .sidebar-conv-item.active {
-    background: rgba(199,0,11,.16) !important;
+    background: rgba(199,0,11,.30) !important;
     border-left-color: #C7000B !important;
     color: #FFFFFF !important;
     font-weight: 600;
@@ -756,7 +756,7 @@
 }
 .sidebar-conv-item:hover { background: var(--frame-hover, rgba(255,255,255,.08)); color: #FFFFFF; }
 .sidebar-conv-item.active {
-    background: rgba(199,0,11,.16) !important;
+    background: rgba(199,0,11,.30) !important;
     border-left-color: #C7000B !important;
     color: #FFFFFF !important;
     font-weight: 600;
