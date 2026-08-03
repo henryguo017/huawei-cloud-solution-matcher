@@ -449,9 +449,9 @@
 .sidebar-mine-toggle .nav-icon .icon { width: 16px; height: 16px; }
 .sidebar-mine-toggle .nav-text {
     flex: 1;
-    font-size: 12px;
+    font-size: 13px;
     color: #FFFFFF;
-    font-weight: 500;
+    font-weight: 600;
 }
 .sidebar-mine-toggle .ws-arrow {
     flex: none;
@@ -467,19 +467,27 @@
 .sidebar-mine[open] .ws-arrow { transform: rotate(90deg); }
 /* 我的子项紧凑 */
 .sidebar-mine .sidebar-item.ws-item {
-    padding: 5px 10px 5px 32px;
-    font-size: 12px;
+    padding: 6px 10px 6px 32px;
+    font-size: 13px;
+    font-weight: 600;
 }
 
-/* ---- 整体紧凑（压缩 sidebar 项间距，让 sidebar 一屏不滚轮） ---- */
+/* ---- 主题切换器推到 sidebar 底部（紧贴 sidebar-footer） ---- */
+.sidebar .theme-switcher,
+#theme-switcher {
+    margin-top: auto;
+}
+
+/* ---- 整体紧凑 + 字体加大+加粗（用户反馈侧栏上部字体看不清） ---- */
 .sidebar-menu > .sidebar-item {
-    padding: 7px 10px;
-    gap: 8px;
-    font-size: 12px;
+    padding: 8px 10px;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
     border-radius: 4px;
 }
 .sidebar-menu > .sidebar-item .nav-icon .icon { width: 16px; height: 16px; }
-.sidebar-menu > .sidebar-item .nav-text { font-size: 12px; font-weight: 500; }
+.sidebar-menu > .sidebar-item .nav-text { font-size: 13px; font-weight: 600; }
 
 /* ---- Sidebar 中部「我的对话记录」紧凑列表（替代之前的页面中部卡片） ---- */
 .sidebar-conversations {
