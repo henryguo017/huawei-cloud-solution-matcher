@@ -492,6 +492,7 @@
 .sidebar-mine[open] .ws-arrow { transform: rotate(90deg); }
 /* 我的子项紧凑 */
 .sidebar-mine .sidebar-item.ws-item {
+    width: 100%;
     padding: 6px 10px 6px 32px;
     font-size: 13px;
     font-weight: 600;
