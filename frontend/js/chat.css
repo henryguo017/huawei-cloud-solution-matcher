@@ -496,6 +496,15 @@
     font-size: 13px;
     font-weight: 600;
 }
+.sidebar-mine .sidebar-item.ws-item:hover {
+    background: var(--frame-hover, rgba(255,255,255,.08));
+    color: #FFFFFF;
+}
+.sidebar-mine .sidebar-item.ws-item.active {
+    background: var(--frame-active-bg, rgba(199,0,11,.16));
+    border-left-color: var(--frame-active-bar, #C7000B);
+    color: var(--frame-active-text, #FFFFFF);
+}
 
 /* ---- 任务 details（紧贴「我的」下方，命名从「我的对话记录」改为「任务」）---- */
 .sidebar-conv-details {
@@ -591,14 +600,16 @@
     text-align: left;
     width: 100%;
     border: none;
+    border-left: 3px solid transparent;
     background: transparent;
     color: rgba(255,255,255,.85);
-    transition: background .15s;
+    transition: background .15s, border-left-color .15s;
 }
-.sidebar-conv-item:hover { background: rgba(255,255,255,.08); color: #FFFFFF; }
+.sidebar-conv-item:hover { background: var(--frame-hover, rgba(255,255,255,.08)); color: #FFFFFF; }
 .sidebar-conv-item.active {
-    background: rgba(255,255,255,.18);
-    color: #FFFFFF;
+    background: var(--frame-active-bg, rgba(199,0,11,.16));
+    border-left-color: var(--frame-active-bar, #C7000B);
+    color: var(--frame-active-text, #FFFFFF);
     font-weight: 600;
 }
 .sidebar-conv-item:focus-visible {
@@ -738,14 +749,16 @@
     text-align: left;
     width: 100%;
     border: none;
+    border-left: 3px solid transparent;
     background: transparent;
     color: rgba(255,255,255,.85);
-    transition: background .15s;
+    transition: background .15s, border-left-color .15s;
 }
-.sidebar-conv-item:hover { background: rgba(255,255,255,.08); color: #FFFFFF; }
+.sidebar-conv-item:hover { background: var(--frame-hover, rgba(255,255,255,.08)); color: #FFFFFF; }
 .sidebar-conv-item.active {
-    background: rgba(255,255,255,.18);
-    color: #FFFFFF;
+    background: var(--frame-active-bg, rgba(199,0,11,.16));
+    border-left-color: var(--frame-active-bar, #C7000B);
+    color: var(--frame-active-text, #FFFFFF);
     font-weight: 600;
 }
 .sidebar-conv-item:focus-visible {
