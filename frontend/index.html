@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css?v=20260803c">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
-<link rel="stylesheet" href="js/chat.css?v=20260803k">
+<link rel="stylesheet" href="js/chat.css?v=20260803l">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -240,43 +240,43 @@
             <!-- 分隔线：顶部 5 项固定菜单 与 下方折叠区 -->
             <hr class="sidebar-divider">
 
-            <!-- 我的：details 折叠（紧贴 nav 之后，作为 sidebar 直接子元素，默认收起） -->
-            <details class="sidebar-mine">
-                <summary class="sidebar-mine-toggle">
-                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
-                    <span class="nav-text">我的</span>
-                    <span class="ws-arrow"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg></span>
-                </summary>
-                <button class="sidebar-item ws-item" data-page="achievement">
-                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
-                    <span class="nav-text">成就中心</span>
-                </button>
-                <button class="sidebar-item ws-item" data-page="history">
-                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
-                    <span class="nav-text">历史记录</span>
-                </button>
-                <button class="sidebar-item ws-item" data-page="clients">
-                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
-                    <span class="nav-text">客户管理</span>
-                </button>
-                <button class="sidebar-item ws-item" data-page="about">
-                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
-                    <span class="nav-text">关于我们</span>
-                </button>
-            </details>
+            <!-- 可滚动中区：「我的」+「任务」，收缩时靠上，展开时向下，超出自身滚轮 -->
+            <div class="sidebar-middle">
+                <!-- 我的：details 折叠（默认收起） -->
+                <details class="sidebar-mine">
+                    <summary class="sidebar-mine-toggle">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
+                        <span class="nav-text">我的</span>
+                        <span class="ws-arrow"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg></span>
+                    </summary>
+                    <button class="sidebar-item ws-item" data-page="achievement">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
+                        <span class="nav-text">成就中心</span>
+                    </button>
+                    <button class="sidebar-item ws-item" data-page="history">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
+                        <span class="nav-text">历史记录</span>
+                    </button>
+                    <button class="sidebar-item ws-item" data-page="clients">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
+                        <span class="nav-text">客户管理</span>
+                    </button>
+                    <button class="sidebar-item ws-item" data-page="about">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
+                        <span class="nav-text">关于我们</span>
+                    </button>
+                </details>
 
-            <!-- 任务：details 折叠（紧贴「我的」之下，默认收起） -->
-            <details class="sidebar-conv-details" id="sidebar-conversations">
-                <summary class="sidebar-conv-toggle">
-                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
-                    <span class="nav-text">任务 <span class="conv-count" id="sidebar-conv-count">(0)</span></span>
-                    <span class="ws-arrow"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg></span>
-                </summary>
-                <div class="sidebar-conv-list" id="sidebar-conv-list"></div>
-            </details>
-
-            <!-- spacer（让 theme-switcher 推到最下） -->
-            <div style="flex:1; min-height: 16px"></div>
+                <!-- 任务：details 折叠（默认收起） -->
+                <details class="sidebar-conv-details" id="sidebar-conversations">
+                    <summary class="sidebar-conv-toggle">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
+                        <span class="nav-text">任务 <span class="conv-count" id="sidebar-conv-count">(0)</span></span>
+                        <span class="ws-arrow"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg></span>
+                    </summary>
+                    <div class="sidebar-conv-list" id="sidebar-conv-list"></div>
+                </details>
+            </div>
 
             <!-- ===== 主题切换器（贴 sidebar 最下边）====== -->
             <div class="theme-switcher" id="theme-switcher">
