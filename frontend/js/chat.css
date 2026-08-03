@@ -404,7 +404,7 @@
 .sidebar-divider {
     border: none;
     height: 1px;
-    margin: 4px 10px 2px;
+    margin: 2px 10px 0;
     background: rgba(255,255,255,.18);
     flex: none;
 }
@@ -416,7 +416,7 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
 }
 
 /* ---- 「我的」details 折叠：与 sidebar-item 同样风格（白文字/SVG/箭头） ---- */
@@ -428,7 +428,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
+    padding: 8px 10px;
     font-size: 12px;
     color: #FFFFFF;
     cursor: pointer;
@@ -444,7 +444,7 @@
 .sidebar-mine-toggle::before {
     content: "";
     position: absolute;
-    left: 0; top: 5px; bottom: 5px;
+    left: 0; top: 7px; bottom: 7px;
     width: 3px;
     background: transparent;
     border-radius: 0 2px 2px 0;
@@ -500,7 +500,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
+    padding: 8px 10px;
     font-size: 13px;
     color: #FFFFFF;
     cursor: pointer;
@@ -515,7 +515,7 @@
 .sidebar-conv-toggle::before {
     content: "";
     position: absolute;
-    left: 0; top: 5px; bottom: 5px;
+    left: 0; top: 7px; bottom: 7px;
     width: 3px;
     background: transparent;
     border-radius: 0 2px 2px 0;
