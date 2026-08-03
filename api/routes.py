@@ -1764,6 +1764,30 @@ async def agent_clarify(
     )
 
 
+@router.post("/agent/session/clear", tags=["Agent"])
+async def clear_agent_session(
+    req: dict = None,
+    user: dict = Depends(require_login),
+):
+    """
+    清空当前用户的 Agent 对话记忆（「新对话」按钮调用）。
+
+    - 默认清空全局会话（session_id=user_id）
+    - 若 body 传 client_id，则清空该客户维度的会话（session_id=user:client）
+    """
+    client_id = None
+    if req:
+        client_id = req.get("client_id")
+    session_id = _resolve_agent_session_id(user, client_id)
+    try:
+        from app.agent import get_agent
+        get_agent().memory.clear_session(session_id)
+    except Exception as e:
+        logger.warning(f"[Agent] 清空会话失败: {e}")
+        raise HTTPException(status_code=500, detail=f"清空会话失败: {str(e)}")
+    return {"cleared": True, "session_id": session_id}
+
+
 # ===== 客户档案（方案B：Agent 记忆按客户维度隔离） =====
 
 # 客户结构化字段清单（与 db_init.py 迁移列保持一致，name/note 之外的新增列）

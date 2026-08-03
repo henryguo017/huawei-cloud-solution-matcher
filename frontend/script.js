@@ -6150,6 +6150,9 @@ function initEventListeners() {
         if (State.matchMode === newMode) return;
         const prevMode = State.matchMode;   // 记录切换前的模式，用于判断布局是否变化
         State.matchMode = newMode;
+        // 清空对话按钮：仅 Agent 模式显示（F2 会话隔离的配套入口）
+        const clearChatBtn = document.getElementById('agent-clear-chat-btn');
+        if (clearChatBtn) clearChatBtn.style.display = newMode === 'agent' ? '' : 'none';
         // 更新 UI
         modeToggle.querySelectorAll('.mode-option').forEach(el => el.classList.remove('active'));
         option.classList.add('active');
@@ -6191,6 +6194,31 @@ function initEventListeners() {
                 const top = target.getBoundingClientRect().top + window.scrollY - headerOffset;
                 window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
             });
+        }
+    });
+
+    // ===== 清空对话按钮（F2：Agent 记忆清空入口，调后端清 SQLite） =====
+    const clearChatBtn = document.getElementById('agent-clear-chat-btn');
+    clearChatBtn?.addEventListener('click', async () => {
+        if (!AuthManager.isLoggedIn()) {
+            UI.showToast('请先登录', 'warning');
+            return;
+        }
+        if (!window.confirm('确定清空 Agent 对话记忆吗？将开始一段全新的对话。')) return;
+        try {
+            const res = await fetch('/api/agent/session/clear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.cleared) {
+                UI.showToast('已清空对话记忆，开始新对话', 'success');
+            } else {
+                UI.showToast('清空失败：' + (data.detail || res.status), 'error');
+            }
+        } catch (e) {
+            UI.showToast('清空失败：' + e.message, 'error');
         }
     });
 
@@ -6427,6 +6455,7 @@ function initEventListeners() {
 .sol-industry { display:inline-block; font-size:12px; color:#0F6E56; background:#d8f0e6; padding:1px 8px; border-radius:10px; margin-bottom:4px; }
 .sol-preview { font-size:13px; color:#1a1a1a; white-space:pre-wrap; word-break:break-word; }
 .sol-meta { font-size:12px; color:#6b7280; margin-top:2px; }
+.agent-clear-chat-btn { float:right; font-size:12px; padding:2px 10px; border-radius:6px; }
 `;
         document.head.appendChild(st);
     }
@@ -8686,6 +8715,11 @@ function init() {
         }
 
         initEventListeners();
+        // 清空对话按钮：默认 Agent 模式显示（F2）
+        (function () {
+            const cbtn = document.getElementById('agent-clear-chat-btn');
+            if (cbtn) cbtn.style.display = (State.matchMode === 'agent') ? '' : 'none';
+        })();
         UpdateTicker.init();
         WeatherBar.init();
         NewsModal.init();

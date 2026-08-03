@@ -6,7 +6,7 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260802a">
+<link rel="stylesheet" href="style.css?v=20260803a">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
@@ -549,7 +549,10 @@
                 
                 <div class="content-card">
                     <div class="form-group">
-                        <label class="form-label">客户需求描述</label>
+                        <label class="form-label">客户需求描述
+                            <button type="button" id="agent-clear-chat-btn" class="btn-secondary agent-clear-chat-btn"
+                                    style="display:none;" title="清空 Agent 对话记忆，开始新对话">清空对话</button>
+                        </label>
                         <textarea 
                             id="demand-input" 
                             class="textarea-input" 
@@ -2190,7 +2193,7 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260802a"></script>
+    <script src="script.js?v=20260803a"></script>
     <script src="js/voice-input.js?v=20260726f"></script>
     <script src="js/achievement-ui.js?v=20260716emoji"></script>
     <script src="welcome-script.js?v=20260801a"></script>

@@ -13,7 +13,7 @@
 
 import time
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -168,15 +168,32 @@ class ConversationMemory:
         except Exception as e:
             logger.warning(f"[memory] 长期记忆落库失败 session={session_id}: {e}")
 
-    def get_conversation_history(self, session_id: str) -> str:
+    def get_conversation_history(self, session_id: str, max_rounds: Optional[int] = None) -> str:
+        """
+        注入给 LLM 的对话历史文本。
+
+        默认仅注入最近 max_rounds 轮（默认取全局配置 AGENT_MEMORY_MAX_ROUNDS=6）：
+        任务型 Agent（每条指令独立完成）只需少量最近上下文，窗口过大会导致跨任务串味
+        （连跑多条时被前几条历史污染，输出畸形/误判"已生成过"）。
+        """
         self._ensure_loaded(session_id)
         if session_id not in self._sessions:
             return "（这是第一次对话）"
         entries = self._sessions[session_id]["long_term"]
         if not entries:
             return "（这是第一次对话）"
+        if max_rounds is None:
+            try:
+                from app.config import AGENT_MEMORY_MAX_ROUNDS
+                max_rounds = AGENT_MEMORY_MAX_ROUNDS
+            except Exception:
+                max_rounds = 6
+        # 最近 max_rounds 轮 = 最近 max_rounds*2 条（一轮 = 用户1条 + 助手1条）
+        window_entries = entries[-(max_rounds * 2):] if max_rounds > 0 else []
+        if not window_entries:
+            return "（这是第一次对话）"
         lines = ["【对话历史】"]
-        for e in entries:
+        for e in window_entries:
             role_label = "用户" if e.role == "user" else "助手"
             content = e.content[:300] + "..." if len(e.content) > 300 else e.content
             lines.append(f"{role_label}: {content}")
@@ -251,9 +268,27 @@ class ConversationMemory:
     # ---- 管理 ----
 
     def clear_session(self, session_id: str) -> None:
+        """彻底清空某会话记忆：内存 + SQLite（agent_memory 表），供「清空对话」使用"""
         if session_id in self._sessions:
             del self._sessions[session_id]
         self._loaded.discard(session_id)
+        try:
+            conn = self._db_conn()
+            cur = conn.cursor()
+            uid = self._parse_user_id(session_id)
+            cur.execute(
+                "DELETE FROM agent_memory WHERE user_id=? AND session_id=?",
+                (uid, session_id),
+            )
+            cur.execute(
+                "DELETE FROM agent_memory_archive WHERE user_id=? AND session_id=?",
+                (uid, session_id),
+            )
+            conn.commit()
+            conn.close()
+            logger.info(f"[memory] 已清空会话记忆 session={session_id}")
+        except Exception as e:
+            logger.warning(f"[memory] 清空会话记忆失败 session={session_id}: {e}")
 
     def get_stats(self, session_id: str) -> Dict[str, int]:
         if session_id not in self._sessions:

@@ -170,6 +170,11 @@ SANDBOX_CPU = int(os.getenv("SANDBOX_CPU", "30"))                    # CPU 时�
 SANDBOX_MEM = int(os.getenv("SANDBOX_MEM", "536870912"))             # 地址空间上限 512MB
 SANDBOX_NPROC = int(os.getenv("SANDBOX_NPROC", "64"))                # 进程数上限（防 fork bomb）
 
+# ==================== Agent 记忆（F2 会话隔离：注入窗口收窄，防跨任务串味） ====================
+# 任务型 Agent（每条指令独立完成）只需注入最近几轮对话；窗口过大时，连跑多条会被前几条历史污染，
+# 导致"误判已生成过/输出畸形"。此值控制 get_conversation_history 注入的最近对话轮数。
+AGENT_MEMORY_MAX_ROUNDS = int(os.getenv("AGENT_MEMORY_MAX_ROUNDS", "6"))
+
 # ==================== 支持的行业列表 ====================
 SUPPORTED_INDUSTRIES = [
     "智慧农业",
