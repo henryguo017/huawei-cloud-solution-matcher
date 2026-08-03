@@ -80,6 +80,18 @@ class Tool:
     async def execute(self, **kwargs) -> str:
         """执行工具，返回 Observation 字符串"""
         try:
+            # 参数名纠偏（F3 鲁棒性）：LLM 偶发传错参数名（如 run_code 传 query 而非 code）。
+            # 仅对【单参数】工具做通用纠偏（无歧义）；多参数工具靠各自的参数别名兼容，
+            # 避免把拼错的字段错误塞给错误参数（如 manage_client 的 name→action）。
+            defined = set(self.parameters.get("properties", {}).keys())
+            unknown = set(kwargs.keys()) - defined
+            if unknown and len(defined) == 1:
+                single = list(defined)[0]
+                for k in list(unknown):
+                    if single not in kwargs:
+                        kwargs[single] = kwargs[k]
+                        kwargs.pop(k, None)
+                        logger.info(f"[Tool:{self.name}] 参数纠偏 {k} → {single}")
             result = self.func(**kwargs)
             if asyncio.iscoroutine(result):
                 result = await result
@@ -753,15 +765,22 @@ def _format_sandbox_observation(result: Dict[str, Any]) -> str:
     return json.dumps(summary, ensure_ascii=False, indent=2)
 
 
-async def _tool_run_code(code: str) -> str:
+async def _tool_run_code(code: str = "", query: str = "") -> str:
     """
     工具: run_code
     作用: 在隔离沙箱里运行 Python 代码，生成真实文件（Excel/PPT 等）或做精确计算。
     实现: 调用 sandbox.run_code，经 file_security jail 隔离；user_id 取自 kb 上下文，
           event_callback 取自 contextvar（由 harness 注入），实现 raw 流式透传。
+    兼容: LLM 偶发把参数名传成 query（与 query_pricing 混淆），此处兼容取 code。
     """
     from app.agent.sandbox import run_code
     from app.services.knowledge_base import get_kb_user_context
+
+    # 参数名别名兼容：LLM 偶发把 code 传成 query（工具变多后选择面扩大，混淆概率上升）
+    if not code and query:
+        code = query
+    if not code or not code.strip():
+        return json.dumps({"status": "error", "error": "缺少 code 参数（要执行的 Python 代码）"}, ensure_ascii=False)
 
     user_id = get_kb_user_context()
     if user_id <= 0:
