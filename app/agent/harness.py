@@ -234,6 +234,7 @@ class AgentHarness:
         self._step_count = 0
         self._start_time = time.time()
         self._logs = []
+        self._parse_fail_count = 0  # F3-2：连续格式错误计数，超 3 次强制兜底
         self._event_callback = event_callback  # 供 _execute_tool 注入工具上下文
         tool_calls_log = []
         self._clarify_round = 0
@@ -473,10 +474,14 @@ Observation: {observation}
                             "elapsed": round(time.time() - self._start_time, 2),
                         })
                         return self._make_result(final_answer, tool_calls_log, success=True)
-                    # 第一次就格式错误，引导重试
-                    self._log("warn", f"无法解析 LLM 输出: {llm_response[:200]}")
+                    # 第一次就格式错误，引导重试（F3-2：连续 3 次格式错误则强制兜底，避免空转）
+                    self._parse_fail_count = getattr(self, "_parse_fail_count", 0) + 1
+                    self._log("warn", f"无法解析 LLM 输出: {llm_response[:200]}（连续失败 {self._parse_fail_count} 次）")
+                    if self._parse_fail_count >= 3:
+                        self._log("system", "连续 3 次格式错误，强制兜底生成")
+                        fallback = await self._generate_fallback(user_input)
+                        return self._make_result(fallback, tool_calls_log, success=False)
                     current_prompt += f"""
-
 {llm_response}
 
 （你的输出格式不正确。请严格按格式输出：
