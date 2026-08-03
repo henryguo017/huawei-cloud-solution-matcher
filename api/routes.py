@@ -63,6 +63,7 @@ import api.dependencies as _kb_deps  # 用于后台重建后刷新全局 KB 缓�
 
 # Agent 模块导入
 from app.agent import get_agent
+from app.agent.tools import set_agent_user_context
 
 logger = logging.getLogger(__name__)
 
@@ -1376,6 +1377,7 @@ async def agent_match_solution(
         # 设置用户上下文，Agent 工具可使用用户独立知识库
         user_id = user['id']
         set_kb_user_context(user_id)
+        set_agent_user_context(user_id)
 
         # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
         original_demand = request.demand
@@ -1530,6 +1532,7 @@ async def agent_match_stream(
             try:
                 # 设置用户上下文，Agent 工具可使用用户独立知识库
                 set_kb_user_context(user['id'])
+                set_agent_user_context(user['id'])
 
                 # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
                 original_demand = request.demand
@@ -1658,6 +1661,7 @@ async def agent_clarify(
             try:
                 from app.agent.clarify_store import ClarifySessionStore
                 set_kb_user_context(user['id'])
+                set_agent_user_context(user['id'])
                 agent = get_agent()
 
                 # 恢复原始需求（用于历史落库与成就检测）

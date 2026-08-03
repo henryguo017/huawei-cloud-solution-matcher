@@ -22,6 +22,19 @@ logger = logging.getLogger(__name__)
 # Agent 事件回调上下文（harness 在 _execute_tool 前注入，工具内部读取，避免改动所有工具的 execute 签名）
 _AGENT_EVENT_CB: contextvars.ContextVar = contextvars.ContextVar("agent_event_cb", default=None)
 
+# Agent 当前用户上下文（Agent 端点入口注入，平台工具按 uid 过滤/写入，数据隔离铁律）
+_AGENT_USER_ID: contextvars.ContextVar = contextvars.ContextVar("agent_user_id", default=0)
+
+
+def set_agent_user_context(user_id: int) -> None:
+    """注入当前 Agent 调用的用户 id（0 表示匿名/未注入）"""
+    _AGENT_USER_ID.set(user_id)
+
+
+def get_agent_user_context() -> int:
+    """读取当前 Agent 调用的用户 id（平台工具据此做数据隔离）"""
+    return _AGENT_USER_ID.get()
+
 
 def set_agent_event_callback(cb) -> None:
     if cb is not None:
