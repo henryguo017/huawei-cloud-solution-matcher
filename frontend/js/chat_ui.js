@@ -116,9 +116,9 @@
     // 当前会话 id（M2）：新建任务=null（后端用 user_id），切换会话=session_id
     S.currentConvId = null;
 
-    // 加载会话列表（主区中间横向卡片）
+    // 加载会话列表（sidebar 紧凑列表）
     async function loadConversations() {
-        const box = $el('page-conv-list');
+        const box = $el('sidebar-conv-list');
         if (!box) return;
         if (!checkLoggedIn()) return;
         try {
@@ -131,27 +131,27 @@
             const convs = data.conversations || [];
             box.innerHTML = '';
             if (!convs.length) {
-                box.innerHTML = '<div class="page-conv-empty">暂无历史任务——开始你的第一次对话吧</div>';
+                box.innerHTML = '<div class="sidebar-conv-empty">暂无任务</div>';
                 return;
             }
             convs.forEach(c => {
                 const item = document.createElement('button');
-                item.className = 'page-conv-item' + (S.currentConvId === c.session_id ? ' active' : '');
+                item.className = 'sidebar-conv-item' + (S.currentConvId === c.session_id ? ' active' : '');
                 item.dataset.session = c.session_id;
                 item.innerHTML = `
-                    <span class="page-conv-icon"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg></span>
-                    <span class="page-conv-text">
-                        <span class="page-conv-title">${esc(c.title || c.session_id)}</span>
-                        <span class="page-conv-time">${esc(String(c.updated_at || '').slice(0, 16))}</span>
+                    <span class="sidebar-conv-icon"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg></span>
+                    <span class="sidebar-conv-text">
+                        <span class="sidebar-conv-title">${esc(c.title || c.session_id)}</span>
+                        <span class="sidebar-conv-time">${esc(String(c.updated_at || '').slice(0, 16))}</span>
                     </span>
-                    <span class="page-conv-archive-btn" title="归档（结束此任务，可在历史中找回）">
+                    <span class="sidebar-conv-archive-btn" title="归档（结束此任务，可在历史中找回）">
                         <svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>
                     </span>`;
                 item.addEventListener('click', (e) => {
-                    if (e.target.closest('.page-conv-archive-btn')) return;
+                    if (e.target.closest('.sidebar-conv-archive-btn')) return;
                     switchConversation(c.session_id);
                 });
-                item.querySelector('.page-conv-archive-btn').addEventListener('click', async (e) => {
+                item.querySelector('.sidebar-conv-archive-btn').addEventListener('click', async (e) => {
                     e.stopPropagation();
                     await archiveConversation(c.session_id, true);
                 });
@@ -165,10 +165,8 @@
     // 切换会话：加载该会话历史
     async function switchConversation(sessionId) {
         S.currentConvId = sessionId;
-        clearStream();
-        renderEmptyHint();
         // 高亮
-        document.querySelectorAll('.page-conv-item').forEach(el => {
+        document.querySelectorAll('.sidebar-conv-item').forEach(el => {
             el.classList.toggle('active', el.dataset.session === sessionId);
         });
         // 加载历史消息
@@ -203,7 +201,7 @@
     // 新建任务：清除当前会话高亮 + 滚动到输入区
     function newConversation() {
         S.currentConvId = null;
-        document.querySelectorAll('.page-conv-item').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.sidebar-conv-item').forEach(el => el.classList.remove('active'));
         // 焦点移到主页的 textarea
         const ta = document.getElementById('demand-input');
         if (ta) ta.focus();
@@ -461,10 +459,10 @@
     function init() {
         // 已有对话 UI 则跳过
         if ($el('chat-shell')) return;
-        if (!$el('page-conversations')) return; // M3 风格调整：会话列表挂到主区中间
+        if (!$el('sidebar-conversations')) return; // M3+：会话列表挂到 sidebar 中部
 
-        // 绑定"新建任务"按钮（主区头部）
-        const newConvBtn = $el('page-conv-new-btn');
+        // 绑定"新建任务"按钮
+        const newConvBtn = $el('sidebar-new-conv-btn');
         if (newConvBtn) newConvBtn.addEventListener('click', newConversation);
 
         // 初始加载会话列表

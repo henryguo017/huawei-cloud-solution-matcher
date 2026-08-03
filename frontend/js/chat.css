@@ -402,20 +402,20 @@
 
 /* ---- 「我的」details 折叠：与 sidebar-item 同样风格（白文字/SVG/箭头） ---- */
 .sidebar-mine {
-    border-top: 1px solid var(--border-color, rgba(0,0,0,.06));
+    border-top: 1px solid rgba(255,255,255,.08);
 }
 .sidebar-mine-toggle {
-    /* 完全复用 sidebar-item 的视觉语言：白文字 + SVG 图标 + 箭头 */
+    /* 与 sidebar-item 完全一致的视觉：白文字 + SVG 图标 + 间距紧凑 */
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 14px;
-    font-size: 13px;
-    color: #FFFFFF;          /* 白色文字（与 sidebar-item 一致） */
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #FFFFFF;
     cursor: pointer;
     user-select: none;
     list-style: none;
-    border-radius: 6px;
+    border-radius: 4px;
     margin: 0;
     position: relative;
     transition: background .15s;
@@ -425,7 +425,7 @@
 .sidebar-mine-toggle::before {
     content: "";
     position: absolute;
-    left: 0; top: 8px; bottom: 8px;
+    left: 0; top: 5px; bottom: 5px;
     width: 3px;
     background: transparent;
     border-radius: 0 2px 2px 0;
@@ -439,148 +439,174 @@
 }
 .sidebar-mine-toggle .nav-icon {
     flex: none;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     color: rgba(255,255,255,.85);
 }
-.sidebar-mine-toggle .nav-icon .icon { width: 18px; height: 18px; }
+.sidebar-mine-toggle .nav-icon .icon { width: 16px; height: 16px; }
 .sidebar-mine-toggle .nav-text {
     flex: 1;
-    font-size: 13px;
+    font-size: 12px;
     color: #FFFFFF;
     font-weight: 500;
 }
 .sidebar-mine-toggle .ws-arrow {
     flex: none;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     color: rgba(255,255,255,.7);
     transition: transform .15s;
 }
-.sidebar-mine-toggle .ws-arrow .icon { width: 14px; height: 14px; }
+.sidebar-mine-toggle .ws-arrow .icon { width: 12px; height: 12px; }
 .sidebar-mine[open] .ws-arrow { transform: rotate(90deg); }
+/* 我的子项紧凑 */
 .sidebar-mine .sidebar-item.ws-item {
-    padding-left: 36px;
+    padding: 5px 10px 5px 32px;
+    font-size: 12px;
 }
 
-/* ---- 主区中部「我的对话记录」横向卡片 ---- */
-.page-conversations {
-    margin: 6px 0 14px;
-    border: 1px solid var(--border-color, rgba(0,0,0,.08));
-    border-radius: 8px;
-    padding: 10px 12px;
-    background: var(--bg-card, #FFFFFF);
+/* ---- 整体紧凑（压缩 sidebar 项间距，让 sidebar 一屏不滚轮） ---- */
+.sidebar-menu > .sidebar-item {
+    padding: 7px 10px;
+    gap: 8px;
+    font-size: 12px;
+    border-radius: 4px;
 }
-.page-conv-header {
+.sidebar-menu > .sidebar-item .nav-icon .icon { width: 16px; height: 16px; }
+.sidebar-menu > .sidebar-item .nav-text { font-size: 12px; font-weight: 500; }
+
+/* ---- Sidebar 中部「我的对话记录」紧凑列表（替代之前的页面中部卡片） ---- */
+.sidebar-conversations {
+    border-top: 1px solid rgba(255,255,255,.08);
+    padding: 6px 8px 8px;
+    flex: 0 0 auto;
+    max-height: 320px;
+    overflow-y: auto;
+}
+.sidebar-conv-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    padding: 4px 6px 6px;
+    color: rgba(255,255,255,.85);
 }
-.page-conv-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-primary, #1A1C23);
-}
-.page-conv-new-btn {
-    border: 1px dashed var(--border-color, rgba(0,0,0,.2));
-    background: transparent;
-    color: var(--text-secondary, #4A5067);
-    border-radius: 6px;
-    padding: 3px 10px;
-    font-size: 12px;
-    cursor: pointer;
-}
-.page-conv-new-btn:hover {
-    border-color: var(--primary-color, #C7000B);
-    color: var(--primary-color, #C7000B);
-    background: var(--primary-light, rgba(199,0,11,.05));
-}
-.page-conv-new-btn:focus-visible {
-    outline: 2px solid var(--primary-color, #C7000B);
-    outline-offset: 2px;
-}
-.page-conv-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-.page-conv-empty {
-    font-size: 12px;
-    color: var(--text-muted, #8890A4);
-    padding: 14px 8px;
-    text-align: center;
-}
-.page-conv-item {
+.sidebar-conv-title {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    border-radius: 6px;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #FFFFFF;
+    letter-spacing: 0.3px;
+}
+.sidebar-conv-title .icon { width: 14px; height: 14px; }
+.sidebar-conv-new-btn {
+    border: none;
+    background: transparent;
+    color: rgba(255,255,255,.65);
     cursor: pointer;
-    font-size: 13px;
-    color: var(--text-primary, #1A1C23);
-    text-align: left;
-    border: 1px solid var(--border-color, rgba(0,0,0,.08));
-    background: var(--bg-card, #FFFFFF);
-    max-width: 280px;
-    min-width: 0;
-    transition: border-color .15s, background .15s;
+    padding: 2px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
-.page-conv-item:hover { border-color: var(--primary-color, #C7000B); background: var(--primary-light, rgba(199,0,11,.03)); }
-.page-conv-item.active {
-    border-color: var(--primary-color, #C7000B);
-    background: var(--primary-light, rgba(199,0,11,.08));
-    color: var(--primary-color, #C7000B);
-}
-.page-conv-item:focus-visible {
-    outline: 2px solid var(--primary-color, #C7000B);
+.sidebar-conv-new-btn:hover { background: rgba(255,255,255,.12); color: #FFFFFF; }
+.sidebar-conv-new-btn:focus-visible {
+    outline: 2px solid #FFFFFF;
     outline-offset: 2px;
 }
-.page-conv-icon { flex: none; font-size: 14px; }
-.page-conv-text {
-    flex: 1;
+.sidebar-conv-new-btn .icon { width: 14px; height: 14px; }
+.sidebar-conv-list {
     display: flex;
     flex-direction: column;
-    min-width: 0;
+    gap: 1px;
 }
-.page-conv-text .page-conv-title {
+.sidebar-conv-empty {
+    font-size: 11px;
+    color: rgba(255,255,255,.45);
+    padding: 8px 6px 4px;
+    text-align: left;
+}
+.sidebar-conv-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: rgba(255,255,255,.85);
+    transition: background .15s;
+}
+.sidebar-conv-item:hover { background: rgba(255,255,255,.08); color: #FFFFFF; }
+.sidebar-conv-item.active {
+    background: rgba(255,255,255,.18);
+    color: #FFFFFF;
+    font-weight: 600;
+}
+.sidebar-conv-item:focus-visible {
+    outline: 2px solid #FFFFFF;
+    outline-offset: -2px;
+}
+.sidebar-conv-icon {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    color: rgba(255,255,255,.7);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.sidebar-conv-icon .icon { width: 14px; height: 14px; }
+.sidebar-conv-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.sidebar-conv-text .sidebar-conv-title {
     font-size: 12px;
     font-weight: 500;
+    color: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    padding: 0;
+    letter-spacing: 0;
 }
-.page-conv-time {
+.sidebar-conv-time {
     font-size: 10px;
-    color: var(--text-muted, #8890A4);
+    color: rgba(255,255,255,.45);
     margin-top: 1px;
 }
-.page-conv-archive-btn {
+.sidebar-conv-archive-btn {
     flex: none;
     border: none;
     background: transparent;
-    color: var(--text-muted, #8890A4);
+    color: rgba(255,255,255,.5);
     cursor: pointer;
-    font-size: 12px;
-    padding: 1px 4px;
-    border-radius: 4px;
+    padding: 1px 3px;
+    border-radius: 3px;
     opacity: 0;
     transition: opacity .15s;
+    display: inline-flex;
+    align-items: center;
 }
-.page-conv-item:hover .page-conv-archive-btn { opacity: 1; }
-.page-conv-archive-btn:hover { color: var(--primary-color, #C7000B); background: var(--primary-light, rgba(199,0,11,.08)); }
-.page-conv-archive-btn:focus-visible {
-    outline: 2px solid var(--primary-color, #C7000B);
-    outline-offset: 2px;
+.sidebar-conv-item:hover .sidebar-conv-archive-btn { opacity: 1; }
+.sidebar-conv-archive-btn:hover { color: #FFFFFF; background: rgba(255,255,255,.12); }
+.sidebar-conv-archive-btn:focus-visible {
+    outline: 2px solid #FFFFFF;
+    outline-offset: 1px;
 }
-
-@media (max-width: 768px) {
-    .page-conversations { display: none; }
-}
+.sidebar-conv-archive-btn .icon { width: 12px; height: 12px; }
