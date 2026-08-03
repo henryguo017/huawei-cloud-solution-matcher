@@ -400,6 +400,16 @@
     flex: 1;
 }
 
+/* ---- 顶部 5 项固定菜单 与 下方「我的/任务」折叠区的分隔线 ---- */
+.sidebar-divider {
+    border: none;
+    height: 1px;
+    margin: 8px 12px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
+    opacity: .9;
+    flex: none;
+}
+
 /* ---- 「我的」details 折叠：与 sidebar-item 同样风格（白文字/SVG/箭头） ---- */
 .sidebar-mine {
     border-top: 1px solid rgba(255,255,255,.08);
