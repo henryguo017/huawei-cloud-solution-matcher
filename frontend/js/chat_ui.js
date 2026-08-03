@@ -116,7 +116,7 @@
     // 当前会话 id（M2）：新建任务=null（后端用 user_id），切换会话=session_id
     S.currentConvId = null;
 
-    // 加载会话列表（sidebar 紧凑列表）
+    // 加载任务列表（紧贴「我的」下方的折叠详情）
     async function loadConversations() {
         const box = $el('sidebar-conv-list');
         if (!box) return;
@@ -129,6 +129,9 @@
             });
             const data = await resp.json();
             const convs = data.conversations || [];
+            // 任务数量角标
+            const countEl = $el('sidebar-conv-count');
+            if (countEl) countEl.textContent = '(' + convs.length + ')';
             box.innerHTML = '';
             if (!convs.length) {
                 box.innerHTML = '<div class="sidebar-conv-empty">暂无任务</div>';
@@ -158,14 +161,20 @@
                 box.appendChild(item);
             });
         } catch (e) {
-            console.warn('[ChatUI] 会话列表加载失败:', e);
+            console.warn('[ChatUI] 任务列表加载失败:', e);
         }
     }
 
     // 切换会话：加载该会话历史
     async function switchConversation(sessionId) {
         S.currentConvId = sessionId;
-        // 高亮
+        // 先清除 sidebar 其他所有 active（顶部菜单、我的子项、任务折叠头），再高亮当前任务
+        if (window.PageTransition && window.PageTransition.clearAllSidebarActive) {
+            window.PageTransition.clearAllSidebarActive();
+        } else {
+            document.querySelectorAll('.sidebar-item.active, .sidebar-mine-toggle.active, .sidebar-conv-toggle.active')
+                .forEach(el => el.classList.remove('active'));
+        }
         document.querySelectorAll('.sidebar-conv-item').forEach(el => {
             el.classList.toggle('active', el.dataset.session === sessionId);
         });
@@ -201,7 +210,12 @@
     // 新建任务：清除当前会话高亮 + 滚动到输入区
     function newConversation() {
         S.currentConvId = null;
-        document.querySelectorAll('.sidebar-conv-item').forEach(el => el.classList.remove('active'));
+        if (window.PageTransition && window.PageTransition.clearAllSidebarActive) {
+            window.PageTransition.clearAllSidebarActive();
+        } else {
+            document.querySelectorAll('.sidebar-item.active, .sidebar-mine-toggle.active, .sidebar-conv-toggle.active, .sidebar-conv-item.active')
+                .forEach(el => el.classList.remove('active'));
+        }
         // 焦点移到主页的 textarea
         const ta = document.getElementById('demand-input');
         if (ta) ta.focus();

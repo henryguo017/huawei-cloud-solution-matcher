@@ -501,10 +501,14 @@
     background: var(--frame-hover, rgba(255,255,255,.08));
     color: #FFFFFF;
 }
+/* 选中态：与 .sidebar-item.active 完全一致（使用 CSS 变量，由 style.css 统一定义） */
 .sidebar-mine .sidebar-item.ws-item.active {
-    background: rgba(199,0,11,.30) !important;
-    border-left-color: #C7000B !important;
-    color: #FFFFFF !important;
+    background: var(--frame-active-bg);
+    border-left-color: var(--frame-active-bar);
+    color: var(--frame-active-text);
+}
+.sidebar-mine .sidebar-item.ws-item.active .nav-icon {
+    color: var(--primary-300);
 }
 
 /* ---- 任务 details（紧贴「我的」下方，命名从「我的对话记录」改为「任务」）---- */
@@ -607,12 +611,15 @@
     transition: background .15s, border-left-color .15s;
 }
 .sidebar-conv-item:hover { background: var(--frame-hover, rgba(255,255,255,.08)); color: #FFFFFF; }
+/* 任务列表项选中态：与顶部 .sidebar-item.active 完全一致 */
 .sidebar-conv-item.active {
-    background: rgba(199,0,11,.30) !important;
-    border-left-color: #C7000B !important;
-    color: #FFFFFF !important;
+    background: var(--frame-active-bg);
+    border-left-color: var(--frame-active-bar);
+    color: var(--frame-active-text);
     font-weight: 600;
 }
+.sidebar-conv-item.active .sidebar-conv-icon { color: var(--primary-300); }
+.sidebar-conv-item.active .sidebar-conv-time { color: rgba(255,255,255,.65); }
 .sidebar-conv-item:focus-visible {
     outline: 2px solid #FFFFFF;
     outline-offset: -2px;
@@ -756,12 +763,15 @@
     transition: background .15s, border-left-color .15s;
 }
 .sidebar-conv-item:hover { background: var(--frame-hover, rgba(255,255,255,.08)); color: #FFFFFF; }
+/* 任务列表项选中态：与顶部 .sidebar-item.active 完全一致 */
 .sidebar-conv-item.active {
-    background: rgba(199,0,11,.30) !important;
-    border-left-color: #C7000B !important;
-    color: #FFFFFF !important;
+    background: var(--frame-active-bg);
+    border-left-color: var(--frame-active-bar);
+    color: var(--frame-active-text);
     font-weight: 600;
 }
+.sidebar-conv-item.active .sidebar-conv-icon { color: var(--primary-300); }
+.sidebar-conv-item.active .sidebar-conv-time { color: rgba(255,255,255,.65); }
 .sidebar-conv-item:focus-visible {
     outline: 2px solid #FFFFFF;
     outline-offset: -2px;

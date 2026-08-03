@@ -3591,7 +3591,14 @@ const PageTransition = {
         setTimeout(() => { this.isTransitioning = false; }, this.duration);
     },
 
+    // 清除整个 sidebar 的所有 active 状态（顶部菜单 / 我的折叠头 / 任务折叠头 / 任务列表项）
+    clearAllSidebarActive() {
+        document.querySelectorAll('.sidebar-item, .sidebar-mine-toggle, .sidebar-conv-toggle, .sidebar-conv-item, .navbar-item, .mobile-nav-item')
+            .forEach(el => el.classList.remove('active'));
+    },
+
     _updateNav(pageName) {
+        this.clearAllSidebarActive();
         document.querySelectorAll('.navbar-item').forEach(item => {
             item.classList.toggle('active', item.dataset.page === pageName);
         });
