@@ -401,127 +401,150 @@
 }
 
 /* ---- M3 侧边栏精简：分区标签 + 工作区折叠 ---- */
-.sidebar-section-label {
-    font-size: 11px;
-    color: var(--text-muted, #8890A4);
-    padding: 10px 16px 4px;
-    letter-spacing: 1px;
+.sidebar-mine {
+    border-top: 1px solid var(--border-color, rgba(0,0,0,.06));
 }
-.sidebar-workspace {
-    margin-top: 2px;
-    border-top: 1px dashed var(--border-color, rgba(0,0,0,.08));
-}
-.sidebar-workspace-toggle {
+.sidebar-mine-toggle {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    font-size: 12px;
+    gap: 8px;
+    padding: 7px 12px;
+    font-size: 13px;
     color: var(--text-secondary, #4A5067);
     cursor: pointer;
     user-select: none;
+    list-style: none;
+    border-radius: 6px;
+    margin: 0;
 }
-.sidebar-workspace-toggle:hover { color: var(--primary-color, #C7000B); }
-.sidebar-workspace-toggle:focus-visible {
+.sidebar-mine-toggle::-webkit-details-marker { display: none; }
+.sidebar-mine-toggle:hover { color: var(--primary-color, #C7000B); background: var(--primary-light, rgba(199,0,11,.05)); }
+.sidebar-mine-toggle:focus-visible {
     outline: 2px solid var(--primary-color, #C7000B);
     outline-offset: 2px;
-    border-radius: 4px;
 }
-.ws-arrow { font-size: 10px; transition: transform .15s; }
-.sidebar-workspace[open] .ws-arrow { transform: rotate(180deg); }
-.sidebar-workspace .sidebar-item.ws-item {
+.sidebar-mine-toggle .ws-arrow {
+    margin-left: auto;
+    font-size: 10px;
+    transition: transform .15s;
+}
+.sidebar-mine[open] .ws-arrow { transform: rotate(180deg); }
+.sidebar-mine .sidebar-item.ws-item {
     padding-left: 28px;
 }
 
-/* ---- A 回退：会话列表挂到 sidebar（替代 chat-shell 内 sidebar） ---- */
-.sidebar-conversations {
-    margin-top: auto;
-    border-top: 1px solid var(--border-color, rgba(0,0,0,.08));
-    padding: 8px 6px 6px;
-    flex: 0 0 auto;
+/* ---- 主区中部「我的对话记录」横向卡片 ---- */
+.page-conversations {
+    margin: 6px 0 14px;
+    border: 1px solid var(--border-color, rgba(0,0,0,.08));
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--bg-card, #FFFFFF);
 }
-.sidebar-new-conv-btn {
-    width: 100%;
+.page-conv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+.page-conv-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary, #1A1C23);
+}
+.page-conv-new-btn {
     border: 1px dashed var(--border-color, rgba(0,0,0,.2));
     background: transparent;
     color: var(--text-secondary, #4A5067);
-    border-radius: 8px;
-    padding: 6px;
+    border-radius: 6px;
+    padding: 3px 10px;
     font-size: 12px;
     cursor: pointer;
-    margin-bottom: 6px;
 }
-.sidebar-new-conv-btn:hover {
+.page-conv-new-btn:hover {
     border-color: var(--primary-color, #C7000B);
     color: var(--primary-color, #C7000B);
     background: var(--primary-light, rgba(199,0,11,.05));
 }
-.sidebar-new-conv-btn:focus-visible {
+.page-conv-new-btn:focus-visible {
     outline: 2px solid var(--primary-color, #C7000B);
     outline-offset: 2px;
 }
-.sidebar-conv-section {
-    font-size: 10px;
-    color: var(--text-muted, #8890A4);
-    padding: 4px 10px 2px;
-    letter-spacing: 0.5px;
-}
-.sidebar-conv-list {
+.page-conv-list {
     display: flex;
-    flex-direction: column;
-    gap: 1px;
-    max-height: 200px;
-    overflow-y: auto;
+    flex-wrap: wrap;
+    gap: 8px;
 }
-.sidebar-conv-item {
+.page-conv-empty {
+    font-size: 12px;
+    color: var(--text-muted, #8890A4);
+    padding: 14px 8px;
+    text-align: center;
+}
+.page-conv-item {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 5px 8px;
+    gap: 8px;
+    padding: 6px 10px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 12px;
-    color: var(--text-secondary, #4A5067);
+    font-size: 13px;
+    color: var(--text-primary, #1A1C23);
     text-align: left;
-    width: 100%;
-    border: none;
-    background: transparent;
+    border: 1px solid var(--border-color, rgba(0,0,0,.08));
+    background: var(--bg-card, #FFFFFF);
+    max-width: 280px;
+    min-width: 0;
+    transition: border-color .15s, background .15s;
 }
-.sidebar-conv-item:hover { background: var(--bg-card-solid, #F4F5F7); }
-.sidebar-conv-item.active {
-    background: var(--primary-light, rgba(199,0,11,.1));
+.page-conv-item:hover { border-color: var(--primary-color, #C7000B); background: var(--primary-light, rgba(199,0,11,.03)); }
+.page-conv-item.active {
+    border-color: var(--primary-color, #C7000B);
+    background: var(--primary-light, rgba(199,0,11,.08));
     color: var(--primary-color, #C7000B);
-    font-weight: 600;
 }
-.sidebar-conv-item:focus-visible {
+.page-conv-item:focus-visible {
     outline: 2px solid var(--primary-color, #C7000B);
     outline-offset: 2px;
 }
-.sidebar-conv-title {
+.page-conv-icon { flex: none; font-size: 14px; }
+.page-conv-text {
     flex: 1;
+    display: flex;
+    flex-direction: column;
     min-width: 0;
+}
+.page-conv-text .page-conv-title {
+    font-size: 12px;
+    font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.sidebar-conv-archive-btn {
+.page-conv-time {
+    font-size: 10px;
+    color: var(--text-muted, #8890A4);
+    margin-top: 1px;
+}
+.page-conv-archive-btn {
+    flex: none;
     border: none;
     background: transparent;
     color: var(--text-muted, #8890A4);
     cursor: pointer;
-    font-size: 11px;
+    font-size: 12px;
     padding: 1px 4px;
     border-radius: 4px;
     opacity: 0;
     transition: opacity .15s;
 }
-.sidebar-conv-item:hover .sidebar-conv-archive-btn { opacity: 1; }
-.sidebar-conv-archive-btn:hover { color: var(--primary-color, #C7000B); background: var(--primary-light, rgba(199,0,11,.08)); }
-.sidebar-conv-archive-btn:focus-visible {
+.page-conv-item:hover .page-conv-archive-btn { opacity: 1; }
+.page-conv-archive-btn:hover { color: var(--primary-color, #C7000B); background: var(--primary-light, rgba(199,0,11,.08)); }
+.page-conv-archive-btn:focus-visible {
     outline: 2px solid var(--primary-color, #C7000B);
     outline-offset: 2px;
 }
 
 @media (max-width: 768px) {
-    .chat-sidebar { display: none; }
+    .page-conversations { display: none; }
 }

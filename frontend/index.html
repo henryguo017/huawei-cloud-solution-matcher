@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css?v=20260803c">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
-<link rel="stylesheet" href="js/chat.css?v=20260803d">
+<link rel="stylesheet" href="js/chat.css?v=20260803e">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -212,14 +212,12 @@
                 </button>
             </div>
             <nav class="sidebar-menu">
-                <!-- M3 精简：方案匹配 → 对话主页（默认落地页，不占菜单） -->
-                <div class="sidebar-section-label">智能对话</div>
+                <!-- 顶部：智能对话（默认主页） -->
                 <button class="sidebar-item active" data-page="solution">
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
                     <span class="nav-text">智能对话 <span class="nav-badge">推荐</span></span>
                 </button>
 
-                <div class="sidebar-section-label">必要功能</div>
                 <button class="sidebar-item" data-page="products">
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg></span>
                     <span class="nav-text">产品图谱</span>
@@ -227,10 +225,6 @@
                 <button class="sidebar-item" data-page="dashboard">
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
                     <span class="nav-text">数据仪表盘</span>
-                </button>
-                <button class="sidebar-item" data-page="achievement">
-                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
-                    <span class="nav-text">成就中心</span>
                 </button>
                 <button class="sidebar-item" data-page="knowledge">
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
@@ -241,12 +235,16 @@
                     <span class="nav-text">设置</span>
                 </button>
 
-                <!-- 工作区：老功能入口兜底（竞品/历史/客户已并入对话，保留可达） -->
-                <details class="sidebar-workspace">
-                    <summary class="sidebar-workspace-toggle">工作区 <span class="ws-arrow">▾</span></summary>
-                    <button class="sidebar-item ws-item" data-page="competitor">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
-                        <span class="nav-text">竞品分析 <span class="nav-badge">高级</span></span>
+                <!-- 我的：合并成就/历史/客户/关于为 details 折叠 -->
+                <details class="sidebar-mine">
+                    <summary class="sidebar-mine-toggle">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
+                        <span class="nav-text">我的</span>
+                        <span class="ws-arrow">▾</span>
+                    </summary>
+                    <button class="sidebar-item ws-item" data-page="achievement">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
+                        <span class="nav-text">成就中心</span>
                     </button>
                     <button class="sidebar-item ws-item" data-page="history">
                         <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
@@ -260,10 +258,19 @@
                         <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
                         <span class="nav-text">关于我们</span>
                     </button>
+                    <button class="sidebar-item ws-item" data-page="competitor">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
+                        <span class="nav-text">竞品分析 <span class="nav-badge">高级</span></span>
+                    </button>
                 </details>
             </nav>
 
-            <!-- ===== 主题切换器（侧栏底部）====== -->
+            <!-- spacer（让 sidebar-footer 推到最下） -->
+            <div style="flex:1"></div>
+
+            <!-- ===== M3：会话列表移至主区中间，sidebar 不再放 ===== -->
+
+            <!-- ===== 主题切换器（侧栏最下边）====== -->
             <div class="theme-switcher" id="theme-switcher">
                 <span class="theme-label">THEME</span>
                 <div class="theme-palette" id="theme-palette">
@@ -284,13 +291,6 @@
                         <span class="theme-name">桃桃粉</span>
                     </div>
                 </div>
-            </div>
-
-            <!-- ===== M3：会话列表（最近任务 + 归档）独立于 sidebar 底部 ===== -->
-            <div class="sidebar-conversations" id="sidebar-conversations">
-                <button class="sidebar-new-conv-btn" id="sidebar-new-conv-btn">✚ 新建任务</button>
-                <div class="sidebar-conv-section">最近任务</div>
-                <div class="sidebar-conv-list" id="sidebar-conv-list"></div>
             </div>
 
             <div class="sidebar-footer">
@@ -563,7 +563,16 @@
                     <h2 class="page-title">华为云解决方案智能匹配</h2>
                     <p class="page-subtitle">输入客户的业务需求和痛点，系统将辅助匹配最适合的华为云行业解决方案</p>
                 </header>
-                
+
+                <!-- ===== M3+:对话记录（主区中间） ===== -->
+                <div class="page-conversations" id="page-conversations">
+                    <div class="page-conv-header">
+                        <span class="page-conv-title">📋 我的对话记录</span>
+                        <button class="page-conv-new-btn" id="page-conv-new-btn">✚ 新建任务</button>
+                    </div>
+                    <div class="page-conv-list" id="page-conv-list"></div>
+                </div>
+
                 <div class="content-card">
                     <div class="form-group">
                         <label class="form-label">客户需求描述

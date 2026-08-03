@@ -116,9 +116,9 @@
     // 当前会话 id（M2）：新建任务=null（后端用 user_id），切换会话=session_id
     S.currentConvId = null;
 
-    // 加载会话列表
+    // 加载会话列表（主区中间横向卡片）
     async function loadConversations() {
-        const box = $el('sidebar-conv-list');
+        const box = $el('page-conv-list');
         if (!box) return;
         if (!checkLoggedIn()) return;
         try {
@@ -131,22 +131,25 @@
             const convs = data.conversations || [];
             box.innerHTML = '';
             if (!convs.length) {
-                box.innerHTML = '<div class="sidebar-conv-section" style="padding-top:0">暂无历史任务</div>';
+                box.innerHTML = '<div class="page-conv-empty">暂无历史任务——开始你的第一次对话吧</div>';
                 return;
             }
             convs.forEach(c => {
                 const item = document.createElement('button');
-                item.className = 'sidebar-conv-item' + (S.currentConvId === c.session_id ? ' active' : '');
+                item.className = 'page-conv-item' + (S.currentConvId === c.session_id ? ' active' : '');
                 item.dataset.session = c.session_id;
-                item.innerHTML = `<span class="sidebar-conv-title">${esc(c.title || c.session_id)}</span>` +
-                    `<span class="sidebar-conv-archive-btn" title="归档（结束此任务，可在历史中找回）">📦</span>`;
-                // 点击切换会话
+                item.innerHTML = `
+                    <span class="page-conv-icon">💬</span>
+                    <span class="page-conv-text">
+                        <span class="page-conv-title">${esc(c.title || c.session_id)}</span>
+                        <span class="page-conv-time">${esc(String(c.updated_at || '').slice(0, 16))}</span>
+                    </span>
+                    <span class="page-conv-archive-btn" title="归档（结束此任务，可在历史中找回）">📦</span>`;
                 item.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('sidebar-conv-archive-btn')) return;
+                    if (e.target.classList.contains('page-conv-archive-btn')) return;
                     switchConversation(c.session_id);
                 });
-                // 归档按钮
-                item.querySelector('.sidebar-conv-archive-btn').addEventListener('click', async (e) => {
+                item.querySelector('.page-conv-archive-btn').addEventListener('click', async (e) => {
                     e.stopPropagation();
                     await archiveConversation(c.session_id, true);
                 });
@@ -163,7 +166,7 @@
         clearStream();
         renderEmptyHint();
         // 高亮
-        document.querySelectorAll('.chat-conv-item').forEach(el => {
+        document.querySelectorAll('.page-conv-item').forEach(el => {
             el.classList.toggle('active', el.dataset.session === sessionId);
         });
         // 加载历史消息
@@ -198,8 +201,8 @@
     // 新建任务：清除当前会话高亮 + 滚动到输入区
     function newConversation() {
         S.currentConvId = null;
-        document.querySelectorAll('.sidebar-conv-item').forEach(el => el.classList.remove('active'));
-        // 焦点移到主页的 textarea（如果存在）
+        document.querySelectorAll('.page-conv-item').forEach(el => el.classList.remove('active'));
+        // 焦点移到主页的 textarea
         const ta = document.getElementById('demand-input');
         if (ta) ta.focus();
     }
@@ -452,14 +455,14 @@
         // 不再操作 DOM（老表单始终显示）
     }
 
-    // ---- 初始化 ----
+    // 初始化
     function init() {
         // 已有对话 UI 则跳过
         if ($el('chat-shell')) return;
-        if (!$el('sidebar-conversations')) return; // A 回退：会话列表挂到 sidebar，不再创建 chat-shell
+        if (!$el('page-conversations')) return; // M3 风格调整：会话列表挂到主区中间
 
-        // 绑定会话列表"新建任务"按钮（挂到 sidebar）
-        const newConvBtn = $el('sidebar-new-conv-btn');
+        // 绑定"新建任务"按钮（主区头部）
+        const newConvBtn = $el('page-conv-new-btn');
         if (newConvBtn) newConvBtn.addEventListener('click', newConversation);
 
         // 初始加载会话列表
@@ -473,7 +476,7 @@
                         const box = document.createElement('div');
                         box.id = 'chat-hint-toast';
                         box.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.82);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;max-width:90vw;box-shadow:0 4px 16px rgba(0,0,0,.3);';
-                        box.textContent = '💬 竞品分析/历史记录/客户管理已并入对话窗口——直接说出需求即可，如「对比华为云和阿里云」「我最近做过哪些方案」「记个客户」。老功能在工作区▾里可找。';
+                        box.textContent = '💬 竞品分析/历史记录/客户管理已并入对话窗口——直接说出需求即可，如「对比华为云和阿里云」「我最近做过哪些方案」「记个客户」。老功能在「我的」里可找。';
                         document.body.appendChild(box);
                         setTimeout(() => box.remove(), 4000);
                     } catch (e) { /* ignore */ }
@@ -482,7 +485,7 @@
             }
         } catch (e) { /* ignore */ }
 
-        // 暴露全局（供 script.js 或调试使用）
+        // 暴露全局
         window.ChatUI = {
             send: (t) => send(t),
             clear: () => { clearStream(); renderEmptyHint(); },
