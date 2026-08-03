@@ -10180,7 +10180,7 @@ select:focus {
 .sidebar-collapse-btn .icon { width: 1rem; height: 1rem; }
 
 .sidebar-menu {
-    flex: 1;
+    flex: 0 0 auto;
     padding: 12px;
     overflow-y: auto;
     overflow-x: hidden;
