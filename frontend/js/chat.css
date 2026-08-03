@@ -404,15 +404,14 @@
 .sidebar-divider {
     border: none;
     height: 1px;
-    margin: 8px 12px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
-    opacity: .9;
+    margin: 4px 10px 2px;
+    background: rgba(255,255,255,.18);
     flex: none;
 }
 
 /* ---- 「我的」details 折叠：与 sidebar-item 同样风格（白文字/SVG/箭头） ---- */
 .sidebar-mine {
-    border-top: 1px solid rgba(255,255,255,.08);
+    border-top: none;
 }
 .sidebar-mine-toggle {
     /* 与 sidebar-item 完全一致的视觉：白文字 + SVG 图标 + 间距紧凑 */
