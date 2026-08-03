@@ -6774,8 +6774,10 @@ function initEventListeners() {
         const favName = (demand || '方案匹配结果').substring(0, 50);
         FavoriteManager._updateResultBtn('fav-solution-btn', favName);
 
-        // 成本参考卡片：仅「方案类」结果（有 solution_json）才渲染；竞品/价目/文件/问答不出（F1）
-        if (result.solution_json) {
+        // 成本参考卡片：仅【方案类】结果（intent=solution/mixed 或有 solution_json）才渲染；
+        // 竞品/价目/文件/平台/通用一律不出（F1 + F1.1：后端 solution_json 现已对非方案意图返回 null）
+        const _isSolutionResult = result.intent === 'solution' || result.intent === 'mixed' || !!result.solution_json;
+        if (_isSolutionResult) {
             renderCostReference(result);
         } else {
             const _crCard = document.getElementById('cost-reference-card');

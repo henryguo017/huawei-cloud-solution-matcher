@@ -902,10 +902,22 @@ Final Answer: [完整方案]）"""
         questions: Optional[list] = None,
         expired: bool = False,
     ) -> Dict[str, Any]:
+        """组装 Agent 返回结果。
+
+        重要（F1 修复 - 后端真修）：
+        solution_json 只在【方案类意图】时才有内容（parse_markdown_to_chapters 解析章节），
+        其他意图（竞品/价目/文件/平台/通用/未知）必须为 None。
+        原因：前端 renderAgentResult 用 if(result.solution_json) 判断要不要渲染成本参考卡，
+        之前的实现是任何 answer 都被解析成 chapters 列表（永远非空），导致前端守卫失效，
+        非方案意图也跟着出成本表（用户反馈 bug）。
+        """
+        intent = self._detect_intent(tool_calls)
+        is_solution_intent = intent in ("solution", "mixed")
         elapsed = time.time() - self._start_time
         return {
             "answer": answer,
-            "solution_json": parse_markdown_to_chapters(answer) if answer else [],
+            "solution_json": parse_markdown_to_chapters(answer) if (answer and is_solution_intent) else None,
+            "intent": intent,  # 顺手透传给前端，便于扩展判断
             "steps": self._step_count,
             "elapsed": round(elapsed, 2),
             "tool_calls": tool_calls,
