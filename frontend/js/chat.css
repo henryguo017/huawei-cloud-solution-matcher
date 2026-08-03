@@ -400,37 +400,73 @@
     flex: 1;
 }
 
-/* ---- M3 侧边栏精简：分区标签 + 工作区折叠 ---- */
+/* ---- 「我的」details 折叠：与 sidebar-item 同样风格（白文字/SVG/箭头） ---- */
 .sidebar-mine {
     border-top: 1px solid var(--border-color, rgba(0,0,0,.06));
 }
 .sidebar-mine-toggle {
+    /* 完全复用 sidebar-item 的视觉语言：白文字 + SVG 图标 + 箭头 */
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 7px 12px;
+    gap: 10px;
+    padding: 8px 14px;
     font-size: 13px;
-    color: var(--text-secondary, #4A5067);
+    color: #FFFFFF;          /* 白色文字（与 sidebar-item 一致） */
     cursor: pointer;
     user-select: none;
     list-style: none;
     border-radius: 6px;
     margin: 0;
+    position: relative;
+    transition: background .15s;
+    border-left: 3px solid transparent;
 }
 .sidebar-mine-toggle::-webkit-details-marker { display: none; }
-.sidebar-mine-toggle:hover { color: var(--primary-color, #C7000B); background: var(--primary-light, rgba(199,0,11,.05)); }
+.sidebar-mine-toggle::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 8px; bottom: 8px;
+    width: 3px;
+    background: transparent;
+    border-radius: 0 2px 2px 0;
+    transition: background .15s;
+}
+.sidebar-mine-toggle:hover { background: rgba(255,255,255,.08); }
+.sidebar-mine-toggle:hover::before { background: var(--primary-color, #C7000B); }
 .sidebar-mine-toggle:focus-visible {
-    outline: 2px solid var(--primary-color, #C7000B);
-    outline-offset: 2px;
+    outline: 2px solid #FFFFFF;
+    outline-offset: -2px;
+}
+.sidebar-mine-toggle .nav-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,.85);
+}
+.sidebar-mine-toggle .nav-icon .icon { width: 18px; height: 18px; }
+.sidebar-mine-toggle .nav-text {
+    flex: 1;
+    font-size: 13px;
+    color: #FFFFFF;
+    font-weight: 500;
 }
 .sidebar-mine-toggle .ws-arrow {
-    margin-left: auto;
-    font-size: 10px;
+    flex: none;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,.7);
     transition: transform .15s;
 }
-.sidebar-mine[open] .ws-arrow { transform: rotate(180deg); }
+.sidebar-mine-toggle .ws-arrow .icon { width: 14px; height: 14px; }
+.sidebar-mine[open] .ws-arrow { transform: rotate(90deg); }
 .sidebar-mine .sidebar-item.ws-item {
-    padding-left: 28px;
+    padding-left: 36px;
 }
 
 /* ---- 主区中部「我的对话记录」横向卡片 ---- */

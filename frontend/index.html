@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css?v=20260803c">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
-<link rel="stylesheet" href="js/chat.css?v=20260803e">
+<link rel="stylesheet" href="js/chat.css?v=20260803f">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -226,6 +226,13 @@
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
                     <span class="nav-text">数据仪表盘</span>
                 </button>
+
+                <!-- 历史记录：独立项，sidebar 中间位置 -->
+                <button class="sidebar-item" data-page="history">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
+                    <span class="nav-text">历史记录</span>
+                </button>
+
                 <button class="sidebar-item" data-page="knowledge">
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
                     <span class="nav-text">知识库</span>
@@ -235,32 +242,16 @@
                     <span class="nav-text">设置</span>
                 </button>
 
-                <!-- 我的：合并成就/历史/客户/关于为 details 折叠 -->
+                <!-- 我的：details 折叠（仅含成就中心，与其他菜单同一风格） -->
                 <details class="sidebar-mine">
                     <summary class="sidebar-mine-toggle">
                         <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
                         <span class="nav-text">我的</span>
-                        <span class="ws-arrow">▾</span>
+                        <span class="ws-arrow"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg></span>
                     </summary>
                     <button class="sidebar-item ws-item" data-page="achievement">
                         <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
                         <span class="nav-text">成就中心</span>
-                    </button>
-                    <button class="sidebar-item ws-item" data-page="history">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
-                        <span class="nav-text">历史记录</span>
-                    </button>
-                    <button class="sidebar-item ws-item" data-page="clients">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
-                        <span class="nav-text">客户管理</span>
-                    </button>
-                    <button class="sidebar-item ws-item" data-page="about">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
-                        <span class="nav-text">关于我们</span>
-                    </button>
-                    <button class="sidebar-item ws-item" data-page="competitor">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
-                        <span class="nav-text">竞品分析 <span class="nav-badge">高级</span></span>
                     </button>
                 </details>
             </nav>
@@ -564,11 +555,16 @@
                     <p class="page-subtitle">输入客户的业务需求和痛点，系统将辅助匹配最适合的华为云行业解决方案</p>
                 </header>
 
-                <!-- ===== M3+:对话记录（主区中间） ===== -->
                 <div class="page-conversations" id="page-conversations">
                     <div class="page-conv-header">
-                        <span class="page-conv-title">📋 我的对话记录</span>
-                        <button class="page-conv-new-btn" id="page-conv-new-btn">✚ 新建任务</button>
+                        <span class="page-conv-title">
+                            <svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg>
+                            我的对话记录
+                        </span>
+                        <button class="page-conv-new-btn" id="page-conv-new-btn">
+                            <svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>
+                            新建任务
+                        </button>
                     </div>
                     <div class="page-conv-list" id="page-conv-list"></div>
                 </div>

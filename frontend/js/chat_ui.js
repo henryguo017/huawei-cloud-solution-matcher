@@ -139,14 +139,16 @@
                 item.className = 'page-conv-item' + (S.currentConvId === c.session_id ? ' active' : '');
                 item.dataset.session = c.session_id;
                 item.innerHTML = `
-                    <span class="page-conv-icon">💬</span>
+                    <span class="page-conv-icon"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg></span>
                     <span class="page-conv-text">
                         <span class="page-conv-title">${esc(c.title || c.session_id)}</span>
                         <span class="page-conv-time">${esc(String(c.updated_at || '').slice(0, 16))}</span>
                     </span>
-                    <span class="page-conv-archive-btn" title="归档（结束此任务，可在历史中找回）">📦</span>`;
+                    <span class="page-conv-archive-btn" title="归档（结束此任务，可在历史中找回）">
+                        <svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>
+                    </span>`;
                 item.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('page-conv-archive-btn')) return;
+                    if (e.target.closest('.page-conv-archive-btn')) return;
                     switchConversation(c.session_id);
                 });
                 item.querySelector('.page-conv-archive-btn').addEventListener('click', async (e) => {
@@ -475,8 +477,8 @@
                     try {
                         const box = document.createElement('div');
                         box.id = 'chat-hint-toast';
-                        box.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.82);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;max-width:90vw;box-shadow:0 4px 16px rgba(0,0,0,.3);';
-                        box.textContent = '💬 竞品分析/历史记录/客户管理已并入对话窗口——直接说出需求即可，如「对比华为云和阿里云」「我最近做过哪些方案」「记个客户」。老功能在「我的」里可找。';
+                        box.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.82);color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;max-width:90vw;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;gap:8px;';
+                        box.innerHTML = '<svg class="icon" aria-hidden="true" style="width:16px;height:16px;flex:none"><use href="#i-info"></use></svg><span>竞品分析/历史记录/客户管理已并入对话窗口——直接说出需求即可，如「对比华为云和阿里云」「我最近做过哪些方案」「记个客户」。老功能在「我的」或直接左侧菜单里可找。</span>';
                         document.body.appendChild(box);
                         setTimeout(() => box.remove(), 4000);
                     } catch (e) { /* ignore */ }
