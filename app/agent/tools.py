@@ -417,6 +417,226 @@ async def _tool_query_pricing(query: str = "") -> str:
 
 
 # ============================================================
+# M2 新增：平台操作工具（查我的历史 / 客户档案 / 导出报告）
+# 数据隔离铁律：一律用 get_agent_user_context() 拿 uid，按 uid 过滤/写入；
+# uid<=0（匿名/未注入）时读操作返回空、写操作拒绝。
+# ============================================================
+
+async def _tool_get_my_history(history_id: int = 0, page: int = 1) -> str:
+    """
+    工具: get_my_history
+    作用: 查询当前用户的历史方案记录（列表或单条详情）。
+    """
+    uid = get_agent_user_context()
+    if uid <= 0:
+        return json.dumps({"status": "error", "message": "需要登录后才能查看历史方案"}, ensure_ascii=False)
+    from api.dependencies import get_usage_logger
+    svc = get_usage_logger()
+    try:
+        if history_id and history_id > 0:
+            item = svc.get_match_history_by_id(history_id, user_id=uid)
+            if item is None:
+                return json.dumps({"status": "not_found", "message": f"未找到历史记录 id={history_id}"}, ensure_ascii=False)
+            return json.dumps({
+                "status": "ok",
+                "item": {
+                    "id": item["id"],
+                    "title": item.get("title") or item.get("demand_text", "")[:50],
+                    "demand_text": item.get("demand_text", ""),
+                    "industry": item.get("industry", ""),
+                    "created_at": item.get("created_at", ""),
+                    "version": item.get("version", 1),
+                    "is_final": item.get("is_final", False),
+                    "group_id": item.get("group_id"),
+                },
+            }, ensure_ascii=False, indent=2)
+        rows = svc.get_match_history_list(limit=10, offset=(max(page, 1) - 1) * 10, user_id=uid)
+        items = [{
+            "id": r["id"],
+            "title": r.get("title") or (r.get("demand_text") or "")[:50],
+            "demand_text": (r.get("demand_text") or "")[:80],
+            "industry": r.get("industry", ""),
+            "created_at": r.get("created_at", ""),
+            "version": r.get("version", 1),
+            "is_final": r.get("is_final", False),
+        } for r in rows]
+        cb = get_agent_event_callback()
+        if cb:
+            try:
+                await cb({"type": "history_list", "items": items, "total": len(items)})
+            except Exception as e:
+                logger.warning(f"[get_my_history] 事件回调失败: {e}")
+        if not items:
+            return json.dumps({"status": "empty", "message": "暂无历史方案记录"}, ensure_ascii=False)
+        return json.dumps({
+            "status": "ok",
+            "total": len(items),
+            "items": items,
+            "message": "已查到历史方案列表。请在 Final Answer 中列出标题、行业、时间（简要即可）。",
+        }, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"[get_my_history] 查询失败: {e}")
+        return f"Error: 查询历史失败 {str(e)}"
+
+
+async def _tool_manage_client(
+    action: str,
+    name: str = "",
+    industry: str = "",
+    company_size: str = "",
+    region: str = "",
+    contact_name: str = "",
+    contact_title: str = "",
+    contact_phone: str = "",
+    contact_email: str = "",
+    stage: str = "",
+    budget: str = "",
+    pain_points: str = "",
+    decision_chain: str = "",
+    tags: str = "",
+    note: str = "",
+    client_id: int = 0,
+) -> str:
+    """
+    工具: manage_client
+    作用: 管理当前用户的客户档案（查询/新建/编辑/删除）。
+    """
+    uid = get_agent_user_context()
+    if uid <= 0:
+        return json.dumps({"status": "error", "message": "需要登录后才能管理客户档案"}, ensure_ascii=False)
+    try:
+        import sqlite3
+        from app.utils import db_init
+        conn = db_init.get_db_connection()
+        action = (action or "").strip().lower()
+        if action in ("list", "get"):
+            if action == "get" and client_id > 0:
+                row = conn.execute(
+                    "SELECT * FROM clients WHERE id=? AND user_id=?", (client_id, uid)
+                ).fetchone()
+                conn.close()
+                if not row:
+                    return json.dumps({"status": "not_found", "message": f"未找到客户 id={client_id}"}, ensure_ascii=False)
+                return json.dumps({"status": "ok", "client": {k: row[k] for k in row.keys()}}, ensure_ascii=False, indent=2)
+            rows = conn.execute(
+                "SELECT id, name, industry, region, stage, budget, contact_name, created_at, note"
+                " FROM clients WHERE user_id=? ORDER BY id DESC LIMIT 20",
+                (uid,),
+            ).fetchall()
+            conn.close()
+            items = [{k: r[k] for k in r.keys()} for r in rows]
+            if not items:
+                return json.dumps({"status": "empty", "message": "暂无客户档案"}, ensure_ascii=False)
+            return json.dumps({"status": "ok", "total": len(items), "clients": items}, ensure_ascii=False, indent=2)
+        if action == "create":
+            if not name or not name.strip():
+                return json.dumps({"status": "error", "message": "创建客户必须提供名称(name)"}, ensure_ascii=False)
+            cur = conn.execute(
+                "INSERT INTO clients (user_id, name, industry, company_size, region, contact_name,"
+                " contact_title, contact_phone, contact_email, stage, budget, pain_points,"
+                " decision_chain, tags, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (uid, name.strip(), industry, company_size, region, contact_name, contact_title,
+                 contact_phone, contact_email, stage, budget, pain_points, decision_chain, tags, note),
+            )
+            conn.commit()
+            new_id = cur.lastrowid
+            conn.close()
+            return json.dumps({"status": "ok", "action": "create", "client_id": new_id, "name": name,
+                               "message": f"已创建客户「{name}」（id={new_id}）"}, ensure_ascii=False, indent=2)
+        if action in ("update", "edit"):
+            if client_id <= 0:
+                return json.dumps({"status": "error", "message": "更新客户必须提供 client_id"}, ensure_ascii=False)
+            row = conn.execute("SELECT id FROM clients WHERE id=? AND user_id=?", (client_id, uid)).fetchone()
+            if not row:
+                conn.close()
+                return json.dumps({"status": "not_found", "message": f"未找到客户 id={client_id} 或无权限"}, ensure_ascii=False)
+            updates = {}
+            for f in ("name", "industry", "company_size", "region", "contact_name", "contact_title",
+                      "contact_phone", "contact_email", "stage", "budget", "pain_points",
+                      "decision_chain", "tags", "note"):
+                v = locals().get(f)
+                if v:
+                    updates[f] = v
+            if updates:
+                sets = ", ".join(f"{k}=?" for k in updates)
+                conn.execute(f"UPDATE clients SET {sets} WHERE id=? AND user_id=?", (*updates.values(), client_id, uid))
+                conn.commit()
+            conn.close()
+            return json.dumps({"status": "ok", "action": "update", "client_id": client_id,
+                               "updated": list(updates.keys())}, ensure_ascii=False, indent=2)
+        if action == "delete":
+            if client_id <= 0:
+                return json.dumps({"status": "error", "message": "删除客户必须提供 client_id"}, ensure_ascii=False)
+            row = conn.execute("SELECT name FROM clients WHERE id=? AND user_id=?", (client_id, uid)).fetchone()
+            if not row:
+                conn.close()
+                return json.dumps({"status": "not_found", "message": f"未找到客户 id={client_id} 或无权限"}, ensure_ascii=False)
+            conn.execute("DELETE FROM clients WHERE id=? AND user_id=?", (client_id, uid))
+            conn.commit()
+            conn.close()
+            return json.dumps({"status": "ok", "action": "delete", "client_id": client_id,
+                               "name": row["name"], "message": f"已删除客户「{row['name']}」"}, ensure_ascii=False, indent=2)
+        conn.close()
+        return json.dumps({"status": "error", "message": f"未知动作: {action}（支持 list/get/create/update/delete）"}, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"[manage_client] 操作失败: {e}")
+        return f"Error: 客户档案操作失败 {str(e)}"
+
+
+async def _tool_export_report(
+    history_id: int,
+    format: str = "word",
+) -> str:
+    """
+    工具: export_report
+    作用: 把指定历史方案导出为 Word/PDF 报告，返回下载链接。
+    """
+    uid = get_agent_user_context()
+    if uid <= 0:
+        return json.dumps({"status": "error", "message": "需要登录后才能导出报告"}, ensure_ascii=False)
+    try:
+        from app.services.usage_logger import UsageLoggerService
+        from app.services.report_generator import ReportGeneratorService, ReportType, ExportFormat
+        svc = UsageLoggerService()
+        item = svc.get_match_history_by_id(history_id, user_id=uid)
+        if item is None:
+            return json.dumps({"status": "not_found", "message": f"未找到历史记录 id={history_id}"}, ensure_ascii=False)
+        content = item.get("solution") or ""
+        if not content.strip():
+            return json.dumps({"status": "error", "message": "该记录无方案内容，无法导出"}, ensure_ascii=False)
+        is_analyze = item.get("type") == "analyze"
+        report_type = ReportType.COMPETITOR if is_analyze else ReportType.SOLUTION
+        fmt = ExportFormat.PDF if (format or "word").lower() == "pdf" else ExportFormat.WORD
+        title = (item.get("competitor") or item.get("demand_text") or "华为云方案")[:60]
+        task = ReportGeneratorService().generate_report(
+            report_type=report_type,
+            content=content,
+            format=fmt,
+            metadata={"title": title, "customer": title},
+        )
+        if not task or task.status.value != "completed" or not task.file_path:
+            return json.dumps({"status": "error", "message": f"文件生成失败: {getattr(task, 'error_message', '未知错误')}"},
+                               ensure_ascii=False)
+        dl_url = getattr(task, "download_url", "") or f"/api/export/download/{task.task_id}"
+        cb = get_agent_event_callback()
+        if cb:
+            try:
+                await cb({"type": "export_ready", "file_name": getattr(task, "file_name", ""),
+                          "download_url": dl_url, "history_id": history_id})
+            except Exception as e:
+                logger.warning(f"[export_report] 事件回调失败: {e}")
+        return json.dumps({
+            "status": "ok",
+            "file_name": getattr(task, "file_name", ""),
+            "download_url": dl_url,
+            "message": "报告已生成。请在 Final Answer 中给出下载链接。",
+        }, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"[export_report] 导出失败: {e}")
+        return f"Error: 导出报告失败 {str(e)}"
+
+
+# ============================================================
 # 阶段1 新增：文件交互工具（读取/落盘/列举）
 # ============================================================
 
@@ -706,6 +926,102 @@ def create_default_tools() -> ToolRegistry:
         },
         func=_tool_query_pricing,
         domain="pricing",
+    ))
+
+    # 8. get_my_history — 我的历史方案（M2 平台工具）
+    registry.register(Tool(
+        name="get_my_history",
+        description=(
+            "查询当前登录用户的历史方案记录。当用户问\"我上次做的方案\"\"我的历史\""
+            "\"找出之前XX的方案\"\"最近做过什么\"时调用。传 history_id 查单条详情，"
+            "不传则返回最近列表（每页10条）。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "history_id": {
+                    "type": "integer",
+                    "description": "历史记录 id（可选，传则查单条详情）",
+                    "default": 0
+                },
+                "page": {
+                    "type": "integer",
+                    "description": "页码，从1开始（可选）",
+                    "default": 1
+                }
+            }
+        },
+        func=_tool_get_my_history,
+        domain="platform",
+    ))
+
+    # 9. manage_client — 客户档案（M2 平台工具）
+    registry.register(Tool(
+        name="manage_client",
+        description=(
+            "管理当前登录用户的客户档案。当用户说\"记个客户/建客户\"\"我的客户有哪些\""
+            "\"把XX客户的信息改一下\"\"删掉XX客户\"时调用。"
+            "action 必填：list(列表)/get(详情，需client_id)/create(新建，需name)/"
+            "update(编辑，需client_id)/delete(删除，需client_id)。"
+            "创建时 name 必填，其余字段可选（industry行业/company_size规模/region区域/"
+            "contact_name联系人/stage阶段/budget预算/pain_points痛点/tags标签/note备注等）。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "get", "create", "update", "delete"],
+                    "description": "操作类型（必填）"
+                },
+                "client_id": {"type": "integer", "description": "客户 id（get/update/delete 必填）", "default": 0},
+                "name": {"type": "string", "description": "客户名称（create 必填）", "default": ""},
+                "industry": {"type": "string", "description": "所属行业", "default": ""},
+                "company_size": {"type": "string", "description": "企业规模", "default": ""},
+                "region": {"type": "string", "description": "所在区域", "default": ""},
+                "contact_name": {"type": "string", "description": "联系人", "default": ""},
+                "contact_title": {"type": "string", "description": "联系人职位", "default": ""},
+                "contact_phone": {"type": "string", "description": "联系电话", "default": ""},
+                "contact_email": {"type": "string", "description": "联系邮箱", "default": ""},
+                "stage": {"type": "string", "description": "项目阶段", "default": ""},
+                "budget": {"type": "string", "description": "预算", "default": ""},
+                "pain_points": {"type": "string", "description": "客户痛点", "default": ""},
+                "decision_chain": {"type": "string", "description": "决策链", "default": ""},
+                "tags": {"type": "string", "description": "标签", "default": ""},
+                "note": {"type": "string", "description": "备注", "default": ""}
+            },
+            "required": ["action"]
+        },
+        func=_tool_manage_client,
+        domain="platform",
+    ))
+
+    # 10. export_report — 导出报告（M2 平台工具）
+    registry.register(Tool(
+        name="export_report",
+        description=(
+            "把当前用户指定的历史方案导出为 Word/PDF 报告文件并给出下载链接。"
+            "当用户说\"导成Word/PDF\"\"下载报告\"\"把方案导出\"时调用。"
+            "需提供 history_id（历史记录 id，可先用 get_my_history 查到）。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "history_id": {
+                    "type": "integer",
+                    "description": "要导出的历史记录 id（必填）"
+                },
+                "format": {
+                    "type": "string",
+                    "enum": ["word", "pdf"],
+                    "description": "导出格式，默认 word",
+                    "default": "word"
+                }
+            },
+            "required": ["history_id"]
+        },
+        func=_tool_export_report,
+        domain="platform",
     ))
 
     return registry

@@ -93,13 +93,22 @@ REACT_SYSTEM_PROMPT_BASE = """你是一个华为云售前智能助手（Copilot�
   ★★★ 绝对禁止：不要把 F 类问题套成方案结构，也不要为了"显得专业"去调 analyze_demand / search_kb 生成方案！直接回答用户的问题即可
   （例外：若问题与华为云具体产品参数/最新报价强相关且你需要事实补全，可轻量调用 query_pricing / search_kb 仅作事实补充，但目的只是补全回答，不是生成方案文档）
 
+【G. 平台操作 / 我的数据】用户查/管**自己**的数据或平台功能
+  特征词：我的历史、我上次的方案、我的客户、记个客户、建客户、查客户、改客户信息、
+         删客户、导出报告、导成Word、导成PDF、下载方案
+  ★ 工具链：按需调用 get_my_history / manage_client / export_report，完成即 Final Answer
+  ★ 输出：**简洁陈述查到什么 / 做了什么**（如"您最近有3条历史方案：…""已创建客户「XX集团」"）
+  ★★★ 绝对禁止：G 类是"办事"不是"写方案"——不要套 14 章方案结构，不要调用 analyze_demand / search_kb
+  （注意：查询类工具只能查到当前登录用户自己的数据；用户问"别人的/全部用户"的数据应礼貌拒绝）
+
 ## ⚠️ 核心纪律（违反会导致体验极差）
 1. **识别意图后只走该意图的工具链，不走别的**
 2. **工具链完成 = 立即 Final Answer，不追加额外工具**
-3. **意图 B/C/D 的 Final Answer 应该简短精炼（几段话/一个表），不是 14 章方案文档**
+3. **意图 B/C/D/G 的 Final Answer 应该简短精炼（几段话/一个表），不是 14 章方案文档**
 4. 如果你发现自己在非方案意图上调了 analyze_demand 或 search_kb → **立即停止，直接 Final Answer**
 5. **F. 通用问答是默认兜底**：任何不属于 A–E 的问题（知识科普、写作、平台用法、闲聊等）一律按 F 直接回答，**绝不套用方案结构、绝不强行调工具**。用户"随便问问"时，给一个自然、有用的回答即可。
 6. **明确请求禁止反问**：用户已说出行业+场景（如"政务局一网通办""对比腾讯云"）的明确动作请求，直接走工具链出结果，**不要用 Clarify 追问细节**——细节可在方案/回答中标注"待细化"。只有连行业/场景都没提时才允许澄清。
+7. **G 类是"办事"不是"写方案"**：用户让你查历史/管客户/导出文件时，做完就简洁汇报结果，禁止追加方案生成、禁止把操作结果写成方案文档。
 
 ## 可用工具
 {tools}
@@ -754,6 +763,7 @@ Final Answer: [完整方案]）"""
         - 'competitor': 仅调了 search_competitor（纯竞品对比）
         - 'pricing'  : 仅调了 query_pricing（纯价目查询）
         - 'filegen'  : 仅调了 run_code（纯文件生成）
+        - 'platform' : 仅调了 get_my_history / manage_client / export_report（平台操作）
         - 'mixed'    : 多种工具组合（含竞品+价目等非方案工具）
         - 'unknown'  : 无法判断（无工具调用或异常）
         """
@@ -762,15 +772,18 @@ Final Answer: [完整方案]）"""
         has_comp = "search_competitor" in tools_used
         has_price = "query_pricing" in tools_used
         has_code = "run_code" in tools_used
+        has_platform = bool(tools_used & {"get_my_history", "manage_client", "export_report"})
 
         if has_kb:
             return "solution"
-        if has_comp and not has_price and not has_code and len(tools_used) == 1:
+        if has_comp and not has_price and not has_code and not has_platform and len(tools_used) == 1:
             return "competitor"
-        if has_price and not has_comp and not has_code and len(tools_used) == 1:
+        if has_price and not has_comp and not has_code and not has_platform and len(tools_used) == 1:
             return "pricing"
-        if has_code and not has_kb and not has_comp and not has_price:
+        if has_code and not has_kb and not has_comp and not has_price and not has_platform:
             return "filegen"
+        if has_platform and not has_kb and len(tools_used) <= 2:
+            return "platform"
         if len(tools_used) > 1:
             return "mixed"
         return "unknown"
@@ -786,7 +799,7 @@ Final Answer: [完整方案]）"""
         self._log("system", f"[_finalize_answer] 检测意图={intent}, 工具={[tc.get('tool') for tc in tool_calls]}")
 
         # 非方案意图 → 直接返回 Agent 草稿，不走 14 章增强
-        if intent in ("competitor", "pricing", "filegen"):
+        if intent in ("competitor", "pricing", "filegen", "platform"):
             self._log("system", f"非方案意图({intent})，跳过14章增强，使用Agent草稿(len={len(draft)})")
             return draft
 
@@ -858,6 +871,12 @@ Final Answer: [完整方案]）"""
         if last_tool == "run_code" and not has_kb:
             return ("文件已生成完毕。请立即输出 Final Answer（简要说明文件名和内容，3-5句话），"
                     "禁止再调 analyze_demand / search_kb / search_competitor / query_pricing！")
+
+        # 平台操作意图：get_my_history / manage_client / export_report 完成后强制 Final Answer
+        if last_tool in ("get_my_history", "manage_client", "export_report") and not has_kb:
+            return ("平台操作已完成。请立即输出 Final Answer（简洁汇报查到什么/做了什么，几段话即可），"
+                    "禁止再调 analyze_demand / search_kb / search_competitor / query_pricing / run_code，"
+                    "也不要套方案文档结构！")
 
         # 方案意图或混合：标准续行提示
         if has_kb:
