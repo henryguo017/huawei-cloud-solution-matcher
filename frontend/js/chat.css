@@ -433,6 +433,95 @@
     padding-left: 28px;
 }
 
+/* ---- A 回退：会话列表挂到 sidebar（替代 chat-shell 内 sidebar） ---- */
+.sidebar-conversations {
+    margin-top: auto;
+    border-top: 1px solid var(--border-color, rgba(0,0,0,.08));
+    padding: 8px 6px 6px;
+    flex: 0 0 auto;
+}
+.sidebar-new-conv-btn {
+    width: 100%;
+    border: 1px dashed var(--border-color, rgba(0,0,0,.2));
+    background: transparent;
+    color: var(--text-secondary, #4A5067);
+    border-radius: 8px;
+    padding: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-bottom: 6px;
+}
+.sidebar-new-conv-btn:hover {
+    border-color: var(--primary-color, #C7000B);
+    color: var(--primary-color, #C7000B);
+    background: var(--primary-light, rgba(199,0,11,.05));
+}
+.sidebar-new-conv-btn:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+}
+.sidebar-conv-section {
+    font-size: 10px;
+    color: var(--text-muted, #8890A4);
+    padding: 4px 10px 2px;
+    letter-spacing: 0.5px;
+}
+.sidebar-conv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.sidebar-conv-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary, #4A5067);
+    text-align: left;
+    width: 100%;
+    border: none;
+    background: transparent;
+}
+.sidebar-conv-item:hover { background: var(--bg-card-solid, #F4F5F7); }
+.sidebar-conv-item.active {
+    background: var(--primary-light, rgba(199,0,11,.1));
+    color: var(--primary-color, #C7000B);
+    font-weight: 600;
+}
+.sidebar-conv-item:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+}
+.sidebar-conv-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sidebar-conv-archive-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted, #8890A4);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity .15s;
+}
+.sidebar-conv-item:hover .sidebar-conv-archive-btn { opacity: 1; }
+.sidebar-conv-archive-btn:hover { color: var(--primary-color, #C7000B); background: var(--primary-light, rgba(199,0,11,.08)); }
+.sidebar-conv-archive-btn:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+}
+
 @media (max-width: 768px) {
     .chat-sidebar { display: none; }
 }

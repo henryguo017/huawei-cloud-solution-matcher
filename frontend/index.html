@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css?v=20260803c">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
-<link rel="stylesheet" href="js/chat.css?v=20260803b">
+<link rel="stylesheet" href="js/chat.css?v=20260803d">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -284,6 +284,13 @@
                         <span class="theme-name">桃桃粉</span>
                     </div>
                 </div>
+            </div>
+
+            <!-- ===== M3：会话列表（最近任务 + 归档）独立于 sidebar 底部 ===== -->
+            <div class="sidebar-conversations" id="sidebar-conversations">
+                <button class="sidebar-new-conv-btn" id="sidebar-new-conv-btn">✚ 新建任务</button>
+                <div class="sidebar-conv-section">最近任务</div>
+                <div class="sidebar-conv-list" id="sidebar-conv-list"></div>
             </div>
 
             <div class="sidebar-footer">

@@ -95,31 +95,18 @@
     }
 
     function renderEmptyHint() {
-        const stream = $el('chat-stream');
-        if (!stream || stream.querySelector('.chat-msg')) return;
-        stream.innerHTML = `<div class="chat-empty-hint">
-            <div style="font-size:22px;margin-bottom:6px">💬</div>
-            <div style="font-size:15px;font-weight:600">我能帮你做什么？</div>
-            <div style="font-size:13px;margin-top:4px">方案匹配 / 竞品对比 / 价目查询 / 生成文件 / 查历史 / 记客户</div>
-            <div class="chat-suggestions">
-                <button data-q="给某地市政务局做一个一网通办的方案，预算有限">做政务一网通办方案</button>
-                <button data-q="对比华为云和阿里云在政务云上谁强">对比华为云和阿里云</button>
-                <button data-q="我最近做过哪些方案？帮我查一下">查我的历史</button>
-                <button data-q="ModelArts 推理多少钱一小时">查 ModelArts 价格</button>
-            </div>
-        </div>`;
-        stream.querySelectorAll('.chat-suggestions button').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const input = $el('chat-input');
-                if (input) { input.value = btn.dataset.q || ''; input.focus(); }
-            });
-        });
+        // A 回退：chat-shell 已删，空态由老 form 的 placeholders 提示
     }
 
+    function renderMessage(m) {
+        // A 回退：不再使用（chat-shell 已删，AI 答案由老 renderAgentResult 渲染）
+    }
+
+    function renderTyping() { /* A 回退：不再使用 */ }
+    function removeTyping() { /* A 回退：不再使用 */ }
+
     function clearStream() {
-        const stream = $el('chat-stream');
-        if (stream) stream.innerHTML = '';
-        S.messages = [];
+        // A 回退：chat-shell 已删，clearStream 不再操作 DOM
     }
 
     // ==================== M2 会话管理 ====================
@@ -131,7 +118,7 @@
 
     // 加载会话列表
     async function loadConversations() {
-        const box = $el('chat-conv-list');
+        const box = $el('sidebar-conv-list');
         if (!box) return;
         if (!checkLoggedIn()) return;
         try {
@@ -144,22 +131,22 @@
             const convs = data.conversations || [];
             box.innerHTML = '';
             if (!convs.length) {
-                box.innerHTML = '<div class="chat-conv-section">暂无历史任务</div>';
+                box.innerHTML = '<div class="sidebar-conv-section" style="padding-top:0">暂无历史任务</div>';
                 return;
             }
             convs.forEach(c => {
                 const item = document.createElement('button');
-                item.className = 'chat-conv-item' + (S.currentConvId === c.session_id ? ' active' : '');
+                item.className = 'sidebar-conv-item' + (S.currentConvId === c.session_id ? ' active' : '');
                 item.dataset.session = c.session_id;
-                item.innerHTML = `<span class="chat-conv-title">${esc(c.title || c.session_id)}</span>` +
-                    `<span class="chat-conv-archive-btn" title="归档（结束此任务，可在历史中找回）">📦</span>`;
+                item.innerHTML = `<span class="sidebar-conv-title">${esc(c.title || c.session_id)}</span>` +
+                    `<span class="sidebar-conv-archive-btn" title="归档（结束此任务，可在历史中找回）">📦</span>`;
                 // 点击切换会话
                 item.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('chat-conv-archive-btn')) return;
+                    if (e.target.classList.contains('sidebar-conv-archive-btn')) return;
                     switchConversation(c.session_id);
                 });
                 // 归档按钮
-                item.querySelector('.chat-conv-archive-btn').addEventListener('click', async (e) => {
+                item.querySelector('.sidebar-conv-archive-btn').addEventListener('click', async (e) => {
                     e.stopPropagation();
                     await archiveConversation(c.session_id, true);
                 });
@@ -208,14 +195,13 @@
         }
     }
 
-    // 新建任务
+    // 新建任务：清除当前会话高亮 + 滚动到输入区
     function newConversation() {
         S.currentConvId = null;
-        clearStream();
-        renderEmptyHint();
-        document.querySelectorAll('.chat-conv-item').forEach(el => el.classList.remove('active'));
-        const input = $el('chat-input');
-        if (input) input.focus();
+        document.querySelectorAll('.sidebar-conv-item').forEach(el => el.classList.remove('active'));
+        // 焦点移到主页的 textarea（如果存在）
+        const ta = document.getElementById('demand-input');
+        if (ta) ta.focus();
     }
 
     // 归档会话
@@ -461,130 +447,22 @@
         }
     }
 
-    // ---- 模式切换（仅 agent 接管对话） ----
+    // ---- A 回退：applyMode 不再隐藏老表单（chat-shell 已删） ----
     function applyMode() {
-        const chatShell = $el('chat-shell');
-        if (!chatShell) return;
-        const agentMode = S.mode === 'agent';
-        chatShell.style.display = agentMode ? 'flex' : 'none';
-
-        // Agent 模式：隐藏老表单区（需求输入/模式切换/客户档案），避免双 UI 冲突
-        const host = $el('page-solution');
-        if (!host) return;
-        const formCard = host.querySelector('.content-card .form-group');
-        const modeBar = host.querySelector('.mode-toggle-bar');
-        if (agentMode) {
-            if (formCard) formCard.closest('.content-card').style.display = 'none';
-            if (modeBar) modeBar.style.display = 'none';
-        } else {
-            if (formCard) formCard.closest('.content-card').style.display = '';
-            if (modeBar) modeBar.style.display = '';
-        }
+        // 不再操作 DOM（老表单始终显示）
     }
 
     // ---- 初始化 ----
     function init() {
         // 已有对话 UI 则跳过
         if ($el('chat-shell')) return;
-        // 获取宿主容器（page-solution）
-        const host = $el('page-solution');
-        if (!host) return;
+        if (!$el('sidebar-conversations')) return; // A 回退：会话列表挂到 sidebar，不再创建 chat-shell
 
-        // 构建对话壳
-        const shell = document.createElement('div');
-        shell.id = 'chat-shell';
-        shell.className = 'chat-shell';
-        shell.innerHTML = `
-            <div class="chat-sidebar" id="chat-sidebar">
-                <button class="chat-new-conv-btn" id="chat-new-conv-btn">✚ 新建任务</button>
-                <div class="chat-conv-section">最近任务</div>
-                <div class="chat-conv-list" id="chat-conv-list"></div>
-            </div>
-            <div class="chat-main">
-                <div class="chat-stream" id="chat-stream"></div>
-                <div class="chat-inputbar">
-                    <div class="chat-inputbar-row">
-                        <textarea id="chat-input" placeholder="输入你的需求，如：给某地市政务局做一个一网通办的方案" rows="1"></textarea>
-                        <button class="chat-send-btn" id="chat-send-btn" title="发送 (Enter)">➤</button>
-                    </div>
-                    <div class="chat-toolbar">
-                        <button class="chat-tool-btn" id="chat-attach-btn" title="上传客户资料（可选）">📎 附件</button>
-                        <select class="chat-mode-select" id="chat-mode-select" title="匹配模式">
-                            <option value="agent" selected>Agent 智能对话（推荐）</option>
-                            <option value="normal">标准模式</option>
-                            <option value="wizard">向导模式</option>
-                        </select>
-                        <span style="flex:1"></span>
-                        <span class="chat-mode-hint" id="chat-mode-hint" style="font-size:12px;color:var(--text-muted,#8890A4)">Enter 发送 · Shift+Enter 换行</span>
-                    </div>
-                </div>
-            </div>
-        `;
-        // 插入到 page-solution 顶部（header 之后）
-        const header = host.querySelector('.page-header');
-        if (header) header.insertAdjacentElement('afterend', shell);
-        else host.prepend(shell);
+        // 绑定会话列表"新建任务"按钮（挂到 sidebar）
+        const newConvBtn = $el('sidebar-new-conv-btn');
+        if (newConvBtn) newConvBtn.addEventListener('click', newConversation);
 
-        // 事件绑定
-        const input = $el('chat-input');
-        const sendBtn = $el('chat-send-btn');
-        const modeSelect = $el('chat-mode-select');
-
-        // 自动撑高
-        input.addEventListener('input', () => {
-            input.style.height = 'auto';
-            input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-        });
-        // Enter 发送 / Shift+Enter 换行
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                send(input.value);
-            }
-        });
-        sendBtn.addEventListener('click', () => send(input.value));
-
-        // 模式选择：agent → 对话接管；其他 → 恢复老表单（隐藏对话壳）
-        modeSelect.addEventListener('change', () => {
-            const m = modeSelect.value;
-            S.mode = m;
-            if (m !== 'agent') {
-                shell.style.display = 'none';
-                // 让老表单可见（模式切换逻辑在 script.js，触发它）
-                const modeToggle = $el('mode-toggle');
-                if (modeToggle) {
-                    const opt = modeToggle.querySelector(`[data-mode="${m}"]`);
-                    if (opt) opt.click();
-                }
-            } else {
-                shell.style.display = 'flex';
-                const modeToggle = $el('mode-toggle');
-                if (modeToggle) {
-                    const opt = modeToggle.querySelector('[data-mode="agent"]');
-                    if (opt) opt.click();
-                }
-            }
-        });
-
-        // 附件按钮：触发老的上传组件（若存在）
-        const attachBtn = $el('chat-attach-btn');
-        attachBtn.addEventListener('click', () => {
-            if (window.CustomerFileUploader && CustomerFileUploader.trigger) {
-                CustomerFileUploader.trigger();
-            } else {
-                const dropzone = $el('cf-dropzone');
-                if (dropzone) dropzone.click();
-            }
-        });
-
-        // M2：新建任务按钮
-        const newConvBtn = $el('chat-new-conv-btn');
-        newConvBtn.addEventListener('click', newConversation);
-
-        // 初始渲染
-        renderEmptyHint();
-        applyMode();
-        // M2：加载会话列表
+        // 初始加载会话列表
         loadConversations();
 
         // M3：首次进入提示（竞品/历史/客户已并入对话）
