@@ -1,0 +1,374 @@
+/* ============================================================
+   cloudsol.cn 对话式主区样式（M1 前端对话化改造）
+   独立于 style.css，避免污染老样式。主题变量沿用 :root 定义。
+   ============================================================ */
+
+/* ---- 对话主区容器 ---- */
+.chat-shell {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 150px);
+    min-height: 480px;
+    border: 1px solid var(--border-color, rgba(0,0,0,.08));
+    border-radius: 12px;
+    background: var(--bg-card, #fff);
+    overflow: hidden;
+}
+
+/* 消息流区域（可滚动） */
+.chat-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-behavior: smooth;
+}
+
+/* ---- 消息行 ---- */
+.chat-msg {
+    display: flex;
+    gap: 10px;
+    max-width: 100%;
+}
+.chat-msg.user {
+    justify-content: flex-end;
+}
+.chat-msg.agent {
+    justify-content: flex-start;
+}
+
+/* 头像 */
+.chat-avatar {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+}
+.chat-msg.user .chat-avatar { background: var(--primary-color, #C7000B); order: 2; }
+.chat-msg.agent .chat-avatar { background: #1E6FD9; order: 0; }
+
+/* 气泡主体 */
+.chat-bubble {
+    max-width: 78%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.65;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+.chat-msg.user .chat-bubble {
+    background: var(--primary-light, rgba(199,0,11,.06));
+    border: 1px solid rgba(199,0,11,.15);
+    color: var(--text-primary, #1A1C23);
+    border-top-right-radius: 4px;
+}
+.chat-msg.agent .chat-bubble {
+    background: var(--bg-card-solid, #F4F5F7);
+    border: 1px solid var(--border-color, rgba(0,0,0,.08));
+    color: var(--text-primary, #1A1C23);
+    border-top-left-radius: 4px;
+}
+
+/* 气泡内 Markdown 增强 */
+.chat-bubble h1, .chat-bubble h2, .chat-bubble h3 {
+    margin: 8px 0 4px;
+    font-size: 15px;
+    color: var(--text-primary, #1A1C23);
+}
+.chat-bubble p { margin: 4px 0; }
+.chat-bubble ul, .chat-bubble ol { margin: 4px 0 4px 18px; padding: 0; }
+.chat-bubble code {
+    background: rgba(0,0,0,.06);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+.chat-bubble pre {
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 10px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 12px;
+}
+.chat-bubble table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 6px 0;
+    font-size: 13px;
+}
+.chat-bubble th, .chat-bubble td {
+    border: 1px solid var(--border-color, rgba(0,0,0,.1));
+    padding: 5px 8px;
+    text-align: left;
+}
+.chat-bubble th { background: var(--bg-card-solid, #F4F5F7); font-weight: 600; }
+.chat-bubble a { color: var(--primary-color, #C7000B); }
+
+/* ---- 思考流折叠区（AI 干活的过程） ---- */
+.chat-think {
+    background: var(--bg-card-solid, #F4F5F7);
+    border: 1px solid var(--border-color, rgba(0,0,0,.06));
+    border-radius: 8px;
+    margin-top: 6px;
+    overflow: hidden;
+}
+.chat-think summary {
+    cursor: pointer;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--text-secondary, #4A5067);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.chat-think summary:hover { color: var(--primary-color, #C7000B); }
+.chat-think-body {
+    padding: 4px 10px 10px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+.chat-think-body .think-entry {
+    font-size: 12px;
+    color: var(--text-secondary, #4A5067);
+    padding: 3px 0;
+    border-bottom: 1px dashed rgba(0,0,0,.05);
+}
+.chat-think-body .think-entry:last-child { border-bottom: none; }
+.chat-think-body .think-text { white-space: pre-wrap; word-break: break-word; }
+.chat-think-body code { font-size: 11px; }
+
+/* ---- 卡片嵌入消息流（复用 script.js 的卡片样式类名） ---- */
+.chat-bubble .sol-card,
+.chat-bubble .comp-card,
+.chat-bubble .price-card,
+.chat-bubble .hist-card,
+.chat-bubble .export-card,
+.chat-bubble .artifact-card {
+    margin: 8px 0;
+}
+
+/* ---- 底部输入区 ---- */
+.chat-inputbar {
+    flex: none;
+    border-top: 1px solid var(--border-color, rgba(0,0,0,.08));
+    padding: 10px 14px;
+    background: var(--bg-card, #fff);
+}
+.chat-inputbar-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+}
+.chat-inputbar textarea {
+    flex: 1;
+    resize: none;
+    border: 1px solid var(--border-color, rgba(0,0,0,.15));
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    max-height: 120px;
+    min-height: 40px;
+    background: var(--bg-elevated, #fff);
+    color: var(--text-primary, #1A1C23);
+    outline: none;
+    font-family: inherit;
+}
+.chat-inputbar textarea:focus {
+    border-color: var(--primary-color, #C7000B);
+    box-shadow: 0 0 0 2px var(--primary-light, rgba(199,0,11,.1));
+}
+.chat-inputbar .chat-send-btn {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: var(--primary-color, #C7000B);
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s;
+}
+.chat-inputbar .chat-send-btn:hover { background: var(--primary-hover, #A30009); }
+.chat-inputbar .chat-send-btn:disabled { opacity: .5; cursor: not-allowed; }
+.chat-inputbar .chat-send-btn:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+}
+
+/* 输入区工具行（附件/模式/模型） */
+.chat-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.chat-toolbar .chat-tool-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #4A5067);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.chat-toolbar .chat-tool-btn:hover { background: var(--primary-light, rgba(199,0,11,.08)); color: var(--primary-color, #C7000B); }
+.chat-toolbar .chat-tool-btn:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+}
+.chat-toolbar .chat-mode-select {
+    border: 1px solid var(--border-color, rgba(0,0,0,.15));
+    border-radius: 6px;
+    font-size: 12px;
+    padding: 3px 6px;
+    background: var(--bg-elevated, #fff);
+    color: var(--text-primary, #1A1C23);
+}
+
+/* 输入提示占位（空对话时展示建议） */
+.chat-empty-hint {
+    text-align: center;
+    color: var(--text-muted, #8890A4);
+    padding: 40px 20px;
+}
+.chat-empty-hint .chat-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 14px;
+}
+.chat-empty-hint .chat-suggestions button {
+    border: 1px solid var(--border-color, rgba(0,0,0,.12));
+    background: var(--bg-card, #fff);
+    color: var(--text-secondary, #4A5067);
+    border-radius: 16px;
+    padding: 5px 12px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.chat-empty-hint .chat-suggestions button:hover {
+    border-color: var(--primary-color, #C7000B);
+    color: var(--primary-color, #C7000B);
+}
+.chat-empty-hint .chat-suggestions button:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+}
+
+/* 思考中动画 */
+.chat-typing {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 0;
+}
+.chat-typing span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted, #8890A4);
+    animation: chat-blink 1.4s infinite both;
+}
+.chat-typing span:nth-child(2) { animation-delay: .2s; }
+.chat-typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes chat-blink { 0%, 80%, 100% { opacity: .2; } 40% { opacity: 1; } }
+
+/* 会话归档/结束按钮 */
+.chat-conv-archive-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted, #8890A4);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity .15s;
+}
+.chat-conv-item:hover .chat-conv-archive-btn { opacity: 1; }
+.chat-conv-archive-btn:hover { color: var(--primary-color, #C7000B); background: var(--primary-light, rgba(199,0,11,.08)); }
+.chat-conv-archive-btn:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+}
+
+/* 会话列表项 */
+.chat-conv-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary, #4A5067);
+    text-align: left;
+    width: 100%;
+    border: none;
+    background: transparent;
+}
+.chat-conv-item:hover { background: var(--bg-card-solid, #F4F5F7); }
+.chat-conv-item.active { background: var(--primary-light, rgba(199,0,11,.1)); color: var(--primary-color, #C7000B); font-weight: 600; }
+.chat-conv-item:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+}
+.chat-conv-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 新建任务按钮 */
+.chat-new-conv-btn {
+    width: 100%;
+    border: 1px dashed var(--border-color, rgba(0,0,0,.2));
+    background: transparent;
+    color: var(--text-secondary, #4A5067);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: 8px;
+}
+.chat-new-conv-btn:hover {
+    border-color: var(--primary-color, #C7000B);
+    color: var(--primary-color, #C7000B);
+    background: var(--primary-light, rgba(199,0,11,.05));
+}
+.chat-new-conv-btn:focus-visible {
+    outline: 2px solid var(--primary-color, #C7000B);
+    outline-offset: 2px;
+}
+
+/* 会话分区标题 */
+.chat-conv-section {
+    font-size: 11px;
+    color: var(--text-muted, #8890A4);
+    padding: 8px 10px 4px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
