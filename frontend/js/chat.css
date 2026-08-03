@@ -472,6 +472,169 @@
     font-weight: 600;
 }
 
+/* ---- 任务 details（紧贴「我的」下方，命名从「我的对话记录」改为「任务」）---- */
+.sidebar-conv-details {
+    border-top: 1px solid rgba(255,255,255,.08);
+}
+.sidebar-conv-toggle {
+    /* 复刻 sidebar-mine-toggle 视觉语言 */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #FFFFFF;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    border-radius: 4px;
+    position: relative;
+    transition: background .15s;
+    border-left: 3px solid transparent;
+}
+.sidebar-conv-toggle::-webkit-details-marker { display: none; }
+.sidebar-conv-toggle::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 5px; bottom: 5px;
+    width: 3px;
+    background: transparent;
+    border-radius: 0 2px 2px 0;
+    transition: background .15s;
+}
+.sidebar-conv-toggle:hover { background: rgba(255,255,255,.08); }
+.sidebar-conv-toggle:hover::before { background: var(--primary-color, #C7000B); }
+.sidebar-conv-toggle:focus-visible {
+    outline: 2px solid #FFFFFF;
+    outline-offset: -2px;
+}
+.sidebar-conv-toggle .nav-icon {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,.85);
+}
+.sidebar-conv-toggle .nav-icon .icon { width: 16px; height: 16px; }
+.sidebar-conv-toggle .nav-text {
+    flex: 1;
+    font-size: 13px;
+    color: #FFFFFF;
+    font-weight: 600;
+}
+.sidebar-conv-toggle .nav-text .conv-count {
+    font-size: 11px;
+    color: rgba(255,255,255,.5);
+    font-weight: 500;
+    margin-left: 2px;
+}
+.sidebar-conv-toggle .ws-arrow {
+    flex: none;
+    width: 12px;
+    height: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,.7);
+    transition: transform .15s;
+}
+.sidebar-conv-toggle .ws-arrow .icon { width: 12px; height: 12px; }
+.sidebar-conv-details[open] .ws-arrow { transform: rotate(90deg); }
+
+/* 任务列表紧凑（任务折叠头展开后才出现） */
+.sidebar-conv-details .sidebar-conv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 4px 6px;
+    max-height: 280px;
+    overflow-y: auto;
+}
+.sidebar-conv-empty {
+    font-size: 11px;
+    color: rgba(255,255,255,.45);
+    padding: 8px 6px 4px;
+    text-align: left;
+}
+.sidebar-conv-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: rgba(255,255,255,.85);
+    transition: background .15s;
+}
+.sidebar-conv-item:hover { background: rgba(255,255,255,.08); color: #FFFFFF; }
+.sidebar-conv-item.active {
+    background: rgba(255,255,255,.18);
+    color: #FFFFFF;
+    font-weight: 600;
+}
+.sidebar-conv-item:focus-visible {
+    outline: 2px solid #FFFFFF;
+    outline-offset: -2px;
+}
+.sidebar-conv-icon {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    color: rgba(255,255,255,.7);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.sidebar-conv-icon .icon { width: 14px; height: 14px; }
+.sidebar-conv-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.sidebar-conv-text .sidebar-conv-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: inherit;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0;
+    letter-spacing: 0;
+}
+.sidebar-conv-time {
+    font-size: 10px;
+    color: rgba(255,255,255,.45);
+    margin-top: 1px;
+}
+.sidebar-conv-archive-btn {
+    flex: none;
+    border: none;
+    background: transparent;
+    color: rgba(255,255,255,.5);
+    cursor: pointer;
+    padding: 1px 3px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity .15s;
+    display: inline-flex;
+    align-items: center;
+}
+.sidebar-conv-item:hover .sidebar-conv-archive-btn { opacity: 1; }
+.sidebar-conv-archive-btn:hover { color: #FFFFFF; background: rgba(255,255,255,.12); }
+.sidebar-conv-archive-btn:focus-visible {
+    outline: 2px solid #FFFFFF;
+    outline-offset: 1px;
+}
+.sidebar-conv-archive-btn .icon { width: 12px; height: 12px; }
+
 /* ---- 主题切换器推到 sidebar 底部（紧贴 sidebar-footer） ---- */
 .sidebar .theme-switcher,
 #theme-switcher {

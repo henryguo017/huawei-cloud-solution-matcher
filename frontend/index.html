@@ -8,7 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="style.css?v=20260803c">
 <link rel="stylesheet" href="cost-reference.css?v=20260726a">
-<link rel="stylesheet" href="js/chat.css?v=20260803h">
+<link rel="stylesheet" href="js/chat.css?v=20260803i">
     <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
 </head>
 <body>
@@ -235,46 +235,42 @@
                     <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></span>
                     <span class="nav-text">设置</span>
                 </button>
-
-                <!-- 我的：details 折叠（含 4 项：成就中心/历史记录/客户管理/关于我们） -->
-                <details class="sidebar-mine">
-                    <summary class="sidebar-mine-toggle">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
-                        <span class="nav-text">我的</span>
-                        <span class="ws-arrow"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg></span>
-                    </summary>
-                    <button class="sidebar-item ws-item" data-page="achievement">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
-                        <span class="nav-text">成就中心</span>
-                    </button>
-                    <button class="sidebar-item ws-item" data-page="history">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
-                        <span class="nav-text">历史记录</span>
-                    </button>
-                    <button class="sidebar-item ws-item" data-page="clients">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
-                        <span class="nav-text">客户管理</span>
-                    </button>
-                    <button class="sidebar-item ws-item" data-page="about">
-                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
-                        <span class="nav-text">关于我们</span>
-                    </button>
-                </details>
             </nav>
 
-            <!-- ===== M3+:侧栏中部「我的对话记录」紧凑列表 ===== -->
-            <div class="sidebar-conversations" id="sidebar-conversations">
-                <div class="sidebar-conv-header">
-                    <span class="sidebar-conv-title">
-                        <svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg>
-                        我的对话记录
-                    </span>
-                    <button class="sidebar-conv-new-btn" id="sidebar-new-conv-btn" title="新建任务">
-                        <svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg>
-                    </button>
-                </div>
+            <!-- 我的：details 折叠（紧贴 nav 之后，作为 sidebar 直接子元素，默认收起） -->
+            <details class="sidebar-mine">
+                <summary class="sidebar-mine-toggle">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
+                    <span class="nav-text">我的</span>
+                    <span class="ws-arrow"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg></span>
+                </summary>
+                <button class="sidebar-item ws-item" data-page="achievement">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
+                    <span class="nav-text">成就中心</span>
+                </button>
+                <button class="sidebar-item ws-item" data-page="history">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
+                    <span class="nav-text">历史记录</span>
+                </button>
+                <button class="sidebar-item ws-item" data-page="clients">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
+                    <span class="nav-text">客户管理</span>
+                </button>
+                <button class="sidebar-item ws-item" data-page="about">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
+                    <span class="nav-text">关于我们</span>
+                </button>
+            </details>
+
+            <!-- 任务：details 折叠（紧贴「我的」之下，默认收起） -->
+            <details class="sidebar-conv-details" id="sidebar-conversations">
+                <summary class="sidebar-conv-toggle">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
+                    <span class="nav-text">任务 <span class="conv-count" id="sidebar-conv-count">(0)</span></span>
+                    <span class="ws-arrow"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg></span>
+                </summary>
                 <div class="sidebar-conv-list" id="sidebar-conv-list"></div>
-            </div>
+            </details>
 
             <!-- spacer（让 theme-switcher 推到最下） -->
             <div style="flex:1; min-height: 16px"></div>
