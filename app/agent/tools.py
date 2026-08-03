@@ -64,11 +64,13 @@ class Tool:
         description: str,
         parameters: Dict[str, Any],
         func: Callable,
+        domain: str = "general",
     ):
         self.name = name
         self.description = description
         self.parameters = parameters  # JSON Schema 格式的参数定义
         self.func = func
+        self.domain = domain  # 工具域：solution/competitor/pricing/filegen/platform/general（用于 prompt 分组展示）
 
     def to_prompt_desc(self) -> str:
         """生成给 LLM 看的工具描述"""
@@ -90,6 +92,17 @@ class Tool:
             return f"Error: {str(e)}"
 
 
+# 工具域中文标签（prompt 分组展示用）
+_DOMAIN_LABELS = {
+    "solution": "方案类工具",
+    "competitor": "竞品对比工具",
+    "pricing": "价目查询工具",
+    "filegen": "文件/计算工具",
+    "platform": "平台操作工具（查我的数据/管理客户/导出）",
+    "general": "通用工具",
+}
+
+
 class ToolRegistry:
     """工具注册中心"""
 
@@ -107,12 +120,17 @@ class ToolRegistry:
         return list(self._tools.values())
 
     def get_tools_prompt(self) -> str:
-        """生成所有工具的 Prompt 描述"""
+        """生成所有工具的 Prompt 描述（按域分组展示，缓解工具选择困难）"""
         if not self._tools:
             return "（无可用工具）"
-        lines = []
+        groups: Dict[str, List[Tool]] = {}
         for tool in self._tools.values():
-            lines.append(tool.to_prompt_desc())
+            groups.setdefault(tool.domain, []).append(tool)
+        lines = []
+        for domain, tools in groups.items():
+            lines.append(f"【{_DOMAIN_LABELS.get(domain, domain)}】")
+            for tool in tools:
+                lines.append(tool.to_prompt_desc())
         return "\n".join(lines)
 
     def get_tool_names(self) -> List[str]:
@@ -562,6 +580,7 @@ def create_default_tools() -> ToolRegistry:
             "required": ["raw_input"]
         },
         func=_tool_analyze_demand,
+        domain="solution",
     ))
 
     # 2. search_kb — 知识库检索
@@ -579,6 +598,7 @@ def create_default_tools() -> ToolRegistry:
             "required": ["query"]
         },
         func=_tool_search_kb,
+        domain="solution",
     ))
 
     # 3. search_competitor — 竞品检索
@@ -600,6 +620,7 @@ def create_default_tools() -> ToolRegistry:
             "required": ["competitor"]
         },
         func=_tool_search_competitor,
+        domain="competitor",
     ))
 
     # 4. read_customer_file — 读取客户上传的任意格式文件（含图片 OCR）
@@ -617,6 +638,7 @@ def create_default_tools() -> ToolRegistry:
             "required": ["path"]
         },
         func=_tool_read_customer_file,
+        domain="filegen",
     ))
 
     # 5. list_dir — 列举用户目录文件
@@ -633,6 +655,7 @@ def create_default_tools() -> ToolRegistry:
             }
         },
         func=_tool_list_dir,
+        domain="filegen",
     ))
 
     # 6. run_code — 代码沙箱（S0：让 Agent 动手生成真实产物）
@@ -657,6 +680,7 @@ def create_default_tools() -> ToolRegistry:
             "required": ["code"]
         },
         func=_tool_run_code,
+        domain="filegen",
     ))
 
     # 7. query_pricing — 价目查询（S0.5 统一 Agent 新增能力）
@@ -681,6 +705,7 @@ def create_default_tools() -> ToolRegistry:
             "required": ["query"]
         },
         func=_tool_query_pricing,
+        domain="pricing",
     ))
 
     return registry
