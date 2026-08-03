@@ -1788,6 +1788,94 @@ async def clear_agent_session(
     return {"cleared": True, "session_id": session_id}
 
 
+@router.get("/agent/conversations", tags=["Agent"])
+async def list_agent_conversations(
+    include_archived: bool = False,
+    user: dict = Depends(require_login),
+):
+    """
+    列出当前用户的 Agent 会话（左侧「最近任务」列表）。
+    - 默认只返回未归档；include_archived=true 返回全部（历史会话页用）
+    - 归档的会话不消失，历史记录里仍能查到（见 archive 端点语义）
+    """
+    try:
+        from app.agent import get_agent
+        convos = get_agent().memory.list_conversations(user['id'], include_archived=include_archived)
+        return {"conversations": convos, "total": len(convos)}
+    except Exception as e:
+        logger.warning(f"[Agent] 列表会话失败: {e}")
+        raise HTTPException(status_code=500, detail=f"列表会话失败: {str(e)}")
+
+
+@router.post("/agent/conversations/{session_id}/archive", tags=["Agent"])
+async def archive_agent_conversation(
+    session_id: str,
+    archived: bool = True,
+    user: dict = Depends(require_login),
+):
+    """
+    归档/取消归档会话。
+    - 归档（archived=true）：从左侧「最近任务」消失（默认列表不含 archived）
+    - 但历史记录（agent_memory）仍保留，可通过 include_archived=true 查到
+    """
+    # 防止越权：session_id 必须属于当前用户
+    _session = _resolve_agent_session_id(user, None)
+    allowed = {_session, f"{user['id']}:"}
+    try:
+        from app.agent import get_agent
+        ok = get_agent().memory.archive_conversation(user['id'], session_id, archived=archived)
+        if not ok:
+            raise HTTPException(status_code=500, detail="归档失败")
+        return {"archived": bool(archived), "session_id": session_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"[Agent] 归档会话失败: {e}")
+        raise HTTPException(status_code=500, detail=f"归档失败: {str(e)}")
+
+
+@router.delete("/agent/conversations/{session_id}", tags=["Agent"])
+async def delete_agent_conversation(
+    session_id: str,
+    user: dict = Depends(require_login),
+):
+    """彻底删除会话（含全部记忆，不可恢复）。"""
+    try:
+        from app.agent import get_agent
+        ok = get_agent().memory.delete_conversation(user['id'], session_id)
+        if not ok:
+            raise HTTPException(status_code=500, detail="删除失败")
+        return {"deleted": True, "session_id": session_id}
+    except Exception as e:
+        logger.warning(f"[Agent] 删除会话失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+
+
+@router.get("/agent/conversations/{session_id}/messages", tags=["Agent"])
+async def get_agent_conversation_messages(
+    session_id: str,
+    user: dict = Depends(require_login),
+):
+    """获取某会话的历史消息（切换会话时渲染消息流）。"""
+    try:
+        import sqlite3
+        from app.utils import db_init
+        conn = db_init.get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT role, content, created_at FROM agent_memory
+               WHERE user_id=? AND session_id=? AND role IN ('user','agent')
+               ORDER BY id ASC""",
+            (user['id'], session_id),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return {"session_id": session_id, "messages": [dict(r) for r in rows]}
+    except Exception as e:
+        logger.warning(f"[Agent] 获取会话消息失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取消息失败: {str(e)}")
+
+
 # ===== 客户档案（方案B：Agent 记忆按客户维度隔离） =====
 
 # 客户结构化字段清单（与 db_init.py 迁移列保持一致，name/note 之外的新增列）

@@ -142,6 +142,7 @@ class ConversationMemory:
         session = self._get_or_create_session(session_id)
         session["long_term"].append(MemoryEntry(role="user", content=content))
         self._persist(session_id, "user", content)
+        self._upsert_conversation(session_id, content)
         self._trim_long_term(session_id)
         self._trim_and_archive(session_id)
 
@@ -297,3 +298,111 @@ class ConversationMemory:
             "short_term": len(self._sessions[session_id]["short_term"]),
             "long_term": len(self._sessions[session_id]["long_term"]),
         }
+
+    # ---- M2：会话元数据（左侧会话列表 / 归档 / 删除） ----
+
+    def _upsert_conversation(self, session_id: str, user_text: str) -> None:
+        """每次用户发言时 upsert 会话行（标题=首条消息前 24 字，last_message=最新）"""
+        try:
+            uid = self._parse_user_id(session_id)
+            title = (user_text or "").strip().replace("\n", " ")[:24]
+            conn = self._db_conn()
+            cur = conn.cursor()
+            # 已有则更新 last_message + updated_at；否则插入（标题只在首次设置）
+            cur.execute(
+                """SELECT id, title FROM agent_conversations
+                   WHERE user_id=? AND session_id=?""",
+                (uid, session_id),
+            )
+            row = cur.fetchone()
+            if row:
+                if not row["title"] and title:
+                    cur.execute(
+                        "UPDATE agent_conversations SET title=?, last_message=?, updated_at=datetime('now','localtime') WHERE id=?",
+                        (title, (user_text or "")[:100], row["id"]),
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE agent_conversations SET last_message=?, updated_at=datetime('now','localtime') WHERE id=?",
+                        ((user_text or "")[:100], row["id"]),
+                    )
+            else:
+                cur.execute(
+                    """INSERT INTO agent_conversations (user_id, session_id, title, last_message)
+                       VALUES (?, ?, ?, ?)""",
+                    (uid, session_id, title, (user_text or "")[:100]),
+                )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"[memory] upsert 会话元数据失败 session={session_id}: {e}")
+
+    def list_conversations(self, user_id: int, include_archived: bool = False, limit: int = 30) -> List[Dict[str, Any]]:
+        """列出用户的会话（默认不含已归档；include_archived=True 时含全部）"""
+        try:
+            conn = self._db_conn()
+            cur = conn.cursor()
+            if include_archived:
+                cur.execute(
+                    """SELECT session_id, title, last_message, archived, updated_at
+                       FROM agent_conversations WHERE user_id=?
+                       ORDER BY updated_at DESC LIMIT ?""",
+                    (user_id, limit),
+                )
+            else:
+                cur.execute(
+                    """SELECT session_id, title, last_message, archived, updated_at
+                       FROM agent_conversations WHERE user_id=? AND archived=0
+                       ORDER BY updated_at DESC LIMIT ?""",
+                    (user_id, limit),
+                )
+            rows = cur.fetchall()
+            conn.close()
+            return [dict(r) for r in rows]
+        except Exception as e:
+            logger.warning(f"[memory] 列表会话失败 user={user_id}: {e}")
+            return []
+
+    def archive_conversation(self, user_id: int, session_id: str, archived: bool = True) -> bool:
+        """归档/取消归档会话（归档后从最近列表消失，历史 agent_memory 仍保留可查）"""
+        try:
+            conn = self._db_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE agent_conversations SET archived=?, updated_at=datetime('now','localtime') WHERE user_id=? AND session_id=?",
+                (1 if archived else 0, user_id, session_id),
+            )
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            logger.warning(f"[memory] 归档会话失败 session={session_id}: {e}")
+            return False
+
+    def delete_conversation(self, user_id: int, session_id: str) -> bool:
+        """彻底删除会话（元数据 + 全部记忆，不可恢复）"""
+        try:
+            conn = self._db_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM agent_conversations WHERE user_id=? AND session_id=?",
+                (user_id, session_id),
+            )
+            cur.execute(
+                "DELETE FROM agent_memory WHERE user_id=? AND session_id=?",
+                (user_id, session_id),
+            )
+            cur.execute(
+                "DELETE FROM agent_memory_archive WHERE user_id=? AND session_id=?",
+                (user_id, session_id),
+            )
+            conn.commit()
+            conn.close()
+            if session_id in self._sessions:
+                del self._sessions[session_id]
+            self._loaded.discard(session_id)
+            return True
+        except Exception as e:
+            logger.warning(f"[memory] 删除会话失败 session={session_id}: {e}")
+            return False
+

@@ -195,6 +195,23 @@ def init_database():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_memory_user ON agent_memory(user_id, session_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_memory_created ON agent_memory(created_at)")
 
+    # ===== M2：Agent 会话元数据（左侧会话列表 / 归档） =====
+    # 每次 Agent 调用时 upsert 会话行；archived=1 表示已归档（从最近列表消失，历史仍可查）
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agent_conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            session_id TEXT NOT NULL,
+            title TEXT DEFAULT '',
+            last_message TEXT DEFAULT '',
+            archived INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
+            updated_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
+            UNIQUE(user_id, session_id)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_conv_user ON agent_conversations(user_id, updated_at)")
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS agent_memory_archive (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

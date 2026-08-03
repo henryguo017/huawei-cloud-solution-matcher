@@ -372,3 +372,33 @@
     text-transform: uppercase;
     letter-spacing: .5px;
 }
+
+/* ---- M2 会话侧边栏（左侧栏） ---- */
+.chat-shell { flex-direction: row; }
+.chat-sidebar {
+    flex: none;
+    width: 220px;
+    border-right: 1px solid var(--border-color, rgba(0,0,0,.08));
+    padding: 10px 8px;
+    overflow-y: auto;
+    background: var(--bg-card-solid, #F4F5F7);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.chat-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.chat-conv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    flex: 1;
+}
+@media (max-width: 768px) {
+    .chat-sidebar { display: none; }
+}

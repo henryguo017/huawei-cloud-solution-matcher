@@ -122,6 +122,121 @@
         S.messages = [];
     }
 
+    // ==================== M2 会话管理 ====================
+    // 会话列表容器（chat-shell 左侧栏）
+    let convListRendered = false;
+
+    // 当前会话 id（M2）：新建任务=null（后端用 user_id），切换会话=session_id
+    S.currentConvId = null;
+
+    // 加载会话列表
+    async function loadConversations() {
+        const box = $el('chat-conv-list');
+        if (!box) return;
+        if (!checkLoggedIn()) return;
+        try {
+            const raw = localStorage.getItem('hwcloud_auth');
+            const d = raw ? JSON.parse(raw) : {};
+            const resp = await fetch('/api/agent/conversations?include_archived=false', {
+                headers: { 'Authorization': 'Bearer ' + d.token },
+            });
+            const data = await resp.json();
+            const convs = data.conversations || [];
+            box.innerHTML = '';
+            if (!convs.length) {
+                box.innerHTML = '<div class="chat-conv-section">暂无历史任务</div>';
+                return;
+            }
+            convs.forEach(c => {
+                const item = document.createElement('button');
+                item.className = 'chat-conv-item' + (S.currentConvId === c.session_id ? ' active' : '');
+                item.dataset.session = c.session_id;
+                item.innerHTML = `<span class="chat-conv-title">${esc(c.title || c.session_id)}</span>` +
+                    `<span class="chat-conv-archive-btn" title="归档（结束此任务，可在历史中找回）">📦</span>`;
+                // 点击切换会话
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('chat-conv-archive-btn')) return;
+                    switchConversation(c.session_id);
+                });
+                // 归档按钮
+                item.querySelector('.chat-conv-archive-btn').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await archiveConversation(c.session_id, true);
+                });
+                box.appendChild(item);
+            });
+        } catch (e) {
+            console.warn('[ChatUI] 会话列表加载失败:', e);
+        }
+    }
+
+    // 切换会话：加载该会话历史
+    async function switchConversation(sessionId) {
+        S.currentConvId = sessionId;
+        clearStream();
+        renderEmptyHint();
+        // 高亮
+        document.querySelectorAll('.chat-conv-item').forEach(el => {
+            el.classList.toggle('active', el.dataset.session === sessionId);
+        });
+        // 加载历史消息
+        try {
+            const raw = localStorage.getItem('hwcloud_auth');
+            const d = raw ? JSON.parse(raw) : {};
+            const resp = await fetch(`/api/agent/conversations/${encodeURIComponent(sessionId)}/messages`, {
+                headers: { 'Authorization': 'Bearer ' + d.token },
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                const msgs = data.messages || [];
+                const stream = $el('chat-stream');
+                if (stream) {
+                    const hint = stream.querySelector('.chat-empty-hint');
+                    if (hint) hint.remove();
+                }
+                msgs.forEach(m => {
+                    S.messages.push({ role: m.role === 'user' ? 'user' : 'agent', type: 'text', content: m.content });
+                    renderMessage({ role: m.role === 'user' ? 'user' : 'agent', content: m.content });
+                });
+                if (msgs.length) {
+                    const stream = $el('chat-stream');
+                    if (stream) stream.scrollTop = stream.scrollHeight;
+                }
+            }
+        } catch (e) {
+            console.warn('[ChatUI] 切换会话加载失败:', e);
+        }
+    }
+
+    // 新建任务
+    function newConversation() {
+        S.currentConvId = null;
+        clearStream();
+        renderEmptyHint();
+        document.querySelectorAll('.chat-conv-item').forEach(el => el.classList.remove('active'));
+        const input = $el('chat-input');
+        if (input) input.focus();
+    }
+
+    // 归档会话
+    async function archiveConversation(sessionId, archived) {
+        try {
+            const raw = localStorage.getItem('hwcloud_auth');
+            const d = raw ? JSON.parse(raw) : {};
+            const resp = await fetch(`/api/agent/conversations/${encodeURIComponent(sessionId)}/archive?archived=${archived}`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + d.token },
+            });
+            if (resp.ok) {
+                // 若当前会话被归档则新建
+                if (S.currentConvId === sessionId) newConversation();
+                loadConversations();
+                return true;
+            }
+        } catch (e) { console.warn('[ChatUI] 归档失败:', e); }
+        return false;
+    }
+
     // ---- 发送 ----
     async function send(text) {
         if (S.busy) return;
@@ -225,6 +340,8 @@
 
             // 直接 fetch（不依赖 window.API / window.AuthManager，self-contained）
             await agentStreamFetch(text, S.abortCtrl.signal, onEvent);
+            // M2：消息完成后刷新会话列表（新任务/新消息都会 upsert）
+            loadConversations();
         } catch (e) {
             if (e.name === 'AbortError') {
                 removeTyping();
@@ -378,21 +495,28 @@
         shell.id = 'chat-shell';
         shell.className = 'chat-shell';
         shell.innerHTML = `
-            <div class="chat-stream" id="chat-stream"></div>
-            <div class="chat-inputbar">
-                <div class="chat-inputbar-row">
-                    <textarea id="chat-input" placeholder="输入你的需求，如：给某地市政务局做一个一网通办的方案" rows="1"></textarea>
-                    <button class="chat-send-btn" id="chat-send-btn" title="发送 (Enter)">➤</button>
-                </div>
-                <div class="chat-toolbar">
-                    <button class="chat-tool-btn" id="chat-attach-btn" title="上传客户资料（可选）">📎 附件</button>
-                    <select class="chat-mode-select" id="chat-mode-select" title="匹配模式">
-                        <option value="agent" selected>Agent 智能对话（推荐）</option>
-                        <option value="normal">标准模式</option>
-                        <option value="wizard">向导模式</option>
-                    </select>
-                    <span style="flex:1"></span>
-                    <span class="chat-mode-hint" id="chat-mode-hint" style="font-size:12px;color:var(--text-muted,#8890A4)">Enter 发送 · Shift+Enter 换行</span>
+            <div class="chat-sidebar" id="chat-sidebar">
+                <button class="chat-new-conv-btn" id="chat-new-conv-btn">✚ 新建任务</button>
+                <div class="chat-conv-section">最近任务</div>
+                <div class="chat-conv-list" id="chat-conv-list"></div>
+            </div>
+            <div class="chat-main">
+                <div class="chat-stream" id="chat-stream"></div>
+                <div class="chat-inputbar">
+                    <div class="chat-inputbar-row">
+                        <textarea id="chat-input" placeholder="输入你的需求，如：给某地市政务局做一个一网通办的方案" rows="1"></textarea>
+                        <button class="chat-send-btn" id="chat-send-btn" title="发送 (Enter)">➤</button>
+                    </div>
+                    <div class="chat-toolbar">
+                        <button class="chat-tool-btn" id="chat-attach-btn" title="上传客户资料（可选）">📎 附件</button>
+                        <select class="chat-mode-select" id="chat-mode-select" title="匹配模式">
+                            <option value="agent" selected>Agent 智能对话（推荐）</option>
+                            <option value="normal">标准模式</option>
+                            <option value="wizard">向导模式</option>
+                        </select>
+                        <span style="flex:1"></span>
+                        <span class="chat-mode-hint" id="chat-mode-hint" style="font-size:12px;color:var(--text-muted,#8890A4)">Enter 发送 · Shift+Enter 换行</span>
+                    </div>
                 </div>
             </div>
         `;
@@ -453,9 +577,15 @@
             }
         });
 
+        // M2：新建任务按钮
+        const newConvBtn = $el('chat-new-conv-btn');
+        newConvBtn.addEventListener('click', newConversation);
+
         // 初始渲染
         renderEmptyHint();
         applyMode();
+        // M2：加载会话列表
+        loadConversations();
 
         // 暴露全局（供 script.js 或调试使用）
         window.ChatUI = {
