@@ -3578,6 +3578,10 @@ const PageTransition = {
         this._updateNav(pageName);
         State.currentPage = pageName;
 
+        // 1.5 聊天主页全宽模式：切到/切出 solution 时切换 content-wrapper 的 chat-fullscreen
+        const wrapper = document.querySelector('.content-wrapper');
+        if (wrapper) wrapper.classList.toggle('chat-fullscreen', pageName === 'solution');
+
         // 2. 切页后钩子：从缓存恢复/其他页级恢复逻辑（与业务 handler 解耦）
         try { this._afterSwitch(pageName); } catch (e) { console.warn('[PageTransition] _afterSwitch 失败:', e); }
 
@@ -8983,6 +8987,15 @@ function init() {
                         console.log('[Init] 重置密码弹窗已打开');
                     }
                 }, 500);
+            }
+        } catch (_) {}
+
+        // 初始化聊天主页全宽模式：如果默认打开的就是 solution 页，给 content-wrapper 加 chat-fullscreen
+        try {
+            const activePage = document.querySelector('.page.active');
+            const wrapper = document.querySelector('.content-wrapper');
+            if (wrapper && activePage && activePage.id === 'page-solution') {
+                wrapper.classList.add('chat-fullscreen');
             }
         } catch (_) {}
     } catch (e) {

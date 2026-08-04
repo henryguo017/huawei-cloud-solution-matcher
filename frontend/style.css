@@ -521,6 +521,15 @@ body::after {
     flex-direction: column;
     min-height: 0;
 }
+/* 聊天主页全宽模式：移除 content-wrapper 的居中 max-width，
+   让 #page-solution 占满 sidebar 外的整个主内容区 */
+.content-wrapper.chat-fullscreen {
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
 
 .content-card {
     background: var(--bg-card);
@@ -12953,7 +12962,7 @@ table tbody tr:hover {
 #chat-stream {
     flex: 1 1 auto;
     overflow-y: auto;
-    padding: 16px 40px;
+    padding: 16px clamp(16px, 3vw, 36px);
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -13007,16 +13016,18 @@ table tbody tr:hover {
     justify-content: center;
     flex: none;
     width: 100%;
-
-    padding: 24px 40px !important;
-    background: var(--bg-page) !important;
-    border: none !important;
-    box-shadow: none !important;
+    padding: 24px clamp(16px, 3vw, 36px);
+    background: var(--bg-page);
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    position: relative;
+    overflow: hidden;
 }
 .chat-home.chat-home-collapsed {
     flex: none;
     justify-content: flex-start;
-    padding: 0 40px 0 !important;
+    padding: 0 clamp(16px, 3vw, 36px) 0;
 }
 .chat-home-welcome { text-align: center; margin: 28px 0 26px; }
 .chat-home-logo {

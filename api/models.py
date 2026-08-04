@@ -8,6 +8,7 @@ class MatchRequest(BaseModel):
     customer_files: List[str] = Field(default_factory=list, description="用户上传的客户资料相对路径列表（如 customer_uploads/xxx.docx），由上传接口返回")
     client_id: Optional[int] = Field(default=None, description="客户档案 ID；提供后 Agent 记忆按 用户:客户 维度隔离，避免多客户串味")
     group_id: Optional[int] = Field(default=None, description="版本分组 ID；提供后本次匹配作为同一方案的「新版本」保存（v2/v3...），不提供则新建分组存为 v1")
+    session_id: Optional[str] = Field(default=None, description="续聊指定会话（左侧「任务」点开后续聊）；格式为 用户id 或 用户id:客户id，后端校验归属。缺省按 client_id 或全局推断")
     
     class Config:
         json_schema_extra = {

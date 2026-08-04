@@ -1247,8 +1247,21 @@ def _read_customer_files_text(user_id: int, paths: list) -> str:
 
 # ========== Agent 智能匹配（单 Agent + Tool Calling） ==========
 
-def _resolve_agent_session_id(user: dict, client_id: Optional[int]) -> str:
-    """Agent 记忆的 session_id：提供 client_id 时按 用户:客户 维度隔离，避免多客户串味；否则沿用全局（按用户）。"""
+def _resolve_agent_session_id(user: dict, client_id: Optional[int], explicit_session_id: Optional[str] = None) -> str:
+    """Agent 记忆的 session_id：提供 client_id 时按 用户:客户 维度隔离，避免多客户串味；否则沿用全局（按用户）。
+
+    explicit_session_id：续聊指定会话（左侧「任务」点开后续聊）。必须归属当前用户
+    （格式为 f"{user_id}" 或 f"{user_id}:{client_id}"），否则视为无效并回退默认推断。
+    """
+    if explicit_session_id:
+        try:
+            sid_str = str(explicit_session_id)
+            uid_part = sid_str.split(':')[0]
+            if str(user['id']) == uid_part:
+                return sid_str
+            logger.warning(f"[Agent] 会话越权拦截: user={user['id']} 尝试访问 session={sid_str}")
+        except Exception:
+            pass
     if client_id:
         return f"{user['id']}:{client_id}"
     return str(user['id'])
@@ -1388,7 +1401,7 @@ async def agent_match_solution(
             logger.info("[Agent] 检测到空输入，使用默认 prompt")
 
         agent = get_agent()
-        session_id = _resolve_agent_session_id(user, request.client_id)
+        session_id = _resolve_agent_session_id(user, request.client_id, getattr(request, "session_id", None))
 
         # 方案 A：关联客户时构造『背景 + 历史方案』上下文
         client_block, client_meta = "", None
@@ -1544,7 +1557,7 @@ async def agent_match_stream(
     - event: final      → Agent 完成
     - event: result     → 最终结果（answer, steps, elapsed, tool_calls）
     """
-    session_id = _resolve_agent_session_id(user, request.client_id)
+    session_id = _resolve_agent_session_id(user, request.client_id, getattr(request, "session_id", None))
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
@@ -1672,7 +1685,7 @@ async def agent_clarify(
     用户回答完 Agent 暂停时提出的问题后，带上 clarify_id 与答案调此接口，
     后端恢复到暂停时的 ReAct 循环状态，把答案作为 Observation 接回并继续生成方案（不是重头再来）。
     """
-    session_id = _resolve_agent_session_id(user, request.client_id)
+    session_id = _resolve_agent_session_id(user, request.client_id, getattr(request, "session_id", None))
 
     async def generate():
         queue: asyncio.Queue = asyncio.Queue()
