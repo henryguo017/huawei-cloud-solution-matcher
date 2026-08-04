@@ -1420,7 +1420,31 @@ async def agent_match_solution(
         # 阶段2：后台异步更新用户画像（best-effort，不阻断主响应）
         background_tasks.add_task(agent.update_user_profile, user['id'], str(session_id))
 
-        answer = result.get("answer", "Agent 未能生成有效方案")
+        # 澄清暂停：Agent 判断信息不足，向用户提问（不落库、不触发成就，直接回显问题）
+        if result.get("paused"):
+            questions = result.get("questions") or []
+            if questions:
+                lines = []
+                for i, q in enumerate(questions, 1):
+                    q_text = q.get("question", "") if isinstance(q, dict) else str(q)
+                    lines.append(f"{i}. {q_text}")
+                    opts = q.get("options", []) if isinstance(q, dict) else []
+                    if opts:
+                        lines.append(f"   可选：{' / '.join(str(o) for o in opts)}")
+                answer = "请补充以下信息，以便生成更准确的方案：\n\n" + "\n".join(lines)
+            else:
+                answer = "需要更多信息才能生成方案，请补充行业或核心场景后重试。"
+            logger.info(f"[Agent] 匹配暂停（澄清），共 {len(questions)} 个问题待用户作答")
+            return MatchResponse(
+                answer=answer,
+                source_documents=[],
+                solution_json=None,
+                history_id=None,
+                newly_unlocked=None,
+                client_context_used=client_meta,
+            )
+
+        answer = result.get("answer", "Agent 未能生成有效方案") or "Agent 未能生成有效方案"
         tool_calls = result.get("tool_calls", [])
         steps = result.get("steps", 0)
 

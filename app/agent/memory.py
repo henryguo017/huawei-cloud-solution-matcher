@@ -273,23 +273,33 @@ class ConversationMemory:
         if session_id in self._sessions:
             del self._sessions[session_id]
         self._loaded.discard(session_id)
-        try:
-            conn = self._db_conn()
-            cur = conn.cursor()
-            uid = self._parse_user_id(session_id)
-            cur.execute(
-                "DELETE FROM agent_memory WHERE user_id=? AND session_id=?",
-                (uid, session_id),
-            )
-            cur.execute(
-                "DELETE FROM agent_memory_archive WHERE user_id=? AND session_id=?",
-                (uid, session_id),
-            )
-            conn.commit()
-            conn.close()
-            logger.info(f"[memory] 已清空会话记忆 session={session_id}")
-        except Exception as e:
-            logger.warning(f"[memory] 清空会话记忆失败 session={session_id}: {e}")
+        # 并发写锁偶发（database is locked）：小退避重试，最多 3 次
+        for attempt in range(3):
+            try:
+                conn = self._db_conn()
+                cur = conn.cursor()
+                uid = self._parse_user_id(session_id)
+                cur.execute(
+                    "DELETE FROM agent_memory WHERE user_id=? AND session_id=?",
+                    (uid, session_id),
+                )
+                cur.execute(
+                    "DELETE FROM agent_memory_archive WHERE user_id=? AND session_id=?",
+                    (uid, session_id),
+                )
+                conn.commit()
+                conn.close()
+                logger.info(f"[memory] 已清空会话记忆 session={session_id}")
+                return
+            except Exception as e:
+                logger.warning(f"[memory] 清空会话记忆失败 session={session_id} (第{attempt + 1}次): {e}")
+                if attempt < 2:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                    import time
+                    time.sleep(0.3 * (attempt + 1))
 
     def get_stats(self, session_id: str) -> Dict[str, int]:
         if session_id not in self._sessions:
