@@ -13034,9 +13034,9 @@ table tbody tr:hover {
     justify-content: flex-start;
     padding: 0 clamp(16px, 3vw, 36px) 0;
 }
-.chat-home-welcome { text-align: center; margin: 0 0 28px; }
+.chat-home-welcome { text-align: center; margin: 0 0 14px; }
 .chat-home-logo {
-    width: 56px; height: 56px; margin: 0 auto 16px;
+    width: 56px; height: 56px; margin: 0 auto 14px;
     border-radius: 16px;
     background: linear-gradient(135deg, #C7000B 0%, #E84D54 100%);
     display: flex; align-items: center; justify-content: center;
@@ -13053,23 +13053,23 @@ table tbody tr:hover {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
-    margin: 0 0 24px;
+    margin: 0 0 12px;
     width: 100%;
 }
 .quick-chip {
     display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
-    padding: 16px; border-radius: 14px;
-    border: 1px solid rgba(0,0,0,.13);
+    padding: 16px; border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
     background: var(--bg-card); color: var(--text-primary);
     font-size: 14px; font-weight: 500; cursor: pointer; text-align: left;
-    transition: border-color .15s, color .15s, transform .15s, box-shadow .15s, background .15s;
+    transition: border-color var(--transition-base), color var(--transition-base), transform var(--transition-base), box-shadow var(--transition-base), background var(--transition-base);
     font-family: var(--font-family);
-    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    box-shadow: var(--shadow-md);
 }
 .quick-chip:hover {
     border-color: var(--primary-color); color: var(--primary-color);
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(199,0,11,.12);
+    box-shadow: var(--shadow-lg);
     background: var(--bg-card);
 }
 .quick-chip:active { transform: translateY(0); }
@@ -13081,39 +13081,37 @@ table tbody tr:hover {
     max-width: 1000px;
     margin: 0 auto;
     background: var(--bg-card);
-    border: 1px solid rgba(0,0,0,.14);
-    border-radius: 18px;
-    padding: 12px 16px 10px;
-    box-shadow: 0 4px 24px rgba(0,0,0,.08);
-    transition: border-color .15s, box-shadow .15s;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px 12px;
+    box-shadow: var(--shadow-md);
+    transition: box-shadow var(--transition-base), border-color var(--transition-base);
 }
-.chat-input-card:focus-within {
-    border-color: rgba(199,0,11,.45);
-    box-shadow: 0 6px 28px rgba(199,0,11,.12);
-}
+.chat-input-card:focus-within { border-color: var(--primary-color); }
 
-.chat-home-input-wrap { width: 100%; margin-bottom: 10px; }
+.chat-home-input-wrap { width: 100%; margin-bottom: 8px; }
 .chat-home-textarea {
-    width: 100%; min-height: 48px; max-height: 220px; resize: none;
-    border-radius: 0; border: none;
-    background: transparent;
-    padding: 4px 2px; font-size: 15px; line-height: 1.6;
+    width: 100%; min-height: 64px; max-height: 220px; resize: vertical;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    padding: 10px 12px; font-size: 15px; line-height: 1.6;
     color: var(--text-primary); font-family: var(--font-family);
-    transition: none;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
     overflow-y: auto;
 }
 .chat-home-textarea:focus {
-    border-color: transparent;
-    box-shadow: none;
     outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(199,0,11,.08);
 }
 .chat-home-textarea::placeholder { color: var(--text-tertiary); }
-.chat-home-counter { text-align: right; font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.chat-home-counter { text-align: right; font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
 
 .chat-home-toolbar {
     display: flex; align-items: center; justify-content: space-between;
     gap: 12px; width: 100%; flex-wrap: nowrap;
-    padding-top: 8px; border-top: 1px solid rgba(0,0,0,.10);
+    padding-top: 8px; border-top: 1px solid var(--border-color);
 }
 .chat-toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .chat-toolbar-right { display: flex; align-items: center; flex: none; }
@@ -13132,7 +13130,7 @@ table tbody tr:hover {
 .chat-mode-toggle {
     display: inline-flex; align-items: center;
     border-radius: 10px; overflow: hidden;
-    border: 1px solid rgba(0,0,0,.12);
+    border: 1px solid var(--border-color);
     background: var(--bg-elevated);
 }
 .chat-mode-toggle .mode-option {
@@ -13154,7 +13152,7 @@ table tbody tr:hover {
 .chat-client-bar { display: flex; align-items: center; gap: 8px; }
 .chat-client-select {
     padding: 5px 28px 5px 10px; border-radius: 10px;
-    border: 1px solid rgba(0,0,0,.12);
+    border: 1px solid var(--border-color);
     background: var(--bg-elevated);
     font-size: 12.5px; color: var(--text-primary);
     font-family: var(--font-family);
