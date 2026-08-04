@@ -1,5 +1,7 @@
 
 /* ==================== 欢迎引导页样式 ==================== */
+/* 修复：welcome-page 默认隐藏，避免 JS 跑完前以 z-index:9999 覆盖 page-solution 主区。
+   WelcomeManager.show() 会显式设 display:flex 触发显示。 */
 .welcome-page {
     position: fixed;
     top: 0;
@@ -7,7 +9,7 @@
     width: 100vw;
     height: 100vh;
     z-index: 9999;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     /* 跟随皮肤：蓝(#0f1724/#162033) / 金(#6e593a/#8a7147) / 绿(#285138/#346b4c) 自动联动 */
@@ -19,6 +21,11 @@
     display: none;
     pointer-events: none;
     z-index: -1;
+}
+
+/* JS 调用 .show() 时去掉 hidden + inline display:flex */
+.welcome-page:not(.hidden) {
+    display: flex;
 }
 
 .welcome-overlay {
