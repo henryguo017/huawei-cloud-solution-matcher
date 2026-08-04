@@ -6284,7 +6284,7 @@ function initEventListeners() {
             }
             MatchProgress.cancel();
             State.loadingStates.match = false;
-            if (matchBtnText) matchBtnText.textContent = '开始匹配';
+            if (matchBtnText) matchBtnText.textContent = '发送';
             matchBtn.classList.remove('btn-cancel');
             UI.setButtonLoading(matchBtn, false);
             State.abortControllers.match = null;
@@ -6330,8 +6330,14 @@ function initEventListeners() {
             return;
         }
 
+        // 多轮对话流：快照上一轮 AI 回答 + 追加本轮用户气泡
+        snapshotAiTurn();
+        appendUserBubble(demand);
+
         // 隐藏之前的结果
         document.getElementById('solution-result').style.display = 'none';
+        const _curAi = document.getElementById('chat-current-ai');
+        if (_curAi) _curAi.style.display = 'none';
         
         // 创建 AbortController
         const controller = new AbortController();
@@ -6383,6 +6389,19 @@ function initEventListeners() {
 
             let result;
             if (isAgentMode) {
+                // 对话流：隐藏欢迎语（保留 chat-home 内的上传组件/向导）
+                // 注意：appendUserBubble 已在 try 块开头调用过（6335），这里不要重复追加
+                const _home = document.querySelector('.chat-home');
+                if (_home) {
+                    _home.classList.add('chat-home-collapsed');
+                    const _w = _home.querySelector('.chat-home-welcome');
+                    const _q = _home.querySelector('.chat-home-quick');
+                    if (_w) _w.style.display = 'none';
+                    if (_q) _q.style.display = 'none';
+                }
+                // 对话态布局：page-solution 切到「对话流占满 + 输入栏贴底」
+                const _ps = document.getElementById('page-solution');
+                if (_ps) _ps.classList.add('chat-page-active');
                 // SSE 流式模式：监听事件更新进度面板 + 实时思考流
                 const toolStepMap = { analyze_demand: 0, search_kb: 1, search_competitor: 1, generate_report: 2 };
                 const tsContainer = document.getElementById('thinking-stream');
@@ -6393,7 +6412,19 @@ function initEventListeners() {
                 if (tsContainer) {
                     tsEntries.innerHTML = '';
                     tsContainer.style.display = 'block';
-                    tsContainer.classList.remove('done');
+                    tsContainer.classList.remove('done', 'expanded');
+                    const _curAi2 = document.getElementById('chat-current-ai');
+                    if (_curAi2) _curAi2.style.display = 'flex';
+                    const _tt = document.getElementById('thinking-title-text');
+                    if (_tt) _tt.textContent = '思考中…';
+                    const _hd = document.getElementById('thinking-header');
+                    if (_hd && !_hd.dataset.bound) {
+                        _hd.dataset.bound = '1';
+                        _hd.addEventListener('click', () => {
+                            const ts2 = document.getElementById('thinking-stream');
+                            if (ts2 && ts2.classList.contains('done')) ts2.classList.toggle('expanded');
+                        });
+                    }
                 }
 
                 // 思考流渲染辅助函数
@@ -6445,6 +6476,13 @@ function initEventListeners() {
             // 统一渲染结果（首轮与澄清续跑共用；含暂停/过期守卫）
             renderAgentResult(result, demand);
             injectAgentArtifacts();  // 把沙箱生成的产物卡片挂到结果区（S0）
+
+            // Agent 会话已写入后端 conversations 表 → 刷新左侧「任务」列表
+            try {
+                if (typeof window.ChatUI !== 'undefined' && window.ChatUI.refreshList) window.ChatUI.refreshList();
+            } catch (refreshErr) {
+                console.warn('[Match] 刷新任务列表失败(非致命):', refreshErr);
+            }
         } catch (error) {
             if (error.name === 'AbortError') {
                 // 用户主动取消，不报错
@@ -6462,7 +6500,7 @@ function initEventListeners() {
         } finally {
             State.loadingStates.match = false;
             State.isQuickDemo = false;
-            if (matchBtnText) matchBtnText.textContent = '开始匹配';
+            if (matchBtnText) matchBtnText.textContent = '发送';
             matchBtn.classList.remove('btn-cancel');
             State.abortControllers.match = null;
         }
@@ -6722,6 +6760,41 @@ function initEventListeners() {
         }
     }
 
+    // ---- 对话消息流 helpers（阶段2：多轮快照 + 用户气泡）----
+    function appendUserBubble(text) {
+        const stream = document.getElementById('chat-stream');
+        if (!stream) return;
+        const row = document.createElement('div');
+        row.className = 'chat-msg user';
+        const avatar = document.createElement('div');
+        avatar.className = 'chat-avatar';
+        avatar.textContent = '我';
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble';
+        bubble.textContent = text;
+        row.appendChild(avatar);
+        row.appendChild(bubble);
+        stream.appendChild(row);
+        stream.scrollTop = stream.scrollHeight;
+    }
+    function snapshotAiTurn() {
+        const cur = document.getElementById('chat-current-ai');
+        const sr = document.getElementById('solution-result');
+        if (!cur || cur.style.display === 'none') return;
+        if (!sr || sr.style.display === 'none') return;
+        const content = document.getElementById('solution-content');
+        if (!content || !content.innerHTML.trim()) return;
+        const stream = document.getElementById('chat-stream');
+        if (!stream) return;
+        const snap = cur.cloneNode(true);
+        snap.removeAttribute('id');
+        snap.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+        snap.querySelectorAll('button').forEach(b => { b.removeAttribute('id'); b.disabled = true; });
+        snap.style.display = 'flex';
+        stream.insertBefore(snap, cur);
+        stream.scrollTop = stream.scrollHeight;
+    }
+
     // 统一渲染匹配结果（标准模式 / Agent 首轮 / 澄清续跑共用）；含 paused/expired/空答案守卫
     function renderAgentResult(result, demand) {
         if (!result) {
@@ -6776,7 +6849,13 @@ function initEventListeners() {
         try { SolutionChapterRefine.bind(); } catch (e) { console.warn('[ChapterRefine] 挂载失败:', e); }
         UI.renderSources(document.getElementById('solution-sources'), result.source_documents);
         resultContainer.style.display = 'block';
-        resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const _curAi3 = document.getElementById('chat-current-ai');
+        if (_curAi3) _curAi3.style.display = 'flex';
+        // 结果已渲染：隐藏进度面板（悬浮式，不占 flex 空间；完成后收起避免遮挡结果）
+        MatchProgress.hide();
+        // 滚动到对话流底部（只滚 chat-stream 内部，不滚 body——body 滚动会把输入栏顶出视口）
+        const _streamBox = document.getElementById('chat-stream');
+        if (_streamBox) _streamBox.scrollTop = _streamBox.scrollHeight;
 
         // 方案 A：结果页小字提示 —— 本次匹配是否参考了某客户背景与历史方案
         const ctxHint = document.getElementById('client-context-hint');
@@ -6805,9 +6884,16 @@ function initEventListeners() {
             }
         }
 
-        // 隐藏思考流面板
+        // 思考流完成：收起为"已思考 N 步"，点击可展开
         const ts = document.getElementById('thinking-stream');
-        if (ts) ts.style.display = 'none';
+        if (ts) {
+            ts.classList.add('done');
+            ts.classList.remove('expanded');
+            const _badge = document.getElementById('thinking-step-badge');
+            const _stepNum = _badge ? (_badge.textContent.match(/\d+/) || [])[0] : '';
+            const _tt = document.getElementById('thinking-title-text');
+            if (_tt) _tt.textContent = _stepNum ? `已思考 ${_stepNum} 步` : '思考完成';
+        }
 
         // 缓存 + 收藏按钮 + FollowUp + 成就（含版本元信息回填）
         State.resultCache.solution = {
@@ -6837,9 +6923,7 @@ function initEventListeners() {
         MatchProgress.success('匹配完成！');
         UI.showToast('匹配完成！', 'success');
 
-        if (result.history_id) {
-            FollowUpUI.show(demand, result.answer, result.history_id);
-        }
+        // 追问已改为底部主输入框继续对话（会话记忆），不再显示独立追问卡
 
         if (result.newly_unlocked && result.newly_unlocked.length > 0 && window.AchievementUI && AchievementUI.showUnlockToast) {
             setTimeout(() => AchievementUI.showUnlockToast(result.newly_unlocked), 500);
@@ -7378,7 +7462,9 @@ function initEventListeners() {
         if (tsContainer) {
             if (tsEntries) tsEntries.innerHTML = '';
             tsContainer.style.display = 'block';
-            tsContainer.classList.remove('done');
+            tsContainer.classList.remove('done', 'expanded');
+            const _tt = document.getElementById('thinking-title-text');
+            if (_tt) _tt.textContent = '思考中…';
         }
 
         try {
@@ -7421,7 +7507,7 @@ function initEventListeners() {
         } finally {
             State.loadingStates.match = false;
             State.isQuickDemo = false;
-            if (matchBtnText) matchBtnText.textContent = '开始匹配';
+            if (matchBtnText) matchBtnText.textContent = '发送';
             if (matchBtn) matchBtn.classList.remove('btn-cancel');
             if (State.abortControllers.match === controller) State.abortControllers.match = null;
         }
@@ -7818,7 +7904,7 @@ function initEventListeners() {
             FavoriteManager._updateResultBtn('fav-competitor-btn', compFavName);
             
             UI.showToast('分析完成！', 'success');
-            CompetitorFollowUpUI.show(competitor, industry, result.answer, result.history_id);
+            // 追问已改为底部主输入框继续对话，不再显示独立追问卡
 
             // 成就通知（竞品分析）
             console.log('[Achievement] analyze newly_unlocked:', result.newly_unlocked);

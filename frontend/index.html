@@ -6,10 +6,10 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260804e">
-<link rel="stylesheet" href="cost-reference.css?v=20260804e">
-<link rel="stylesheet" href="js/chat.css?v=20260804e">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260804e">
+<link rel="stylesheet" href="style.css?v=20260804f">
+<link rel="stylesheet" href="cost-reference.css?v=20260804f">
+<link rel="stylesheet" href="js/chat.css?v=20260804f">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260804f">
 </head>
 <body>
     <!-- 密码重置链接检测（内联，不受外部JS缓存影响） -->
@@ -274,6 +274,11 @@
                         <span class="nav-text">任务 <span class="conv-count" id="sidebar-conv-count">(0)</span></span>
                         <span class="ws-arrow"><svg class="icon" aria-hidden="true"><use href="#i-arrow-down-right"></use></svg></span>
                     </summary>
+                    <!-- 新建对话入口：聊天框回到空态居中，开始新话题 -->
+                    <button type="button" class="sidebar-new-conv-btn" id="sidebar-new-conv-btn" title="开始新话题">
+                        <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+                        <span class="nav-text">新建对话</span>
+                    </button>
                     <div class="sidebar-conv-list" id="sidebar-conv-list"></div>
                 </details>
             </div>
@@ -578,8 +583,8 @@
                         <div class="chat-home-logo">
                             <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>
                         </div>
-                        <h2 class="chat-home-title">智能方案匹配，我帮你</h2>
-                        <p class="chat-home-sub">输入客户需求，AI 匹配华为云解决方案 · 洞察竞品 · 一键导出 Word / PDF 报告</p>
+                        <h2 class="chat-home-title">有什么可以帮你？</h2>
+                        <p class="chat-home-sub">输入客户需求，匹配华为云方案 · 洞察竞品 · 导出报告</p>
                     </div>
 
                     <!-- ② 功能胶囊：点击把预设词填入输入框（不自动发送） -->
@@ -604,57 +609,6 @@
                         </button>
                     </div>
 
-                    <!-- ③ 主输入区（无 label，直接大输入框） -->
-                    <div class="chat-home-input-wrap" id="chat-home-input-wrap">
-                        <textarea
-                            id="demand-input"
-                            class="textarea-input chat-home-textarea"
-                            rows="3"
-                            placeholder="描述客户需求：例如“我们是一家中型制造企业，50台生产设备，经常因为设备突发故障导致停产，希望实现预测性维护，减少停机时间。”"></textarea>
-                        <div class="char-counter chat-home-counter">
-                            <span id="demand-char-count">0</span> / 2000 字符
-                        </div>
-                    </div>
-
-                    <!-- ④ 工具栏：附件 / 模式切换 / 客户档案 / 清空 / 发送 -->
-                    <div class="chat-home-toolbar">
-                        <button type="button" class="chat-tool-btn" id="cf-attach-btn"
-                                title="上传客户资料（Word / PDF / Excel / PPT / 图片，自动 OCR）">
-                            <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg> 附件
-                        </button>
-
-                        <div class="mode-toggle chat-mode-toggle" id="mode-toggle">
-                            <span class="mode-option" data-mode="normal">标准</span>
-                            <span class="mode-option active" data-mode="agent">
-                                Agent <span class="mode-badge">推荐</span>
-                            </span>
-                            <span class="mode-option" data-mode="wizard">向导</span>
-                        </div>
-
-                        <div class="client-bar chat-client-bar" id="client-bar" style="display:none;">
-                            <select id="client-select" class="client-select chat-client-select">
-                                <option value="">（不限定客户）</option>
-                            </select>
-                            <button type="button" id="client-new-btn" class="btn-secondary client-new-btn">+ 新建</button>
-                            <button type="button" id="client-edit-btn" class="btn-secondary client-edit-btn chat-client-extra-btn">编辑</button>
-                            <button type="button" id="client-manage-btn" class="btn-secondary client-manage-btn chat-client-extra-btn">管理</button>
-                            <button type="button" id="client-del-btn" class="btn-icon client-del-btn chat-client-extra-btn">×</button>
-                        </div>
-
-                        <span class="mode-hint" id="mode-hint" style="display:none;"></span>
-
-                        <button type="button" id="agent-clear-chat-btn" class="chat-tool-btn chat-clear-btn"
-                                style="display:none;" title="清空 Agent 对话记忆，开始新对话">清空</button>
-
-                        <div class="chat-toolbar-spacer"></div>
-
-                        <button class="btn btn-primary chat-send-btn" id="match-btn">
-                            <span class="btn-text">发送</span>
-                            <span class="btn-loader"></span>
-                        </button>
-                    </div>
-
-                    <p class="chat-home-hint">按 Enter 发送 · Shift+Enter 换行 · 支持拖拽上传文档</p>
 
                     <!-- 隐藏：客户资料上传组件（点「附件」按钮触发，保留原 DOM/id 供 JS 使用） -->
                     <div class="form-group" id="customer-files-group" style="display:none;">
@@ -782,6 +736,27 @@
                     <button id="clear-solution-btn" class="btn btn-secondary" style="display:none;">清空</button>
                 </div>
 
+                <!-- ============ 任务历史视图（点击左侧「任务」点开，续聊会话） ============ -->
+                <div class="content-card chat-history-view" id="chat-history-view" style="display:none;">
+                    <div class="chat-history-header">
+                        <button type="button" class="chat-tool-btn" id="chat-history-back">
+                            <svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg> 返回
+                        </button>
+                        <span class="chat-history-title" id="chat-history-title">任务</span>
+                        <span class="chat-history-badge" id="chat-history-badge">会话中</span>
+                    </div>
+                    <div class="chat-history-messages" id="chat-history-messages">
+                        <div class="chat-empty-hint">暂无历史消息</div>
+                    </div>
+                    <div class="chat-history-footer">
+                        <textarea id="chat-history-input" class="textarea-input chat-history-textarea" rows="2"
+                            placeholder="继续对话：追问细节 / 调整方案 / 问竞品…"></textarea>
+                        <button type="button" class="btn btn-primary chat-send-btn" id="chat-history-send">
+                            <span class="btn-text">发送</span>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- 方案匹配进度面板 -->
                 <div id="match-progress-panel" class="progress-panel" style="display: none;">
                     <div class="progress-header">
@@ -822,10 +797,15 @@
                     </div>
                 </div>
 
+                <!-- 对话消息流（历史轮快照 + 用户气泡 + 当前 AI 气泡） -->
+                <div id="chat-stream" class="chat-stream">
+                <div class="chat-msg agent" id="chat-current-ai" style="display:none">
+                    <div class="chat-avatar">AI</div>
+                    <div class="chat-bubble" id="chat-current-ai-bubble">
                 <!-- Agent 思考流（SSE 实时推送） -->
                 <div id="thinking-stream" class="thinking-stream content-card" style="display: none;">
-                    <div class="thinking-header">
-                        <span class="thinking-title"><svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg> AI 思考过程</span>
+                    <div class="thinking-header" id="thinking-header" role="button" tabindex="0" aria-expanded="false">
+                        <span class="thinking-title"><svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg> <span id="thinking-title-text">思考中…</span></span>
                         <span class="thinking-step-badge" id="thinking-step-badge">Step 1</span>
                     </div>
                     <div id="thinking-entries" class="thinking-entries"></div>
@@ -887,27 +867,7 @@
                         </div>
                         <div class="cr-disclaimer" id="cr-disclaimer"></div>
                     </div>
-                    <!-- 方案追问优化区域 -->
-                    <div class="follow-up-section" id="follow-up-section" style="display: none;">
-                        <div class="follow-up-divider">
-                            <span class="follow-up-divider-text"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg> 方案追问优化</span>
-                            <button class="btn-link" id="clear-follow-up-btn">清空历史</button>
-                        </div>
-                        <div class="follow-up-history" id="follow-up-history"></div>
-                        <div class="follow-up-loading" id="follow-up-loading" style="display: none;">
-                            <div class="follow-up-loading-dot"></div>
-                            <div class="follow-up-loading-dot"></div>
-                            <div class="follow-up-loading-dot"></div>
-                            <span>正在优化方案...</span>
-                        </div>
-                        <div class="follow-up-input-area">
-                            <textarea id="follow-up-input" placeholder="输入追问内容，例如：把价格部分再详细一点；或 @第9章 再细化 ROI（精修单章节）"></textarea>
-                            <button class="btn btn-primary btn-sm" id="send-follow-up-btn">发送</button>
-                        </div>
-                        <div class="follow-up-actions" id="follow-up-actions" style="display: none;">
-                            <button class="btn btn-success btn-sm" id="apply-refined-btn"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 使用此优化结果</button>
-                        </div>
-                    </div>
+
                     <div class="result-actions">
                         <button class="btn btn-primary" id="download-solution-btn">
                             <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载方案文档
@@ -926,6 +886,54 @@
                         <summary class="source-summary"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg> 查看参考的解决方案文档</summary>
                         <div id="solution-sources"></div>
                     </details>
+                </div>
+                    </div>
+                </div>
+                </div>
+
+                <!-- 底部固定输入栏（sticky） -->
+                <div class="chat-inputbar-sticky">
+                    <div class="chat-home-input-wrap" id="chat-home-input-wrap">
+                        <textarea
+                            id="demand-input"
+                            class="textarea-input chat-home-textarea"
+                            rows="3"
+                            placeholder="描述客户需求，例如：中型制造企业，50 台设备，想做预测性维护减少停机"></textarea>
+                        <div class="char-counter chat-home-counter">
+                            <span id="demand-char-count">0</span> / 2000 字符
+                        </div>
+                    </div>
+                    <div class="chat-home-toolbar">
+                        <button type="button" class="chat-tool-btn" id="cf-attach-btn"
+                                title="上传客户资料（Word / PDF / Excel / PPT / 图片，自动 OCR）">
+                            <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg> 附件
+                        </button>
+                        <div class="mode-toggle chat-mode-toggle" id="mode-toggle">
+                            <span class="mode-option" data-mode="normal">标准</span>
+                            <span class="mode-option active" data-mode="agent">
+                                Agent <span class="mode-badge">推荐</span>
+                            </span>
+                            <span class="mode-option" data-mode="wizard">向导</span>
+                        </div>
+                        <div class="client-bar chat-client-bar" id="client-bar" style="display:none;">
+                            <select id="client-select" class="client-select chat-client-select">
+                                <option value="">（不限定客户）</option>
+                            </select>
+                            <button type="button" id="client-new-btn" class="btn-secondary client-new-btn">+ 新建</button>
+                            <button type="button" id="client-edit-btn" class="btn-secondary client-edit-btn chat-client-extra-btn">编辑</button>
+                            <button type="button" id="client-manage-btn" class="btn-secondary client-manage-btn chat-client-extra-btn">管理</button>
+                            <button type="button" id="client-del-btn" class="btn-icon client-del-btn chat-client-extra-btn">×</button>
+                        </div>
+                        <span class="mode-hint" id="mode-hint" style="display:none;"></span>
+                        <button type="button" id="agent-clear-chat-btn" class="chat-tool-btn chat-clear-btn"
+                                style="display:none;" title="清空 Agent 对话记忆，开始新对话">清空</button>
+                        <div class="chat-toolbar-spacer"></div>
+                        <button class="btn btn-primary chat-send-btn" id="match-btn">
+                            <span class="btn-text">发送</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                    </div>
+                    <p class="chat-home-hint">按 Enter 发送 · Shift+Enter 换行 · 支持拖拽上传文档</p>
                 </div>
             </div>
             
@@ -1052,26 +1060,7 @@
                         <span class="result-badge success"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 分析完成</span>
                     </div>
                     <div class="result-content content-card" id="competitor-content"></div>
-                    <div class="follow-up-section competitor-follow-up" id="competitor-follow-up-section" style="display: none;">
-                        <div class="follow-up-divider">
-                            <span class="follow-up-divider-text"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg> 分析追问优化</span>
-                            <button class="btn-link" id="clear-competitor-follow-up-btn">清空历史</button>
-                        </div>
-                        <div class="follow-up-history" id="competitor-follow-up-history"></div>
-                        <div class="follow-up-loading" id="competitor-follow-up-loading" style="display: none;">
-                            <div class="follow-up-loading-dot"></div>
-                            <div class="follow-up-loading-dot"></div>
-                            <div class="follow-up-loading-dot"></div>
-                            <span>正在优化分析报告...</span>
-                        </div>
-                        <div class="follow-up-input-area">
-                            <textarea id="competitor-follow-up-input" placeholder="输入追问内容，例如：把价格对比部分再详细一点"></textarea>
-                            <button class="btn btn-primary btn-sm" id="send-competitor-follow-up-btn">发送</button>
-                        </div>
-                        <div class="follow-up-actions" id="competitor-follow-up-actions" style="display: none;">
-                            <button class="btn btn-success btn-sm" id="apply-competitor-refined-btn"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 使用此优化结果</button>
-                        </div>
-                    </div>
+
                     <div class="result-actions">
                         <button class="btn btn-primary" id="download-competitor-btn">
                             <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载竞争分析报告
@@ -2204,7 +2193,7 @@
         </div><!-- /.app-main -->
     </div><!-- /.app-shell -->
 
-    <script src="js/chart.umd.min.js?v=20260804e" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
+    <script src="js/chart.umd.min.js?v=20260804f" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
     <!-- 方案分享弹窗 -->
     <div id="share-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content share-modal-content">
@@ -2246,11 +2235,11 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260804e"></script>
-    <script src="js/chat_ui.js?v=20260804e"></script>
-    <script src="js/voice-input.js?v=20260804e"></script>
-    <script src="js/achievement-ui.js?v=20260804e"></script>
-    <script src="welcome-script.js?v=20260804e"></script>
+    <script src="script.js?v=20260804f"></script>
+    <script src="js/chat_ui.js?v=20260804f"></script>
+    <script src="js/voice-input.js?v=20260804f"></script>
+    <script src="js/achievement-ui.js?v=20260804f"></script>
+    <script src="welcome-script.js?v=20260804f"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">
   <symbol id="i-arrow-down-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10" />
   <path d="M17 7v10H7" /></symbol>
@@ -2295,6 +2284,7 @@
   <path d="M9 17h6" />
   <circle cx="17" cy="17" r="2" /></symbol>
   <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></symbol>
   <symbol id="i-circle-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" />
   <path d="m9 12 2 2 4-4" /></symbol>
   <symbol id="i-clipboard-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" />

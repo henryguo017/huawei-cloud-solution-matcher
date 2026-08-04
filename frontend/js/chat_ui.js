@@ -165,10 +165,47 @@
         }
     }
 
-    // 切换会话：加载该会话历史
+    // ---- 任务历史视图（点击左侧「任务」点开） ----
+    function showHistoryView(title) {
+        const hv = $el('chat-history-view');
+        const home = document.querySelector('.chat-home');
+        if (hv) hv.style.display = '';
+        if (home) home.style.display = 'none';
+        const t = $el('chat-history-title');
+        if (t) t.textContent = title || '任务';
+    }
+    function hideHistoryView() {
+        const hv = $el('chat-history-view');
+        const home = document.querySelector('.chat-home');
+        if (hv) hv.style.display = 'none';
+        if (home) home.style.display = '';
+        const ta = document.getElementById('demand-input');
+        if (ta) ta.focus();
+    }
+    // 渲染历史消息到任务视图（复用 chat-msg 气泡样式）
+    function renderHistoryMessage(m) {
+        const box = $el('chat-history-messages');
+        if (!box) return;
+        const hint = box.querySelector('.chat-empty-hint');
+        if (hint) hint.remove();
+        const row = document.createElement('div');
+        row.className = 'chat-msg ' + (m.role === 'user' ? 'user' : 'agent');
+        const avatar = document.createElement('div');
+        avatar.className = 'chat-avatar';
+        avatar.textContent = m.role === 'user' ? '我' : 'AI';
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-bubble';
+        bubble.innerHTML = md(m.content || '');
+        row.appendChild(avatar);
+        row.appendChild(bubble);
+        box.appendChild(row);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    // 切换会话：加载该会话历史到任务视图（不再依赖不存在的 chat-stream）
     async function switchConversation(sessionId) {
         S.currentConvId = sessionId;
-        // 先清除 sidebar 其他所有 active（顶部菜单、我的子项、任务折叠头），再高亮当前任务
+        // 先清除 sidebar 其他所有 active，再高亮当前任务
         if (window.PageTransition && window.PageTransition.clearAllSidebarActive) {
             window.PageTransition.clearAllSidebarActive();
         } else {
@@ -178,6 +215,15 @@
         document.querySelectorAll('.sidebar-conv-item').forEach(el => {
             el.classList.toggle('active', el.dataset.session === sessionId);
         });
+        // 打开任务视图（隐藏主页）
+        const box = $el('chat-history-messages');
+        if (box) box.innerHTML = '<div class="chat-empty-hint">加载中…</div>';
+        showHistoryView($el('chat-history-title')?.textContent || '任务');
+        // 从列表项取标题
+        try {
+            const item = document.querySelector(`.sidebar-conv-item[data-session="${CSS.escape(sessionId)}"] .sidebar-conv-title`);
+            if (item) { const t = $el('chat-history-title'); if (t) t.textContent = item.textContent; }
+        } catch (e) { /* ignore */ }
         // 加载历史消息
         try {
             const raw = localStorage.getItem('hwcloud_auth');
@@ -188,26 +234,22 @@
             if (resp.ok) {
                 const data = await resp.json();
                 const msgs = data.messages || [];
-                const stream = $el('chat-stream');
-                if (stream) {
-                    const hint = stream.querySelector('.chat-empty-hint');
-                    if (hint) hint.remove();
-                }
+                S.messages = [];
+                if (box) box.innerHTML = '';
+                if (!msgs.length && box) box.innerHTML = '<div class="chat-empty-hint">暂无历史消息，输入内容继续对话</div>';
                 msgs.forEach(m => {
-                    S.messages.push({ role: m.role === 'user' ? 'user' : 'agent', type: 'text', content: m.content });
-                    renderMessage({ role: m.role === 'user' ? 'user' : 'agent', content: m.content });
+                    const role = m.role === 'user' ? 'user' : 'agent';
+                    S.messages.push({ role, type: 'text', content: m.content });
+                    renderHistoryMessage({ role, content: m.content });
                 });
-                if (msgs.length) {
-                    const stream = $el('chat-stream');
-                    if (stream) stream.scrollTop = stream.scrollHeight;
-                }
             }
         } catch (e) {
             console.warn('[ChatUI] 切换会话加载失败:', e);
+            if (box) box.innerHTML = '<div class="chat-empty-hint">加载失败，请重试</div>';
         }
     }
 
-    // 新建任务：清除当前会话高亮 + 滚动到输入区
+    // 新建任务：回到主页
     function newConversation() {
         S.currentConvId = null;
         if (window.PageTransition && window.PageTransition.clearAllSidebarActive) {
@@ -216,9 +258,88 @@
             document.querySelectorAll('.sidebar-item.active, .sidebar-mine-toggle.active, .sidebar-conv-toggle.active, .sidebar-conv-item.active')
                 .forEach(el => el.classList.remove('active'));
         }
-        // 焦点移到主页的 textarea
-        const ta = document.getElementById('demand-input');
-        if (ta) ta.focus();
+        hideHistoryView();
+        // 清空对话消息流（保留 #chat-current-ai 容器，重置其内容）
+        const cs = document.getElementById('chat-stream');
+        if (cs) {
+            Array.from(cs.children).forEach(child => {
+                if (child.id !== 'chat-current-ai') child.remove();
+            });
+        }
+        const curAi = document.getElementById('chat-current-ai');
+        if (curAi) curAi.style.display = 'none';
+        const sr = document.getElementById('solution-result');
+        if (sr) sr.style.display = 'none';
+        const ts = document.getElementById('thinking-stream');
+        if (ts) ts.style.display = 'none';
+        const sc = document.getElementById('solution-content');
+        if (sc) sc.innerHTML = '';
+        // 隐藏匹配进度面板（SSE 完成/中断后可能残留，479px 占位会把输入栏挤出视口）
+        const _pp = document.getElementById('match-progress-panel');
+        if (_pp) _pp.style.display = 'none';
+        // 恢复欢迎语
+        const home = document.querySelector('.chat-home');
+        if (home) {
+            home.classList.remove('chat-home-collapsed');
+            const _w = home.querySelector('.chat-home-welcome');
+            const _q = home.querySelector('.chat-home-quick');
+            if (_w) _w.style.display = '';
+            if (_q) _q.style.display = '';
+        }
+        // 恢复空态布局：chat-home 回到居中态
+        const _ps = document.getElementById('page-solution');
+        if (_ps) _ps.classList.remove('chat-page-active');
+    }
+
+    // 续聊：在当前任务会话里发送一条消息
+    async function sendHistory(text) {
+        text = (text || '').trim();
+        if (!text || !S.currentConvId || S.busy) return;
+        S.busy = true;
+        S.abortCtrl = new AbortController();
+        renderHistoryMessage({ role: 'user', content: text });
+        const input = $el('chat-history-input');
+        if (input) input.value = '';
+        const typing = document.createElement('div');
+        typing.id = 'chat-history-typing';
+        typing.className = 'chat-msg agent';
+        typing.innerHTML = '<div class="chat-avatar">AI</div><div class="chat-bubble"><div class="chat-typing"><span></span><span></span><span></span></div></div>';
+        const box = $el('chat-history-messages');
+        if (box) box.appendChild(typing);
+        try {
+            let aiAnswer = '';
+            const stream = $el('chat-history-messages');
+            const bubble = document.createElement('div');
+            await agentStreamFetch(text, S.abortCtrl.signal, (evt) => {
+                if (evt.type === 'result') {
+                    const data = evt.data || evt;
+                    aiAnswer = data.answer || aiAnswer;
+                } else if (evt.type === 'error') {
+                    throw new Error(evt.message || '请求失败');
+                }
+            }, S.currentConvId);
+            if (typing.parentNode) typing.remove();
+            if (aiAnswer) {
+                renderHistoryMessage({ role: 'agent', content: aiAnswer });
+            } else if (stream) {
+                const row = document.createElement('div');
+                row.className = 'chat-msg agent';
+                row.innerHTML = '<div class="chat-avatar">AI</div><div class="chat-bubble"><b>完成</b>（无文本回复）</div>';
+                stream.appendChild(row);
+            }
+            loadConversations();
+        } catch (e) {
+            if (typing.parentNode) typing.remove();
+            console.warn('[ChatUI] 续聊失败:', e);
+            if (box) {
+                const row = document.createElement('div');
+                row.className = 'chat-msg agent';
+                row.innerHTML = `<div class="chat-avatar">AI</div><div class="chat-bubble"><span style="color:#9b1c1c">⚠️ ${esc(e.message || '请求失败')}</span></div>`;
+                box.appendChild(row);
+            }
+        } finally {
+            S.busy = false;
+        }
     }
 
     // 归档会话
@@ -418,7 +539,7 @@
     }
 
     // ---- 自包含 SSE fetch（不依赖 window.API） ----
-    async function agentStreamFetch(demand, signal, onEvent) {
+    async function agentStreamFetch(demand, signal, onEvent, sessionId) {
         const headers = { 'Content-Type': 'application/json' };
         try {
             const raw = localStorage.getItem('hwcloud_auth');
@@ -431,7 +552,14 @@
         const resp = await fetch('/api/agent/match/stream', {
             method: 'POST',
             headers,
-            body: JSON.stringify({ demand, mode: 'agent', customer_files: [], client_id: null, is_quick_demo: false }),
+            body: JSON.stringify({
+                demand,
+                mode: 'agent',
+                customer_files: [],
+                client_id: null,
+                is_quick_demo: false,
+                session_id: sessionId || undefined,
+            }),
             signal,
         });
         if (!resp.ok) {
@@ -479,6 +607,19 @@
         const newConvBtn = $el('sidebar-new-conv-btn');
         if (newConvBtn) newConvBtn.addEventListener('click', newConversation);
 
+        // 任务历史视图：返回主页 / 续聊发送
+        const backBtn = $el('chat-history-back');
+        if (backBtn) backBtn.addEventListener('click', () => { S.currentConvId = null; hideHistoryView(); });
+        const sendBtn = $el('chat-history-send');
+        if (sendBtn) sendBtn.addEventListener('click', () => { const i = $el('chat-history-input'); sendHistory(i ? i.value : ''); });
+        const hInput = $el('chat-history-input');
+        if (hInput) hInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                e.preventDefault();
+                sendHistory(hInput.value);
+            }
+        });
+
         // 初始加载会话列表
         loadConversations();
 
@@ -504,6 +645,8 @@
             send: (t) => send(t),
             clear: () => { clearStream(); renderEmptyHint(); },
             getState: () => ({ ...S, messages: S.messages.length }),
+            newConversation: () => { try { newConversation(); } catch (e) { console.warn('[ChatUI] 新建对话失败:', e); } },
+            refreshList: () => { try { loadConversations(); } catch (e) { console.warn('[ChatUI] 刷新任务列表失败:', e); } },
         };
     }
 
