@@ -7078,8 +7078,12 @@ body::after {
 }
 
 /* ===== 页面标题栏（带统计数字） ===== */
-/* 产品页：占满视口高度，左栏独立滚动、右栏固定不跟随 */
-#page-products {
+/* 产品页：占满视口高度，左栏独立滚动、右栏固定不跟随
+   【修复】必须只对 .active 生效！原 CSS 没有限定 active，导致非 active 时
+   display:flex + height:100vh 覆盖了 .page 默认的 position:absolute，
+   在文档流里占了 100vh 高度，把后面所有 page（dashboard/knowledge/...）推到视口下方。
+   用户看到的"主区空白"实际是 page-dashboard 在 y=1176 处开始（viewport 高 720）。 */
+#page-products.active {
     display: flex;
     flex-direction: column;
     height: 100vh;

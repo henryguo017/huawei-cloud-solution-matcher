@@ -6,10 +6,10 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260804b">
-<link rel="stylesheet" href="cost-reference.css?v=20260804b">
-<link rel="stylesheet" href="js/chat.css?v=20260804b">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260804b">
+<link rel="stylesheet" href="style.css?v=20260804c">
+<link rel="stylesheet" href="cost-reference.css?v=20260804c">
+<link rel="stylesheet" href="js/chat.css?v=20260804c">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260804c">
 </head>
 <body>
     <!-- 密码重置链接检测（内联，不受外部JS缓存影响） -->
@@ -575,7 +575,12 @@
                     <p class="page-subtitle">输入客户的业务需求和痛点，系统将辅助匹配最适合的华为云行业解决方案</p>
                 </header>
 
-                <div class="content-card">
+                <!-- 【修复】原 line 578-579 双层 <div class="content-card"> 嵌套少了一个 </div>，
+                     导致 div 配对错乱，浏览器把后续 page-competitor/dashboard/... 自动
+                     闭合到 page-solution 内部。所有非 active 页面挤在 page-solution 里，
+                     又因 page-solution 设了 position:relative，会撑高页面 2647px，把
+                     后面的 page-dashboard 等推到视口下方 1176px 处（viewport 720），
+                     用户看到"主区空白"。删除多余的 content-card 包装即可。 -->
                 <div class="content-card">
                     <div class="form-group">
                         <label class="form-label">客户需求描述
@@ -2180,7 +2185,7 @@
         </div><!-- /.app-main -->
     </div><!-- /.app-shell -->
 
-    <script src="js/chart.umd.min.js?v=20260804b" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
+    <script src="js/chart.umd.min.js?v=20260804c" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
     <!-- 方案分享弹窗 -->
     <div id="share-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content share-modal-content">
@@ -2222,11 +2227,11 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260804b"></script>
-    <script src="js/chat_ui.js?v=20260804b"></script>
-    <script src="js/voice-input.js?v=20260804b"></script>
-    <script src="js/achievement-ui.js?v=20260804b"></script>
-    <script src="welcome-script.js?v=20260804b"></script>
+    <script src="script.js?v=20260804c"></script>
+    <script src="js/chat_ui.js?v=20260804c"></script>
+    <script src="js/voice-input.js?v=20260804c"></script>
+    <script src="js/achievement-ui.js?v=20260804c"></script>
+    <script src="welcome-script.js?v=20260804c"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">
   <symbol id="i-arrow-down-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10" />
   <path d="M17 7v10H7" /></symbol>
