@@ -5690,7 +5690,50 @@ function initEventListeners() {
         }
     };
     CustomerFileUploader.init();
-    
+
+    // ===== 对话前主页（chat-home v2）：功能胶囊填词 + 附件按钮 =====
+    (function initChatHome() {
+        // 功能胶囊：点击把预设词填入输入框（不自动发送）
+        const demandInputEl = document.getElementById('demand-input');
+        const matchBtnEl = document.getElementById('match-btn');
+        const chips = document.querySelectorAll('.chat-home-quick .quick-chip');
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                const preset = chip.dataset.preset || '';
+                if (demandInputEl && preset) {
+                    demandInputEl.value = preset;
+                    demandInputEl.focus();
+                    demandInputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+        });
+
+        // 附件按钮：复用上传组件的登录检查 + 文件选择
+        const attachBtn = document.getElementById('cf-attach-btn');
+        if (attachBtn) {
+            attachBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (typeof CustomerFileUploader !== 'undefined' && CustomerFileUploader._onActivate) {
+                    CustomerFileUploader._onActivate();
+                } else {
+                    const input = document.getElementById('cf-file-input');
+                    if (input) input.click();
+                }
+            });
+        }
+
+        // 输入框快捷键：Enter 发送（Agent 模式走 matchBtn），Shift+Enter 换行
+        if (demandInputEl && matchBtnEl) {
+            demandInputEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                    e.preventDefault();
+                    if (matchBtnEl.disabled) return;
+                    matchBtnEl.click();
+                }
+            });
+        }
+    })();
+
     const demandInput = document.getElementById('demand-input');
     const charCount = document.getElementById('demand-char-count');    
     demandInput?.addEventListener('input', () => {
