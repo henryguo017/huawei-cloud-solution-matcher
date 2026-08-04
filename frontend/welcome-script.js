@@ -107,10 +107,14 @@ const WelcomeManager = {
     
     show() {
         if (this.welcomePage) {
+            // 修复：用 .not(.hidden) 选择器触发显示，不再写 inline display:flex。
+            // 之前 inline style 在用户视图意外残留时（JS 异常、网络慢）会导致 z-index:9999
+            // 永久覆盖 page-solution，主区看似空白。
             this.welcomePage.classList.remove('hidden');
-            this.welcomePage.style.display = 'flex';
-            this.welcomePage.style.zIndex = '9999';
-            this.welcomePage.style.pointerEvents = 'auto';
+            // 保留 .not(.hidden) 兼容保险：万一 inline 被外部脚本写入，这里再清一遍。
+            this.welcomePage.style.display = '';
+            this.welcomePage.style.zIndex = '';
+            this.welcomePage.style.pointerEvents = '';
             this.startAnimations();
         }
     },

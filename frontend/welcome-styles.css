@@ -1,7 +1,9 @@
 
 /* ==================== 欢迎引导页样式 ==================== */
-/* 修复：welcome-page 默认隐藏，避免 JS 跑完前以 z-index:9999 覆盖 page-solution 主区。
-   WelcomeManager.show() 会显式设 display:flex 触发显示。 */
+/* 修复：welcome-page 默认隐藏，仅靠 JS 移除 .hidden 类触发显示。
+   关键：不要让 .welcome-page 默认 display:flex，否则 z-index:9999 永远覆盖主区。
+   也不要写 .welcome-page:not(.hidden) { display:flex }（之前误加，优先级压过 display:none）。
+   JS show() 现在只移除 .hidden，不再写 inline style。 */
 .welcome-page {
     position: fixed;
     top: 0;
@@ -9,23 +11,25 @@
     width: 100vw;
     height: 100vh;
     z-index: 9999;
+    /* 默认隐藏：display:none（只有 .hidden 类不匹配时通过 :not(:not) 触发显示） */
     display: none;
     align-items: center;
     justify-content: center;
-    /* 跟随皮肤：蓝(#0f1724/#162033) / 金(#6e593a/#8a7147) / 绿(#285138/#346b4c) 自动联动 */
     background: linear-gradient(135deg, var(--topbar-bg, #0f1724) 0%, var(--sidebar-bg, #162033) 60%, var(--topbar-bg, #0f1724) 100%);
     animation: fadeIn 0.5s ease;
 }
 
+/* .hidden 类强制隐藏（即使上面规则被覆盖） */
 .welcome-page.hidden {
-    display: none;
-    pointer-events: none;
-    z-index: -1;
+    display: none !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
 }
 
-/* JS 调用 .show() 时去掉 hidden + inline display:flex */
+/* JS 调用 .show() 时去掉 .hidden，触发上面的 display:flex。
+   注意：必须使用 :not(.hidden) { display:flex !important } 才能压过上面的默认 display:none + .hidden 的 !important */
 .welcome-page:not(.hidden) {
-    display: flex;
+    display: flex !important;
 }
 
 .welcome-overlay {
