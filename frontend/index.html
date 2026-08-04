@@ -6,10 +6,10 @@
     <meta name="description" content="华为云解决方案智能匹配系统">
     <title>华为云解决方案匹配系统</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=20260804g">
-<link rel="stylesheet" href="cost-reference.css?v=20260804g">
-<link rel="stylesheet" href="js/chat.css?v=20260804g">
-    <link rel="stylesheet" href="welcome-styles.css?v=20260804g">
+<link rel="stylesheet" href="style.css?v=20260804h">
+<link rel="stylesheet" href="cost-reference.css?v=20260804h">
+<link rel="stylesheet" href="js/chat.css?v=20260804h">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260804h">
 </head>
 <body>
     <!-- 密码重置链接检测（内联，不受外部JS缓存影响） -->
@@ -893,45 +893,50 @@
 
                 <!-- 底部固定输入栏（sticky） -->
                 <div class="chat-inputbar-sticky">
-                    <div class="chat-home-input-wrap" id="chat-home-input-wrap">
-                        <textarea
-                            id="demand-input"
-                            class="textarea-input chat-home-textarea"
-                            rows="3"
-                            placeholder="描述客户需求，例如：中型制造企业，50 台设备，想做预测性维护减少停机"></textarea>
-                        <div class="char-counter chat-home-counter">
-                            <span id="demand-char-count">0</span> / 2000 字符
+                    <div class="chat-input-card">
+                        <div class="chat-home-input-wrap" id="chat-home-input-wrap">
+                            <textarea
+                                id="demand-input"
+                                class="textarea-input chat-home-textarea"
+                                rows="1"
+                                placeholder="描述客户需求，例如：中型制造企业，50 台设备，想做预测性维护减少停机"></textarea>
+                            <div class="char-counter chat-home-counter">
+                                <span id="demand-char-count">0</span> / 2000
+                            </div>
                         </div>
-                    </div>
-                    <div class="chat-home-toolbar">
-                        <button type="button" class="chat-tool-btn" id="cf-attach-btn"
-                                title="上传客户资料（Word / PDF / Excel / PPT / 图片，自动 OCR）">
-                            <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg> 附件
-                        </button>
-                        <div class="mode-toggle chat-mode-toggle" id="mode-toggle">
-                            <span class="mode-option" data-mode="normal">标准</span>
-                            <span class="mode-option active" data-mode="agent">
-                                Agent <span class="mode-badge">推荐</span>
-                            </span>
-                            <span class="mode-option" data-mode="wizard">向导</span>
+                        <div class="chat-home-toolbar">
+                            <div class="chat-toolbar-left">
+                                <button type="button" class="chat-tool-btn" id="cf-attach-btn"
+                                        title="上传客户资料（Word / PDF / Excel / PPT / 图片，自动 OCR）">
+                                    <svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg> 附件
+                                </button>
+                                <div class="mode-toggle chat-mode-toggle" id="mode-toggle">
+                                    <span class="mode-option" data-mode="normal">标准</span>
+                                    <span class="mode-option active" data-mode="agent">
+                                        Agent <span class="mode-badge">推荐</span>
+                                    </span>
+                                    <span class="mode-option" data-mode="wizard">向导</span>
+                                </div>
+                                <div class="client-bar chat-client-bar" id="client-bar" style="display:none;">
+                                    <select id="client-select" class="client-select chat-client-select">
+                                        <option value="">（不限定客户）</option>
+                                    </select>
+                                    <button type="button" id="client-new-btn" class="btn-secondary client-new-btn">+ 新建</button>
+                                    <button type="button" id="client-edit-btn" class="btn-secondary client-edit-btn chat-client-extra-btn">编辑</button>
+                                    <button type="button" id="client-manage-btn" class="btn-secondary client-manage-btn chat-client-extra-btn">管理</button>
+                                    <button type="button" id="client-del-btn" class="btn-icon client-del-btn chat-client-extra-btn">×</button>
+                                </div>
+                                <span class="mode-hint" id="mode-hint" style="display:none;"></span>
+                                <button type="button" id="agent-clear-chat-btn" class="chat-tool-btn chat-clear-btn"
+                                        style="display:none;" title="清空 Agent 对话记忆，开始新对话">清空</button>
+                            </div>
+                            <div class="chat-toolbar-right">
+                                <button class="btn btn-primary chat-send-btn" id="match-btn">
+                                    <span class="btn-text">发送</span>
+                                    <span class="btn-loader"></span>
+                                </button>
+                            </div>
                         </div>
-                        <div class="client-bar chat-client-bar" id="client-bar" style="display:none;">
-                            <select id="client-select" class="client-select chat-client-select">
-                                <option value="">（不限定客户）</option>
-                            </select>
-                            <button type="button" id="client-new-btn" class="btn-secondary client-new-btn">+ 新建</button>
-                            <button type="button" id="client-edit-btn" class="btn-secondary client-edit-btn chat-client-extra-btn">编辑</button>
-                            <button type="button" id="client-manage-btn" class="btn-secondary client-manage-btn chat-client-extra-btn">管理</button>
-                            <button type="button" id="client-del-btn" class="btn-icon client-del-btn chat-client-extra-btn">×</button>
-                        </div>
-                        <span class="mode-hint" id="mode-hint" style="display:none;"></span>
-                        <button type="button" id="agent-clear-chat-btn" class="chat-tool-btn chat-clear-btn"
-                                style="display:none;" title="清空 Agent 对话记忆，开始新对话">清空</button>
-                        <div class="chat-toolbar-spacer"></div>
-                        <button class="btn btn-primary chat-send-btn" id="match-btn">
-                            <span class="btn-text">发送</span>
-                            <span class="btn-loader"></span>
-                        </button>
                     </div>
                     <p class="chat-home-hint">按 Enter 发送 · Shift+Enter 换行 · 支持拖拽上传文档</p>
                 </div>
@@ -2193,7 +2198,7 @@
         </div><!-- /.app-main -->
     </div><!-- /.app-shell -->
 
-    <script src="js/chart.umd.min.js?v=20260804g" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
+    <script src="js/chart.umd.min.js?v=20260804h" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
     <!-- 方案分享弹窗 -->
     <div id="share-modal" class="modal-overlay" style="display:none;">
         <div class="modal-content share-modal-content">
@@ -2235,11 +2240,11 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260804g"></script>
-    <script src="js/chat_ui.js?v=20260804g"></script>
-    <script src="js/voice-input.js?v=20260804g"></script>
-    <script src="js/achievement-ui.js?v=20260804g"></script>
-    <script src="welcome-script.js?v=20260804g"></script>
+    <script src="script.js?v=20260804h"></script>
+    <script src="js/chat_ui.js?v=20260804h"></script>
+    <script src="js/voice-input.js?v=20260804h"></script>
+    <script src="js/achievement-ui.js?v=20260804h"></script>
+    <script src="welcome-script.js?v=20260804h"></script>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">
   <symbol id="i-arrow-down-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10" />
   <path d="M17 7v10H7" /></symbol>

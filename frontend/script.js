@@ -5777,11 +5777,11 @@ function initEventListeners() {
             })
             .catch(() => {});
     }
-    // 三模式通用：登录态就绪后显示客户栏并加载下拉
+    // 三模式通用：登录态就绪后显示客户栏并加载下拉；Agent 模式下隐藏（客户管理改由对话完成）
     function ensureClientBar() {
         if (AuthManager.isLoggedIn()) {
             const cb = document.getElementById('client-bar');
-            if (cb) cb.style.display = '';
+            if (cb) cb.style.display = (State.matchMode === 'agent') ? 'none' : '';
             loadClients();
         }
     }
