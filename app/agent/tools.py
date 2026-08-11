@@ -797,6 +797,221 @@ async def _tool_run_code(code: str = "", query: str = "") -> str:
 
 
 # ============================================================
+# 统一入口 P1 新增：平台数据工具（仪表盘 / 知识库 / 成就 / 资讯）
+# 数据隔离铁律：一律 get_agent_user_context() 取 uid；uid<=0 读返回空、写拒绝
+# ============================================================
+
+async def _tool_get_my_stats(period: str = "month") -> str:
+    """
+    工具: get_my_stats
+    作用: 查询当前用户的使用统计（匹配次数/竞品分析/历史方案数/每日趋势）
+    参数:
+      period: day | week | month | all，默认 month
+    发事件: stats_card
+    """
+    uid = get_agent_user_context()
+    if uid <= 0:
+        return json.dumps({"status": "error", "message": "需要登录后才能查看使用统计"}, ensure_ascii=False)
+    try:
+        from api.dependencies import get_usage_logger
+        svc = get_usage_logger()
+        days_map = {"day": 1, "week": 7, "month": 30, "all": 365}
+        days = days_map.get((period or "month").strip().lower(), 30)
+        recent = svc.get_recent_counts(days=days, user_id=uid)
+        trends = svc.get_daily_trends(days=min(days, 7), user_id=uid)
+        history_total = svc.get_match_history_count(user_id=uid)
+        payload = {
+            "period": (period or "month").strip().lower(),
+            "days": days,
+            "match_count": recent.get("match", 0),
+            "analyze_count": recent.get("analyze", 0),
+            "history_total": history_total,
+            "recent_trend": trends,
+        }
+        cb = get_agent_event_callback()
+        if cb:
+            try:
+                await cb({"type": "stats_card", **payload})
+            except Exception as e:
+                logger.warning(f"[get_my_stats] 事件回调失败: {e}")
+        return json.dumps({
+            "status": "ok",
+            **payload,
+            "message": "已获取使用统计。请在 Final Answer 中简要汇报几个关键数字。",
+        }, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"[get_my_stats] 查询失败: {e}")
+        return f"Error: 查询使用统计失败 {str(e)}"
+
+
+async def _tool_manage_kb(action: str, query: str = "", doc_id: str = "") -> str:
+    """
+    工具: manage_kb
+    作用: 管理当前用户的知识库（列表/搜索/删除/统计）
+    参数:
+      action: list | search | delete | stats
+      query: search 时必填
+      doc_id: delete 时必填（文档 id）
+    发事件: kb_overview
+    """
+    uid = get_agent_user_context()
+    if uid <= 0:
+        return json.dumps({"status": "error", "message": "需要登录后才能管理知识库"}, ensure_ascii=False)
+    try:
+        from api.dependencies import get_user_knowledge_base
+        kb = get_user_knowledge_base(uid)
+        action = (action or "").strip().lower()
+
+        if action == "list":
+            docs = kb.list_documents()
+            items = [{
+                "id": d["id"], "title": d["title"], "category": d.get("category", ""),
+                "industry": d.get("industry", ""), "size_kb": d.get("size_kb", 0),
+            } for d in docs[:30]]
+            payload = {"action": "list", "total": len(items), "items": items}
+            if not items:
+                cb = get_agent_event_callback()
+                if cb:
+                    try:
+                        await cb({"type": "kb_overview", **payload})
+                    except Exception:
+                        pass
+                return json.dumps({"status": "empty", "message": "知识库暂无文档"}, ensure_ascii=False)
+        elif action == "search":
+            if not query:
+                return json.dumps({"status": "error", "message": "search 必须提供 query 关键词"}, ensure_ascii=False)
+            docs = kb.search(query)
+            items = [{
+                "content": d.page_content[:200],
+                "source": d.metadata.get("source", ""),
+            } for d in docs[:5]]
+            payload = {"action": "search", "query": query, "total": len(items), "items": items}
+        elif action == "delete":
+            if not doc_id:
+                return json.dumps({"status": "error", "message": "delete 必须提供 doc_id"}, ensure_ascii=False)
+            kb.delete_document(doc_id, delete_file=True)
+            payload = {"action": "delete", "doc_id": doc_id, "message": f"已删除文档 {doc_id}"}
+        elif action == "stats":
+            stats = kb.get_stats()
+            payload = {
+                "action": "stats",
+                "total_documents": stats.get("total_documents", 0),
+                "total_solution_files": stats.get("total_solution_files", 0),
+                "industries": stats.get("supported_industries", [])[:15],
+                "competitor_companies": stats.get("competitor_companies", [])[:15],
+                "accuracy": stats.get("accuracy", 0),
+            }
+        else:
+            return json.dumps({"status": "error", "message": f"未知 action: {action}（支持 list/search/delete/stats）"}, ensure_ascii=False)
+
+        cb = get_agent_event_callback()
+        if cb:
+            try:
+                await cb({"type": "kb_overview", **payload})
+            except Exception as e:
+                logger.warning(f"[manage_kb] 事件回调失败: {e}")
+        return json.dumps({"status": "ok", **payload,
+                           "message": "知识库操作完成，请简要汇报结果。"}, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"[manage_kb] 操作失败: {e}")
+        return f"Error: 知识库操作失败 {str(e)}"
+
+
+async def _tool_get_my_achievements() -> str:
+    """
+    工具: get_my_achievements
+    作用: 查询当前用户的成就列表（已解锁 + 未解锁）
+    发事件: achievement_card
+    """
+    uid = get_agent_user_context()
+    if uid <= 0:
+        return json.dumps({"status": "error", "message": "需要登录后才能查看成就"}, ensure_ascii=False)
+    try:
+        from app.services.achievement_service import get_achievement_service
+        svc = get_achievement_service()
+        items = svc.get_user_achievements(uid)
+        stats = svc.get_user_stats(uid)
+        payload = {
+            "total": stats.get("total", 0),
+            "unlocked": stats.get("unlocked", 0),
+            "percent": stats.get("percent", 0),
+            "items": [{
+                "name": it.get("name", ""),
+                "description": it.get("description", ""),
+                "unlocked": bool(it.get("unlocked", False)),
+                "unlocked_at": it.get("unlocked_at", ""),
+            } for it in items[:20]],
+        }
+        cb = get_agent_event_callback()
+        if cb:
+            try:
+                await cb({"type": "achievement_card", **payload})
+            except Exception as e:
+                logger.warning(f"[get_my_achievements] 事件回调失败: {e}")
+        return json.dumps({"status": "ok", **payload,
+                           "message": "已获取成就列表，请简要汇报解锁数与亮点成就。"}, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"[get_my_achievements] 查询失败: {e}")
+        return f"Error: 查询成就失败 {str(e)}"
+
+
+async def _tool_get_news(category: str = "all", limit: int = 5) -> str:
+    """
+    工具: get_news
+    作用: 获取科技资讯 / 华为云动态 / 行业展会摘要
+    参数:
+      category: all | tech | huawei | events
+      limit: 条数，默认 5，最多 10
+    发事件: news_digest
+    """
+    try:
+        from api.routes import tech_news, huawei_news, industry_events
+        cat = (category or "all").strip().lower()
+        merged = []
+        if cat in ("all", "tech"):
+            r = await tech_news()
+            if isinstance(r, dict):
+                merged += [{"title": it.get("title", ""), "source": it.get("source", "科技资讯"),
+                            "url": it.get("url", ""), "pub_date": it.get("pub_date", ""), "tag": "科技"}
+                           for it in r.get("items", [])]
+        if cat in ("all", "huawei"):
+            r = await huawei_news()
+            if isinstance(r, dict):
+                merged += [{"title": it.get("title", ""), "source": "华为云动态",
+                            "url": it.get("url", ""), "pub_date": it.get("pub_date", ""), "tag": "华为云"}
+                           for it in r.get("items", [])]
+        if cat in ("all", "events"):
+            r = await industry_events()
+            if isinstance(r, dict):
+                merged += [{"title": it.get("name") or it.get("title", ""), "source": it.get("source", "行业展会"),
+                            "url": it.get("url", ""), "pub_date": "", "tag": "展会"}
+                           for it in r.get("items", [])]
+
+        limit = max(1, min(int(limit or 5), 10))
+        items = merged[:limit]
+        payload = {"category": cat, "items": items}
+        if not items:
+            cb = get_agent_event_callback()
+            if cb:
+                try:
+                    await cb({"type": "news_digest", **payload})
+                except Exception:
+                    pass
+            return json.dumps({"status": "empty", "category": cat, "message": "暂无资讯内容"}, ensure_ascii=False)
+        cb = get_agent_event_callback()
+        if cb:
+            try:
+                await cb({"type": "news_digest", **payload})
+            except Exception as e:
+                logger.warning(f"[get_news] 事件回调失败: {e}")
+        return json.dumps({"status": "ok", **payload,
+                           "message": "已获取资讯摘要，请简要汇报标题与来源。"}, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"[get_news] 获取失败: {e}")
+        return f"Error: 获取资讯失败 {str(e)}"
+
+
+# ============================================================
 # 工厂函数：创建默认工具集
 # ============================================================
 
@@ -1040,6 +1255,98 @@ def create_default_tools() -> ToolRegistry:
             "required": ["history_id"]
         },
         func=_tool_export_report,
+        domain="platform",
+    ))
+
+    # 11. get_my_stats — 我的使用统计（统一入口 P1）
+    registry.register(Tool(
+        name="get_my_stats",
+        description=(
+            "查询当前登录用户的使用统计（匹配次数、竞品分析次数、历史方案总数、最近每日趋势）。"
+            "当用户问\"我这个月匹配了多少次\"\"最近用了多少次\"\"我的使用统计\"\"我做了多少方案\"时调用。"
+            "period 可选：day/week/month/all，默认 month。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "period": {
+                    "type": "string",
+                    "enum": ["day", "week", "month", "all"],
+                    "description": "统计周期（可选，默认 month）",
+                    "default": "month"
+                }
+            }
+        },
+        func=_tool_get_my_stats,
+        domain="platform",
+    ))
+
+    # 12. manage_kb — 知识库管理（统一入口 P1）
+    registry.register(Tool(
+        name="manage_kb",
+        description=(
+            "管理当前登录用户的独立知识库。当用户说\"我的知识库有哪些文档\"\"知识库有多少文档\""
+            "\"删掉某个知识库文档\"\"查一下知识库\"时调用。"
+            "action 必填：list(文档列表)/search(需query关键词)/delete(需doc_id)/stats(统计)。"
+            "注意：这是查/管知识库文档，与方案检索(search_kb)不同。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "search", "delete", "stats"],
+                    "description": "操作类型（必填）"
+                },
+                "query": {"type": "string", "description": "搜索关键词（action=search 必填）", "default": ""},
+                "doc_id": {"type": "string", "description": "文档 id（action=delete 必填）", "default": ""}
+            },
+            "required": ["action"]
+        },
+        func=_tool_manage_kb,
+        domain="platform",
+    ))
+
+    # 13. get_my_achievements — 我的成就（统一入口 P1）
+    registry.register(Tool(
+        name="get_my_achievements",
+        description=(
+            "查询当前登录用户的成就/徽章列表（已解锁 + 未解锁占位）。"
+            "当用户问\"我拿了哪些徽章\"\"我的成就\"\"解锁了多少成就\"时调用。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {}
+        },
+        func=_tool_get_my_achievements,
+        domain="platform",
+    ))
+
+    # 14. get_news — 行业资讯（统一入口 P1）
+    registry.register(Tool(
+        name="get_news",
+        description=(
+            "获取科技资讯 / 华为云官方动态 / 行业展会活动摘要。"
+            "当用户问\"最近有什么行业新闻\"\"华为云最近有什么动态\"\"近期有哪些展会/活动\"时调用。"
+            "category 可选：all/tech(科技资讯)/huawei(华为云动态)/events(行业展会)，默认 all。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string",
+                    "enum": ["all", "tech", "huawei", "events"],
+                    "description": "资讯类别（可选，默认 all）",
+                    "default": "all"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "返回条数（可选，默认 5，最多 10）",
+                    "default": 5
+                }
+            }
+        },
+        func=_tool_get_news,
         domain="platform",
     ))
 

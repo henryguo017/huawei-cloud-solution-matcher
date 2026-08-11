@@ -433,7 +433,8 @@
                     return;
                 }
                 // 卡片事件：自包含渲染（不依赖 script.js 闭包里的 appendXxx）
-                if (['pricing_info', 'competitor_table', 'solution_card', 'history_list', 'export_ready', 'file_created'].includes(event.type)) {
+                if (['pricing_info', 'competitor_table', 'solution_card', 'history_list', 'export_ready', 'file_created',
+                      'stats_card', 'kb_overview', 'achievement_card', 'news_digest'].includes(event.type)) {
                     const b = ensureAiBubble();
                     const cardHost = document.createElement('div');
                     cardHost.innerHTML = renderAgentCard(event);
@@ -522,6 +523,40 @@
         if (t === 'file_created') {
             const link = event.path ? `/api/agent/artifact?path=${encodeURIComponent(event.path)}` : '';
             return `<div class="chat-bubble artifact-entry"><div class="comp-title">📎 沙箱产物</div><div class="export-name">${esc(event.name||'')}</div>${link?`<a class="artifact-dl" href="${esc(link)}" target="_blank" download>下载</a>`:''}</div>`;
+        }
+        if (t === 'stats_card') {
+            const periodLabel = {day:'今日', week:'近7天', month:'近30天', all:'全部'}[event.period] || '近30天';
+            const kpis = [
+                ['方案匹配', event.match_count || 0],
+                ['竞品分析', event.analyze_count || 0],
+                ['历史方案', event.history_total || 0],
+            ];
+            const kpiHtml = kpis.map(([k, v]) => `<div class="kpi-item"><div class="kpi-num">${v}</div><div class="kpi-label">${k}</div></div>`).join('');
+            const trend = (event.recent_trend || []).map(d => `<div class="trend-day"><span class="trend-date">${esc(d.date || '')}</span><span class="trend-bar" style="width:${Math.min(100, (d.matches || 0) * 12)}%"></span><span class="trend-num">${d.matches || 0}次</span></div>`).join('');
+            return `<div class="chat-bubble stats-card"><div class="comp-title">📊 使用统计（${periodLabel}）</div><div class="kpi-grid">${kpiHtml}</div>${trend ? `<div class="trend-list">${trend}</div>` : ''}</div>`;
+        }
+        if (t === 'kb_overview') {
+            if (event.action === 'stats') {
+                return `<div class="chat-bubble kb-card"><div class="comp-title">📚 知识库统计</div><div class="kb-stats"><span>片段 ${event.total_documents || 0}</span><span>文件 ${event.total_solution_files || 0}</span><span>行业 ${(event.industries || []).length}</span></div><div class="kb-detail">行业: ${esc((event.industries || []).join('、') || '无')}</div><div class="kb-detail">竞品: ${esc((event.competitor_companies || []).join('、') || '无')}</div></div>`;
+            }
+            if (event.action === 'delete') {
+                return `<div class="chat-bubble kb-card"><div class="comp-title">🗑 已删除文档</div><div class="kb-detail">${esc(event.doc_id || '')}</div></div>`;
+            }
+            if (event.action === 'search') {
+                const items = (event.items || []).map(i => `<div class="kb-doc"><span class="kb-doc-src">${esc(i.source || '')}</span><div class="kb-doc-content">${esc((i.content || '').slice(0, 150))}</div></div>`).join('');
+                return `<div class="chat-bubble kb-card"><div class="comp-title">🔍 知识库搜索（${esc(event.query || '')}）</div>${items || '<div>无结果</div>'}</div>`;
+            }
+            const items = (event.items || []).slice(0, 10).map(i => `<div class="kb-doc"><span class="kb-doc-title">${esc(i.title || '')}</span><span class="kb-doc-meta">${esc(i.industry || i.category || '')} · ${i.size_kb || 0}KB</span></div>`).join('');
+            return `<div class="chat-bubble kb-card"><div class="comp-title">📚 我的知识库（${event.total || 0}）</div><div class="kb-list">${items || '<div>暂无文档</div>'}</div></div>`;
+        }
+        if (t === 'achievement_card') {
+            const grid = (event.items || []).map(it => `<div class="ach-item ${it.unlocked ? 'unlocked' : 'locked'}"><div class="ach-icon">${it.unlocked ? '🏅' : '🔒'}</div><div class="ach-name">${esc(it.name || '???')}</div></div>`).join('');
+            return `<div class="chat-bubble ach-card"><div class="comp-title">🏆 我的成就（${event.unlocked || 0}/${event.total || 0}）</div><div class="ach-progress"><div class="ach-bar" style="width:${event.percent || 0}%"></div></div><div class="ach-grid">${grid || '<div>暂无成就</div>'}</div></div>`;
+        }
+        if (t === 'news_digest') {
+            const catLabel = event.category === 'huawei' ? '华为云动态' : event.category === 'events' ? '行业展会' : event.category === 'tech' ? '科技资讯' : '资讯摘要';
+            const items = (event.items || []).slice(0, 8).map(i => `<div class="news-row"><a class="news-title" href="${esc(i.url || '#')}" target="_blank" rel="noopener">${esc(i.title || '')}</a><span class="news-meta">${esc(i.source || '')}${i.pub_date ? ' · ' + esc(String(i.pub_date).slice(0, 10)) : ''}</span></div>`).join('');
+            return `<div class="chat-bubble news-card"><div class="comp-title">📰 ${catLabel}</div><div class="news-list">${items || '<div>暂无内容</div>'}</div></div>`;
         }
         return `<div class="chat-bubble"><div class="comp-title">${esc(t)}</div><pre>${esc(JSON.stringify(event).slice(0, 300))}</pre></div>`;
     }

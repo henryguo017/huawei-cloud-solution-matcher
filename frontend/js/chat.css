@@ -154,9 +154,73 @@
 .chat-bubble .price-card,
 .chat-bubble .hist-card,
 .chat-bubble .export-card,
-.chat-bubble .artifact-card {
+.chat-bubble .artifact-card,
+.chat-bubble .stats-card,
+.chat-bubble .kb-card,
+.chat-bubble .ach-card,
+.chat-bubble .news-card {
     margin: 8px 0;
 }
+
+/* ---- 统一入口 P1 新增卡片：统计 / 知识库 / 成就 / 资讯 ---- */
+.chat-bubble .comp-title { font-weight: 600; font-size: 13.5px; margin-bottom: 8px; }
+.kpi-grid { display: flex; gap: 10px; margin-bottom: 10px; }
+.kpi-item {
+    flex: 1; text-align: center;
+    background: var(--bg-elevated, #F7F8FA);
+    border: 1px solid var(--border-color, rgba(0,0,0,.08));
+    border-radius: 10px; padding: 10px 6px;
+}
+.kpi-num { font-size: 20px; font-weight: 600; color: var(--primary-color, #C7000B); line-height: 1.2; }
+.kpi-label { font-size: 11.5px; color: var(--text-secondary, #4E5969); margin-top: 2px; }
+.trend-list { display: flex; flex-direction: column; gap: 4px; }
+.trend-day { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.trend-date { width: 38px; flex: none; color: var(--text-tertiary, #86909C); }
+.trend-bar {
+    height: 8px; border-radius: 4px;
+    background: rgba(199,0,11,.25); min-width: 2px;
+}
+.trend-num { width: 42px; flex: none; text-align: right; color: var(--text-secondary, #4E5969); }
+.kb-stats { display: flex; gap: 10px; margin-bottom: 8px; }
+.kb-stats span {
+    flex: 1; text-align: center; font-size: 12.5px;
+    background: var(--bg-elevated, #F7F8FA);
+    border-radius: 8px; padding: 6px 4px;
+}
+.kb-detail { font-size: 12px; color: var(--text-secondary, #4E5969); margin-top: 4px; }
+.kb-list { display: flex; flex-direction: column; gap: 6px; }
+.kb-doc {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    font-size: 12.5px; padding: 6px 8px;
+    background: var(--bg-elevated, #F7F8FA); border-radius: 8px;
+}
+.kb-doc-title { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-doc-meta, .kb-doc-src { font-size: 11px; color: var(--text-tertiary, #86909C); flex: none; }
+.kb-doc-content { font-size: 12px; color: var(--text-secondary, #4E5969); margin-top: 2px; }
+.ach-progress {
+    height: 6px; border-radius: 3px; overflow: hidden;
+    background: var(--border-color, rgba(0,0,0,.08)); margin-bottom: 8px;
+}
+.ach-bar { height: 100%; background: var(--primary-color, #C7000B); border-radius: 3px; }
+.ach-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.ach-item {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 8px 2px; border-radius: 8px; text-align: center;
+    background: var(--bg-elevated, #F7F8FA);
+    border: 1px solid var(--border-color, rgba(0,0,0,.06));
+}
+.ach-item.locked { opacity: .45; filter: grayscale(.6); }
+.ach-icon { font-size: 18px; line-height: 1; }
+.ach-name { font-size: 10.5px; color: var(--text-secondary, #4E5969); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.news-list { display: flex; flex-direction: column; gap: 6px; }
+.news-row {
+    display: flex; flex-direction: column; gap: 1px;
+    padding: 6px 8px; border-radius: 8px;
+    background: var(--bg-elevated, #F7F8FA);
+}
+.news-title { font-size: 12.5px; color: var(--text-primary, #1A1C23); text-decoration: none; }
+.news-title:hover { color: var(--primary-color, #C7000B); }
+.news-meta { font-size: 11px; color: var(--text-tertiary, #86909C); }
 
 /* ---- 底部输入区 ---- */
 .chat-inputbar {
