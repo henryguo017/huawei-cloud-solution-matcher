@@ -1,0 +1,1169 @@
+"""
+使用日志服务 - 记录系统操作日志，为Dashboard提供真实统计数据
+"""
+import sqlite3
+import os
+import json
+import logging
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional
+from threading import Lock
+
+logger = logging.getLogger(__name__)
+
+MAX_MATCH_HISTORY = 100  # 历史记录上限，超过时自动删除最老的
+
+# 单例锁
+_instance_lock = Lock()
+_instance = None
+
+
+class UsageLoggerService:
+    """使用日志服务：记录每次匹配/分析操作到 SQLite"""
+
+    def __init__(self, db_path: str = None):
+        """
+        初始化日志服务
+
+        Args:
+            db_path: SQLite 数据库路径，默认存储在 data/usage_logs.db
+        """
+        if db_path is None:
+            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+            os.makedirs(data_dir, exist_ok=True)
+            db_path = os.path.join(data_dir, "usage_logs.db")
+
+        self.db_path = db_path
+        self._init_db()
+
+    def _get_connection(self):
+        """获取数据库连接（每次新建连接以保证线程安全）"""
+        conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=10)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+        except sqlite3.Error:
+            pass
+        return conn
+
+    def _init_db(self):
+        """初始化数据库表结构"""
+        with self._get_connection() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS usage_logs (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    action_type TEXT    NOT NULL CHECK(action_type IN ('match', 'analyze')),
+                    detail      TEXT,                        -- JSON 详情（如竞品名、行业）
+                    created_at  DATETIME DEFAULT (datetime('now', 'localtime'))
+                )
+            """)
+            # user_id 列（v=20260530zn — 用户数据隔离）
+            try:
+                conn.execute("ALTER TABLE usage_logs ADD COLUMN user_id INTEGER")
+            except:
+                pass  # 列已存在
+            # mode 列（v=20260618 — 记录匹配模式 standard/agent/wizard）
+            try:
+                conn.execute("ALTER TABLE usage_logs ADD COLUMN mode TEXT")
+            except:
+                pass  # 列已存在
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_user ON usage_logs(user_id)")
+
+            # 为查询性能创建索引
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_type ON usage_logs(action_type)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_date ON usage_logs(created_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_type_date ON usage_logs(action_type, created_at)")
+
+            # 匹配历史记录表（用于回溯和对比）
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS match_history (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    demand_text TEXT    NOT NULL,              -- 原始需求描述 / 竞品名
+                    solution    TEXT    NOT NULL,              -- 完整方案内容 / 分析报告（Markdown）
+                    industry    TEXT,                          -- 识别出的行业
+                    sources     TEXT,                          -- JSON 参考文档列表
+                    type        TEXT    NOT NULL DEFAULT 'match',  -- match=方案匹配 / analyze=竞品分析
+                    competitor  TEXT    DEFAULT '',                 -- 竞品名称（仅 type='analyze' 时有值）
+                    created_at  DATETIME DEFAULT (datetime('now', 'localtime'))
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_history_date ON match_history(created_at)")
+            
+            # 兼容旧表：如果 type/competitor 列不存在则添加（必须在创建 type 索引之前）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN type TEXT NOT NULL DEFAULT 'match'")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN competitor TEXT DEFAULT ''")
+            except:
+                pass  # 列已存在
+            
+            # type 列索引必须在 ALTER TABLE 之后创建
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_history_type ON match_history(type)")
+
+            # 添加 user_id 列（v=20260530zn — 登录系统集成）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN user_id INTEGER")
+            except:
+                pass  # 列已存在
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_history_user ON match_history(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_history_user_type_date ON match_history(user_id, type, created_at)")
+
+            # 下载状态（v=20260715 — 历史方案下载标记）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN downloaded INTEGER DEFAULT 0")
+            except:
+                pass  # 列已存在
+            # 归档状态（v=20260715 — 历史方案归档锁定）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN archived INTEGER DEFAULT 0")
+            except:
+                pass  # 列已存在
+            # 追问对话记录（v=20260715 — 历史方案内展开追问优化，JSON 数组）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN conversation TEXT")
+            except:
+                pass  # 列已存在
+
+            # 方案版本化（阶段 2.5 配套 — 同组方案 v1/v2/v3...，支持定稿）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN group_id INTEGER")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN version INTEGER DEFAULT 1")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN is_final INTEGER DEFAULT 0")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN title TEXT")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_history_group ON match_history(group_id)")
+            except:
+                pass
+
+            # 客户关联（2026-07 客户档案升级 — 方案挂客户）
+            try:
+                conn.execute("ALTER TABLE match_history ADD COLUMN client_id INTEGER")
+            except:
+                pass  # 列已存在
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_history_client ON match_history(client_id)")
+            except:
+                pass
+
+            conn.commit()
+            logger.info(f"使用日志数据库已初始化: {self.db_path}")
+
+    def log_match(self, demand_text: str = "", user_id: Optional[int] = None, mode: str = "standard"):
+        """
+        记录一次解决方案匹配操作
+
+        Args:
+            demand_text: 用户需求文本（可选，用于审计）
+            user_id: 用户ID（可选，用于数据隔离）
+            mode: 匹配模式（standard/agent/wizard）
+        """
+        try:
+            detail = {"demand_length": len(demand_text)} if demand_text else {}
+            with self._get_connection() as conn:
+                conn.execute(
+                    "INSERT INTO usage_logs (action_type, detail, user_id, mode) VALUES (?, ?, ?, ?)",
+                    ("match", json.dumps(detail, ensure_ascii=False), user_id, mode)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"记录 match 日志失败: {e}")
+
+    def log_analyze(self, competitor: str, industry: str, user_id: Optional[int] = None):
+        """
+        记录一次竞品分析操作
+
+        Args:
+            competitor: 竞品名称
+            industry: 行业名称
+            user_id: 用户ID（可选，用于数据隔离）
+        """
+        try:
+            detail = {"competitor": competitor, "industry": industry}
+            with self._get_connection() as conn:
+                conn.execute(
+                    "INSERT INTO usage_logs (action_type, detail, user_id) VALUES (?, ?, ?)",
+                    ("analyze", json.dumps(detail, ensure_ascii=False), user_id)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"记录 analyze 日志失败: {e}")
+
+    def get_total_counts(self) -> Dict[str, int]:
+        """
+        获取总操作次数统计
+
+        Returns:
+            {"match": int, "analyze": int}
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT action_type, COUNT(*) as count FROM usage_logs GROUP BY action_type"
+                )
+                result = {"match": 0, "analyze": 0}
+                for row in cursor.fetchall():
+                    result[row["action_type"]] = row["count"]
+                return result
+        except Exception as e:
+            logger.error(f"获取总计数失败: {e}")
+            return {"match": 0, "analyze": 0}
+
+    def get_recent_counts(self, days: int = 7, user_id: Optional[int] = None) -> Dict[str, int]:
+        """
+        获取最近 N 天的操作次数统计
+
+        Args:
+            days: 统计天数（默认7天）
+            user_id: 用户ID（可选，过滤指定用户）
+
+        Returns:
+            {"match": int, "analyze": int}
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = []
+                if user_id is not None:
+                    where_user = "AND user_id = ?"
+                    params.append(user_id)
+                cursor = conn.execute(f"""
+                    SELECT action_type, COUNT(*) as count
+                    FROM usage_logs
+                    WHERE date(created_at) >= date('now', 'localtime', '-{days-1} days')
+                    {where_user}
+                    GROUP BY action_type
+                """, params)
+                result = {"match": 0, "analyze": 0}
+                for row in cursor.fetchall():
+                    result[row["action_type"]] = row["count"]
+                return result
+        except Exception as e:
+            logger.error(f"获取最近{days}天计数失败: {e}")
+            return {"match": 0, "analyze": 0}
+
+    def get_daily_trends(self, days: int = 5, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        获取最近 N 天的每日操作趋势
+
+        Args:
+            days: 天数（默认7天）
+            user_id: 用户ID（可选，过滤指定用户）
+
+        Returns:
+            [{"date": "MM-DD", "matches": int, "analyses": int}, ...]
+        """
+        try:
+            with self._get_connection() as conn:
+                # 生成日期范围
+                today = datetime.now()
+                results = []
+
+                where_user = ""
+                params_extra = []
+                if user_id is not None:
+                    where_user = "AND user_id = ?"
+                    params_extra = [user_id]
+
+                for i in range(days - 1, -1, -1):
+                    date = today - timedelta(days=i)
+                    date_str = date.strftime("%Y-%m-%d")
+                    display_str = date.strftime("%m-%d")
+
+                    cursor = conn.execute(
+                        f"""
+                        SELECT
+                            SUM(CASE WHEN action_type = 'match' THEN 1 ELSE 0 END) as matches,
+                            SUM(CASE WHEN action_type = 'analyze' THEN 1 ELSE 0 END) as analyses
+                        FROM usage_logs
+                        WHERE date(created_at) = date(?)
+                        {where_user}
+                        """,
+                        (date_str, *params_extra)
+                    )
+                    row = cursor.fetchone()
+                    results.append({
+                        "date": display_str,
+                        "matches": row["matches"] or 0,
+                        "analyses": row["analyses"] or 0
+                    })
+
+                return results
+        except Exception as e:
+            logger.error(f"获取每日趋势失败: {e}")
+            return []
+
+    def get_competitor_frequency(self, user_id: Optional[int] = None) -> Dict[str, int]:
+        """
+        获取各竞品被分析的次数统计
+
+        Args:
+            user_id: 用户ID（可选，过滤指定用户）
+
+        Returns:
+            {"竞品名": 次数, ...}
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = []
+                if user_id is not None:
+                    where_user = "AND user_id = ?"
+                    params.append(user_id)
+                cursor = conn.execute(
+                    f"SELECT detail FROM usage_logs WHERE action_type = 'analyze' {where_user}",
+                    params
+                )
+                freq = {}
+                for row in cursor.fetchall():
+                    try:
+                        detail = json.loads(row["detail"])
+                        competitor = detail.get("competitor", "未知")
+                        # 多竞品组合（如 "阿里云 + 腾讯云"）拆开分别累加，避免组合类别无限膨胀
+                        parts = [p.strip() for p in str(competitor).split("+") if p.strip()]
+                        for part in parts:
+                            freq[part] = freq.get(part, 0) + 1
+                    except (json.JSONDecodeError, AttributeError):
+                        continue
+                return freq
+        except Exception as e:
+            logger.error(f"获取竞品频次失败: {e}")
+            return {}
+
+    def get_growth_rates(self, days: int = 7, user_id: Optional[int] = None) -> Dict[str, Optional[float]]:
+        """
+        获取最近N天 vs 前N天的环比增长率（7日环比）
+
+        Args:
+            days: 统计天数（默认7天）
+            user_id: 用户ID（可选，过滤指定用户）
+
+        - 最近N天：today - (N-1) ~ today
+        - 前N天：   today - (2N-1) ~ today - N
+
+        Returns:
+            {
+                "match_growth":    float or None,  # 百分比，如 25.0 表示 +25%
+                "analyze_growth":  float or None   # None 表示前一区间无数据（新增长）
+            }
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = []
+                if user_id is not None:
+                    where_user = "AND user_id = ?"
+                    params = [user_id]
+
+                # 最近N天（含今天）
+                cursor = conn.execute(f"""
+                    SELECT
+                        SUM(CASE WHEN action_type = 'match'   THEN 1 ELSE 0 END) AS matches,
+                        SUM(CASE WHEN action_type = 'analyze' THEN 1 ELSE 0 END) AS analyses
+                    FROM usage_logs
+                    WHERE date(created_at) >= date('now', 'localtime', '-{days-1} days')
+                    {where_user}
+                """, params)
+                recent = cursor.fetchone()
+
+                # 前N天
+                cursor = conn.execute(f"""
+                    SELECT
+                        SUM(CASE WHEN action_type = 'match'   THEN 1 ELSE 0 END) AS matches,
+                        SUM(CASE WHEN action_type = 'analyze' THEN 1 ELSE 0 END) AS analyses
+                    FROM usage_logs
+                    WHERE date(created_at) >= date('now', 'localtime', '-{days*2-1} days')
+                      AND date(created_at) <= date('now', 'localtime', '-{days} days')
+                    {where_user}
+                """, params)
+                previous = cursor.fetchone()
+
+                match_recent  = recent["matches"]  or 0
+                match_prev    = previous["matches"] or 0
+                analyze_recent = recent["analyses"]  or 0
+                analyze_prev   = previous["analyses"] or 0
+
+                # match 涨幅
+                if match_prev > 0:
+                    match_growth = round((match_recent - match_prev) / match_prev * 100, 1)
+                elif match_recent > 0:
+                    match_growth = None   # 前一区间为0，新增长
+                else:
+                    match_growth = 0.0    # 两个区间都是0
+
+                # analyze 涨幅
+                if analyze_prev > 0:
+                    analyze_growth = round((analyze_recent - analyze_prev) / analyze_prev * 100, 1)
+                elif analyze_recent > 0:
+                    analyze_growth = None   # 前一区间为0，新增长
+                else:
+                    analyze_growth = 0.0
+
+                return {
+                    "match_growth":   match_growth,
+                    "analyze_growth": analyze_growth
+                }
+
+        except Exception as e:
+            logger.error(f"获取增长率失败: {e}")
+            return {"match_growth": None, "analyze_growth": None}
+
+    def get_recent_logs(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """获取最近的日志记录（用于调试）"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT * FROM usage_logs ORDER BY created_at DESC LIMIT ?",
+                    (limit,)
+                )
+                return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"获取最近日志失败: {e}")
+            return []
+
+    # ========== 历史记录（方案匹配回溯 & 对比） ==========
+
+    def save_match_history(self, demand_text: str, solution: str, industry: str = "", sources: List[Dict[str, Any]] = None, user_id: Optional[int] = None, group_id: Optional[int] = None, title: Optional[str] = None, client_id: Optional[int] = None) -> Optional[int]:
+        """
+        保存一次匹配方案到历史记录
+
+        版本化逻辑：
+        - group_id 为 None → 新建一个分组（group_id = 当前最大+1），版本号固定为 1
+        - group_id 已提供   → 在同组内追加新版本（version = 该组最大版本号+1）
+
+        Returns:
+            新记录 id，保存失败返回 None
+        """
+        try:
+            if not title:
+                title = (demand_text or "解决方案").strip().replace("\n", " ")[:60]
+            with self._get_connection() as conn:
+                if group_id is None:
+                    row = conn.execute("SELECT COALESCE(MAX(group_id), 0) AS mx FROM match_history").fetchone()
+                    group_id = (row["mx"] if row and row["mx"] is not None else 0) + 1
+                    version = 1
+                else:
+                    row = conn.execute(
+                        "SELECT COALESCE(MAX(version), 0) AS mx FROM match_history WHERE group_id = ?",
+                        (group_id,)
+                    ).fetchone()
+                    version = (row["mx"] if row and row["mx"] is not None else 0) + 1
+                cursor = conn.execute(
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id, group_id, version, is_final, title, client_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+                    (
+                        demand_text,
+                        solution,
+                        industry,
+                        json.dumps(sources or [], ensure_ascii=False),
+                        user_id,
+                        group_id,
+                        version,
+                        title,
+                        client_id,
+                    )
+                )
+                conn.commit()
+                self._trim_match_history(conn, record_type='match', user_id=user_id)
+                return cursor.lastrowid
+        except Exception as e:
+            logger.error(f"保存匹配历史记录失败: {e}")
+            return None
+
+    def get_match_history_meta(self, record_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """获取单条记录的版本元信息（group_id/version/is_final/title），用于接口回填。"""
+        try:
+            with self._get_connection() as conn:
+                sql = "SELECT group_id, version, is_final, title FROM match_history WHERE id = ?"
+                params = (record_id,)
+                if user_id is not None:
+                    sql += " AND user_id = ?"
+                    params = (record_id, user_id)
+                row = conn.execute(sql, params).fetchone()
+                if row is None:
+                    return None
+                return {
+                    "group_id": row["group_id"],
+                    "version": row["version"] if row["version"] is not None else 1,
+                    "is_final": bool(row["is_final"]) if "is_final" in row.keys() else False,
+                    "title": row["title"] or "",
+                }
+        except Exception as e:
+            logger.error(f"获取历史版本元信息失败: {e}")
+            return None
+
+    def get_match_history_group(self, group_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        获取同一分组的全部版本（按版本号升序），用于版本对比 / 回滚 / 定稿。
+
+        Returns:
+            {"group_id":, "title":, "demand_text":, "total_versions":, "final_version":, "versions":[...]}
+            分组不存在返回 None
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = [group_id]
+                if user_id is not None:
+                    where_user = " AND user_id = ?"
+                    params.append(user_id)
+                rows = conn.execute(
+                    f"""SELECT id, version, is_final, title, demand_text, industry, solution, created_at
+                        FROM match_history WHERE group_id = ?{where_user}
+                        ORDER BY version ASC""",
+                    params
+                ).fetchall()
+                if not rows:
+                    return None
+                versions = []
+                final_version = None
+                for r in rows:
+                    is_final = bool(r["is_final"]) if "is_final" in r.keys() else False
+                    if is_final:
+                        final_version = r["version"]
+                    versions.append({
+                        "id": r["id"],
+                        "version": r["version"] if r["version"] is not None else 1,
+                        "is_final": is_final,
+                        "title": r["title"] or "",
+                        "demand_text": r["demand_text"] or "",
+                        "industry": r["industry"] or "",
+                        "created_at": r["created_at"],
+                        "solution_preview": (r["solution"] or "")[:300],
+                    })
+                first = rows[0]
+                return {
+                    "group_id": group_id,
+                    "title": first["title"] or "",
+                    "demand_text": first["demand_text"] or "",
+                    "total_versions": len(versions),
+                    "final_version": final_version,
+                    "versions": versions,
+                }
+        except Exception as e:
+            logger.error(f"获取历史版本分组失败: {e}")
+            return None
+
+    def finalize_match_history(self, record_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        将某版本标记为「定稿」：该版本 is_final=1，同组其余版本 is_final=0（同组仅一个定稿）。
+
+        Returns:
+            {"id":, "group_id":, "version":} 或 None
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = [record_id]
+                if user_id is not None:
+                    where_user = " AND user_id = ?"
+                    params.append(user_id)
+                row = conn.execute(
+                    f"SELECT id, group_id, version FROM match_history WHERE id = ?{where_user}", params
+                ).fetchone()
+                if row is None:
+                    return None
+                gid = row["group_id"]
+                ver = row["version"] if row["version"] is not None else 1
+                # 先清空同组定稿标记
+                if gid is not None:
+                    conn.execute("UPDATE match_history SET is_final = 0 WHERE group_id = ?", (gid,))
+                conn.execute(
+                    f"UPDATE match_history SET is_final = 1 WHERE id = ?{where_user}", params
+                )
+                conn.commit()
+                return {"id": row["id"], "group_id": gid, "version": ver}
+        except Exception as e:
+            logger.error(f"定稿历史版本失败(id={record_id}): {e}")
+            return None
+
+    def rollback_match_history(self, record_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        回滚（非破坏性）：把选定版本的方案内容复制为同组的新版本（version = 最大+1）。
+        不修改原版本，安全可重入。
+
+        Returns:
+            {"source_id":, "new_id":, "group_id":, "version":} 或 None
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = [record_id]
+                if user_id is not None:
+                    where_user = " AND user_id = ?"
+                    params.append(user_id)
+                row = conn.execute(
+                    f"SELECT id, group_id, version, demand_text, solution, industry, sources, title, client_id FROM match_history WHERE id = ?{where_user}", params
+                ).fetchone()
+                if row is None:
+                    return None
+                gid = row["group_id"]
+                if gid is None:
+                    # 没有分组（极旧数据），为其建立分组再复制
+                    mx = conn.execute("SELECT COALESCE(MAX(group_id),0) AS mx FROM match_history").fetchone()
+                    gid = (mx["mx"] if mx and mx["mx"] is not None else 0) + 1
+                    conn.execute("UPDATE match_history SET group_id = ?, version = 1 WHERE id = ?", (gid, record_id))
+                maxv = conn.execute(
+                    "SELECT COALESCE(MAX(version),0) AS mx FROM match_history WHERE group_id = ?", (gid,)
+                ).fetchone()
+                new_version = (maxv["mx"] if maxv and maxv["mx"] is not None else 0) + 1
+                cur = conn.execute(
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, user_id, group_id, version, is_final, title, client_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)",
+                    (
+                        row["demand_text"],
+                        row["solution"],
+                        row["industry"] or "",
+                        row["sources"] if row["sources"] is not None else json.dumps([], ensure_ascii=False),
+                        user_id,
+                        gid,
+                        new_version,
+                        row["title"] or "",
+                        row["client_id"],
+                    )
+                )
+                conn.commit()
+                return {"source_id": record_id, "new_id": cur.lastrowid, "group_id": gid, "version": new_version}
+        except Exception as e:
+            logger.error(f"回滚历史版本失败(id={record_id}): {e}")
+            return None
+
+    def update_match_history_solution(self, record_id: int, solution: str, user_id: Optional[int] = None) -> bool:
+        """
+        更新指定历史记录的方案内容（用于追问优化后保存最终版）
+        Returns:
+            更新成功返回 True，失败返回 False
+        """
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    conn.execute(
+                        "UPDATE match_history SET solution = ? WHERE id = ? AND user_id = ?",
+                        (solution, record_id, user_id)
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE match_history SET solution = ? WHERE id = ?",
+                        (solution, record_id)
+                    )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"更新匹配历史方案失败(id={record_id}): {e}")
+            return False
+
+    def update_competitor_history_solution(self, record_id: int, analysis: str, user_id: Optional[int] = None) -> bool:
+        """
+        更新指定竞品分析历史记录的分析内容（用于追问优化后保存最终版）
+        Returns:
+            更新成功返回 True，失败返回 False
+        """
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    conn.execute(
+                        "UPDATE match_history SET solution = ? WHERE id = ? AND type = 'analyze' AND user_id = ?",
+                        (analysis, record_id, user_id)
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE match_history SET solution = ? WHERE id = ? AND type = 'analyze'",
+                        (analysis, record_id)
+                    )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"更新竞品分析历史失败(id={record_id}): {e}")
+            return False
+
+    def set_history_flags(self, record_id: int, user_id: Optional[int] = None,
+                          downloaded: Optional[bool] = None, archived: Optional[bool] = None) -> bool:
+        """
+        更新指定历史记录的下载/归档标记。
+        仅允许记录所有者操作（user_id 提供时）。
+        Returns:
+            更新成功返回 True，失败返回 False
+        """
+        try:
+            assigns = []
+            params: List[Any] = []
+            if downloaded is not None:
+                assigns.append("downloaded = ?")
+                params.append(1 if downloaded else 0)
+            if archived is not None:
+                assigns.append("archived = ?")
+                params.append(1 if archived else 0)
+            if not assigns:
+                return False
+            params.append(record_id)
+            sql = f"UPDATE match_history SET {', '.join(assigns)} WHERE id = ?"
+            if user_id is not None:
+                sql += " AND user_id = ?"
+                params.append(user_id)
+            with self._get_connection() as conn:
+                conn.execute(sql, params)
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"更新历史标记失败(id={record_id}): {e}")
+            return False
+
+    def append_history_conversation(self, record_id: int, user_id: Optional[int] = None,
+                                    follow_up: str = "", refined_solution: str = "",
+                                    conversation_history: Optional[List[Dict[str, str]]] = None) -> Optional[List[Dict[str, str]]]:
+        """
+        追加一条追问对话（用户追问 + AI 优化方案）到历史记录，并同步更新方案正文。
+        - conversation_history 提供时，直接以其为准覆盖（用于前端已维护完整对话）；
+        - 否则按 user/assistant 两条追加到现有 conversation。
+        Returns:
+            更新后的完整对话列表；失败返回 None
+        """
+        try:
+            with self._get_connection() as conn:
+                cur = conn.execute(
+                    "SELECT conversation, solution FROM match_history WHERE id = ?" + (" AND user_id = ?" if user_id is not None else ""),
+                    (record_id, user_id) if user_id is not None else (record_id,)
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                try:
+                    conv = json.loads(row["conversation"]) if row["conversation"] else []
+                except Exception:
+                    conv = []
+                if not isinstance(conv, list):
+                    conv = []
+
+                if conversation_history is not None and isinstance(conversation_history, list):
+                    conv = [{"role": str(m.get("role", "")), "content": str(m.get("content", ""))} for m in conversation_history]
+                else:
+                    if follow_up:
+                        conv.append({"role": "user", "content": follow_up})
+                    if refined_solution:
+                        conv.append({"role": "assistant", "content": refined_solution})
+
+                new_solution = refined_solution if refined_solution else row["solution"]
+                conn.execute(
+                    "UPDATE match_history SET conversation = ?, solution = ? WHERE id = ?" + (" AND user_id = ?" if user_id is not None else ""),
+                    (json.dumps(conv, ensure_ascii=False), new_solution, record_id, user_id) if user_id is not None else (json.dumps(conv, ensure_ascii=False), new_solution, record_id)
+                )
+                conn.commit()
+                return conv
+        except Exception as e:
+            logger.error(f"追加历史追问对话失败(id={record_id}): {e}")
+            return None
+
+    def get_match_history_count(self, user_id: Optional[int] = None) -> int:
+        """获取匹配历史记录总数"""
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    cursor = conn.execute("SELECT COUNT(*) AS cnt FROM match_history WHERE type = 'match' AND user_id = ?", (user_id,))
+                else:
+                    cursor = conn.execute("SELECT COUNT(*) AS cnt FROM match_history WHERE type = 'match'")
+                return cursor.fetchone()["cnt"]
+        except Exception as e:
+            logger.error(f"获取匹配历史总数失败: {e}")
+            return 0
+
+    def get_competitor_history_count(self, user_id: Optional[int] = None) -> int:
+        """获取竞品分析历史记录总数"""
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    cursor = conn.execute("SELECT COUNT(*) AS cnt FROM match_history WHERE type = 'analyze' AND user_id = ?", (user_id,))
+                else:
+                    cursor = conn.execute("SELECT COUNT(*) AS cnt FROM match_history WHERE type = 'analyze'")
+                return cursor.fetchone()["cnt"]
+        except Exception as e:
+            logger.error(f"获取竞品分析历史总数失败: {e}")
+            return 0
+
+    def get_match_history_list(self, limit: int = 50, offset: int = 0, user_id: Optional[int] = None, client_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """获取匹配历史记录列表（按时间倒序，支持分页；client_id 提供时按客户筛选）"""
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    sql = """
+                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived, group_id, version, is_final, title, client_id
+                        FROM match_history
+                        WHERE type = 'match' AND user_id = ?
+                        """
+                    params = [user_id]
+                    if client_id is not None:
+                        sql += " AND client_id = ?"
+                        params.append(client_id)
+                    sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+                    params.extend([limit, offset])
+                    cursor = conn.execute(sql, tuple(params))
+                else:
+                    cursor = conn.execute(
+                        """
+                        SELECT id, demand_text, industry, solution, created_at, downloaded, archived, group_id, version, is_final, title, client_id
+                        FROM match_history
+                        WHERE type = 'match'
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                        OFFSET ?
+                        """,
+                        (limit, offset)
+                    )
+                rows = cursor.fetchall()
+                results = []
+                for row in rows:
+                    results.append({
+                        "id": row["id"],
+                        "demand_text": row["demand_text"],
+                        "industry": row["industry"] or "",
+                        "solution": row["solution"] or "",
+                        "created_at": row["created_at"],
+                        "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
+                        "archived": bool(row["archived"]) if "archived" in row.keys() else False,
+                        "group_id": row["group_id"] if "group_id" in row.keys() else None,
+                        "version": row["version"] if row["version"] is not None else 1,
+                        "is_final": bool(row["is_final"]) if "is_final" in row.keys() else False,
+                        "title": row["title"] or "",
+                        "client_id": row["client_id"] if "client_id" in row.keys() else None,
+                    })
+                return results
+        except Exception as e:
+            logger.error(f"获取匹配历史列表失败: {e}")
+            return []
+
+    def get_client_solutions(self, user_id: int, client_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """获取某客户名下的方案历史（轻量列表，供客户详情页使用）"""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    SELECT id, demand_text, industry, created_at, group_id, version, is_final, title
+                    FROM match_history
+                    WHERE type = 'match' AND user_id = ? AND client_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (user_id, client_id, limit)
+                )
+                rows = cursor.fetchall()
+                return [
+                    {
+                        "id": row["id"],
+                        "demand_text": (row["demand_text"] or "")[:200],
+                        "industry": row["industry"] or "",
+                        "created_at": row["created_at"],
+                        "group_id": row["group_id"],
+                        "version": row["version"] if row["version"] is not None else 1,
+                        "is_final": bool(row["is_final"]),
+                        "title": row["title"] or "",
+                    }
+                    for row in rows
+                ]
+        except Exception as e:
+            logger.error(f"获取客户方案列表失败: {e}")
+            return []
+
+    def get_client_solutions_with_body(self, user_id: int, client_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """获取某客户名下全部匹配历史（含方案正文），供匹配时『智能相关性选取』与摘录使用。
+
+        与 get_client_solutions 的区别：此处额外返回 solution 正文（用于嵌入排序与方案要点摘录），
+        且仅取 type='match'（方案匹配类，不含竞品分析）。
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    SELECT id, demand_text, industry, solution, created_at, title
+                    FROM match_history
+                    WHERE type = 'match' AND user_id = ? AND client_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (user_id, client_id, limit)
+                )
+                rows = cursor.fetchall()
+                return [
+                    {
+                        "id": row["id"],
+                        "demand_text": row["demand_text"] or "",
+                        "industry": row["industry"] or "",
+                        "solution": row["solution"] or "",
+                        "created_at": row["created_at"],
+                        "title": row["title"] or "",
+                    }
+                    for row in rows
+                ]
+        except Exception as e:
+            logger.error(f"获取客户方案(含正文)失败: {e}")
+            return []
+
+    def set_match_history_client(self, history_id: int, user_id: int, client_id: Optional[int]) -> bool:
+        """改挂 / 解除关联客户（方案历史与客户的后期绑定）
+
+        注意：clients 表在 users.db，match_history 在 usage 独立库，跨库不可 JOIN，
+        故客户归属校验走 get_db_connection()，历史更新走 _get_connection()。
+        """
+        try:
+            if client_id is not None:
+                # 校验该客户确实属于当前用户，避免越权绑定他人客户（clients 在 users.db）
+                from app.utils.db_init import get_db_connection
+                uconn = get_db_connection()
+                try:
+                    ok = uconn.execute(
+                        "SELECT 1 FROM clients WHERE id = ? AND user_id = ?",
+                        (client_id, user_id)
+                    ).fetchone()
+                finally:
+                    uconn.close()
+                if not ok:
+                    logger.warning(f"改挂客户失败：客户 {client_id} 不属于用户 {user_id}")
+                    return False
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE match_history SET client_id = ? WHERE id = ? AND type = 'match' AND user_id = ?",
+                    (client_id, history_id, user_id)
+                )
+                conn.commit()
+                return True
+        except Exception as e:
+            logger.error(f"改挂客户失败: {e}")
+            return False
+
+    def get_match_history_by_id(self, history_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单条匹配历史记录（含完整方案内容）"""
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    cursor = conn.execute(
+                        "SELECT * FROM match_history WHERE id = ? AND type = 'match' AND user_id = ?",
+                        (history_id, user_id)
+                    )
+                else:
+                    cursor = conn.execute(
+                        "SELECT * FROM match_history WHERE id = ? AND type = 'match'",
+                        (history_id,)
+                    )
+                row = cursor.fetchone()
+                if row is None:
+                    return None
+                return {
+                    "id": row["id"],
+                    "demand_text": row["demand_text"],
+                    "solution": row["solution"],
+                    "industry": row["industry"] or "",
+                    "sources": json.loads(row["sources"]) if row["sources"] else [],
+                    "type": row["type"] if "type" in row.keys() else "match",
+                    "competitor": row["competitor"] if "competitor" in row.keys() else "",
+                    "created_at": row["created_at"],
+                    "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
+                    "archived": bool(row["archived"]) if "archived" in row.keys() else False,
+                    "conversation": json.loads(row["conversation"]) if row["conversation"] else [],
+                    "group_id": row["group_id"] if "group_id" in row.keys() else None,
+                    "version": row["version"] if row["version"] is not None else 1,
+                    "is_final": bool(row["is_final"]) if "is_final" in row.keys() else False,
+                    "title": row["title"] or "",
+                    "client_id": row["client_id"] if "client_id" in row.keys() else None,
+                }
+        except Exception as e:
+            logger.error(f"获取匹配历史记录失败: {e}")
+            return None
+
+    def update_match_history_client(self, record_id: int, client_id: Optional[int], user_id: Optional[int] = None) -> bool:
+        """
+        更新某条历史记录的关联客户（事后改挂 / 解绑）。client_id 为 None 表示解绑。
+        Returns: 成功返回 True，失败（如记录不存在）返回 False
+        """
+        try:
+            with self._get_connection() as conn:
+                where_user = ""
+                params = [client_id]
+                if user_id is not None:
+                    where_user = " AND user_id = ?"
+                    params.append(user_id)
+                params.append(record_id)
+                cur = conn.execute(
+                    f"UPDATE match_history SET client_id = ? WHERE id = ?{where_user}",
+                    tuple(params)
+                )
+                conn.commit()
+                return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"更新历史记录关联客户失败(id={record_id}): {e}")
+            return False
+
+    # ========== 竞品分析历史记录 ==========
+
+    def save_competitor_history(self, competitor: str, industry: str, analysis: str, sources: List[Dict[str, Any]] = None, user_id: Optional[int] = None) -> Optional[int]:
+        """
+        保存一次竞品分析结果到历史记录
+
+        Returns:
+            新记录 id，保存失败返回 None
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute(
+                    "INSERT INTO match_history (demand_text, solution, industry, sources, type, competitor, user_id) VALUES (?, ?, ?, ?, 'analyze', ?, ?)",
+                    (
+                        competitor,  # demand_text 存竞品名
+                        analysis,    # solution 存分析报告
+                        industry,
+                        json.dumps(sources or [], ensure_ascii=False),
+                        competitor,
+                        user_id
+                    )
+                )
+                conn.commit()
+                self._trim_match_history(conn, record_type='analyze', user_id=user_id)
+                return cursor.lastrowid
+        except Exception as e:
+            logger.error(f"保存竞品分析历史记录失败: {e}")
+            return None
+
+    def get_competitor_history_list(self, limit: int = 50, offset: int = 0, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        """获取竞品分析历史记录列表（按时间倒序，支持分页）"""
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    cursor = conn.execute(
+                        """
+                        SELECT id, demand_text, industry, competitor, solution, created_at, downloaded, archived
+                        FROM match_history
+                        WHERE type = 'analyze' AND user_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                        OFFSET ?
+                        """,
+                        (user_id, limit, offset)
+                    )
+                else:
+                    cursor = conn.execute(
+                        """
+                        SELECT id, demand_text, industry, competitor, solution, created_at, downloaded, archived
+                        FROM match_history
+                        WHERE type = 'analyze'
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                        OFFSET ?
+                        """,
+                        (limit, offset)
+                    )
+                rows = cursor.fetchall()
+                results = []
+                for row in rows:
+                    results.append({
+                        "id": row["id"],
+                        "competitor": row["competitor"] or row["demand_text"] or "",
+                        "industry": row["industry"] or "",
+                        "solution": row["solution"] or "",
+                        "created_at": row["created_at"],
+                        "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
+                        "archived": bool(row["archived"]) if "archived" in row.keys() else False,
+                    })
+                return results
+        except Exception as e:
+            logger.error(f"获取竞品分析历史列表失败: {e}")
+            return []
+
+    def get_competitor_history_by_id(self, history_id: int, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """根据 ID 获取单条竞品分析历史记录（含完整分析报告）"""
+        try:
+            with self._get_connection() as conn:
+                if user_id is not None:
+                    cursor = conn.execute(
+                        "SELECT * FROM match_history WHERE id = ? AND type = 'analyze' AND user_id = ?",
+                        (history_id, user_id)
+                    )
+                else:
+                    cursor = conn.execute(
+                        "SELECT * FROM match_history WHERE id = ? AND type = 'analyze'",
+                        (history_id,)
+                    )
+                row = cursor.fetchone()
+                if row is None:
+                    return None
+                return {
+                    "id": row["id"],
+                    "competitor": row["competitor"] or row["demand_text"] or "",
+                    "industry": row["industry"] or "",
+                    "analysis": row["solution"],
+                    "sources": json.loads(row["sources"]) if row["sources"] else [],
+                    "created_at": row["created_at"],
+                    "downloaded": bool(row["downloaded"]) if "downloaded" in row.keys() else False,
+                    "archived": bool(row["archived"]) if "archived" in row.keys() else False,
+                    "conversation": json.loads(row["conversation"]) if row["conversation"] else [],
+                }
+        except Exception as e:
+            logger.error(f"获取竞品分析历史记录失败: {e}")
+            return None
+
+    def _trim_match_history(self, conn, record_type: str = 'match', user_id: Optional[int] = None):
+        """
+        清理超限的历史记录（按用户+类型分别保留最新的 MAX_MATCH_HISTORY 条）
+        """
+        try:
+            if user_id is None:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) AS cnt FROM match_history WHERE type = ?",
+                    (record_type,)
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    return
+                count = row["cnt"]
+                if count > MAX_MATCH_HISTORY:
+                    conn.execute("""
+                        DELETE FROM match_history
+                        WHERE type = ?
+                          AND id NOT IN (
+                            SELECT id FROM match_history
+                            WHERE type = ?
+                            ORDER BY created_at DESC
+                            LIMIT ?
+                          )
+                    """, (record_type, record_type, MAX_MATCH_HISTORY))
+                    logger.info(f"历史记录自动清理(type={record_type})：{count} → {MAX_MATCH_HISTORY} 条")
+                return
+
+            cursor = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM match_history WHERE type = ? AND user_id = ?",
+                (record_type, user_id)
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return
+            count = row["cnt"]
+            if count > MAX_MATCH_HISTORY:
+                conn.execute("""
+                    DELETE FROM match_history
+                    WHERE type = ? AND user_id = ?
+                      AND id NOT IN (
+                        SELECT id FROM match_history
+                        WHERE type = ? AND user_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                      )
+                """, (record_type, user_id, record_type, user_id, MAX_MATCH_HISTORY))
+                logger.info(f"历史记录自动清理(type={record_type}, user={user_id})：{count} → {MAX_MATCH_HISTORY} 条")
+        except Exception as e:
+            logger.warning(f"历史记录清理失败（不影响保存）: {e}")
+
+
+def get_usage_logger() -> UsageLoggerService:
+    """获取 UsageLoggerService 单例"""
+    global _instance
+    if _instance is None:
+        with _instance_lock:
+            if _instance is None:
+                _instance = UsageLoggerService()
+    return _instance

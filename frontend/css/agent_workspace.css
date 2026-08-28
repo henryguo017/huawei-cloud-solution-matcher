@@ -1,0 +1,1718 @@
+/* =========================================================================
+ * Agent 视图独立样式（frontend/css/agent_workspace.css）
+ * ------------------------------------------------------------------------
+ * 隔离铁律：本文件只服务于 Agent 模式，不修改经典 style.css 任何一行。
+ * 所有视觉变量复用经典设计令牌（皮肤系统 data-skin 联动）：
+ *   --frame-bg / --topbar-bg / --primary-color / --bg-page / --bg-card
+ *   --text-primary / --text-secondary / --text-muted / --border-color
+ *   --radius-* / --font-family / --topbar-height / --sidebar-width / --input-focus-ring
+ * 双模式互斥显隐规则随本文件加载；经典 style.css 保持纯经典零改动。
+ * ========================================================================= */
+
+/* ---------- 双模式互斥显隐（中性切换，仅依赖 body.view-* 类） ---------- */
+body.view-agent   .classic-solution   { display: none !important; }
+body.view-agent   .main-content       { display: none !important; }
+body.view-agent   .site-footer        { display: none !important; }
+body.view-agent   .sidebar            { display: none !important; }
+body.view-classic .workspace-solution { display: none !important; }
+
+/* ---------- Agent 模式专属皮肤微调（与经典模式共用 data-skin，同一套四主题色） ----------
+   放在 body.view-agent 上，与经典 [data-skin] 同特异性；agent_workspace.css 后加载，故优先生效。
+   仅补红色系专属 token（hover/active/文字），--sidebar-bg / --topbar-bg 完全交给 [data-skin] 驱动，
+   因此 Agent 与经典共享“经典蓝/浅葱绿/盛夏黄/桃桃粉”四个主题，切换完全同步。
+   注意：绝不能写进 .workspace-solution（特异性会盖过 [data-skin]，导致主题切换失效）。 ---------- */
+body.view-agent {
+    --frame-bg-2: rgba(255, 255, 255, 0.06);
+    --frame-hover: rgba(255, 255, 255, 0.12);
+    --frame-border: rgba(255, 255, 255, 0.10);
+    --frame-text: #FFFFFF;
+    --frame-text-dim: rgba(255, 255, 255, 0.72);
+    --frame-active-bg: rgba(199, 0, 11, 0.22);
+    --frame-active-bar: #FF6A6A;
+    --frame-active-text: #FFFFFF;
+    --frame-brand-grad: linear-gradient(135deg, #C7000B 0%, #E84D54 100%);
+    /* 关键：:root 的 --frame-bg:var(--sidebar-bg) 在 <html> 处已冻结为默认蓝（data-skin 在 body 上），
+       须在此把别名重新解析到 body 当前主题色，否则 .ws-sidebar 永远停在经典蓝。 */
+    --frame-bg: var(--sidebar-bg);
+    /* Agent 左栏与经典同宽（用户要求主题大小/位置与经典一致，220px 才能让经典 4 色主题面板自然放下） */
+    --sidebar-width: 220px;
+}
+
+.workspace-solution {
+    flex: 1 1 0;
+    min-height: 0;
+    display: none;                 /* 默认隐藏，仅 body.view-agent 时显示 */
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-page);
+}
+body.view-agent .workspace-solution { display: flex; }
+body.view-agent .app-main {
+    min-height: 100vh;
+    display: flex !important;
+    flex-direction: column;
+    margin-left: 0 !important;           /* 关键：.workspace-solution 在 .app-main 内，若保留 220px margin 会造成双缩进 */
+}
+/* 视图切换瞬间：禁用 .app-main 的 margin-left 过渡，避免内容因 220↔0 的 margin 动画产生
+   水平“滑动”，造成不协调的拼凑感。两视图内容最终都落在 x=220，关掉过渡即可瞬时对齐、无位移；
+   侧栏收起等正常动画不受影响（下一帧恢复过渡后生效）。 */
+body.view-transitioning .app-main { transition: none !important; }
+
+/* Agent 模式下：全局顶栏（天气/AI 搜索/导航）与滚动横幅需整体右缩进一个侧边栏宽度，
+   否则会被固定且 z-index 更高的 Agent 侧边栏压住，导致天气条“缩进去”。
+   缩进量 = 侧栏宽度 + 该元素原本的左内边距，使内容起始位置与经典模式完全一致。 */
+body.view-agent .topbar {
+    /* 经典模式 .topbar 在 .app-main{margin-left:220px} 内，本身 padding-left:20px，内容从 240px 开始 */
+    padding-left: calc(var(--sidebar-width) + 20px);
+    box-sizing: border-box;
+}
+body.view-agent #update-ticker {
+    /* 经典模式 .update-ticker 同样在 app-main 内，本身 padding-left:16px，内容从 236px 开始 */
+    padding-left: calc(var(--sidebar-width) + 16px);
+    box-sizing: border-box;
+}
+
+/* ---------- 视图切换进入动效（淡入 + 轻微位移，替代生硬闪换） ---------- */
+@keyframes wsViewFadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes wsSidebarIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+/* 仅动画“非固定侧栏祖先”的元素（.ws-main / .main-content / .ws-sidebar 自身），
+   避免给固定侧栏的祖先加 transform/opacity 而改变其 containing block 导致侧栏错位。 */
+body.view-agent   .ws-main       { animation: wsViewFadeUp .30s cubic-bezier(.22,.61,.36,1); }
+body.view-classic .main-content  { animation: wsViewFadeUp .30s cubic-bezier(.22,.61,.36,1); }
+body.view-agent   .ws-sidebar    { animation: wsSidebarIn .30s cubic-bezier(.22,.61,.36,1); }
+
+/* ---------- 切换守卫弹窗（中性共享运行时触发，复用经典模态语言） ---------- */
+.switch-guard-overlay {
+    position: fixed; inset: 0; z-index: 100000;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.45); padding: 16px;
+}
+.switch-guard-modal {
+    width: min(420px, 92vw); background: #fff; border-radius: 12px;
+    padding: 24px 24px 20px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    text-align: center; animation: switch-guard-pop .18s ease;
+}
+@keyframes switch-guard-pop {
+    from { opacity: 0; transform: translateY(8px) scale(.98); }
+    to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.switch-guard-icon { margin-bottom: 8px; }
+.switch-guard-icon .icon { width: 40px; height: 40px; color: var(--primary-color); }
+.switch-guard-title { margin: 4px 0 8px; font-size: 17px; font-weight: 600; color: #1f2329; }
+.switch-guard-text { margin: 0 0 20px; font-size: 13px; line-height: 1.6; color: #646a73; }
+.switch-guard-actions { display: flex; gap: 12px; justify-content: center; }
+.switch-guard-actions .btn { min-width: 120px; }
+.switch-guard-actions .btn-ghost { color: #646a73; background: #fff; border: 1px solid var(--border-color, #dcdfe6); }
+.switch-guard-actions .btn-ghost:hover { color: #1f2329; border-color: #c0c4cc; }
+
+/* ---------- 三栏工作区 ---------- */
+.ws-agent {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    width: 100%;
+    background: var(--bg-page);
+}
+
+/* ===== 左栏（完全复刻经典 .sidebar 风格，内容改为 Agent 相关） ===== */
+.ws-sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-width);
+    background: var(--frame-bg);
+    border-right: 1px solid var(--frame-border);
+    display: flex;
+    flex-direction: column;
+    z-index: 1001;
+    overflow: hidden;
+    transition: width var(--transition-base);
+}
+/* 收起态：侧栏宽度压缩，主区 margin 同步缩小 */
+.ws-sidebar.collapsed { width: var(--sidebar-width-collapsed); }
+.ws-sidebar.collapsed .ws-brand { padding: 0; justify-content: center; }
+.ws-sidebar.collapsed .ws-brand-titles { display: none; }
+.ws-sidebar.collapsed .ws-sidebar-collapse-btn { margin-left: 0; }
+.ws-sidebar.collapsed .ws-sidebar-collapse-btn .icon { transform: rotate(180deg); }
+.ws-sidebar.collapsed .ws-menu-section { display: none; }
+.ws-sidebar.collapsed .ws-menu-item { justify-content: center; padding-left: 0; padding-right: 0; }
+.ws-sidebar.collapsed .ws-menu-item span:last-child { display: none; }
+.ws-sidebar.collapsed .ws-tasks { display: none; }
+.ws-sidebar.collapsed .ws-sidebar-footer { display: none; }
+
+/* 品牌区 —— 复刻经典 .sidebar-brand：云图标 + 上下居中文字 + 右侧折叠按钮 */
+.ws-brand {
+    height: var(--topbar-height);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--frame-border);
+}
+.ws-brand-titles {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+    gap: 8px;
+    line-height: 1.3;
+    min-width: 0;
+    overflow: hidden;
+    flex: 1;
+}
+.ws-brand-cloud-icon {
+    color: #fff;
+    width: 24px; height: 24px;
+    flex-shrink: 0;
+    margin-right: 0.4em;   /* 复刻经典 .icon:not(:only-child) 的间距 */
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.3));
+}
+.ws-brand-cloud-icon svg,
+.ws-brand-cloud-icon .icon { width: 24px; height: 24px; }
+.ws-brand-texts {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 2px;
+    line-height: 1.2;
+    min-width: 0;
+    overflow: hidden;
+}
+.ws-brand-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #fff;
+    background: none;
+    -webkit-background-clip: unset;
+    -webkit-text-fill-color: #fff;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+}
+.ws-brand-sub {
+    font-size: 0.85rem;
+    color: var(--frame-text-dim);
+    background: none;
+    -webkit-background-clip: unset;
+    -webkit-text-fill-color: var(--frame-text-dim);
+    white-space: nowrap;
+}
+.ws-sidebar-collapse-btn {
+    margin-left: auto;
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent;
+    border: 1px solid var(--frame-border);
+    border-radius: 8px;
+    color: var(--frame-text-dim);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+.ws-sidebar-collapse-btn:hover { background: var(--frame-hover); color: #fff; }
+.ws-sidebar-collapse-btn .icon { width: 1rem; height: 1rem; }
+/* 与经典模式一致：皮肤激活时折叠按钮强制白色（rgba(255,255,255,0.85)） */
+[data-skin] .ws-sidebar-collapse-btn { color: rgba(255,255,255,0.85) !important; }
+
+.ws-menu {
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 8px 0 4px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.ws-menu::-webkit-scrollbar { width: 6px; }
+.ws-menu::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+.ws-menu-section {
+    font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--frame-text-dim); padding: 16px 12px 6px;
+}
+.ws-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 12px;
+    background: transparent;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: 8px;
+    color: var(--frame-text);
+    font-size: 0.9rem;
+    font-weight: 500;
+    font-family: var(--font-family);
+    cursor: pointer;
+    white-space: nowrap;
+    text-align: left;
+    transition: all var(--transition-fast);
+}
+.ws-menu-item .ws-menu-icon {
+    display: flex; flex-shrink: 0;
+    color: var(--frame-text-dim);
+    transition: color var(--transition-fast);
+}
+.ws-menu-item .ws-menu-icon svg,
+.ws-menu-item .ws-menu-icon .icon { width: 1.25rem; height: 1.25rem; }
+.ws-menu-item:hover { background: var(--frame-hover); color: #fff; }
+.ws-menu-item:hover .ws-menu-icon { color: #fff; }
+.ws-menu-item.active {
+    background: var(--frame-active-bg);
+    border-left-color: var(--frame-active-bar);
+    color: var(--frame-active-text);
+}
+.ws-menu-item.active .ws-menu-icon { color: var(--primary-300); }
+
+/* ===== 侧栏：当前客户只读展示框（方案 B-2，不可点，避免串客户） ===== */
+.ws-context-readout {
+    display: flex; flex-direction: column; gap: 5px;
+    padding: 10px 12px; margin-bottom: 2px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--frame-border);
+    border-left: 3px solid var(--primary-300);
+    border-radius: 8px;
+    color: var(--frame-text);
+    font-family: var(--font-family);
+    cursor: default;
+    text-align: left;
+    transition: all var(--transition-fast);
+}
+.ws-context-readout .ws-context-label-row {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.68rem; color: var(--frame-text-dim); font-weight: 400;
+    letter-spacing: 0.02em;
+}
+.ws-context-readout .ws-context-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--primary-300);
+    box-shadow: 0 0 0 2px rgba(199, 0, 11, 0.22);
+}
+.ws-context-readout .ws-context-body {
+    display: flex; align-items: center; gap: 10px;
+}
+.ws-context-readout .ws-context-btn-icon {
+    display: flex; flex-shrink: 0;
+    width: 1.1rem; height: 1.1rem;
+    color: var(--frame-text-dim);
+}
+.ws-context-readout .ws-context-btn-icon .icon { width: 1.1rem; height: 1.1rem; }
+.ws-context-readout .ws-context-current { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--frame-text); font-size: 0.9rem; font-weight: 500; }
+.ws-context-readout:hover { background: var(--frame-hover); }
+.ws-context-readout:hover .ws-context-dot { background: #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18); }
+.ws-context-readout:hover .ws-context-btn-icon { color: #fff; }
+.ws-context-readout:hover .ws-context-current { color: #fff; }
+
+/* ===== 主区底部：客户上下文选择器（方案 B，放在输入框下方，像 WorkBuddy） ===== */
+.ws-context-picker {
+    position: relative;
+    display: flex; align-items: center; gap: 10px;
+    margin: 8px 16px 0; padding-bottom: 12px;
+}
+.ws-context-picker-label {
+    font-size: 0.72rem; color: var(--frame-text-dim); flex-shrink: 0;
+}
+.ws-context-pick-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--frame-border);
+    border-radius: 8px;
+    color: #fff; font-size: 0.82rem; font-family: var(--font-family);
+    cursor: pointer; text-align: left;
+    transition: background var(--transition-fast);
+}
+.ws-context-pick-btn:hover { background: var(--frame-hover); }
+.ws-context-pick-icon {
+    display: flex; align-items: center; justify-content: center;
+    width: 1.1rem; height: 1.1rem; color: var(--frame-text-dim); flex-shrink: 0;
+}
+.ws-context-pick-icon .icon { width: 1.1rem; height: 1.1rem; }
+.ws-context-pick-current { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-context-pick-caret { width: 0.9rem; height: 0.9rem; color: var(--frame-text-dim); flex-shrink: 0; transition: transform var(--transition-fast); }
+.ws-context-picker.open .ws-context-pick-caret { transform: rotate(180deg); }
+
+/* 下拉浮层（向上展开，避免贴底裁切） */
+.ws-context-pick-menu {
+    position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; z-index: 40;
+    margin-top: 4px;
+    background: #143a5e;                 /* 略亮深蓝浮层，与侧栏拉开层次 */
+    border: 1px solid var(--frame-border);
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.40);
+    max-height: 260px; overflow-y: auto;
+    padding: 4px;
+}
+.ws-context-pick-menu::-webkit-scrollbar { width: 6px; }
+.ws-context-pick-menu::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 3px; }
+
+/* 下拉项（图标 / 名称 / 行业 / active 态） */
+.ws-context-pick-menu .ws-context-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    color: var(--frame-text); font-size: 0.82rem;
+    transition: background var(--transition-fast);
+}
+.ws-context-pick-menu .ws-context-item:hover { background: var(--frame-hover); color: #fff; }
+.ws-context-pick-menu .ws-context-item.active { background: var(--frame-active-bg); color: #fff; }
+.ws-context-pick-menu .ws-context-item.clear { color: var(--frame-text-dim); }
+.ws-context-pick-menu .ws-context-item-icon {
+    display: flex; align-items: center; justify-content: center;
+    width: 1.25rem; height: 1.25rem; color: var(--frame-text-dim); flex-shrink: 0;
+}
+.ws-context-pick-menu .ws-context-item-icon .icon { width: 1.25rem; height: 1.25rem; }
+.ws-context-pick-menu .ws-context-item-body { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.ws-context-pick-menu .ws-context-item-name { font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-context-pick-menu .ws-context-item-meta { font-size: 0.72rem; color: var(--frame-text-dim); margin-top: 2px; }
+.ws-context-pick-menu .ws-context-item:hover .ws-context-item-icon,
+.ws-context-pick-menu .ws-context-item.active .ws-context-item-icon { color: #fff; }
+
+/* ===== 能力面板（折叠为单个入口可展开） ===== */
+.ws-cap-group { display: flex; flex-direction: column; }
+.ws-cap-toggle .ws-cap-caret {
+    margin-left: auto; width: 0.9rem; height: 0.9rem;
+    color: var(--frame-text-dim); flex-shrink: 0;
+    transition: transform var(--transition-fast);
+}
+.ws-cap-group.open .ws-cap-caret { transform: rotate(90deg); }
+.ws-cap-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin: 4px 0;
+    padding-left: 12px;
+}
+.ws-cap-list .ws-menu-item {
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 6px 5px;
+    font-size: 0.72rem;
+    border-left: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ws-cap-list .ws-menu-item .ws-menu-icon svg,
+.ws-cap-list .ws-menu-item .ws-menu-icon .icon { width: 0.85rem; height: 0.85rem; }
+.ws-cap-list .ws-menu-item span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ===== 输入框上方：已关联客户提示条 ===== */
+.ws-context-hint {
+    display: flex; align-items: center; gap: 8px;
+    margin: 10px 16px 0;
+    padding: 8px 12px;
+    background: var(--frame-active-bg);
+    border: 1px solid var(--frame-active-bar);
+    border-radius: 8px;
+    color: #fff; font-size: 0.78rem;
+}
+.ws-context-hint .ws-hint-icon { color: var(--primary-300); flex-shrink: 0; }
+.ws-context-hint .ws-hint-text { flex: 1; min-width: 0; }
+.ws-context-hint .ws-hint-clear {
+    background: none; border: none; color: var(--frame-text-dim);
+    font-size: 0.78rem; cursor: pointer; flex-shrink: 0;
+    font-family: var(--font-family);
+}
+.ws-context-hint .ws-hint-clear:hover { color: #fff; }
+
+/* 折叠态隐藏新增块 */
+.ws-sidebar.collapsed .ws-context-readout,
+.ws-sidebar.collapsed .ws-context-picker { display: none; }
+.ws-sidebar.collapsed .ws-cap-list { display: none !important; }
+.ws-sidebar.collapsed .ws-theme-switcher { display: none; }
+
+.ws-tasks { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; overflow-y: auto; flex: 1 1 0; padding: 0; }
+.ws-task-empty { font-size: var(--font-size-xs); color: var(--frame-text-dim); padding: 8px 4px; }
+.ws-task-item {
+    background: transparent;
+    border-left: 3px solid transparent;
+    border-radius: 0;
+    padding: 7px 12px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+.ws-task-item:hover { background: var(--frame-hover); }
+.ws-task-item.active {
+    background: var(--frame-active-bg);
+    border-left-color: var(--frame-active-bar);
+}
+.ws-task-name { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.6875rem; font-weight: 500; color: #fff; line-height: 1.35; overflow: hidden; }
+.ws-task-name-text { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-task-time { flex-shrink: 0; font-size: 0.625rem; color: var(--frame-text-dim); white-space: nowrap; transition: opacity var(--transition-fast); }
+.ws-task-meta { display: none; }       /* 已合并到 ws-task-name 单行展示，不再渲染 */
+.ws-task-cap,
+.ws-task-client { display: none; }     /* 标签已从侧栏移除 */
+
+/* 鼠标移上去直接显示操作按钮：无背景方框、仅图标，hover 时时间淡出避免重叠 */
+.ws-task-hover-actions {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+    align-items: center;
+    gap: 1px;
+    z-index: 2;
+}
+.ws-task-item:hover .ws-task-time { opacity: 0; }
+.ws-task-item:hover .ws-task-hover-actions { display: inline-flex; }
+.ws-task-hover-btn {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--frame-text-dim);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ws-task-hover-btn:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.ws-task-hover-btn.danger:hover { background: rgba(255, 86, 86, 0.25); color: #ffb4b4; }
+.ws-task-hover-btn .icon { width: 13px; height: 13px; }
+
+/* ws-task-item 内部右侧 ⋮ 操作按钮（hover 时显示） */
+.ws-task-actions {
+    position: absolute; right: 6px; top: 6px;
+    display: none;
+    width: 24px; height: 24px;
+    align-items: center; justify-content: center;
+    border-radius: 4px;
+    color: var(--frame-text-dim);
+    background: rgba(255, 255, 255, 0.10);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+.ws-task-actions:hover { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.ws-task-actions .icon { width: 14px; height: 14px; }
+.ws-task-item { position: relative; }
+.ws-task-item:hover .ws-task-actions,
+.ws-task-item.active .ws-task-actions { display: inline-flex; }
+
+/* 上下文菜单（仿 WorkBuddy 风格：白底圆角阴影，左侧图标+标签，删除项红色） */
+.ws-context-menu {
+    position: fixed;
+    min-width: 180px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.08);
+    padding: 6px;
+    z-index: 100000;
+    animation: wsMenuPop .14s ease;
+}
+@keyframes wsMenuPop {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.ws-context-menu .ws-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 36px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #1f2329;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+.ws-context-menu .ws-menu-item:hover { background: rgba(199, 0, 11, 0.08); }
+.ws-context-menu .ws-menu-item .icon { width: 16px; height: 16px; color: #5f6368; flex-shrink: 0; }
+.ws-context-menu .ws-menu-item:hover .icon { color: var(--primary-color, #C7000B); }
+.ws-context-menu .ws-menu-item.danger { color: #d9534f; }
+.ws-context-menu .ws-menu-item.danger .icon { color: #d9534f; }
+.ws-context-menu .ws-menu-item.danger:hover { background: rgba(217, 83, 79, 0.10); }
+.ws-context-menu .ws-menu-divider { height: 1px; background: #e5e7eb; margin: 4px 6px; }
+
+/* 通用确认弹窗（重命名/删除时复用；z-index 高于归档弹窗 100002，确保确认在归档弹窗之上） */
+.ws-confirm-overlay {
+    position: fixed; inset: 0; z-index: 100003;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(15, 17, 21, 0.55);
+    animation: wsMenuPop .14s ease;
+}
+.ws-confirm {
+    width: min(360px, 92vw);
+    background: #fff; border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+.ws-confirm-header { padding: 18px 20px 6px; font-size: 15px; font-weight: 600; color: #1f2329; }
+.ws-confirm-body { padding: 0 20px 16px; font-size: 13px; color: #4b525b; line-height: 1.6; }
+.ws-confirm-input {
+    width: 100%;
+    margin: 4px 0 0;
+    padding: 8px 10px;
+    border: 1px solid #dcdfe6;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.ws-confirm-input:focus { border-color: var(--primary-color, #C7000B); box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.12); }
+.ws-confirm-actions {
+    display: flex; gap: 8px; justify-content: flex-end;
+    padding: 12px 16px;
+    background: #f7f8fa;
+    border-top: 1px solid #eef0f3;
+}
+.ws-confirm-btn {
+    height: 32px; min-width: 72px;
+    padding: 0 14px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.ws-confirm-btn.ghost { background: #fff; border-color: #dcdfe6; color: #4b525b; }
+.ws-confirm-btn.ghost:hover { border-color: #c0c4cc; color: #1f2329; }
+.ws-confirm-btn.primary { background: var(--primary-color, #C7000B); color: #fff; }
+.ws-confirm-btn.primary:hover { background: #a80009; }
+.ws-confirm-btn.danger { background: #d9534f; color: #fff; }
+.ws-confirm-btn.danger:hover { background: #b9443f; }
+.ws-confirm-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+/* 侧栏「已归档对话」单一入口（替换原折叠区位置，置于历史对话下方；样式对齐 .ws-menu-item/能力） */
+.ws-archive-entry {
+    display: flex; align-items: center; gap: 12px;
+    margin: 2px 12px;
+    padding: 11px 12px;
+    border-radius: 8px;
+    color: var(--frame-text);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ws-archive-entry:hover { background: var(--frame-hover); color: #fff; }
+.ws-archive-entry .icon { width: 1.25rem; height: 1.25rem; color: var(--frame-text-dim); transition: color var(--transition-fast); }
+.ws-archive-entry:hover .icon { color: #fff; }
+.ws-archive-entry-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-archive-entry-count {
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 1px 8px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* 只读徽标：打开归档对话时显示在 chat-header 标题旁 */
+.ws-readonly-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-left: 10px;
+    padding: 3px 9px;
+    background: rgba(199, 0, 11, 0.10);
+    color: var(--primary-color, #C7000B);
+    font-size: 0.6875rem; font-weight: 500;
+    border-radius: 10px;
+    border: 1px solid rgba(199, 0, 11, 0.22);
+    white-space: nowrap;
+}
+.ws-readonly-badge::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--primary-color, #C7000B);
+}
+
+/* 已归档对话管理弹窗（白底面板 + 华为红主色，对齐 .ws-confirm 风格） */
+.ws-archive-modal-overlay {
+    position: fixed; inset: 0; z-index: 100002;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(15, 17, 21, 0.55);
+    animation: wsMenuPop .14s ease;
+}
+.ws-archive-modal {
+    width: min(480px, 92vw);
+    max-height: 80vh;
+    display: flex; flex-direction: column;
+    background: #fff; border-radius: 12px;
+    overflow: hidden;
+}
+.ws-archive-modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px; border-bottom: 1px solid #eef0f3;
+}
+.ws-archive-modal-title { font-size: 15px; font-weight: 600; color: #1f2329; }
+.ws-archive-modal-count { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--primary-color, #C7000B); }
+.ws-archive-modal-close {
+    border: none; background: transparent; cursor: pointer;
+    color: #8a9099; width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ws-archive-modal-close:hover { background: #f0f1f3; color: #1f2329; }
+.ws-archive-modal-close .icon { width: 16px; height: 16px; }
+.ws-archive-modal-search { padding: 12px 18px 0; }
+.ws-archive-modal-search input {
+    width: 100%; box-sizing: border-box;
+    padding: 8px 11px; border: 1px solid #dcdfe6; border-radius: 8px;
+    font-size: 13px; outline: none; color: #1f2329;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.ws-archive-modal-search input:focus { border-color: var(--primary-color, #C7000B); box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.12); }
+.ws-archive-modal-list { padding: 12px 18px 18px; overflow-y: auto; }
+.ws-archive-modal-empty { text-align: center; color: #8a9099; font-size: 13px; padding: 32px 0; }
+.ws-archive-modal-card {
+    border: 1px solid #eef0f3; border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 10px;
+    transition: border-color var(--transition-fast);
+}
+.ws-archive-modal-card:hover { border-color: #d8dbe0; }
+.ws-archive-modal-card-top {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+}
+.ws-archive-modal-card-title { font-size: 13px; font-weight: 600; color: #1f2329; }
+.ws-archive-modal-card-time { font-size: 11px; color: #a5abb3; white-space: nowrap; flex-shrink: 0; }
+.ws-archive-modal-card-snippet {
+    font-size: 12px; color: #5f6368; margin-top: 4px; line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ws-archive-modal-card-actions { display: flex; gap: 8px; margin-top: 10px; }
+.ws-archive-modal-btn {
+    font-size: 12px; padding: 5px 13px; border-radius: 6px;
+    border: 1px solid #dcdfe6; background: #fff; color: #1f2329; cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.ws-archive-modal-btn:hover { background: #f5f6f8; }
+.ws-archive-modal-btn.primary { border-color: var(--primary-color, #C7000B); color: var(--primary-color, #C7000B); }
+.ws-archive-modal-btn.primary:hover { background: rgba(199, 0, 11, 0.06); }
+.ws-archive-modal-btn.danger { color: #d9534f; border-color: #f0d4d4; }
+.ws-archive-modal-btn.danger:hover { background: rgba(217, 83, 79, 0.10); }
+
+.ws-sidebar-footer {
+    flex-shrink: 0;
+    padding: 12px 16px;
+    border-top: 1px solid var(--frame-border);
+    color: var(--frame-text-dim);
+    font-size: 0.75rem;
+}
+.ws-sidebar-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; }
+
+/* Agent 主题面板：保持与经典同尺寸同位置，不在 Agent 视图内压缩色块/间距。 */
+
+body.view-agent .theme-label { margin-bottom: 8px; }
+
+/* 打开一条空 conv 时的主区空态占位（不回到欢迎态、保住 currentConvoId 上下文） */
+.ws-empty-convo {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 80px 20px;
+    color: var(--text-secondary, #4b525b);
+    text-align: center;
+}
+.ws-empty-convo-icon { color: var(--primary-color, #C7000B); margin-bottom: 12px; }
+.ws-empty-convo-icon .icon { width: 40px; height: 40px; opacity: .85; }
+.ws-empty-convo-title { font-size: 15px; font-weight: 600; color: var(--text-primary, #1f2329); margin-bottom: 6px; }
+.ws-empty-convo-sub { font-size: 13px; color: var(--text-muted, #8c959e); }
+.ws-footer-meta { color: var(--frame-text-dim); }
+.ws-footer-meta b { color: var(--frame-text); font-weight: 700; }
+.ws-status-text { display: flex; align-items: center; gap: 8px; color: var(--frame-text-dim); }
+.ws-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 6px rgba(0,180,42,0.6); flex-shrink: 0; }
+
+/* ===== 主区（纯白底 + WorkBuddy 式顶栏） ===== */
+.ws-main {
+    flex: 1 1 0; min-width: 0;
+    margin-left: var(--sidebar-width);
+    display: flex; flex-direction: column;
+    background: #FFFFFF; min-height: 0;
+    transition: margin-left var(--transition-base);
+}
+.ws-sidebar.collapsed ~ .ws-main { margin-left: var(--sidebar-width-collapsed); }
+/* WorkBuddy 式极简顶栏：透明背景 + 缩小标题 + 纯图标按钮（去深蓝、去头像） */
+.ws-chat-header {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 40px;
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 0 16px;
+    flex-shrink: 0;
+}
+.ws-title { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
+.ws-header-actions { display: flex; align-items: center; gap: 2px; }
+.ws-header-icon-btn {
+    width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ws-header-icon-btn:hover { background: rgba(0, 0, 0, 0.06); color: var(--text-primary); }
+.ws-header-icon-btn.active { background: rgba(199, 0, 11, 0.08); color: var(--primary-color, #C7000B); }
+.ws-header-icon-btn .icon { width: 16px; height: 16px; stroke-width: 2.4; }
+.ws-header-more-menu {
+    position: fixed; z-index: 9999;
+    min-width: 132px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 4px;
+}
+.ws-header-more-item {
+    display: block; width: 100%; text-align: left;
+    background: transparent; border: none;
+    padding: 8px 12px; border-radius: 6px;
+    font-size: 0.875rem; color: var(--text-primary);
+    cursor: pointer; font-family: var(--font-family);
+}
+.ws-header-more-item:hover { background: rgba(0, 0, 0, 0.05); }
+.ws-header-more-item.danger { color: #e23d3d; }
+.ws-header-more-item.danger:hover { background: rgba(226, 61, 61, 0.08); }
+
+.ws-stream {
+    flex: 1 1 0; min-height: 0; overflow-y: auto;
+    padding: 0;
+    display: flex; flex-direction: column; gap: 0;
+}
+/* ========== 左右对话气泡（WorkBuddy 式） ==========
+   设计：用户右对齐 + 浅红渐变 + guo 首字母圆头像；
+        agent 左对齐 + 白底 + 华为红云 LOGO 圆头像；
+        max-width 78%，保证两边有视觉留白，避免“铺满整屏”粗糙感。 */
+.ws-msg-wrap {
+    display: flex;
+    width: 100%;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 14px var(--spacing-lg);
+    animation: ws-msg-in 0.28s cubic-bezier(.22,.61,.36,1);
+}
+@keyframes ws-msg-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.ws-msg-wrap-user { justify-content: flex-end; }
+.ws-msg-wrap-agent { justify-content: flex-start; }
+/* ---------- Agent 主页欢迎区：WorkBuddy 式新对话页（全白居中）----------
+   未对话时：全白主区、居中标题/副标题、能力胶囊、经典 content-card 大输入框、
+   快捷场景条、知识库状态条；一屏完成不滚动。对话展开后欢迎区整体隐藏。 ---------- */
+.ws-welcome {
+    width: 100%;
+    flex: 1 1 auto;
+    display: flex; flex-direction: column;
+    align-items: center;          /* 水平居中 */
+    justify-content: center;      /* 垂直居中，一屏不滚动 */
+    background: var(--bg-card);    /* 全白 */
+    overflow-y: auto;
+    padding: 24px 16px;
+}
+.ws-welcome-inner {
+    width: 100%;
+    max-width: 860px;             /* 内容最大宽，饱满不空旷 */
+    display: flex; flex-direction: column;
+    align-items: center;
+    gap: 22px;
+}
+.ws-welcome-head { text-align: center; }
+.ws-welcome-title {
+    font-size: 2rem; font-weight: 700; color: var(--text-primary);
+    margin-bottom: 8px; line-height: 1.2;
+}
+.ws-welcome-sub { font-size: 1rem; color: var(--text-secondary); line-height: 1.6; }
+
+/* 能力胶囊行（WorkBuddy 式轻量入口，不与主框红条冲突） */
+.ws-caps-row {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
+}
+.ws-cap-pill {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    padding: 9px 18px;
+    font-size: 0.92rem; color: var(--text-secondary);
+    font-family: var(--font-family);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.ws-cap-pill:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: rgba(199, 0, 11, 0.03);
+}
+.ws-cap-pill.active {
+    background: var(--primary-color); color: #fff; border-color: var(--primary-color);
+}
+
+/* 主输入框：保留顶部 2px 华为红条（与 .ws-msg-agent 一致的设计语言），
+   不保留左侧红条；点击输入框时不出现红色 focus 辉光（对齐经典模式
+   .ai-input-box textarea:focus 处理，覆盖全局 textarea:focus 红环） */
+.ws-compose-card {
+    position: relative;
+    width: 100%;
+    background: var(--bg-card);
+    border: none;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 18px 18px 14px;
+    overflow: hidden;
+}
+.ws-compose-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 2px; background: var(--primary-color);
+}
+.ws-compose-input {
+    width: 100%; min-height: 56px; max-height: 200px; resize: none;
+    border: none; outline: none; background: transparent;
+    font-family: var(--font-family); font-size: 1rem; color: var(--text-primary);
+    line-height: 1.6;
+}
+/* Agent 输入框聚焦：不出现红色 focus 方框（覆盖全局 textarea:focus 红环，对齐经典模式） */
+.ws-compose-card:focus-within { box-shadow: var(--shadow-md); }
+.ws-compose-input:focus,
+.ws-compose-input:focus-visible,
+.ws-input:focus,
+.ws-input:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    border-color: var(--border-color);
+}
+.ws-compose-input::placeholder { color: var(--text-muted); }
+.ws-compose-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 10px;
+}
+.ws-compose-hint { font-size: 0.82rem; color: var(--text-muted); }
+.ws-compose-send {
+    background: var(--primary-color); color: #fff; border: none;
+    border-radius: var(--radius-md); padding: 8px 22px;
+    font-size: 0.92rem; font-family: var(--font-family); cursor: pointer;
+    transition: background var(--transition-fast);
+}
+.ws-compose-send:hover { background: #E02020; }
+
+/* 快捷场景条 */
+.ws-scenes-row {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+    width: 100%;
+}
+.ws-scene {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px 14px;
+    font-size: 0.85rem; color: var(--text-secondary);
+    font-family: var(--font-family); cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.ws-scene:hover {
+    border-color: var(--primary-color); color: var(--primary-color);
+    background: rgba(199, 0, 11, 0.03);
+}
+
+/* 底部知识库状态条 */
+.ws-kb-status { font-size: 0.82rem; color: var(--text-muted); text-align: center; }
+/* 欢迎态提示：在工具栏已在底部的前提下，告知用户在下方输入。 */
+.ws-welcome-hint {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-align: center;
+    margin: 8px 0 0;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 12px;
+    line-height: 1.5;
+}
+
+@keyframes ws-scale-pop {
+    0%   { transform: scale(0.96); }
+    50%  { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+/* 消息气泡 —— WorkBuddy 式：去气泡、去头像，仅作者名加粗 + 正文 */
+.ws-msg {
+    margin-bottom: 28px;
+    max-width: 100%;
+    position: relative;
+}
+
+/* ===== 用户消息（右对齐：作者名灰、内容右对齐） ===== */
+.ws-msg-user { text-align: right; }
+.ws-msg-user .ws-msg-body { text-align: right; }
+.ws-msg-user .ws-msg-author { color: var(--text-secondary); }
+
+/* ===== Agent 消息（左对齐：作者名红、内容左对齐） ===== */
+.ws-msg-agent { text-align: left; }
+.ws-msg-agent .ws-msg-author { color: var(--primary-color); }
+.ws-msg-agent .ws-msg-body { text-align: left; }
+
+/* ===== 头像（已不再渲染，保留样式以便回退/扩展） ===== */
+.ws-msg-user-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #fff;
+    font-size: 0.9rem; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.ws-msg-agent-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.ws-msg-agent-avatar svg,
+.ws-msg-agent-avatar .icon { width: 18px; height: 18px; stroke-width: 2; color: #fff; }
+
+/* ===== 作者名（加粗 + 醒目，作者身份标识） ===== */
+.ws-msg-author {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: 0.01em;
+}
+
+.w-msg-body { /* placeholder kept for backward compat */ }
+
+.ws-msg-body {
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.6;
+    white-space: normal;
+    word-break: break-word;
+    color: var(--text-primary);
+}
+/* 历史对话与流式回答共用 Markdown 样式（ws-msg-body / ws-msg-answer）。
+   关键：pre-wrap 会把 <br> 之间多出的换行当作独立行（line-height × N），
+   导致 agent 长回答渲染出近两倍空高（白方框）。白空间必须 normal。*/
+.ws-msg-body .ws-md-h,
+.ws-msg-answer .ws-md-h { color: var(--text-primary); margin: 8px 0 2px; line-height: 1.35; font-weight: 600; }
+.ws-msg-body .ws-md-h:first-child,
+.ws-msg-answer .ws-md-h:first-child { margin-top: 0; }
+.ws-msg-body .ws-md-h2,
+.ws-msg-answer .ws-md-h2 { font-size: 0.96rem; }
+.ws-msg-body .ws-md-h3,
+.ws-msg-answer .ws-md-h3 { font-size: 0.88rem; color: var(--text-secondary); }
+.ws-msg-body .ws-md-ul,
+.ws-msg-answer .ws-md-ul { padding-left: 20px; margin: 2px 0; }
+.ws-msg-body .ws-md-ul li,
+.ws-msg-answer .ws-md-ul li { margin: 0; line-height: 1.45; color: var(--text-secondary); }
+.ws-msg-body .ws-md-link,
+.ws-msg-answer .ws-md-link { color: var(--primary-color); text-decoration: none; }
+.ws-msg-body .ws-md-link:hover,
+.ws-msg-answer .ws-md-link:hover { text-decoration: underline; }
+.ws-msg-body .ws-code-inline,
+.ws-msg-answer .ws-code-inline { background: #F2F3F5; color: var(--primary-color); border: 1px solid #E8EAED; padding: 1px 5px; border-radius: 4px; font-size: 0.88em; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); }
+.ws-msg-body .ws-code-block,
+.ws-msg-answer .ws-code-block { background: #1E1E1E; color: #E6E6E6; border: 1px solid #2D2D2D; padding: 12px 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; margin: 10px 0; }
+.ws-msg-body .ws-code-block code,
+.ws-msg-answer .ws-code-block code { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); white-space: pre; }
+.ws-msg-body .ws-md-table,
+.ws-msg-answer .ws-md-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; border: 1px solid #E5E7EB; }
+.ws-msg-body .ws-md-table th,
+.ws-msg-answer .ws-md-table th { border: 1px solid #E5E7EB; border-bottom: 2px solid rgba(199,0,11,0.18); padding: 8px 12px; text-align: left; background: rgba(199,0,11,0.05); color: #1f2329; font-weight: 600; }
+.ws-msg-body .ws-md-table td,
+.ws-msg-answer .ws-md-table td { border: 1px solid #E5E7EB; padding: 8px 12px; color: #333; }
+.ws-msg-body .ws-md-table tbody tr:nth-child(even),
+.ws-msg-answer .ws-md-table tbody tr:nth-child(even) { background: #FAFBFC; }
+.ws-msg-body .ws-md-hr,
+.ws-msg-answer .ws-md-hr { border: none; border-top: 1px solid #E5E7EB; margin: 12px 0; }
+.ws-msg-body .ws-md-img,
+.ws-msg-answer .ws-md-img { color: var(--text-muted); font-size: 0.9em; }
+.ws-msg-body br,
+.ws-msg-answer br { line-height: 0; }
+.ws-msg-body br + br,
+.ws-msg-answer br + br { line-height: 1.4; }
+
+.ws-progress { font-size: var(--font-size-xs); color: var(--text-muted); margin-bottom: 6px; }
+.ws-progress.done { color: var(--success); }
+
+.ws-msg-answer {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    white-space: normal;
+    word-break: break-word;
+    color: var(--text-primary);
+}
+.ws-msg-answer .ws-h { font-weight: 600; color: var(--text-primary); margin: 10px 0 4px; line-height: 1.4; }
+.ws-msg-answer .ws-h2 { font-size: 0.96rem; }
+.ws-msg-answer .ws-h3 { font-size: 0.88rem; color: var(--text-secondary); }
+.ws-msg-answer .ws-li {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    padding-left: 4px;
+}
+
+/* 答案区 Markdown 排版：紧凑模式（针对 knowledge_q 等长结构化内容）
+   - line-height 1.4：单行约 18px，长内容不显空
+   - li 0 0 0：列表项间无 margin，间距由 line-height 自然控制
+   - h 0 0 2 / 0 0 1：标题与正文 2px，与下个块 1px
+   - br 0 + br+br 1.4：单 br（行内换行）0 高度，段落分隔 ≈ 6px */
+.ws-msg-answer { line-height: 1.5; }
+.ws-msg-answer .ws-md-h { color: var(--text-primary); margin: 8px 0 2px; line-height: 1.35; font-weight: 600; }
+.ws-msg-answer .ws-md-h:first-child { margin-top: 0; }
+.ws-msg-answer .ws-md-h2 { font-size: 0.96rem; }
+.ws-msg-answer .ws-md-h3 { font-size: 0.88rem; color: var(--text-secondary); }
+.ws-msg-answer .ws-md-ul { padding-left: 20px; margin: 2px 0; }
+.ws-msg-answer .ws-md-ul li { margin: 0 0 0; line-height: 1.45; color: var(--text-secondary); }
+.ws-msg-answer .ws-md-link { color: var(--primary-color); text-decoration: none; }
+.ws-msg-answer .ws-md-link:hover { text-decoration: underline; }
+.ws-msg-answer br { line-height: 0; }
+.ws-msg-answer br + br { line-height: 1.4; }
+.ws-msg-answer .ws-md-link { color: var(--primary-color); text-decoration: none; }
+.ws-msg-answer .ws-md-link:hover { text-decoration: underline; }
+.ws-msg-answer .ws-code-inline { background: #F2F3F5; color: var(--primary-color); border: 1px solid #E8EAED; padding: 1px 5px; border-radius: 4px; font-size: 0.88em; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); }
+.ws-msg-answer .ws-code-block { background: #1E1E1E; color: #E6E6E6; border: 1px solid #2D2D2D; padding: 12px 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; margin: 10px 0; }
+.ws-msg-answer .ws-code-block code { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); white-space: pre; }
+.ws-msg-answer .ws-md-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; border: 1px solid #E5E7EB; }
+.ws-msg-answer .ws-md-table th { border: 1px solid #E5E7EB; border-bottom: 2px solid rgba(199,0,11,0.18); padding: 10px 14px; text-align: left; background: rgba(199,0,11,0.05); color: #1f2329; font-weight: 600; }
+.ws-msg-answer .ws-md-table td { border: 1px solid #E5E7EB; padding: 10px 14px; color: #333; }
+.ws-msg-answer .ws-md-table tbody tr:nth-child(even) { background: #FAFBFC; }
+.ws-msg-answer .ws-md-hr { border: none; border-top: 1px solid #E5E7EB; margin: 16px 0; }
+.ws-msg-answer .ws-md-img { color: var(--text-muted); font-size: 0.9em; }
+
+/* P0：答案就绪后的操作行（导出方案书 / 竞品分析 Word） */
+.ws-msg-actions {
+    display: flex; align-items: center; gap: 10px;
+    margin: 12px 0 4px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color, #E5E7EB);
+}
+.ws-export-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 32px; padding: 0 14px;
+    background: linear-gradient(135deg, #C7000B, #E01E2A);
+    color: #fff;
+    border: none; border-radius: 16px;
+    cursor: pointer;
+    font-size: 12.5px; font-weight: 500; font-family: var(--font-family);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+    box-shadow: 0 2px 8px rgba(199, 0, 11, 0.18);
+}
+.ws-export-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(199, 0, 11, 0.26); }
+.ws-export-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.ws-export-btn .icon { width: 15px; height: 15px; stroke-width: 2.2; }
+
+/* 思考过程面板（流式、可折叠，参照 DeepSeek 思考过程设计） */
+.ws-thinking {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin: 10px 0 12px;
+    overflow: hidden;
+    transition: background var(--transition-base), border-color var(--transition-base);
+}
+.ws-thinking.active { border-color: #D9DCE1; box-shadow: none; }
+.ws-thinking.collapsed .ws-thinking-body { display: none; }
+
+.ws-thinking-head {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; background: transparent; border: none; cursor: pointer;
+    padding: 10px 14px;
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    text-align: left;
+    transition: background var(--transition-fast);
+}
+.ws-thinking-head:hover { background: #F2F3F5; }
+.ws-thinking-title { font-weight: 600; color: var(--text-primary); }
+.ws-thinking-count { color: var(--text-muted); font-size: var(--font-size-xs); margin-left: 2px; }
+.ws-thinking-caret {
+    margin-left: auto; color: var(--text-muted);
+    display: inline-flex; align-items: center;
+    transition: transform var(--transition-fast);
+}
+.ws-thinking-caret svg { display: block; }
+.ws-thinking.collapsed .ws-thinking-caret { transform: rotate(-90deg); }
+
+/* 头部 spinner：思考中旋转，结束替换为 ✓（JS 设置 textContent + .stop） */
+.ws-think-spin {
+    width: 14px; height: 14px; flex-shrink: 0;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: ws-think-spin 0.8s linear infinite;
+}
+.ws-think-spin.stop { animation: none; border: none; color: var(--success); font-weight: 700; font-size: 14px; line-height: 1; }
+
+@keyframes ws-think-spin { to { transform: rotate(360deg); } }
+
+/* P0 Plan 面板：Devin 式执行计划，展示"它打算怎么做" */
+.ws-plan {
+    padding: 2px 14px 10px;
+    border-bottom: 1px dashed var(--border-color, #E5E7EB);
+    margin-bottom: 10px;
+}
+.ws-plan-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    letter-spacing: 0.02em;
+}
+.ws-plan-list {
+    display: flex; flex-direction: column; gap: 5px;
+}
+.ws-plan-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+.ws-plan-check {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border-color, #D3D6DC);
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all var(--transition-fast);
+}
+.ws-plan-item.done .ws-plan-check {
+    background: var(--success, #0F6E56);
+    border-color: var(--success, #0F6E56);
+}
+.ws-plan-item.done .ws-plan-check::after {
+    content: "";
+    width: 6px; height: 3px;
+    border-left: 1.5px solid #fff;
+    border-bottom: 1.5px solid #fff;
+    transform: rotate(-45deg) translateY(-1px);
+}
+.ws-plan-item.pending .ws-plan-text {
+    color: var(--text-secondary);
+}
+.ws-plan-item.running .ws-plan-text {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+.ws-plan-item.running .ws-plan-check {
+    border-color: var(--primary-color);
+    border-top-color: transparent;
+    border-right-color: transparent;
+    animation: ws-plan-spin 0.7s linear infinite;
+}
+@keyframes ws-plan-spin { to { transform: rotate(360deg); } }
+.ws-plan-item.done .ws-plan-text {
+    color: var(--text-tertiary, #9CA3AF);
+    text-decoration: line-through;
+    text-decoration-color: rgba(0,0,0,0.18);
+}
+/* P2-D5：Plan 行内「重跑」按钮 */
+.ws-plan-rerun {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 2px 8px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-tertiary, #9CA3AF);
+    background: transparent;
+    border: 1px solid var(--border-color, #D3D6DC);
+    border-radius: 999px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.ws-plan-item:hover .ws-plan-rerun { opacity: 1; }
+.ws-plan-rerun:hover { color: var(--primary-color); border-color: var(--primary-color); }
+.ws-plan-rerun:disabled { opacity: 0.5; cursor: wait; }
+/* P2-1-B：多智能体阶段徽标（需求分析师→方案架构师→质量校验官） */
+.ws-think-step-phase {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; margin: 2px 0;
+    background: rgba(199,0,11,0.07);
+    border: 1px solid rgba(199,0,11,0.22);
+    border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+    color: var(--primary-color);
+}
+.ws-thinking.collapsed .ws-plan { display: none; }
+
+/* P1-2：文档生成 chip（与导出按钮共存于 actions 面板） */
+.ws-doc-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-left: 8px; padding: 6px 13px;
+    background: rgba(199,0,11,0.08); color: var(--primary-color);
+    border: 1px solid rgba(199,0,11,0.28); border-radius: 999px;
+    font-size: var(--font-size-sm); cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.ws-doc-chip:hover { background: rgba(199,0,11,0.16); }
+.ws-doc-chip .icon { width: 14px; height: 14px; }
+
+/* P1-3：反思气泡（Agent 自我纠错可见化） */
+.ws-reflexion-bubble {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin-top: 4px; padding: 8px 10px;
+    background: rgba(245,158,11,0.12);
+    border: 1px solid rgba(245,158,11,0.32);
+    border-radius: 10px;
+    font-size: var(--font-size-sm); color: var(--text-primary);
+}
+.ws-reflexion-tag {
+    flex-shrink: 0; padding: 1px 8px; border-radius: 999px;
+    background: #F59E0B; color: #fff; font-size: 11px; font-weight: 600;
+}
+.ws-reflexion-text { line-height: 1.5; }
+
+/* 思考步骤列表（流式追加） */
+.ws-thinking-body {
+    display: flex; flex-direction: column; gap: 7px;
+    padding: 0 14px 12px;
+}
+.ws-think-step {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    line-height: 1.55;
+    animation: ws-think-step-in 0.25s ease;
+}
+@keyframes ws-think-step-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.ws-think-icon { flex-shrink: 0; margin-top: 3px; display: inline-flex; }
+/* 思考中：脉冲点 */
+.ws-think-dot-live {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--primary-color);
+    animation: ws-think-pulse 1.1s ease-in-out infinite;
+}
+@keyframes ws-think-pulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.85); }
+    50%      { opacity: 1; transform: scale(1.15); }
+}
+/* 工具步骤：小 spinner → ✓（JS 将 .ws-think-tool-spin 替换为 .ws-think-check） */
+.ws-think-tool-spin {
+    width: 12px; height: 12px; border: 2px solid var(--border-color);
+    border-top-color: var(--primary-color); border-radius: 50%;
+    animation: ws-think-spin 0.8s linear infinite;
+}
+.ws-think-check { color: var(--success); font-weight: 700; font-size: 13px; line-height: 1; }
+.ws-think-step-tool .ws-think-text { color: var(--text-primary); font-weight: 500; }
+/* P0 工具结果摘要：检索/读取结果的一句话说明（在工具步骤下方，小字灰） */
+.ws-think-tool-result {
+    margin: 3px 0 0 22px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    padding-left: 6px;
+    border-left: 2px solid rgba(199,0,11,0.20);
+}
+.ws-think-text { white-space: pre-wrap; word-break: break-word; }
+
+/* 工具调用芯片 */
+.ws-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.ws-tools-label { font-size: var(--font-size-xs); color: var(--text-muted); }
+.ws-tool-chip {
+    font-size: var(--font-size-xs);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 3px 9px;
+    color: var(--text-secondary);
+    display: inline-flex; align-items: center; gap: 5px;
+}
+.ws-tool-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+/* 澄清 / 补充信息框（呼应 content-card 华为红顶条风格，更轻） */
+.ws-clarify {
+    margin-top: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-left: 3px solid var(--primary-color);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+}
+.ws-clarify-title { font-size: var(--font-size-sm); font-weight: 500; color: var(--primary-color); margin-bottom: 4px; }
+.ws-clarify-q { font-size: var(--font-size-sm); color: var(--text-secondary); line-height: 1.5; }
+.ws-clarify-input {
+    width: 100%; margin-top: 8px; padding: 8px 10px;
+    border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+    background: var(--bg-base); color: var(--text-primary);
+    font-size: var(--font-size-sm); line-height: 1.5; resize: vertical;
+    box-sizing: border-box;
+}
+.ws-clarify-input:focus { outline: none; border-color: var(--primary-color); }
+.ws-clarify-btn {
+    margin-top: 8px; padding: 6px 18px;
+    background: var(--primary-color); color: #fff; border: none;
+    border-radius: var(--radius-sm); font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+.ws-clarify-btn:hover { opacity: .9; }
+
+/* 输入区（多行 textarea + 字符计数 + 华为红发送按钮） */
+/* ===== 底部输入区（WorkBuddy 式：极简、扁平、间隔线 + 居中 + 单圆角容器） ===== */
+.ws-input-bar {
+    flex-shrink: 0;
+    padding: 14px 24px 16px;
+    border-top: 1px solid #E5E7EB;       /* 与上方对话区的间隔线 */
+    background: #FFFFFF;
+}
+/* 输入栏容器：v=20260825c 改成单行布局（textarea + 工具栏全部在 ws-input-wrap 内） */
+.ws-input-bar {
+    padding: 4px 0 8px;
+}
+/* 居中行：与对话内容同宽（max-width:880px），保证左右对齐 */
+.ws-input-row {
+    max-width: 880px;
+    margin: 0 auto;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+/* 顶层输入行：所有 4 个工具（附件/深度思考/模型/语音）都进 ws-input-wrap */
+.ws-input-row-top .ws-input-wrap { padding: 8px 10px; align-items: center; gap: 6px; }
+.ws-input-row-top .ws-input { padding: 4px 6px; font-size: 0.95rem; min-height: 24px; }
+/* 圆角容器：装 附件 + textarea + 计数 + 工具组 + 发送按钮（WorkBuddy 式单容器） */
+.ws-input-wrap {
+    flex: 1;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    border-radius: 18px;
+    padding: 6px 8px 6px 10px;
+    display: flex; align-items: center; gap: 6px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.ws-input-wrap:focus-within {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(199, 0, 11, 0.08);
+}
+
+/* 工具栏行：在输入框下方，承载 [+][✨][model][🎙] + 快捷场景 */
+.ws-toolbar {
+    max-width: 880px;
+    margin: 6px auto 0;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.ws-toolbar-spacer { flex: 1; min-width: 8px; }
+.ws-quick-scenes {
+    display: flex; gap: 6px;
+    overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none;
+    flex-shrink: 1;
+}
+.ws-quick-scenes::-webkit-scrollbar { display: none; }
+.ws-quick-scene-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    border: 1px solid var(--border-color, #E5E7EB);
+    background: rgba(255,255,255,0.7);
+    color: var(--text-secondary);
+    font-size: 12px; line-height: 1.4;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.ws-quick-scene-chip:hover { background: rgba(199,0,11,0.06); color: var(--primary-color); border-color: rgba(199,0,11,0.32); }
+.ws-quick-scene-chip .ws-quick-scene-icon { width: 12px; height: 12px; opacity: 0.7; flex-shrink: 0; }
+
+/* 输入栏内的右侧动作区（mic + send）：在 textarea / count 右侧 */
+.ws-input-actions {
+    display: inline-flex; align-items: center; gap: 2px;
+    flex-shrink: 0;
+}
+/* 语音按钮：voice-input.js 注入到 .ws-input-actions 的麦克风按钮。
+   关键：覆盖全局 .voice-mic-btn 的 position:absolute / 32x32 圆角 / border 等。 */
+.ws-input-actions .voice-mic-btn {
+    position: static;
+    top: auto; right: auto;
+    width: 32px; height: 32px; padding: 0;
+    border-radius: 50%; border: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ws-input-actions .voice-mic-btn:hover { background: rgba(0, 0, 0, 0.05); color: var(--primary-color); }
+.ws-input-actions .voice-mic-btn svg { width: 16px; height: 16px; stroke-width: 2.2; position: static; }
+.ws-input-actions .voice-mic-btn.listening {
+    background: linear-gradient(135deg, rgba(199,0,11,0.10), rgba(199,0,11,0.18));
+    color: var(--primary-color, #C7000B);
+}
+.ws-input-actions .voice-mic-btn.is-disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 工具栏行：v=20260825d 把 [+]附件 / ✨深度思考 / 🔧模型 放回 toolbar 行（用户反馈"放下面"）。
+   语音 🎙 移到输入框右侧（.ws-input-actions），其余 3 个工具独立一行。 */
+.ws-toolbar {
+    max-width: 880px;
+    margin: 6px auto 0;
+    padding: 0 14px;
+    display: flex; align-items: center; gap: 8px;
+    flex-wrap: wrap;
+}
+/* 工具按钮（v=20260825d 重做）：28h 胶囊 + 图 + 文字，参考主流 AI 工具样式 */
+.ws-tool-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 28px; padding: 0 10px;
+    background: transparent; color: var(--text-secondary);
+    border: 1px solid transparent;
+    border-radius: 14px;
+    cursor: pointer;
+    font-size: 12px; font-family: var(--font-family);
+    flex-shrink: 0;
+    transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.ws-tool-btn:hover { background: rgba(0, 0, 0, 0.05); color: var(--text-primary); }
+.ws-tool-btn .icon { width: 14px; height: 14px; stroke-width: 2.2; flex-shrink: 0; }
+.ws-tool-btn-label { line-height: 1; font-weight: 500; white-space: nowrap; }
+/* 深度思考（active）：红边 + 红字 */
+.ws-tool-btn.ws-thinking-toggle.active {
+    background: linear-gradient(135deg, rgba(199,0,11,0.10), rgba(199,0,11,0.18));
+    color: var(--primary-color, #C7000B);
+    border-color: rgba(199,0,11,0.28);
+}
+.ws-tool-btn.ws-thinking-toggle.active .icon { filter: drop-shadow(0 0 4px rgba(199,0,11,0.30)); }
+/* 模型按钮：右侧多带一个 caret */
+.ws-tool-btn.ws-model-btn {
+    background: rgba(0, 0, 0, 0.04);
+}
+.ws-tool-btn.ws-model-btn:hover { background: rgba(0, 0, 0, 0.08); }
+
+/* 模型选择器（沿用上版，简化边距以贴合新容器） */
+.ws-model-pick { position: relative; flex-shrink: 0; }
+.ws-model-btn { background: rgba(0, 0, 0, 0.04); border-color: transparent; }
+/* 模型选择器：相对定位容器，让下拉菜单绝对定位弹出 */
+.ws-model-pick { position: relative; flex-shrink: 0; }
+/* 模型按钮背景：浅灰（.ws-tool-icon-btn.ws-model-btn 已定义尺寸，这里只补背景色） */
+.ws-tool-icon-btn.ws-model-btn { background: rgba(0, 0, 0, 0.04); }
+.ws-tool-icon-btn.ws-model-btn:hover { background: rgba(0, 0, 0, 0.08); }
+/* 下拉菜单：贴底部弹出 */
+.ws-model-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    min-width: 220px;
+    list-style: none; margin: 0; padding: 4px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.10);
+    z-index: 999;
+}
+.ws-model-item {
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--text-primary);
+    transition: background var(--transition-fast);
+}
+.ws-model-item:hover { background: rgba(0, 0, 0, 0.05); }
+.ws-model-item.active {
+    background: rgba(199, 0, 11, 0.08);
+    color: var(--primary-color, #C7000B);
+}
+.ws-model-item-name { font-weight: 500; }
+.ws-model-item-tag {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(199, 0, 11, 0.10);
+    color: var(--primary-color, #C7000B);
+}
+.ws-model-item.active .ws-model-item-tag { background: rgba(199, 0, 11, 0.18); }
+
+/* 左侧 + 附件按钮（新位置：在工具栏里而不是 textarea 行里） */
+.ws-input-attach {
+    width: auto; height: 28px; padding: 0 10px;
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+    color: var(--text-secondary);
+    display: inline-flex; align-items: center; gap: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ws-input-attach:hover { background: #F3F4F6; color: var(--text-primary); }
+.ws-input-attach .icon { width: 18px; height: 18px; stroke-width: 2.2; }
+
+/* 模型选择器（带下拉菜单） */
+.ws-model-pick { position: relative; flex-shrink: 0; }
+.ws-model-btn {
+    width: auto; height: 30px;
+    padding: 0 8px 0 6px;
+    border-radius: 15px;
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--text-primary);
+    border: none;
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 13px; font-family: var(--font-family);
+    cursor: pointer; flex-shrink: 0;
+    transition: background var(--transition-fast);
+}
+.ws-model-btn:hover { background: rgba(0, 0, 0, 0.08); }
+.ws-model-icon { width: 14px; height: 14px; color: var(--text-secondary); }
+.ws-model-label { font-weight: 500; }
+.ws-model-caret { width: 12px; height: 12px; opacity: 0.6; }
+.ws-model-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    min-width: 220px;
+    list-style: none; margin: 0; padding: 4px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.10);
+    z-index: 999;
+}
+.ws-model-item {
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--text-primary);
+    transition: background var(--transition-fast);
+}
+.ws-model-item:hover { background: rgba(0, 0, 0, 0.05); }
+.ws-model-item.active {
+    background: rgba(199, 0, 11, 0.08);
+    color: var(--primary-color, #C7000B);
+}
+.ws-model-item-name { font-weight: 500; }
+.ws-model-item-tag {
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(199, 0, 11, 0.10);
+    color: var(--primary-color, #C7000B);
+}
+.ws-model-item.active .ws-model-item-tag { background: rgba(199, 0, 11, 0.18); }
+
+/* 主输入区 */
+.ws-input {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    border: none; outline: none;
+    background: transparent;
+    padding: 6px 4px;
+    font-size: 0.95rem;
+    font-family: var(--font-family);
+    line-height: 1.55;
+    color: var(--text-primary);
+    resize: none;
+    align-self: center;
+}
+.ws-input::placeholder { color: var(--text-muted); }
+
+/* 字数计数：放在右下角，紧贴发送按钮左侧 */
+.ws-input-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    align-self: center;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.ws-input-count.ws-count-over { color: var(--error); }
+
+/* 发送按钮：圆形实心红 */
+.ws-send-btn {
+    width: 34px; height: 34px;
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--transition-fast);
+}
+.ws-send-btn:hover { background: #E02020; }
+.ws-send-btn:active { transform: scale(0.94); }
+.ws-send-btn:disabled {
+    background: #E5E7EB;
+    color: #9CA3AF;
+    cursor: not-allowed;
+}
+.ws-send-btn .icon { width: 16px; height: 16px; stroke-width: 2.2; }
+
+/* ===== 右侧方案预览：始终作为覆盖在主内容上的浮层抽屉 ===== */
+.ws-drawer {
+    position: fixed;
+    top: var(--topbar-height); right: 0; bottom: 0;
+    width: 360px;
+    background: var(--bg-card);
+    border-left: 1px solid var(--border-color);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.18);
+    display: flex; flex-direction: column; min-height: 0;
+    z-index: 99999;
+    transition: right var(--transition-base);
+}
+.ws-drawer.closed { right: -360px; }
+.ws-drawer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    height: var(--topbar-height);
+    padding: 0 var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600; color: var(--text-primary);
+    flex-shrink: 0;
+}
+.ws-drawer-close {
+    background: transparent; border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm); color: var(--text-secondary);
+    padding: 4px 10px; font-size: var(--font-size-xs); cursor: pointer;
+    font-family: var(--font-family);
+}
+.ws-drawer-close:hover { background: var(--bg-elevated); }
+.ws-drawer-body { flex: 1; overflow-y: auto; padding: var(--spacing-lg); display: flex; flex-direction: column; gap: var(--spacing-lg); }
+.ws-preview-empty { text-align: center; color: var(--text-muted); padding: 40px var(--spacing-lg); display: flex; flex-direction: column; align-items: center; }
+.ws-preview-empty-icon { margin-bottom: 14px; color: var(--text-muted); opacity: 0.5; }
+.ws-preview-empty-icon .icon { width: 2.4rem; height: 2.4rem; }
+.ws-preview-empty-title { font-size: var(--font-size-base); font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
+.ws-preview-empty-desc { font-size: var(--font-size-sm); line-height: 1.6; }
+.ws-preview-title {
+    font-size: var(--font-size-sm); font-weight: 600; color: var(--text-primary);
+    margin-bottom: 10px; padding-left: 10px; border-left: 3px solid var(--primary-color);
+}
+.ws-preview-list { display: flex; flex-direction: column; gap: 8px; }
+.ws-preview-item {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+}
+.ws-preview-item-name { font-size: var(--font-size-sm); font-weight: 600; color: var(--text-primary); }
+.ws-preview-item-desc { font-size: var(--font-size-xs); color: var(--text-secondary); line-height: 1.5; margin-top: 3px; }
+.ws-preview-item-role { font-size: 10px; color: var(--primary-color); margin-top: 4px; }
+.ws-preview-item-cost { font-size: var(--font-size-sm); color: var(--text-primary); font-weight: 500; }
+.ws-drawer-mask { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 99998; }
+
+/* 方案预览浮层：宽屏/窄屏统一从右侧滑出覆盖；抽屉始终 fixed 不推挤主区 */
+
+/* ==================== BUG-1 修复 ====================
+   切到 Agent 视图时隐藏经典欢迎/引导浮层。
+   .welcome-page 与 #demo-selector-modal 都直接挂在 <body> 下、不在
+   #classic-solution 内，原 "#classic-solution{display:none}" 无法隐藏它们；
+   且其显隐由 welcome-script.js 用内联 style.display 控制，故必须用 !important
+   覆盖内联样式。仅在 body.view-agent 下生效，classic 视图完全不受影响。 */
+body.view-agent .welcome-page,
+body.view-agent #demo-selector-modal {
+    display: none !important;
+}

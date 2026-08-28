@@ -1,0 +1,2734 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="华为云解决方案智能匹配系统">
+    <title>华为云解决方案匹配系统</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="style.css?v=20260815j">
+    <link rel="stylesheet" href="css/agent_workspace.css?v=20260828a">
+<link rel="stylesheet" href="cost-reference.css?v=20260726a">
+    <link rel="stylesheet" href="welcome-styles.css?v=20260716c">
+</head>
+<body class="view-classic">
+    <!-- 密码重置链接检测（内联，不受外部JS缓存影响） -->
+    <script>
+    (function() {
+        var params = new URLSearchParams(window.location.search);
+        var token = params.get('token');
+        if (token) {
+            console.log('[ResetLink] 检测到重置token，长度:', token.length);
+            window._resetToken = token;
+            // 清理URL
+            history.replaceState({}, document.title, window.location.pathname);
+            // 标记今天已看过欢迎页（重置流程属于"已访问过"，跳转后不再弹）
+            try {
+                localStorage.setItem('huawei-cloud-welcome-daily-date', new Date().toDateString());
+                console.log('[ResetLink] 已标记今天看过欢迎页');
+            } catch (_) {}
+
+            // 立即隐藏欢迎页（不依赖 welcome-script.js 缓存）
+            function hideWelcome() {
+                var wp = document.getElementById('welcome-page');
+                if (wp) {
+                    wp.style.display = 'none';
+                    console.log('[ResetLink] 欢迎页已隐藏');
+                }
+            }
+            // 尽早隐藏：DOM 解析到 welcome-page 元素后立刻隐藏
+            if (document.getElementById('welcome-page')) {
+                hideWelcome();
+            } else {
+                // DOM 还没解析到，用 MutationObserver 监听
+                var observer = new MutationObserver(function() {
+                    if (document.getElementById('welcome-page')) {
+                        hideWelcome();
+                        observer.disconnect();
+                    }
+                });
+                observer.observe(document.documentElement, { childList: true, subtree: true });
+                // 兜底：500ms 后再试一次
+                setTimeout(hideWelcome, 500);
+            }
+
+            // 等DOM就绪后弹窗
+            function tryOpenModal() {
+                var el = document.getElementById('reset-password-modal-overlay');
+                if (el) {
+                    el.style.display = '';
+                    console.log('[ResetLink] 重置密码弹窗已打开');
+                    // 隐藏提示信息
+                    var errEl = document.getElementById('reset-password-error');
+                    var succEl = document.getElementById('reset-password-success');
+                    if (errEl) errEl.style.display = 'none';
+                    if (succEl) succEl.style.display = 'none';
+                } else {
+                    setTimeout(tryOpenModal, 200);
+                }
+            }
+            setTimeout(tryOpenModal, 800);
+        }
+    })();
+    </script>
+
+    <canvas id="particle-canvas"></canvas>
+    
+    <!-- 欢迎引导页 -->
+    <div id="welcome-page" class="welcome-page">
+        <div class="welcome-overlay"></div>
+        <canvas id="welcome-particle-canvas"></canvas>
+        
+        <div class="welcome-content">
+            <div class="welcome-badge">AI 智能匹配系统</div>
+            
+            <h1 class="welcome-title">
+                <span class="title-gradient">云解决方案</span>
+                <br>
+                <span class="title-highlight">智能匹配系统</span>
+            </h1>
+            
+            <p class="welcome-subtitle">
+                让方案准备从 <strong class="highlight-time">人工翻找资料</strong> 变成 <strong class="highlight-time">AI 智能匹配</strong>
+            </p>
+            
+            <div class="welcome-stats">
+                <!-- data-target 仅作初始兜底值，实际数值由 welcome-script.js 从后端 API 动态获取 -->
+                <div class="stat-box">
+                    <div class="stat-number" data-target="317">0</div>
+                    <div class="stat-label">解决方案文档</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number" data-target="25">0</div>
+                    <div class="stat-label">覆盖行业</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number" data-target="12">0</div>
+                    <div class="stat-label">竞品厂商</div>
+                </div>
+            </div>
+            
+            <div class="welcome-features">
+                <div class="feature-item">
+                    <span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
+                    <span class="feature-text">智能匹配解决方案</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
+                    <span class="feature-text">竞争对手分析</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
+                    <span class="feature-text">知识库管理</span>
+                </div>
+            </div>
+            
+            <div class="welcome-actions">
+                <button id="start-experience-btn" class="btn btn-primary btn-lg">
+                    立即体验
+                </button>
+                <div class="skip-option">
+                    <button id="skip-welcome-btn" class="btn btn-ghost">
+                        <span class="btn-text">跳过引导</span>
+                    </button>
+                    <label class="skip-checkbox-label">
+                        <input type="checkbox" id="skip-permanently-checkbox">
+                        <span class="skip-checkbox-text">下次不再显示</span>
+                    </label>
+                </div>
+            </div>
+            
+            <p class="welcome-hint"><svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg> 也可以点击右上角"快速体验"按钮随时体验</p>
+        </div>
+    </div>
+    
+    <!-- Demo 案例选择器 -->
+    <div id="demo-selector-modal" class="demo-modal" style="display: none;">
+        <div class="demo-modal-overlay"></div>
+        <div class="demo-modal-content">
+            <!-- Hero Header -->
+            <div class="demo-modal-hero">
+                <div class="hero-icon"><svg class="icon" aria-hidden="true" style="width:22px;height:22px"><use href="#i-target"></use></svg></div>
+                <div>
+                    <h3>选择 Demo 案例</h3>
+                    <p>一键体验 AI 方案匹配全流程</p>
+                </div>
+                <button class="demo-close-btn" id="close-demo-modal"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+            </div>
+            <!-- 场景卡片列表 -->
+            <div class="demo-modal-body">
+                <div class="demo-cases">
+                    <div class="demo-case" data-case="manufacturing">
+                        <div class="case-icon"><svg class="icon" aria-hidden="true" style="width:26px;height:26px"><use href="#i-factory"></use></svg></div>
+                        <div class="case-info">
+                            <h4>制造业预测性维护</h4>
+                            <p>50台生产设备的故障预测与停机优化</p>
+                        </div>
+                    </div>
+                    <div class="demo-case" data-case="agriculture">
+                        <div class="case-icon"><svg class="icon" aria-hidden="true" style="width:26px;height:26px"><use href="#i-wheat"></use></svg></div>
+                        <div class="case-info">
+                            <h4>智慧农业植物方舱</h4>
+                            <p>环境监测、自动化管理与产量提升</p>
+                        </div>
+                    </div>
+                    <div class="demo-case" data-case="park">
+                        <div class="case-icon"><svg class="icon" aria-hidden="true" style="width:26px;height:26px"><use href="#i-building-2"></use></svg></div>
+                        <div class="case-info">
+                            <h4>智慧园区管理</h4>
+                            <p>安防、能源、停车综合管理</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- 底部引导 -->
+                <div class="demo-modal-footer">
+                    <p class="demo-tip">选择案例后将自动填充需求并演示匹配过程</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 演示提示 -->
+    <div id="demo-notice" class="demo-notice" style="display: none;">
+        <span class="notice-icon"><svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg></span>
+        <span class="notice-text">这是演示结果，您可以输入自己的需求进行匹配</span>
+        <button class="notice-close" id="close-demo-notice"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+    </div>
+    
+    <!-- 应用外壳：深色侧边栏 + (深色顶栏 + 浅色内容) -->
+    <div class="app-shell" id="app-shell">
+        <!-- 左侧深色侧边栏 -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-titles">
+                    <svg class="icon brand-cloud-icon" aria-hidden="true"><use href="#i-cloud"></use></svg>
+                    <div class="brand-text-block">
+                        <span class="brand-text">华为云方案</span>
+                        <span class="brand-sub">智能匹配</span>
+                    </div>
+                </div>
+                <button class="sidebar-collapse-btn" id="sidebar-toggle" title="收起 / 展开侧边栏">
+                    <svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+                </button>
+            </div>
+            <nav class="sidebar-menu">
+                <button class="sidebar-item active" data-page="solution">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
+                    <span class="nav-text">方案匹配</span>
+                </button>
+                <button class="sidebar-item" data-page="clients">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
+                    <span class="nav-text">客户管理</span>
+                </button>
+                <button class="sidebar-item" data-page="competitor">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
+                    <span class="nav-text">竞品分析</span>
+                </button>
+                <button class="sidebar-item" data-page="products">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg></span>
+                    <span class="nav-text">产品图谱</span>
+                </button>
+                <button class="sidebar-item" data-page="dashboard">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
+                    <span class="nav-text">数据仪表盘</span>
+                </button>
+                <button class="sidebar-item" data-page="history">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
+                    <span class="nav-text">历史记录</span>
+                </button>
+                <button class="sidebar-item" data-page="achievement">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
+                    <span class="nav-text">成就中心</span>
+                </button>
+                <button class="sidebar-item" data-page="knowledge">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
+                    <span class="nav-text">知识库</span>
+                </button>
+                <button class="sidebar-item" data-page="settings">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></span>
+                    <span class="nav-text">设置</span>
+                </button>
+                <button class="sidebar-item" data-page="about">
+                    <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
+                    <span class="nav-text">关于我们</span>
+                </button>
+            </nav>
+
+            <!-- ===== 主题切换器（侧栏底部）====== -->
+            <div class="theme-switcher" id="theme-switcher">
+                <span class="theme-label">THEME</span>
+                <div class="theme-palette" id="theme-palette">
+                    <div class="theme-option">
+                        <button class="theme-color active" data-skin="classic-blue" data-sidebar="#1B4F72" data-topbar="#154360" style="background:#1B4F72;" title="经典蓝"></button>
+                        <span class="theme-name">经典蓝</span>
+                    </div>
+                    <div class="theme-option">
+                        <button class="theme-color" data-skin="teal" data-sidebar="#17A58B" data-topbar="#148F77" style="background:#17A58B;" title="浅葱绿"></button>
+                        <span class="theme-name">浅葱绿</span>
+                    </div>
+                    <div class="theme-option">
+                        <button class="theme-color" data-skin="summer-yellow" data-sidebar="#D4AC0D" data-topbar="#B7950B" style="background:#D4AC0D;" title="盛夏黄"></button>
+                        <span class="theme-name">盛夏黄</span>
+                    </div>
+                    <div class="theme-option">
+                        <button class="theme-color" data-skin="peach-pink" data-sidebar="#E74C7A" data-topbar="#C23B65" style="background:#E74C7A;" title="桃桃粉"></button>
+                        <span class="theme-name">桃桃粉</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="sidebar-status">
+                    <span>文档 <b id="nav-doc-count">--</b> · 行业 <b id="nav-industry-count">--</b></span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 右侧主区：深色顶栏 + 浅色内容 -->
+        <div class="app-main">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="topbar-menu-btn" id="navbar-toggle" title="菜单">
+                        <svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>
+                    </button>
+                    <!-- 顶栏天气条（高德天气，点击展开城市搜索面板） -->
+                    <div class="weather-widget" id="weather-widget">
+                        <button class="weather-bar" id="weather-bar" title="查看天气 - 点击切换城市">
+                            <svg class="icon weather-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                            <span class="weather-city" id="weather-city">定位中</span>
+                            <span class="weather-temp" id="weather-temp">--°</span>
+                            <span class="weather-desc" id="weather-desc"></span>
+                            <svg class="icon weather-caret" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
+                        <div class="weather-panel" id="weather-panel" style="display:none;">
+                            <div class="weather-panel-search">
+                                <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                <input type="text" id="weather-search-input" placeholder="搜索城市，如：北京 / 深圳 / 成都" autocomplete="off">
+                            </div>
+                            <div class="weather-panel-hot">
+                                <span class="weather-panel-label">常用城市</span>
+                                <div class="weather-hot-list" id="weather-hot-list"></div>
+                            </div>
+                            <div class="weather-panel-results" id="weather-panel-results"></div>
+                            <div class="weather-panel-empty" id="weather-panel-empty">输入城市名开始搜索</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="topbar-center">
+                    <div class="topbar-ai-bar" id="topbar-ai-btn" title="AI 智能助手 - 点击提问">
+                        <svg class="icon ai-search-icon" aria-hidden="true"><use href="#i-search"></use></svg>
+                        <svg class="icon ai-icon" aria-hidden="true"><use href="#i-sparkle"></use></svg>
+                        <span class="ai-placeholder">问 AI：产品 / 方案匹配…</span>
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <div class="view-toggle" id="view-toggle" title="切换 Agent 对话 / 经典功能">
+                        <button type="button" class="view-option active" data-view="agent">
+                            <svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>Agent 对话
+                        </button>
+                        <button type="button" class="view-option" data-view="classic">
+                            <svg class="icon" aria-hidden="true"><use href="#i-grid"></use></svg>经典功能
+                        </button>
+                    </div>
+                    <button id="news-btn" class="topbar-icon-btn" title="科技资讯 - 每日更新">
+                        <span class="news-icon"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg></span>
+                        <span class="news-text">资讯</span>
+                    </button>
+                    <button id="quick-demo-btn" class="topbar-icon-btn" title="快速体验 Demo">
+                        <span class="demo-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></span>
+                        <span class="demo-text">体验</span>
+                    </button>
+                    <button id="nav-login-btn" class="topbar-icon-btn" title="登录 / 注册">
+                        <span class="nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
+                        <span class="nav-text">登录</span>
+                    </button>
+                    <div id="nav-user-menu" class="nav-user-menu" style="display: none;">
+                        <button id="nav-user-avatar-btn" class="nav-user-avatar-btn" title="用户菜单">
+                            <span class="user-avatar-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
+                            <span class="user-name" id="nav-user-name"></span>
+                            <span class="dropdown-arrow">▾</span>
+                        </button>
+                        <div id="user-dropdown" class="user-dropdown" style="display: none;">
+                            <button class="dropdown-item" id="dropdown-profile"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg> 个人信息</button>
+                            <button class="dropdown-item" id="dropdown-logout"><svg class="icon" aria-hidden="true"><use href="#i-log-out"></use></svg> 退出登录</button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 最新更新滚动横幅（顶栏下方，随皮肤主题联动） -->
+            <div class="update-ticker" id="update-ticker">
+                <div class="update-ticker-label">
+                    <svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>
+                    <span>更新</span>
+                </div>
+                <div class="update-ticker-viewport">
+                    <div class="update-ticker-track" id="update-ticker-track"></div>
+                </div>
+            </div>
+
+    <!-- 移动端底部导航栏（5 Tab：匹配/竞品/仪表盘/知识库/我的） -->
+    <nav class="mobile-bottom-nav" id="mobile-menu">
+        <button class="mobile-nav-item active" data-page="solution">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></span>
+            <span class="mobile-nav-label">匹配</span>
+        </button>
+        <button class="mobile-nav-item" data-page="competitor">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></span>
+            <span class="mobile-nav-label">竞品</span>
+        </button>
+        <button class="mobile-nav-item" data-page="dashboard">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></span>
+            <span class="mobile-nav-label">仪表盘</span>
+        </button>
+        <button class="mobile-nav-item" data-page="clients">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
+            <span class="mobile-nav-label">客户</span>
+        </button>
+        <button class="mobile-nav-item" data-page="knowledge">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>
+            <span class="mobile-nav-label">知识库</span>
+        </button>
+        <button class="mobile-nav-item" data-page="mine">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></span>
+            <span class="mobile-nav-label">我的</span>
+        </button>
+        <button class="mobile-nav-item" data-page="about">
+            <span class="mobile-nav-icon"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg></span>
+            <span class="mobile-nav-label">关于</span>
+        </button>
+    </nav>
+    
+    <!-- AI 智能助手面板 -->
+    <div id="ai-assistant-overlay" class="ai-assistant-overlay" style="display:none;">
+        <div class="ai-assistant-panel">
+            <!-- 头部 -->
+            <div class="ai-panel-header">
+                <div class="ai-header-left">
+                    <div class="ai-avatar"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></div>
+                    <div>
+                        <h3>智能方案助手</h3>
+                    </div>
+                </div>
+                <button class="ai-new-chat-btn" id="ai-new-chat-btn" title="开始新对话（清空上下文）">新对话</button>
+                <button class="ai-close-btn" id="ai-panel-close">&times;</button>
+            </div>
+
+            <!-- 快捷建议（首次打开显示） -->
+            <div class="ai-quick-actions" id="ai-quick-actions">
+                <div class="ai-quick-title">你可以问我</div>
+                <div class="ai-quick-grid">
+                    <!-- 业务类 -->
+                    <button class="ai-quick-card" data-q="华为云有哪些核心产品？适合中小企业的入门方案是什么？">
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>中小企业入门方案
+                    </button>
+                    <button class="ai-quick-card" data-q="华为云数据库产品有哪些？RDS和GaussDB有什么区别？">
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg></span>数据库产品对比
+                    </button>
+                    <button class="ai-quick-card" data-q="金融行业上华为云有什么合规要求？推荐什么架构方案？">
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-landmark"></use></svg></span>金融行业合规方案
+                    </button>
+                    <button class="ai-quick-card" data-q="智慧园区的典型架构是什么样的？涉及哪些华为云产品？">
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>智慧园区架构
+                    </button>
+                    <!-- 使用帮助类 -->
+                    <button class="ai-quick-card" data-q="这个平台的方案匹配功能怎么用？三种模式有什么区别？">
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>方案匹配功能使用
+                    </button>
+                    <button class="ai-quick-card" data-q="知识库怎么管理？如何添加和索引文档？">
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg></span>知识库文档管理
+                    </button>
+                    <button class="ai-quick-card" data-q="这个平台一共有哪些功能？每个功能分别做什么、入口在哪里？">
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-layers"></use></svg></span>平台全部功能一览
+                    </button>
+                    <button class="ai-quick-card" data-q="如何导出方案、对比两条历史、以及定稿和回滚版本？">
+                        <span class="aq-icon"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></span>导出/对比/版本管理
+                    </button>
+                </div>
+            </div>
+
+            <!-- 对话消息区 -->
+            <div class="ai-chat-messages" id="ai-chat-messages"></div>
+
+            <!-- 输入区 -->
+            <div class="ai-input-area">
+                <div class="ai-input-box">
+                    <textarea id="ai-input" placeholder="输入你的问题..." rows="1" maxlength="2000"></textarea>
+                    <button class="ai-send-btn" id="ai-send-btn" disabled aria-label="发送">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 产品详情弹窗 -->
+    <div id="product-modal-overlay" class="product-modal-overlay" style="display:none;">
+        <div class="product-modal">
+            <button class="product-modal-close" id="product-modal-close">×</button>
+            <div class="product-modal-content" id="product-modal-body"></div>
+        </div>
+    </div>
+
+    <!-- 知识库文档编辑弹窗 -->
+    <div id="kb-editor-overlay" class="kb-editor-overlay" style="display:none;">
+        <div class="kb-editor-modal">
+            <div class="kb-editor-header">
+                <h3 id="kb-editor-title-text">新增文档</h3>
+                <button class="kb-editor-close" id="kb-editor-close">×</button>
+            </div>
+            <div class="kb-editor-body">
+                <div class="kb-editor-field">
+                    <label>分类</label>
+                    <select id="kb-editor-category">
+                        <option value="huawei">华为方案</option>
+                        <option value="competitor">竞品方案</option>
+                    </select>
+                </div>
+                <div class="kb-editor-field">
+                    <label>行业 / 竞品名称</label>
+                    <select id="kb-editor-industry">
+                        <option value="智慧农业">智慧农业</option>
+                        <option value="工业互联网">工业互联网</option>
+                        <option value="智慧园区">智慧园区</option>
+                        <option value="智慧城市">智慧城市</option>
+                        <option value="智慧医疗">智慧医疗</option>
+                        <option value="智慧金融">智慧金融</option>
+                        <option value="智慧能源">智慧能源</option>
+                        <option value="智慧交通">智慧交通</option>
+                        <option value="智慧教育">智慧教育</option>
+                        <option value="智慧文旅">智慧文旅</option>
+                        <option value="制造">制造</option>
+                        <option value="政务">政务</option>
+                        <option value="零售">零售</option>
+                        <option value="汽车">汽车</option>
+                        <option value="矿山">矿山</option>
+                        <option value="钢铁冶金">钢铁冶金</option>
+                        <option value="化工">化工</option>
+                        <option value="智慧物流">智慧物流</option>
+                        <option value="传媒文娱">传媒文娱</option>
+                        <option value="应急管理">应急管理</option>
+                        <option value="智慧水利">智慧水利</option>
+                        <option value="国资云">国资云</option>
+                        <option value="互联网">互联网</option>
+                        <option value="游戏">游戏</option>
+                        <option value="生物医药">生物医药</option>
+                    </select>
+                </div>
+                <div class="kb-editor-field">
+                    <label>文档标题</label>
+                    <input type="text" id="kb-editor-doc-title" placeholder="如：华为云智慧畜牧解决方案" maxlength="200">
+                </div>
+                <div class="kb-editor-field kb-editor-upload-section">
+                    <label>或上传文件（自动解析与 OCR 入库）</label>
+                    <div class="kb-editor-upload-row">
+                        <button type="button" class="btn btn-outline btn-sm" id="kb-editor-upload-btn">选择文件并解析</button>
+                        <input type="file" id="kb-editor-file" accept=".docx,.pptx,.pdf,.txt,.md,.csv" style="display:none;">
+                        <span id="kb-editor-upload-name" class="kb-editor-upload-name"></span>
+                    </div>
+                    <div class="kb-editor-hint">支持 Word / PDF / PPT / TXT / MD / CSV；扫描件 PDF 会自动 OCR 识别文字。上传成功后会自动填入下方标题与内容，你可以在保存前核对修改（docx 表格、pptx 图片暂不在提取范围内）。</div>
+                </div>
+                <div class="kb-editor-divider"><span>或手动输入内容</span></div>
+                <div class="kb-editor-field">
+                    <label>文档内容（支持 Markdown）</label>
+                    <textarea id="kb-editor-content" rows="8" placeholder="输入文档内容..."></textarea>
+                </div>
+            </div>
+            <div class="kb-editor-footer">
+                <span id="kb-editor-status"></span>
+                <button class="btn btn-secondary btn-sm" id="kb-editor-cancel-btn">取消</button>
+                <button class="btn btn-primary btn-sm" id="kb-editor-save-btn">
+                    <span class="btn-text">保存</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- 主内容区域 -->
+    <main class="main-content classic-solution" id="classic-solution">
+        <div class="content-wrapper">
+            <!-- 解决方案匹配页面 -->
+            <div id="page-solution" class="page active">
+                <header class="page-header">
+                    <h2 class="page-title">华为云解决方案智能匹配</h2>
+                    <p class="page-subtitle">输入客户的业务需求和痛点，系统将辅助匹配最适合的华为云行业解决方案</p>
+                </header>
+                
+                <div class="content-card">
+                    <div class="form-group">
+                        <label class="form-label">客户需求描述</label>
+                        <textarea 
+                            id="demand-input" 
+                            class="textarea-input" 
+                            rows="8" 
+                            placeholder="例如：我们是一家中型制造企业，有50台生产设备，经常因为设备突发故障导致生产线停工，每次停工损失约5万元。我们希望能够实现设备的预测性维护，提前发现故障隐患，减少停机时间。"></textarea>
+                        <div class="char-counter">
+                            <span id="demand-char-count">0</span> / 2000 字符
+                        </div>
+                    </div>
+
+                    <!-- ===== 客户资料上传（阶段1：标准/智能/向导三模式通用） ===== -->
+                    <div class="form-group" id="customer-files-group">
+                        <label class="form-label" for="cf-file-input">
+                            <svg class="icon form-label-icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+                            客户资料上传（可选）
+                        </label>
+                        <div class="upload-dropzone" id="cf-dropzone" role="button" tabindex="0" aria-label="上传客户资料文件">
+                            <input type="file" id="cf-file-input" multiple hidden
+                                   accept=".docx,.xlsx,.pdf,.pptx,.txt,.csv,.md,.png,.jpg,.jpeg">
+                            <div class="upload-dropzone-inner">
+                                <svg class="icon upload-dropzone-icon" aria-hidden="true"><use href="#i-upload"></use></svg>
+                                <div class="upload-dropzone-text">点击选择，或将文件拖拽到此处</div>
+                                <div class="upload-dropzone-hint">支持 Word / Excel / PDF / PPT / TXT / CSV / Markdown / 图片（自动 OCR）<br>单个 ≤ 100MB，最多同时 10 个 · 仅本人可见</div>
+                            </div>
+                        </div>
+                        <ul class="upload-file-list" id="cf-file-list"></ul>
+                        <div class="upload-locked-hint" id="cf-locked-hint" style="display: none;">
+                            <svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>
+                            登录后即可上传客户资料，让 AI 基于你的文件生成方案
+                        </div>
+                    </div>
+
+                    <!-- Agent 模式切换 -->
+                    <div class="mode-toggle-bar">
+                        <span class="mode-label">匹配模式</span>
+                        <div class="mode-toggle" id="mode-toggle">
+                            <span class="mode-option" data-mode="normal">标准</span>
+                            <span class="mode-option active" data-mode="agent">
+                                Agent
+                                <span class="mode-badge">推荐</span>
+                            </span>
+                            <span class="mode-option" data-mode="wizard">
+                                向导
+                                <span class="mode-badge">对话</span>
+                            </span>
+                        </div>
+                        <span class="mode-hint" id="mode-hint">AI 记忆上下文 → 精准检索 → 为你定制方案</span>
+                    </div>
+
+                    <!-- ===== 客户档案栏（三种匹配模式通用，方案挂客户） ===== -->
+                    <div class="form-group client-bar" id="client-bar" style="display: none;">
+                        <label class="form-label" for="client-select">
+                            <svg class="icon form-label-icon" aria-hidden="true"><use href="#i-building-2"></use></svg>
+                            当前客户档案
+                            <span class="client-hint">方案将归入所选客户，便于后续检索</span>
+                        </label>
+                        <div class="client-select-row">
+                            <select id="client-select" class="client-select">
+                                <option value="">（不限定客户）</option>
+                            </select>
+                            <button type="button" id="client-new-btn" class="btn-secondary client-new-btn">+ 新建</button>
+                            <button type="button" id="client-edit-btn" class="btn-secondary client-edit-btn">编辑</button>
+                            <button type="button" id="client-manage-btn" class="btn-secondary client-manage-btn">管理</button>
+                            <button type="button" id="client-del-btn" class="btn-icon client-del-btn" title="删除当前选中的客户">×</button>
+                        </div>
+                    </div>
+                    <!-- 【客户弹窗已移至 body 级别，与 history-detail-modal 平级，避免被 page-solution display:none 吞掉】 -->
+
+                    <!-- ===== 对话式需求引导向导 ===== -->
+                    <div id="demand-wizard" class="demand-wizard" style="display: none;">
+                        <!-- 步骤指示器 -->
+                        <div class="wizard-steps">
+                            <div class="wizard-step-dot active" data-ws="0"><span>1</span></div>
+                            <div class="wizard-step-line" data-wl="0"></div>
+                            <div class="wizard-step-dot" data-ws="1"><span>2</span></div>
+                            <div class="wizard-step-line" data-wl="1"></div>
+                            <div class="wizard-step-dot" data-ws="2"><span>3</span></div>
+                            <div class="wizard-step-line" data-wl="2"></div>
+                            <div class="wizard-step-dot" data-ws="3"><span>4</span></div>
+                        </div>
+
+                        <!-- Step 0: 选择行业 -->
+                        <div class="wizard-panel active" data-wp="0">
+                            <div class="wizard-question">
+                                <span class="wizard-q-icon"><svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg></span>
+                                <h3>请选择客户所在的行业</h3>
+                            </div>
+                            <div class="wizard-industry-grid" id="wizard-industry-grid">
+                                <!-- JS 动态生成 -->
+                            </div>
+                        </div>
+
+                        <!-- Step 1: 公司规模 -->
+                        <div class="wizard-panel" data-wp="1">
+                            <div class="wizard-question">
+                                <span class="wizard-q-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
+                                <h3>客户的团队规模大约是多少？</h3>
+                            </div>
+                            <div class="wizard-scale-options" id="wizard-scale-options">
+                                <label class="wizard-radio-card" data-value="startup">
+                                    <input type="radio" name="wizard-scale" value="startup" hidden>
+                                    <span class="wizard-radio-icon"><svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg></span>
+                                    <span class="wizard-radio-title">初创团队</span>
+                                    <span class="wizard-radio-desc">1-50人，刚起步</span>
+                                </label>
+                                <label class="wizard-radio-card" data-value="sme">
+                                    <input type="radio" name="wizard-scale" value="sme" hidden>
+                                    <span class="wizard-radio-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>
+                                    <span class="wizard-radio-title">中小企业</span>
+                                    <span class="wizard-radio-desc">50-500人</span>
+                                </label>
+                                <label class="wizard-radio-card" data-value="large">
+                                    <input type="radio" name="wizard-scale" value="large" hidden>
+                                    <span class="wizard-radio-icon"><svg class="icon" aria-hidden="true"><use href="#i-factory"></use></svg></span>
+                                    <span class="wizard-radio-title">大型企业</span>
+                                    <span class="wizard-radio-desc">500-5000人</span>
+                                </label>
+                                <label class="wizard-radio-card" data-value="group">
+                                    <input type="radio" name="wizard-scale" value="group" hidden>
+                                    <span class="wizard-radio-icon"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg></span>
+                                    <span class="wizard-radio-title">集团/跨国</span>
+                                    <span class="wizard-radio-desc">5000人以上</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: 核心痛点 -->
+                        <div class="wizard-panel" data-wp="2">
+                            <div class="wizard-question">
+                                <span class="wizard-q-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></span>
+                                <h3>客户最关心哪些问题？（可多选）</h3>
+                            </div>
+                            <div class="wizard-pain-tags" id="wizard-pain-tags">
+                                <!-- JS 动态生成 -->
+                            </div>
+                            <div class="wizard-custom-pain">
+                                <label>或自己描述：</label>
+                                <input type="text" id="wizard-custom-pain" placeholder="如：想用AI做销售预测..." maxlength="100">
+                            </div>
+                        </div>
+
+                        <!-- Step 3: 确认 & 补充分享 -->
+                        <div class="wizard-panel" data-wp="3">
+                            <div class="wizard-question">
+                                <span class="wizard-q-icon"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg></span>
+                                <h3>确认需求，补充更多细节</h3>
+                            </div>
+                            <div class="wizard-summary" id="wizard-summary">
+                                <!-- JS 动态生成摘要 -->
+                            </div>
+                            <textarea id="wizard-extra" class="textarea-input" rows="4"
+                                placeholder="补充：目前的技术栈、预算范围、时间要求等（可选）"></textarea>
+                        </div>
+
+                        <!-- 向导导航按钮 -->
+                        <div class="wizard-nav">
+                            <button class="btn btn-secondary btn-sm" id="wizard-prev-btn" disabled><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg> 上一步</button>
+                            <div class="wizard-nav-right">
+                                <button class="btn btn-link btn-sm" id="wizard-skip-btn">跳过向导，自由输入</button>
+                                <button class="btn btn-primary btn-sm" id="wizard-next-btn">下一步 <svg class="icon" aria-hidden="true"><use href="#i-arrow-right"></use></svg></button>
+                                <button class="btn btn-primary btn-sm" id="wizard-submit-btn" style="display: none;">
+                                    <span class="btn-text">开始匹配</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="button-group">
+                        <button class="btn btn-primary" id="match-btn">
+                            <span class="btn-text">开始匹配</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                        <button class="btn btn-secondary" id="clear-solution-btn">清空</button>
+                    </div>
+                </div>
+
+                <!-- 方案匹配进度面板 -->
+                <div id="match-progress-panel" class="progress-panel" style="display: none;">
+                    <div class="progress-header">
+                        <div class="progress-spinner"></div>
+                        <span class="progress-title">正在为您匹配最佳方案...</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="match-progress-bar"></div>
+                    </div>
+                    <div class="progress-steps" id="match-progress-steps">
+                        <div class="progress-step" data-step="0">
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg></div>
+                            <div class="step-info">
+                                <div class="step-label">理解客户需求</div>
+                                <div class="step-desc">分析业务痛点与关键诉求</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="1">
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></div>
+                            <div class="step-info">
+                                <div class="step-label">检索知识库</div>
+                                <div class="step-desc" id="kb-fragment-count">从知识库中检索匹配方案</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="2">
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></div>
+                            <div class="step-info">
+                                <div class="step-label">生成解决方案</div>
+                                <div class="step-desc">AI 生成定制化方案建议</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                    </div>
+                    <div class="progress-time">
+                        <span class="time-elapsed" id="match-time-elapsed">已用时 0.0s</span>
+                    </div>
+                </div>
+
+                <!-- Agent 思考流（SSE 实时推送） -->
+                <div id="thinking-stream" class="thinking-stream content-card" style="display: none;">
+                    <div class="thinking-header">
+                        <span class="thinking-title"><svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg> AI 思考过程</span>
+                        <span class="thinking-step-badge" id="thinking-step-badge">Step 1</span>
+                    </div>
+                    <div id="thinking-entries" class="thinking-entries"></div>
+                </div>
+
+                <div id="solution-result" class="result-container" style="display: none;">
+                    <div class="result-header">
+                        <span class="result-badge success"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 匹配完成</span>
+                    </div>
+                    <!-- 快速体验引导条：仅免登录体验结果展示（script.js 按 State.isQuickDemo 控制显隐） -->
+                    <div id="quick-demo-banner" class="quick-demo-banner" style="display: none;">
+                        <svg class="icon qd-icon" aria-hidden="true"><use href="#i-user"></use></svg>
+                        <span class="qd-text">这是快速体验结果，登录后可<b>保存方案</b> / <b>查看历史</b> / 使用<b>向导和 Agent</b> 深度匹配</span>
+                        <button class="btn btn-primary btn-sm qd-login-btn" id="qd-login-btn">登录 / 注册</button>
+                    </div>
+                    <div id="client-context-hint" class="client-context-hint" style="display:none;"></div>
+                    <div class="result-content content-card" id="solution-content"></div>
+                    <!-- 成本参考卡片：匹配结果出来后按行业拉公开价目骨架，可编辑数量/单价做参考估算 -->
+                    <div class="content-card cost-reference-card" id="cost-reference-card" style="display:none;">
+                        <div class="cr-header">
+                            <div class="cr-title">
+                                <svg class="icon" aria-hidden="true"><use href="#i-banknote"></use></svg>
+                                <span>成本参考</span>
+                                <span class="cr-badge" id="cr-industry-badge">通用</span>
+                            </div>
+                            <div class="cr-sub" id="cr-sub">基于公开价目表策展的区间参考</div>
+                        </div>
+                        <div class="cr-controls">
+                            <div class="cr-tier-tabs" id="cr-tier-tabs">
+                                <span class="cr-tier-label">档位：</span>
+                                <button class="cr-tier-btn" data-tier="low" type="button">低成本</button>
+                                <button class="cr-tier-btn active" data-tier="mid" type="button">均衡</button>
+                                <button class="cr-tier-btn" data-tier="high" type="button">高可靠</button>
+                            </div>
+                            <div class="cr-view-tabs" id="cr-view-tabs">
+                                <span class="cr-tier-label">周期：</span>
+                                <button class="cr-view-btn active" data-view="month" type="button">按月</button>
+                                <button class="cr-view-btn" data-view="year" type="button">按年</button>
+                                <span class="cr-view-hint" id="cr-view-hint"></span>
+                            </div>
+                        </div>
+                        <div class="cr-table" id="cr-table"></div>
+                        <div class="cr-add-row">
+                            <button class="cr-add-btn" id="cr-add-btn" type="button">
+                                <span class="cr-add-plus" aria-hidden="true">+</span> 添加自定义产品
+                            </button>
+                            <div class="cr-add-form" id="cr-add-form" style="display:none;">
+                                <input type="text" class="cr-input cr-add-name" id="cr-add-name" placeholder="产品名称（必填）">
+                                <input type="text" class="cr-input cr-add-spec" id="cr-add-spec" placeholder="规格 / 说明（可选）">
+                                <input type="number" min="0" step="0.01" class="cr-input cr-add-price" id="cr-add-price" placeholder="单价(元/月)">
+                                <input type="number" min="0" step="1" class="cr-input cr-add-qty" id="cr-add-qty" placeholder="数量" value="1">
+                                <button class="cr-add-confirm" id="cr-add-confirm" type="button">添加</button>
+                                <button class="cr-add-cancel" id="cr-add-cancel" type="button">取消</button>
+                            </div>
+                        </div>
+                        <div class="cr-total">
+                            <span class="cr-total-label" id="cr-total-label">预估月费合计（参考）</span>
+                            <strong class="cr-total-value" id="cr-total">¥0</strong>
+                        </div>
+                        <div class="cr-disclaimer" id="cr-disclaimer"></div>
+                    </div>
+                    <!-- 方案追问优化区域 -->
+                    <div class="follow-up-section" id="follow-up-section" style="display: none;">
+                        <div class="follow-up-divider">
+                            <span class="follow-up-divider-text"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg> 方案追问优化</span>
+                            <button class="btn-link" id="clear-follow-up-btn">清空历史</button>
+                        </div>
+                        <div class="follow-up-history" id="follow-up-history"></div>
+                        <div class="follow-up-loading" id="follow-up-loading" style="display: none;">
+                            <div class="follow-up-loading-dot"></div>
+                            <div class="follow-up-loading-dot"></div>
+                            <div class="follow-up-loading-dot"></div>
+                            <span>正在优化方案...</span>
+                        </div>
+                        <div class="follow-up-input-area">
+                            <textarea id="follow-up-input" placeholder="输入追问内容，例如：把价格部分再详细一点；或 @第9章 再细化 ROI（精修单章节）"></textarea>
+                            <button class="btn btn-primary btn-sm" id="send-follow-up-btn">发送</button>
+                        </div>
+                        <div class="follow-up-actions" id="follow-up-actions" style="display: none;">
+                            <button class="btn btn-success btn-sm" id="apply-refined-btn"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 使用此优化结果</button>
+                        </div>
+                    </div>
+                    <div class="result-actions">
+                        <button class="btn btn-primary" id="download-solution-btn">
+                            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载方案文档
+                        </button>
+                        <button class="btn btn-secondary" id="export-docx-btn">
+                            <svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg> 导出方案书
+                        </button>
+                        <button class="btn btn-favorite-result" id="fav-solution-btn">
+                            <svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏方案
+                        </button>
+                        <button class="btn btn-secondary" id="share-solution-btn">
+                            <svg class="icon" aria-hidden="true"><use href="#i-share"></use></svg> 分享
+                        </button>
+                    </div>
+                    <details class="source-documents content-card">
+                        <summary class="source-summary"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg> 查看参考的解决方案文档</summary>
+                        <div id="solution-sources"></div>
+                    </details>
+                </div>
+            </div>
+            
+            <!-- 竞争对手分析页面 -->
+            <div id="page-competitor" class="page">
+                <header class="page-header">
+                    <h2 class="page-title">竞争对手方案智能分析</h2>
+                    <p class="page-subtitle">选择竞争对手和行业，系统将辅助生成华为云的差异化优势和销售应对话术</p>
+                </header>
+                
+                <div class="content-card">
+                    <div class="select-row">
+                        <div class="form-group">
+                            <label class="form-label">选择竞争对手<span class="multi-tip">（可多选，最多 2 家，与华为云三方横评）</span></label>
+                            <div class="competitor-chips" id="competitor-chips">
+                                <span class="chip-group-label">国内主流云服务商</span>
+                                <button type="button" class="competitor-chip" data-comp="阿里云">阿里云</button>
+                                <button type="button" class="competitor-chip" data-comp="腾讯云">腾讯云</button>
+                                <button type="button" class="competitor-chip" data-comp="字节跳动火山引擎">火山引擎</button>
+                                <button type="button" class="competitor-chip" data-comp="天翼云">天翼云</button>
+                                <button type="button" class="competitor-chip" data-comp="移动云">移动云</button>
+                                <button type="button" class="competitor-chip" data-comp="联通云">联通云</button>
+                                <span class="chip-group-label">国际主流云服务商</span>
+                                <button type="button" class="competitor-chip" data-comp="AWS">AWS</button>
+                                <button type="button" class="competitor-chip" data-comp="微软Azure">微软 Azure</button>
+                                <button type="button" class="competitor-chip" data-comp="Google Cloud">Google Cloud</button>
+                                <button type="button" class="competitor-chip" data-comp="Oracle Cloud">Oracle Cloud</button>
+                                <span class="chip-group-label">行业解决方案提供商</span>
+                                <button type="button" class="competitor-chip" data-comp="西门子">西门子</button>
+                                <button type="button" class="competitor-chip" data-comp="施耐德电气">施耐德电气</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择行业</label>
+                            <select id="industry-select" class="select-input">
+                                <option value="智慧农业">智慧农业</option>
+                                <option value="工业互联网">工业互联网</option>
+                                <option value="智慧园区">智慧园区</option>
+                                <option value="智慧城市">智慧城市</option>
+                                <option value="智慧医疗">智慧医疗</option>
+                                <option value="智慧金融">智慧金融</option>
+                                <option value="智慧能源">智慧能源</option>
+                                <option value="智慧交通">智慧交通</option>
+                                <option value="智慧教育">智慧教育</option>
+                                <option value="智慧文旅">智慧文旅</option>
+                                <option value="制造">制造</option>
+                                <option value="政务">政务</option>
+                                <option value="零售">零售</option>
+                                <option value="汽车">汽车</option>
+                                <option value="矿山">矿山</option>
+                                <option value="钢铁冶金">钢铁冶金</option>
+                                <option value="化工">化工</option>
+                                <option value="智慧物流">智慧物流</option>
+                                <option value="传媒文娱">传媒文娱</option>
+                                <option value="应急管理">应急管理</option>
+                                <option value="智慧水利">智慧水利</option>
+                                <option value="国资云">国资云</option>
+                                <option value="互联网">互联网</option>
+                                <option value="游戏">游戏</option>
+                                <option value="生物医药">生物医药</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-primary" id="analyze-btn">
+                            <span class="btn-text">开始分析</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                        <button class="btn btn-secondary" id="clear-competitor-btn">清空</button>
+                    </div>
+                </div>
+
+                <!-- 竞品分析进度面板 -->
+                <div id="analyze-progress-panel" class="progress-panel" style="display: none;">
+                    <div class="progress-header">
+                        <div class="progress-spinner"></div>
+                        <span class="progress-title">正在生成竞争分析报告...</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="analyze-progress-bar"></div>
+                    </div>
+                    <div class="progress-steps" id="analyze-progress-steps">
+                        <div class="progress-step" data-step="0">
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></div>
+                            <div class="step-info">
+                                <div class="step-label">检索华为云方案</div>
+                                <div class="step-desc">调取华为云该行业解决方案资料</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="1">
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg></div>
+                            <div class="step-info">
+                                <div class="step-label">检索竞品资料</div>
+                                <div class="step-desc">调取竞品行业方案与优劣势分析</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="2">
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-brain"></use></svg></div>
+                            <div class="step-info">
+                                <div class="step-label">分析竞争态势</div>
+                                <div class="step-desc">对比双方方案，提炼差异化优势</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                        <div class="progress-step" data-step="3">
+                            <div class="step-icon"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg></div>
+                            <div class="step-info">
+                                <div class="step-label">生成销售话术</div>
+                                <div class="step-desc">撰写应对策略与实战销售话术</div>
+                            </div>
+                            <div class="step-status waiting"></div>
+                        </div>
+                    </div>
+                    <div class="progress-time">
+                        <span class="time-elapsed" id="analyze-time-elapsed">已用时 0.0s</span>
+                    </div>
+                </div>
+
+                <div id="competitor-result" class="result-container" style="display: none;">
+                    <div class="result-header">
+                        <span class="result-badge success"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 分析完成</span>
+                    </div>
+                    <div class="result-content content-card" id="competitor-content"></div>
+                    <div class="follow-up-section competitor-follow-up" id="competitor-follow-up-section" style="display: none;">
+                        <div class="follow-up-divider">
+                            <span class="follow-up-divider-text"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg> 分析追问优化</span>
+                            <button class="btn-link" id="clear-competitor-follow-up-btn">清空历史</button>
+                        </div>
+                        <div class="follow-up-history" id="competitor-follow-up-history"></div>
+                        <div class="follow-up-loading" id="competitor-follow-up-loading" style="display: none;">
+                            <div class="follow-up-loading-dot"></div>
+                            <div class="follow-up-loading-dot"></div>
+                            <div class="follow-up-loading-dot"></div>
+                            <span>正在优化分析报告...</span>
+                        </div>
+                        <div class="follow-up-input-area">
+                            <textarea id="competitor-follow-up-input" placeholder="输入追问内容，例如：把价格对比部分再详细一点"></textarea>
+                            <button class="btn btn-primary btn-sm" id="send-competitor-follow-up-btn">发送</button>
+                        </div>
+                        <div class="follow-up-actions" id="competitor-follow-up-actions" style="display: none;">
+                            <button class="btn btn-success btn-sm" id="apply-competitor-refined-btn"><svg class="icon" aria-hidden="true"><use href="#i-circle-check"></use></svg> 使用此优化结果</button>
+                        </div>
+                    </div>
+                    <div class="result-actions">
+                        <button class="btn btn-primary" id="download-competitor-btn">
+                            <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> 下载竞争分析报告
+                        </button>
+                        <button class="btn btn-favorite-result" id="fav-competitor-btn">
+                            <svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg> 收藏报告
+                        </button>
+                    </div>
+                    <details class="source-documents content-card">
+                        <summary class="source-summary"><svg class="icon" aria-hidden="true"><use href="#i-book-open"></use></svg> 查看参考的解决方案文档</summary>
+                        <div id="competitor-sources"></div>
+                    </details>
+                </div>
+            </div>
+
+            <!-- 华为云产品图谱页面 -->
+            <div id="page-products" class="page">
+                <!-- 页面标题 + 统计 -->
+                <header class="products-header">
+                    <div class="products-header-left">
+                        <h2><svg class="icon" aria-hidden="true"><use href="#i-map"></use></svg> 华为云产品图谱</h2>
+                        <p>覆盖 9 大类、50 款核心云产品 · 点击任意节点查看详情</p>
+                    </div>
+                    <div class="products-header-center">
+                        <!-- 3D产品架构弹窗已移除 -->
+                    </div>
+                    <div class="products-header-stats">
+                        <span class="ph-stat"><b id="pg-stat-products">50</b> 产品</span>
+                        <span class="ph-stat"><b id="pg-stat-categories">9</b> 分类</span>
+                        <span class="ph-stat"><b id="pg-stat-links">69</b> 关联</span>
+                    </div>
+                </header>
+
+                <!-- 分类筛选 + 搜索 -->
+                <div class="products-toolbar">
+                    <div class="products-filter-group">
+                        <button class="product-filter-btn active" data-category="all"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg> 全部</button>
+                        <button class="product-filter-btn" data-category="compute"><svg class="icon" aria-hidden="true"><use href="#i-cloud"></use></svg> 计算</button>
+                        <button class="product-filter-btn" data-category="network"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg> 网络</button>
+                        <button class="product-filter-btn" data-category="storage"><svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg> 存储</button>
+                        <button class="product-filter-btn" data-category="database"><svg class="icon" aria-hidden="true"><use href="#i-database"></use></svg> 数据库</button>
+                        <button class="product-filter-btn" data-category="ai"><svg class="icon" aria-hidden="true"><use href="#i-bot"></use></svg> AI</button>
+                        <button class="product-filter-btn" data-category="iot"><svg class="icon" aria-hidden="true"><use href="#i-radio"></use></svg> IoT</button>
+                        <button class="product-filter-btn" data-category="security"><svg class="icon" aria-hidden="true"><use href="#i-shield"></use></svg> 安全</button>
+                        <button class="product-filter-btn" data-category="media"><svg class="icon" aria-hidden="true"><use href="#i-film"></use></svg> 音视频</button>
+                        <button class="product-filter-btn" data-category="enterprise"><svg class="icon" aria-hidden="true"><use href="#i-briefcase"></use></svg> 企业应用</button>
+                    </div>
+                    <input type="text" id="product-search-input" class="product-search-input" placeholder=" 搜索产品名称或能力...">
+                </div>
+
+                <!-- 产品图谱主体：左侧图谱 + 右侧详情 -->
+                <div class="products-graph-wrapper">
+                    <!-- 左侧：可滚动图谱画布 -->
+                    <div class="products-canvas-area">
+                        <div id="products-graph" class="products-grid-layout">
+                            <!-- 由 JS 渲染：按分类分组的产品卡片网格 -->
+                        </div>
+                    </div>
+
+                    <!-- 右侧：智能面板（默认/悬停预览/选中详情 三态切换） -->
+                    <div id="product-detail-panel" class="product-detail-panel">
+                        <!-- 态1：默认 — 统计 + 热门入口 -->
+                        <div class="panel-default" id="panel-default-state">
+                            <!-- 面板头部 -->
+                            <div class="panel-header">
+                                <h4><svg class="icon" aria-hidden="true"><use href="#i-compass"></use></svg> 产品导航</h4>
+                            </div>
+
+                            <!-- 快速统计 -->
+                            <div class="panel-stats-grid">
+                                <div class="panel-stat-item">
+                                    <span class="panel-stat-num" id="pg-nav-products">50</span>
+                                    <span class="panel-stat-label">云产品</span>
+                                </div>
+                                <div class="panel-stat-item">
+                                    <span class="panel-stat-num">9</span>
+                                    <span class="panel-stat-label">分类</span>
+                                </div>
+                                <div class="panel-stat-item">
+                                    <span class="panel-stat-num">10+</span>
+                                    <span class="panel-stat-label">行业覆盖</span>
+                                </div>
+                            </div>
+
+                            <!-- 热门产品快捷入口 -->
+                            <div class="panel-section">
+                                <div class="panel-section-title"><svg class="icon" aria-hidden="true"><use href="#i-fire"></use></svg> 热门产品</div>
+                                <div class="panel-hot-list" id="panel-hot-products"></div>
+                            </div>
+
+                            <!-- 使用提示 -->
+                            <div class="panel-tips">
+                                <div class="panel-tip-row">悬停节点预览摘要</div>
+                                <div class="panel-tip-row">点击查看完整详情弹窗</div>
+                                <div class="panel-tip-row">分类筛选快速定位</div>
+                            </div>
+                        </div>
+
+                        <!-- 态2：悬停预览 — 轻量产品卡 -->
+                        <div class="panel-hover-preview" id="panel-hover-state" style="display:none;">
+                            <div class="preview-card" id="hover-preview-card"></div>
+                        </div>
+
+                        <!-- 态3：选中详情 — 面板内嵌精简详情 -->
+                        <div class="panel-selected-detail" id="panel-selected-state" style="display:none;">
+                            <div class="selected-detail-scroll" id="selected-detail-content"></div>
+                        </div>
+                    </div>
+                </div>
+
+
+            </div>
+
+            <!-- 客户管理页面（总入口：列表 + 客户详情） -->
+            <div id="page-clients" class="page">
+                <header class="page-header">
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg> 客户管理 CRM</h2>
+                    <p class="page-subtitle">以客户为中心组织方案工作：查看客户全景、名下方案时间线，并一键为其发起匹配</p>
+                </header>
+
+                <!-- 列表视图 -->
+                <div id="clients-list-view">
+                    <div class="clients-toolbar">
+                        <div class="clients-search">
+                            <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+                            <input type="text" id="clients-search-input" placeholder="搜索客户名称 / 行业 / 联系人">
+                        </div>
+                        <select id="clients-stage-filter" class="clients-filter-select">
+                            <option value="">全部商机阶段</option>
+                            <option>初步接触</option><option>需求调研</option><option>方案报价</option><option>商务谈判</option><option>已成交</option><option>已流失</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm" id="clients-new-btn">+ 新建客户</button>
+                    </div>
+                    <div class="clients-grid" id="clients-grid">
+                        <div class="clients-empty">加载中…</div>
+                    </div>
+                </div>
+
+                <!-- 详情视图 -->
+                <div id="client-detail-view" style="display:none;">
+                    <button class="btn btn-secondary btn-sm" id="client-detail-back"><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"></use></svg> 返回客户列表</button>
+                    <div id="client-detail-content"></div>
+                </div>
+            </div>
+
+            <!-- Dashboard 数据仪表盘页面 -->
+            <div id="page-dashboard" class="page">
+                <header class="page-header">
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-bar-chart-3"></use></svg> 数据仪表盘 Dashboard</h2>
+                    <p class="page-subtitle">实时监控系统的使用数据、行业覆盖与竞品分析洞察</p>
+                </header>
+                
+                <!-- KPI 统计卡片 -->
+                <div class="dashboard-kpi-grid">
+                    <div class="dashboard-kpi-card">
+                        <div class="kpi-icon"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg></div>
+                        <div class="kpi-content">
+                            <div class="kpi-value" id="dash-total-matches">--</div>
+                            <div class="kpi-label">近7天匹配</div>
+                        </div>
+                        <div class="kpi-trend" id="dash-match-trend"><svg class="icon" aria-hidden="true"><use href="#i-arrow-up-right"></use></svg> +12%</div>
+                    </div>
+                    <div class="dashboard-kpi-card">
+                        <div class="kpi-icon"><svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg></div>
+                        <div class="kpi-content">
+                            <div class="kpi-value" id="dash-total-analyses">--</div>
+                            <div class="kpi-label">近7天分析</div>
+                        </div>
+                        <div class="kpi-trend" id="dash-analyze-trend"><svg class="icon" aria-hidden="true"><use href="#i-arrow-up-right"></use></svg> +8%</div>
+                    </div>
+                    <div class="dashboard-kpi-card">
+                        <div class="kpi-icon"><svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg></div>
+                        <div class="kpi-content">
+                            <div class="kpi-value" id="dash-total-docs">--</div>
+                            <div class="kpi-label">知识库文档</div>
+                        </div>
+                        <div class="kpi-trend static">实时</div>
+                    </div>
+                    <div class="dashboard-kpi-card">
+                        <div class="kpi-icon"><svg class="icon" aria-hidden="true"><use href="#i-target"></use></svg></div>
+                        <div class="kpi-content">
+                            <div class="kpi-value" id="dash-competitors">--</div>
+                            <div class="kpi-label">竞品厂商</div>
+                        </div>
+                        <div class="kpi-trend static">实时</div>
+                    </div>
+                </div>
+                
+                <!-- 图表区域 -->
+                <div class="dashboard-charts-grid">
+                    <!-- 行业覆盖热力图 -->
+                    <div class="dashboard-chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-title"><svg class="icon" aria-hidden="true"><use href="#i-thermometer"></use></svg> 行业覆盖热力图</h3>
+                            <span class="chart-subtitle">各行业解决方案文档覆盖度</span>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="industry-heatmap-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 最近匹配趋势图 -->
+                    <div class="dashboard-chart-card">
+                        <div class="chart-header">
+                            <h3 class="chart-title"><svg class="icon" aria-hidden="true"><use href="#i-trending-up"></use></svg> 最近匹配趋势</h3>
+                            <span class="chart-subtitle">近7天解决方案匹配活跃度</span>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="match-trend-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 竞品分析频次统计 -->
+                    <div class="dashboard-chart-card wide">
+                        <div class="chart-header">
+                            <h3 class="chart-title"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg> 热门对比方向 Top12</h3>
+                            <span class="chart-subtitle">全部用户分析占比（数据脱敏，仅展示比例）</span>
+                        </div>
+                        <div class="chart-body">
+                            <canvas id="competitor-freq-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 系统信息栏 -->
+                <div class="dashboard-info-bar">
+                    <div class="info-item">
+                        <span class="info-label">系统版本</span>
+                        <span class="info-value" id="dash-version">v2.4.0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">运行时间</span>
+                        <span class="info-value" id="dash-uptime">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">最后更新</span>
+                        <span class="info-value" id="dash-last-update">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">数据状态</span>
+                        <span class="info-value status-online">● 实时同步</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 成就勋章页面 -->
+            <div id="page-achievement" class="page">
+                <nav class="mobile-sub-nav">
+                    <button class="mobile-back-btn" onclick="PageTransition.switchTo('mine')" title="返回"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                    <span class="mobile-sub-nav-title">成就勋章</span>
+                </nav>
+                <header class="page-header">
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg> 成就勋章</h2>
+                    <p class="page-subtitle">完成指定操作解锁成就，收集全部 45 枚勋章！</p>
+                </header>
+                <div class="achievement-progress-bar">
+                    <div class="achievement-progress-fill" id="ach-progress-fill"></div>
+                    <span class="achievement-progress-text" id="ach-progress-text">加载中...</span>
+                </div>
+                <div class="achievement-filter" id="ach-filter">
+                    <button class="ach-filter-btn active" data-rarity="all">全部</button>
+                    <button class="ach-filter-btn" data-rarity="copper"><svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg> 铜</button>
+                    <button class="ach-filter-btn" data-rarity="silver"><svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg> 银</button>
+                    <button class="ach-filter-btn" data-rarity="gold"><svg class="icon" aria-hidden="true"><use href="#i-medal"></use></svg> 金</button>
+                    <button class="ach-filter-btn" data-rarity="diamond"><svg class="icon" aria-hidden="true"><use href="#i-gem"></use></svg> 钻</button>
+                    <button class="ach-filter-btn" data-rarity="hidden"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg> 隐藏</button>
+                </div>
+                <div class="achievement-grid" id="ach-grid">
+                    <!-- JS 动态渲染 -->
+                </div>
+            </div>
+            
+            <!-- 知识库管理页面 -->
+            <div id="page-knowledge" class="page">
+                <header class="page-header">
+                    <h2 class="page-title">知识库管理</h2>
+                    <p class="page-subtitle">管理系统的解决方案知识库，支持一键导入华为云官方解决方案文档</p>
+                </header>
+                
+                <div class="stats-grid">
+                    <div class="stat-card content-card">
+                        <div class="stat-card-value" id="kb-total-docs">--</div>
+                        <div class="stat-card-label">总文档片段数</div>
+                    </div>
+                    <div class="stat-card content-card">
+                        <div class="stat-card-value" id="kb-total-industries">--</div>
+                        <div class="stat-card-label">覆盖行业数</div>
+                    </div>
+                    <div class="stat-card content-card">
+                        <div class="stat-card-value" id="kb-competitors">--</div>
+                        <div class="stat-card-label">竞品厂商</div>
+                    </div>
+                </div>
+
+                <!-- 知识库空状态（当无文档时显示） -->
+                <div id="kb-empty-state" class="empty-state-card content-card" style="display: none;">
+                    <div class="empty-state-content">
+                        <div class="empty-state-icon"><svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg></div>
+                        <h3 class="empty-state-title">知识库暂无数据</h3>
+                        <p class="empty-state-desc">上传文档或初始化示例数据来开始使用</p>
+                        <div class="empty-state-steps">
+                            <div class="empty-state-step">
+                                <span class="step-number">1</span>
+                                <span>将方案文档放入 <code>data/sample_solutions/行业名称/</code> 目录</span>
+                            </div>
+                            <div class="empty-state-step">
+                                <span class="step-number">2</span>
+                                <span>点击下方"重建知识库"按钮</span>
+                            </div>
+                            <div class="empty-state-step">
+                                <span class="step-number">3</span>
+                                <span>系统自动处理文档并建立索引</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="content-card">
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-trending-up"></use></svg> 行业分布</h3>
+                    <div class="chart-container">
+                        <canvas id="industry-chart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- 文档列表管理 -->
+                <div class="content-card">
+                    <div class="kb-doc-toolbar">
+                        <h3 class="card-title" style="margin:0;"><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg> 文档管理</h3>
+                        <div class="kb-doc-toolbar-right">
+                            <input type="text" id="kb-doc-search" class="kb-doc-search" placeholder="搜索文档...">
+                            <button class="btn btn-primary btn-sm" id="kb-doc-add-btn">+ 新增文档</button>
+                        </div>
+                    </div>
+                    <div class="kb-doc-stats">
+                        <span id="kb-doc-count">加载中...</span>
+                        <span class="kb-doc-filter">
+                            <button class="kb-filter-btn active" data-filter="all">全部</button>
+                            <button class="kb-filter-btn" data-filter="huawei">华为方案</button>
+                            <button class="kb-filter-btn" data-filter="competitor">竞品方案</button>
+                        </span>
+                    </div>
+                    <div class="kb-doc-list" id="kb-doc-list">
+                        <div class="kb-doc-skeleton">加载中...</div>
+                    </div>
+                </div>
+
+                <div class="content-card">
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg> 知识库操作</h3>
+                    <div class="button-row">
+                        <button class="btn btn-primary" id="rebuild-btn">
+                            <span class="btn-text"><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 重建知识库</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                        <button class="btn btn-primary" id="sync-mine-btn">
+                            <span class="btn-text"><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 同步最新官方方案（保留我的内容）</span>
+                            <span class="btn-loader"></span>
+                        </button>
+                    </div>
+                    <p class="kb-reset-hint"><strong>同步</strong>：把管理员最新扩充的官方方案合并进你的知识库，<strong>你自己的文档会保留</strong>（客户档案等其它数据也不受影响）。</p>
+
+                    <!-- 知识库重建进度面板 -->
+                    <div id="rebuild-progress-panel" class="progress-panel" style="display: none; margin-top: 20px;">
+                        <div class="progress-header">
+                            <div class="progress-spinner"></div>
+                            <span class="progress-title">正在重建知识库...</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar indeterminate" id="rebuild-progress-bar"></div>
+                        </div>
+                        <div class="rebuild-status" id="rebuild-status-text">正在读取文档目录...</div>
+                    </div>
+                </div>
+                
+                <div class="info-card content-card">
+                    <h4><svg class="icon" aria-hidden="true"><use href="#i-lightbulb"></use></svg> 提示</h4>
+                    <ol>
+                        <li>点击"+ 新增文档"按钮，直接输入文档标题和内容（支持 Markdown 格式）</li>
+                        <li>选择分类（华为方案 / 竞品方案）和对应行业，保存后自动入库建索引</li>
+                        <li>支持的行业包括：智慧农业、工业互联网、智慧园区等25个行业</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- 历史记录页面 -->
+            <div id="page-history" class="page">
+                <nav class="mobile-sub-nav">
+                    <button class="mobile-back-btn" onclick="PageTransition.switchTo('mine')" title="返回"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                    <span class="mobile-sub-nav-title">历史记录</span>
+                </nav>
+                <header class="page-header">
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg> 历史记录</h2>
+                    <p class="page-subtitle">随时调阅过往方案与分析报告，沉淀经验</p>
+                    <div class="history-tabs">
+                        <button class="history-tab active" data-tab="match" id="history-tab-match">
+                            <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg> 方案匹配
+                        </button>
+                        <button class="history-tab" data-tab="analyze" id="history-tab-analyze">
+                            <svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg> 竞品分析
+                        </button>
+                    </div>
+                </header>
+
+                <!-- 操作栏 & 对比工具（仅方案匹配支持对比） -->
+                <div id="history-compare-section">
+                <div class="history-toolbar">
+                    <div class="history-toolbar-left">
+                        <span id="history-count">共 0 条记录</span>
+                        <label class="history-filter-label" for="history-client-filter">
+                            <svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg> 客户
+                        </label>
+                        <select id="history-client-filter" class="history-client-filter">
+                            <option value="">全部客户</option>
+                        </select>
+                    </div>
+                    <div class="history-toolbar-right">
+                        <span id="compare-hint" class="compare-hint">选择两条记录进行对比</span>
+                        <button class="btn btn-primary" id="btn-do-compare" disabled>开始对比</button>
+                        <button class="btn btn-secondary" id="btn-clear-compare" style="display: none;">取消对比</button>
+                    </div>
+                </div>
+                </div>
+
+                <!-- 历史记录列表 -->
+                <div id="history-list" class="history-list">
+                    <!-- 由 JS 动态生成 -->
+                    <div class="history-empty">
+                        <div class="empty-icon"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></div>
+                        <p>暂无历史记录</p>
+                        <p class="empty-sub">使用「解决方案匹配」或「竞争分析」功能后，记录会自动保存到这里</p>
+                        <div class="empty-state-actions">
+                            <button class="btn btn-primary btn-sm" onclick="document.querySelector('[data-page=\'solution\']').click()">
+                                <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg> 去匹配方案
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="document.querySelector('[data-page=\'competitor\']').click()">
+                                <svg class="icon" aria-hidden="true"><use href="#i-swords"></use></svg> 去分析竞品
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 分页组件 -->
+                <div id="pagination-container" class="pagination-container" style="display: none;">
+                    <div class="pagination-info">
+                        <span id="pagination-info">第 1-20 条，共 0 条</span>
+                    </div>
+                    <div class="pagination-buttons" id="pagination-buttons">
+                        <!-- 由 JS 动态生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 系统设置页面 -->
+            <div id="page-settings" class="page">
+                <nav class="mobile-sub-nav">
+                    <button class="mobile-back-btn" onclick="PageTransition.switchTo('mine')" title="返回"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+                    <span class="mobile-sub-nav-title">系统设置</span>
+                </nav>
+                <header class="page-header">
+                    <h2 class="page-title"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg> 系统设置</h2>
+                    <p class="page-subtitle">管理系统偏好、显示选项和数据配置</p>
+                </header>
+
+                <!-- 显示设置 -->
+                <div class="content-card">
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-palette"></use></svg> 显示设置</h3>
+                    <div class="settings-grid">
+                        <div class="setting-item" id="setting-animation-toggle">
+                            <div class="setting-info">
+                                <div class="setting-label">页面动画</div>
+                                <div class="setting-desc">启用页面切换和交互动画效果</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item" id="setting-skeleton-toggle">
+                            <div class="setting-info">
+                                <div class="setting-label">骨架屏加载</div>
+                                <div class="setting-desc">数据加载时显示骨架屏占位动画</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 功能设置 -->
+                <div class="content-card">
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg> 功能设置</h3>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-label">每页显示条数</div>
+                                <div class="setting-desc">历史记录列表每页显示的条目数量</div>
+                            </div>
+                            <select id="setting-page-size" class="setting-select">
+                                <option value="10">10条</option>
+                                <option value="20" selected>20条</option>
+                                <option value="50">50条</option>
+                            </select>
+                        </div>
+                        <div class="setting-item" id="setting-autosave-toggle">
+                            <div class="setting-info">
+                                <div class="setting-label">自动保存</div>
+                                <div class="setting-desc">方案和分析结果自动保存到历史记录</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item" id="setting-welcome-toggle">
+                            <div class="setting-info">
+                                <div class="setting-label">欢迎引导页</div>
+                                <div class="setting-desc">启动时显示欢迎引导页面</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统信息 -->
+                <div class="content-card">
+                    <h3 class="card-title"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg> 系统信息</h3>
+                    <div class="settings-info-grid">
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">系统版本</span>
+                            <span class="settings-info-value" id="settings-version">v2.4.0</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">API 状态</span>
+                            <span class="settings-info-value" id="settings-api-status">检查中...</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">连接状态</span>
+                            <span class="settings-info-value" id="settings-api-indicator" style="font-size: 14px;">● 检查中</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">数据库类型</span>
+                            <span class="settings-info-value">SQLite</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">后端引擎</span>
+                            <span class="settings-info-value">FastAPI</span>
+                        </div>
+                        <div class="settings-info-item">
+                            <span class="settings-info-label">前端框架</span>
+                            <span class="settings-info-value">Vanilla JS</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="settings-actions">
+                    <button class="btn btn-primary" id="settings-save-btn">
+                        <svg class="icon" aria-hidden="true"><use href="#i-save"></use></svg> 保存设置
+                    </button>
+                    <button class="btn btn-secondary" id="settings-reset-btn">
+                        <svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 恢复默认
+                    </button>
+                </div>
+            </div>
+
+            <!-- ===== 我的（移动端聚合页，桌面端隐藏）===== -->
+            <div id="page-mine" class="page">
+                <!-- 用户卡片 -->
+                <div class="mine-user-card">
+                    <!-- 未登录态 -->
+                    <div class="mine-user-guest" id="mine-user-guest">
+                        <div class="mine-avatar mine-avatar-guest">
+                            <svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>
+                        </div>
+                        <div class="mine-guest-text">
+                            <div class="mine-guest-title">欢迎使用</div>
+                            <div class="mine-guest-sub">登录后可保存方案、查看历史与成就</div>
+                        </div>
+                        <button class="mine-login-btn" id="mine-login-btn">登录 / 注册</button>
+                    </div>
+                    <!-- 已登录态 -->
+                    <div class="mine-user-logged" id="mine-user-logged" style="display:none;">
+                        <div class="mine-avatar">
+                            <svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg>
+                        </div>
+                        <div class="mine-user-info">
+                            <div class="mine-user-name" id="mine-user-name">用户名</div>
+                            <div class="mine-user-email" id="mine-user-email">未绑定邮箱</div>
+                        </div>
+                        <button class="mine-logout-btn" id="mine-logout-btn" title="退出登录">
+                            <svg class="icon" aria-hidden="true"><use href="#i-log-out"></use></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 功能入口列表 -->
+                <div class="mine-menu-list">
+                    <button class="mine-menu-item" data-goto="history">
+                    <button class="mine-menu-item" data-goto="history">
+                        <span class="mine-menu-icon mine-icon-green"><svg class="icon" aria-hidden="true"><use href="#i-clipboard-list"></use></svg></span>
+                        <span class="mine-menu-text">
+                            <span class="mine-menu-title">历史方案</span>
+                            <span class="mine-menu-desc">查看与对比历史匹配记录</span>
+                        </span>
+                        <span class="mine-menu-arrow">›</span>
+                    </button>
+                    <button class="mine-menu-item" data-goto="achievement">
+                        <span class="mine-menu-icon mine-icon-gold"><svg class="icon" aria-hidden="true"><use href="#i-trophy"></use></svg></span>
+                        <span class="mine-menu-text">
+                            <span class="mine-menu-title">成就徽章</span>
+                            <span class="mine-menu-desc">解锁使用里程碑</span>
+                        </span>
+                        <span class="mine-menu-arrow">›</span>
+                    </button>
+                    <button class="mine-menu-item" data-goto="settings">
+                        <span class="mine-menu-icon mine-icon-gray"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg></span>
+                        <span class="mine-menu-text">
+                            <span class="mine-menu-title">系统设置</span>
+                            <span class="mine-menu-desc">偏好、显示与数据配置</span>
+                        </span>
+                        <span class="mine-menu-arrow">›</span>
+                    </button>
+                </div>
+
+                <!-- 主题切换（移动端也可换肤） -->
+                <div class="mine-theme-block">
+                    <div class="mine-block-title">主题皮肤</div>
+                    <div class="mine-theme-row" id="mine-theme-row">
+                        <button class="mine-theme-dot active" data-skin="classic-blue" data-sidebar="#1B4F72" data-topbar="#154360" style="background:#1B4F72;" title="经典蓝"></button>
+                        <button class="mine-theme-dot" data-skin="teal" data-sidebar="#17A58B" data-topbar="#148F77" style="background:#17A58B;" title="浅葱绿"></button>
+                        <button class="mine-theme-dot" data-skin="summer-yellow" data-sidebar="#D4AC0D" data-topbar="#B7950B" style="background:#D4AC0D;" title="盛夏黄"></button>
+                        <button class="mine-theme-dot" data-skin="peach-pink" data-sidebar="#E74C7A" data-topbar="#C23B65" style="background:#E74C7A;" title="桃桃粉"></button>
+                    </div>
+                </div>
+
+                <!-- 底部信息 -->
+                <div class="mine-footer">
+                    <div class="mine-footer-status">文档 <b id="mine-doc-count">--</b> · 行业 <b id="mine-industry-count">--</b></div>
+                    <div class="mine-footer-version">华为云方案匹配系统 v1.0</div>
+                    <a class="mine-footer-icp" href="https://beian.miit.gov.cn" target="_blank" rel="noopener">豫ICP备2026027974号</a>
+                </div>
+            </div>
+
+            <!-- 关于我们页面 -->
+            <div id="page-about" class="page">
+                <header class="page-header">
+                    <h2 class="page-title">关于我们</h2>
+                    <p class="page-subtitle">cloudsol.cn 是一个面向 ToB 售前与解决方案岗位的智能匹配工具，也是作者的个人技术作品集</p>
+                </header>
+
+                <div class="content-card about-card">
+                    <div class="about-section">
+                        <h3 class="about-section-title"><svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg> 项目简介</h3>
+                        <p class="about-text">
+                            cloudsol.cn 致力于解决售前与解决方案工程师在日常工作中「客户需求 → 华为云产品 / 方案」匹配效率低下的问题。
+                            系统内置华为云行业解决方案知识库与主流云厂商竞品资料，结合大语言模型与向量检索，
+                            支持<strong>方案智能匹配</strong>、<strong>竞品对比分析</strong>、<strong>方案优化建议</strong>与<strong>结构化报告导出</strong>。
+                        </p>
+                        <p class="about-note">
+                            <svg class="icon about-note-icon" aria-hidden="true"><use href="#i-info"></use></svg>
+                            免责声明：本项目为个人作品集，与华为技术有限公司无隶属或合作关系，文中方案与数据均来自公开资料整理，仅供参考。
+                        </p>
+                    </div>
+                </div>
+
+                <div class="content-card about-card">
+                    <div class="about-section">
+                        <h3 class="about-section-title"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg> 关于作者</h3>
+                        <div class="about-author">
+                            <div class="about-author-avatar"><svg class="icon" aria-hidden="true"><use href="#i-user"></use></svg></div>
+                            <div class="about-author-meta">
+                                <div class="about-author-name">郭鸿宇</div>
+                                <div class="about-author-school">杭州电子科技大学 · 电气工程及其自动化</div>
+                            </div>
+                        </div>
+                        <p class="about-text">
+                            杭州电子科技大学 2027 届本科生（电气工程及其自动化 / 自动化学院），华为 HSD 校园大使、
+                            华为云 HCSD 开发者、HarmonyOS 高级开发者认证持有者。
+                            曾任大华股份市场产品工程师（存储 NVR 产品线）、浙江大学滨江研究院 ToB 解决方案交付实习生、
+                            萤石网络在线支持/产品运营工程师。熟悉大华 / 华为云 / 萤石云产品体系、
+                            安防物联网与政企行业解决方案设计、竞品对标分析与招投标全流程支撑。
+                        </p>
+                    </div>
+                </div>
+
+                <div class="content-card about-card">
+                    <div class="about-section">
+                        <h3 class="about-section-title"><svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg> 联系方式</h3>
+                        <p class="about-text">欢迎就产品建议、技术交流或求职机会与我联系：</p>
+                        <div class="about-contact-list">
+                            <a class="about-contact-item" href="https://github.com/henryguo017" target="_blank" rel="noopener">
+                                <span class="about-contact-icon"><svg class="icon about-github-icon" aria-hidden="true"><use href="#i-github"></use></svg></span>
+                                <span class="about-contact-text">
+                                    <span class="about-contact-label">GitHub</span>
+                                    <span class="about-contact-value">@henryguo017</span>
+                                </span>
+                                <span class="about-contact-arrow">↗</span>
+                            </a>
+                            <a class="about-contact-item" href="mailto:henryguo0523@163.com">
+                                <span class="about-contact-icon"><svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg></span>
+                                <span class="about-contact-text">
+                                    <span class="about-contact-label">邮箱</span>
+                                    <span class="about-contact-value">henryguo0523@163.com</span>
+                                </span>
+                                <span class="about-contact-arrow">↗</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="content-card about-card">
+                    <div class="about-section">
+                        <h3 class="about-section-title"><svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg> 案例展示</h3>
+                        <p class="about-text">以下为真实操作录屏，演示从需求输入、竞品对标、方案匹配到报告导出的完整售前工作流。</p>
+                        <video class="case-video" autoplay muted loop playsinline controls src="case-demo.mp4"></video>
+                        <p class="case-hint">完整功能演示（2 分 37 秒）：方案匹配 → 竞品分析 → 报告导出 Word → AI 助手对话。</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Agent 视图根容器：与经典 .classic-solution 互斥显隐；Agent 模块只操作此容器，绝不引用经典 DOM -->
+    <div class="workspace-solution" id="workspace-solution"></div>
+
+    <!-- 全局错误边界（移到 body 级别避免被 main 层叠上下文限制） -->
+    <div id="global-error-boundary" class="global-error-boundary" style="display: none;">
+        <div class="global-error-content">
+            <div class="global-error-emoji"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg></div>
+            <h3 id="error-boundary-title" class="global-error-title">系统遇到了一点问题</h3>
+            <p id="error-boundary-message" class="global-error-message">请尝试刷新页面或稍后再试</p>
+            <p id="error-boundary-detail" class="global-error-detail" style="display: none;"></p>
+            <div class="global-error-actions">
+                <button class="btn btn-primary" onclick="location.reload()"><svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg> 刷新页面</button>
+                <button class="btn btn-secondary" id="error-boundary-close">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 内联错误提示（移到 body 级别） -->
+    <div id="global-inline-error" class="global-inline-error" style="display: none;">
+        <div class="global-inline-error-content">
+            <span class="global-inline-error-icon"><svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg></span>
+            <span id="global-error-text" class="global-inline-error-text">发生了错误</span>
+            <button class="btn btn-primary btn-sm" id="global-error-retry" style="display: none;">重试</button>
+            <button class="global-inline-error-close" id="global-error-close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+        </div>
+    </div>
+
+    <!-- 历史记录 - 对比模式遮罩层（移到 body 级别避免被 main 层叠上下文限制） -->
+    <div id="history-compare-panel" class="history-compare-overlay" style="display: none;">
+        <div class="history-compare-content">
+            <div class="compare-header">
+                <h3><svg class="icon" aria-hidden="true"><use href="#i-scale"></use></svg> 方案对比</h3>
+                <button class="btn-close" id="close-compare"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+            </div>
+            <div class="compare-body" id="compare-body">
+                <!-- 左右分栏由 JS 动态生成 -->
+            </div>
+            <!-- AI 智能总结区域（底部） -->
+            <div class="compare-ai-summary-bottom" id="compare-ai-summary-bottom" style="display: none;">
+                <div class="ai-summary-label">
+                    <span class="ai-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></span>
+                    <span>AI 智能对比总结</span>
+                </div>
+                <div class="ai-summary-content result-content" id="ai-summary-content"></div>
+            </div>
+            <div class="compare-ai-action" id="compare-ai-action">
+                <button class="btn btn-primary ai-summary-btn" id="btn-ai-summary">
+                    <span class="ai-btn-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></span>
+                    <span>AI 智能总结</span>
+                </button>
+                <div class="ai-summary-loading" id="ai-summary-loading" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <span>AI 正在分析对比中...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 客户档案弹窗（body 级别，避免被 page 容器 display:none 吞掉） -->
+    <div id="client-modal" class="history-modal" style="display: none;">
+        <div class="history-modal-content">
+            <div class="modal-header">
+                <h3 id="client-modal-title">新建客户档案</h3>
+                <button class="btn-close" id="client-modal-close" type="button"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+            </div>
+            <div class="modal-body">
+                <form id="client-form" onsubmit="return false;">
+                    <input type="hidden" id="cf-id">
+                    <div class="client-form-grid">
+                        <div class="form-row"><label>客户名称 *</label><input id="cf-name" maxlength="100" required></div>
+                        <div class="form-row"><label>所属行业 *</label><select id="cf-industry" required><option value="">（请选择行业）</option></select></div>
+                        <div class="form-row"><label>企业规模</label><input id="cf-company_size" maxlength="50" placeholder="如 500-2000人"></div>
+                        <div class="form-row"><label>所在区域</label><input id="cf-region" maxlength="100"></div>
+                        <div class="form-row"><label>联系人姓名</label><input id="cf-contact_name" maxlength="50"></div>
+                        <div class="form-row"><label>联系人职位</label><input id="cf-contact_title" maxlength="50"></div>
+                        <div class="form-row"><label>联系电话</label><input id="cf-contact_phone" maxlength="50"></div>
+                        <div class="form-row"><label>联系邮箱</label><input id="cf-contact_email" maxlength="100"></div>
+                        <div class="form-row"><label>商机阶段</label>
+                            <select id="cf-stage">
+                                <option value="">（未设定）</option>
+                                <option>初步接触</option><option>需求调研</option><option>方案报价</option><option>商务谈判</option><option>已成交</option><option>已流失</option>
+                            </select>
+                        </div>
+                        <div class="form-row"><label>预算范围</label><input id="cf-budget" maxlength="100"></div>
+                        <div class="form-row full"><label>标签（逗号分隔）</label><input id="cf-tags" maxlength="200"></div>
+                        <div class="form-row full"><label>核心痛点</label><textarea id="cf-pain_points" maxlength="1000" rows="2"></textarea></div>
+                        <div class="form-row full"><label>决策链 / 关键角色</label><input id="cf-decision_chain" maxlength="500"></div>
+                        <div class="form-row full"><label>其他备注</label><textarea id="cf-note" maxlength="500" rows="2"></textarea></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="client-modal-cancel" type="button">取消</button>
+                <button class="btn-primary" id="client-modal-save" type="button">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 客户档案管理弹窗（body 级别） -->
+    <div id="client-manage-modal" class="history-modal" style="display: none;">
+        <div class="history-modal-content client-manage-content">
+            <div class="modal-header">
+                <h3><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg> 客户档案管理</h3>
+                <button class="btn-close" id="client-manage-close" type="button"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+            </div>
+            <div class="client-manage-toolbar">
+                <button class="btn btn-primary btn-sm" id="client-manage-new">+ 新建客户</button>
+                <span class="client-manage-hint">左侧选择客户，右侧查看结构化档案与其名下方案</span>
+            </div>
+            <div class="client-manage-body">
+                <div class="client-manage-list" id="client-manage-list">
+                    <div class="client-manage-empty">加载中…</div>
+                </div>
+                <div class="client-manage-detail" id="client-manage-detail">
+                    <div class="client-manage-empty">从左侧选择一个客户查看详情</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 历史记录 - 详情弹窗（移到 body 级别避免被 main 层叠上下文限制） -->
+    <div id="history-detail-modal" class="history-modal" style="display: none;">
+        <div class="history-modal-content">
+            <div class="modal-header">
+                <h3><svg class="icon" aria-hidden="true"><use href="#i-file"></use></svg> 方案详情</h3>
+                <button class="btn-close" id="close-detail"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+            </div>
+            <div class="modal-body" id="detail-body">
+                <!-- 由 JS 动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 个人中心面板 v2 Premium -->
+    <div id="profile-panel" class="profile-panel" style="display: none;">
+        <div class="profile-backdrop" id="profile-backdrop"></div>
+        <div class="profile-drawer">
+            <!-- ===== Hero Header：红渐变（与产品弹窗/Demo/仪表盘统一）====== -->
+            <div class="profile-hero">
+                <!-- 关闭按钮：白底实心圆浮于右上角外侧 -->
+                <button class="profile-close-btn" id="close-profile"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+                <div class="profile-hero-body">
+                    <div class="profile-avatar" id="profile-avatar">G</div>
+                    <div class="profile-hero-text">
+                        <div class="profile-username" id="profile-username"></div>
+                        <div class="profile-role-badge" id="profile-role">普通用户</div>
+                        <div class="profile-welcome-sub">欢迎回来，今天也要加油哦</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 使用概览：分色统计卡 ===== -->
+            <div class="profile-section">
+                <div class="profile-stats-grid">
+                    <div class="profile-stat-card stat-card-red">
+                        <div class="profile-stat-value" id="stat-match">0</div>
+                        <div class="profile-stat-label">智能匹配</div>
+                    </div>
+                    <div class="profile-stat-card stat-card-amber">
+                        <div class="profile-stat-value" id="stat-analyze">0</div>
+                        <div class="profile-stat-label">竞品分析</div>
+                    </div>
+                    <div class="profile-stat-card stat-card-green">
+                        <div class="profile-stat-value" id="stat-favorites">0</div>
+                        <div class="profile-stat-label">收藏方案</div>
+                    </div>
+                    <div class="profile-stat-card stat-card-blue">
+                        <div class="profile-stat-value" id="stat-history">0</div>
+                        <div class="profile-stat-label">历史记录</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 收藏方案 ===== -->
+            <div class="profile-section" id="profile-favorites-section">
+                <div class="profile-fav-box">
+                    <div class="profile-fav-header">
+                        <span class="profile-fav-title"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;"><use href="#i-star"></use></svg> 收藏方案（<span id="fav-count">0</span>）</span>
+                    </div>
+                    <div id="fav-list-empty" class="profile-fav-empty">暂无收藏方案，去匹配结果里收藏吧～</div>
+                    <div id="fav-list" class="profile-fav-list" style="display: none;">
+                        <!-- JS populated -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 基本信息概览（卡片化行）====== -->
+            <div class="profile-section">
+                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px;"><use href="#i-mail"></use></svg> 基本信息概览</h4>
+                <div class="profile-info-list">
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">用户名</span>
+                        <span class="profile-info-value" id="info-username">-</span>
+                    </div>
+                    <div class="profile-info-row" id="email-display-row" style="display: none;">
+                        <span class="profile-info-label">邮箱</span>
+                        <div class="profile-info-value-row">
+                            <span class="profile-info-value" id="info-email" style="color: var(--text-secondary);">未设置</span>
+                            <button class="profile-edit-btn" id="btn-edit-email">编辑</button>
+                        </div>
+                    </div>
+                    <div class="profile-info-row profile-email-edit-row" id="email-edit-row" style="display: none;">
+                        <span class="profile-info-label"></span>
+                        <div class="profile-email-edit">
+                            <input type="email" id="input-new-email" placeholder="请输入新邮箱" class="profile-input">
+                            <button class="btn btn-primary btn-sm" id="btn-save-email">保存</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-cancel-email">取消</button>
+                        </div>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">角色</span>
+                        <span class="profile-info-value" id="info-role">-</span>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">注册时间</span>
+                        <span class="profile-info-value" id="info-created">-</span>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">最后登录</span>
+                        <span class="profile-info-value" id="info-last-login">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 安全设置（卡片化行）====== -->
+            <div class="profile-section">
+                <h4 class="profile-section-title"><svg class="icon" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px;"><use href="#i-lock"></use></svg> 安全设置</h4>
+                <div id="password-section-view">
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">登录密码</span>
+                        <span class="profile-info-value" style="color: var(--text-secondary);">••••••••</span>
+                        <button class="profile-edit-btn" id="btn-change-password">修改</button>
+                    </div>
+                </div>
+                <div id="password-section-edit" style="display: none;">
+                    <div class="profile-password-form">
+                        <div class="profile-form-group">
+                            <label class="profile-form-label">旧密码</label>
+                            <input type="password" id="input-old-password" placeholder="请输入旧密码" class="profile-input">
+                        </div>
+                        <div class="profile-form-group">
+                            <label class="profile-form-label">新密码</label>
+                            <input type="password" id="input-new-password" placeholder="至少6位" class="profile-input">
+                        </div>
+                        <div class="profile-form-group">
+                            <label class="profile-form-label">确认新密码</label>
+                            <input type="password" id="input-confirm-password" placeholder="再次输入新密码" class="profile-input">
+                        </div>
+                        <div id="profile-password-error" class="profile-error" style="display: none;"></div>
+                        <div class="profile-form-actions">
+                            <button class="btn btn-primary btn-sm" id="btn-save-password">保存修改</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-cancel-password">取消</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 退出登录（品牌红渐变）====== -->
+            <div class="profile-section profile-logout-section">
+                <button class="profile-logout-btn" id="btn-profile-logout">
+                    <svg class="icon" aria-hidden="true" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;"><use href="#i-log-out"></use></svg> 退出登录
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录/注册弹窗 -->
+    <div id="auth-modal-overlay" class="auth-modal-overlay" style="display: none;">
+        <div class="auth-modal">
+            <button class="auth-modal-close" id="auth-modal-close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">登录</button>
+                <button class="auth-tab" data-tab="register">注册</button>
+            </div>
+
+            <!-- 登录表单 -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-input" id="login-username" placeholder="请输入用户名" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-input" id="login-password" placeholder="请输入密码" required autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">验证码</label>
+                    <div class="captcha-row">
+                        <input type="text" class="form-input captcha-input" id="login-captcha" placeholder="请输入验证码" required maxlength="4" autocomplete="off">
+                        <img id="login-captcha-img" class="captcha-img" src="" alt="验证码" title="点击刷新">
+                    </div>
+                </div>
+                <div id="login-error" class="auth-error" style="display: none;"></div>
+                <div id="login-auto-fill-hint" class="login-auto-fill-hint" style="display: none;">
+                    <svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg> 当前将登录为：<strong id="login-hint-username"></strong>
+                    <br><small>如不是你的账号，请手动修改用户名</small>
+                </div>
+                <button type="submit" class="auth-submit-btn" id="login-submit-btn">
+                    <span class="btn-text">登录</span>
+                    <span class="btn-spinner" style="display: none;"><svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg></span>
+                </button>
+                <div class="forgot-password-link" style="text-align: center; margin-top: 12px;">
+                    <a href="javascript:void(0);" id="forgot-password-link" style="color: #667eea; text-decoration: none; font-size: 14px;">忘记密码？</a>
+                </div>
+            </form>
+
+            <!-- 注册表单 -->
+            <form id="register-form" class="auth-form" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-input" id="register-username" placeholder="3-50位字符" required minlength="3" maxlength="50" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">邮箱 <span class="form-label-hint">(必填)</span></label>
+                    <input type="email" class="form-input" id="register-email" placeholder="请输入邮箱（必填）" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-input" id="register-password" placeholder="至少6位" required minlength="6" maxlength="50" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">确认密码</label>
+                    <input type="password" class="form-input" id="register-password-confirm" placeholder="再次输入密码" required autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">验证码</label>
+                    <div class="captcha-row">
+                        <input type="text" class="form-input captcha-input" id="register-captcha" placeholder="请输入验证码" required maxlength="4" autocomplete="off">
+                        <img id="register-captcha-img" class="captcha-img" src="" alt="验证码" title="点击刷新">
+                    </div>
+                </div>
+                <div id="register-error" class="auth-error" style="display: none;"></div>
+                <button type="submit" class="auth-submit-btn" id="register-submit-btn">
+                    <span class="btn-text">注册</span>
+                    <span class="btn-spinner" style="display: none;"><svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg></span>
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <span id="auth-switch-text">还没有账号？</span>
+                <button type="button" id="auth-switch-btn" class="auth-switch-link">立即注册</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 忘记密码弹窗 -->
+    <div id="forgot-password-modal-overlay" class="auth-modal-overlay" style="display: none;">
+        <div class="auth-modal">
+            <button class="auth-modal-close" id="forgot-password-modal-close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+            <h2 style="text-align:center; margin-bottom:20px; color:#333;">忘记密码</h2>
+            <p style="text-align:center; color:#666; margin-bottom:25px; font-size:14px;">请输入注册邮箱，我们将发送重置链接</p>
+            <form id="forgot-password-form" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">注册邮箱</label>
+                    <input type="email" class="form-input" id="forgot-password-email" placeholder="请输入邮箱" required autocomplete="email">
+                </div>
+                <div id="forgot-password-error" class="auth-error" style="display:none;"></div>
+                <div id="forgot-password-success" style="display:none; color:green; text-align:center; padding:10px;"></div>
+                <button type="submit" class="auth-submit-btn" id="forgot-password-submit-btn">
+                    <span class="btn-text">发送重置链接</span>
+                    <span class="btn-spinner" style="display:none;"><svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg></span>
+                </button>
+            </form>
+            <div class="auth-footer">
+                <button type="button" id="back-to-login-btn" class="auth-switch-link">返回登录</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重置密码弹窗 -->
+    <div id="reset-password-modal-overlay" class="auth-modal-overlay" style="display: none;">
+        <div class="auth-modal">
+            <button class="auth-modal-close" id="reset-password-modal-close"><svg class="icon" aria-hidden="true"><use href="#i-x"></use></svg></button>
+            <h2 style="text-align:center; margin-bottom:20px; color:#333;">重置密码</h2>
+            <form id="reset-password-form" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">新密码</label>
+                    <input type="password" class="form-input" id="reset-password-new" placeholder="至少6位" required minlength="6" maxlength="50" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">确认新密码</label>
+                    <input type="password" class="form-input" id="reset-password-confirm" placeholder="再次输入密码" required autocomplete="new-password">
+                </div>
+                <div id="reset-password-error" class="auth-error" style="display:none;"></div>
+                <div id="reset-password-success" style="display:none; color:green; text-align:center; padding:10px;"></div>
+                <button type="submit" class="auth-submit-btn" id="reset-password-submit-btn">
+                    <span class="btn-text">重置密码</span>
+                    <span class="btn-spinner" style="display:none;"><svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg></span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <!-- ICP 备案号 Footer -->
+    <footer class="site-footer">
+        <span class="site-footer-text">© 2026 华为云解决方案智能匹配系统</span>
+        <span class="site-footer-divider">·</span>
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="site-footer-icp">
+            豫ICP备2026027974号
+        </a>
+    </footer>
+        </div><!-- /.app-main -->
+    </div><!-- /.app-shell -->
+
+    <script src="js/chart.umd.min.js?v=20260714j" onerror="console.error('[Chart.js] 本地文件加载失败，可能缓存了旧版index.html，请 Ctrl+Shift+R 硬刷新');window.__chartFailed=true"></script>
+    <!-- 方案分享弹窗 -->
+    <div id="share-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content share-modal-content">
+            <button class="modal-close" id="share-modal-close" aria-label="关闭">×</button>
+            <h3 class="share-modal-title">生成只读分享链接</h3>
+            <p class="share-modal-tip">任何人凭链接即可查看，不含你的账号信息</p>
+            <div class="share-link-row">
+                <input type="text" id="share-link-input" readonly class="share-link-input">
+                <button class="btn btn-primary btn-sm" id="share-copy-btn">复制</button>
+            </div>
+            <div class="share-qr-wrap">
+                <div class="share-qr-inner"><div id="share-qr"></div></div>
+                <p class="share-qr-tip">手机扫码查看</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 科技资讯弹窗（顶栏「资讯」按钮：行业资讯 / 华为云动态 / 行业展会 三个标签页） -->
+    <div id="news-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content news-modal-content">
+            <button class="modal-close" id="news-modal-close" aria-label="关闭">×</button>
+            <h3 class="news-modal-title">科技资讯 · 每日更新</h3>
+            <div class="news-tabs" id="news-tabs">
+                <button class="news-tab active" data-tab="industry" type="button">行业资讯</button>
+                <button class="news-tab" data-tab="huawei" type="button">华为云动态</button>
+                <button class="news-tab" data-tab="events" type="button">行业展会</button>
+            </div>
+            <p class="news-modal-tip" id="news-modal-tip">聚合 AI / 云 / 科技前沿动态，点击条目跳转原文阅读</p>
+            <div class="news-modal-body">
+                <div class="news-list" id="news-list">
+                    <div class="news-loading">资讯加载中…</div>
+                </div>
+            </div>
+            <div class="news-modal-footer">
+                <span class="news-updated" id="news-updated"></span>
+                <button class="btn btn-ghost btn-sm" id="news-refresh-btn">刷新</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/vendor/qrcode.js"></script>
+    <script src="script.js?v=20260817e"></script>
+    <script src="js/shared_runtime.js?v=20260815j"></script>
+    <script src="js/agent_workspace.js?v=20260828a"></script>
+    <script src="js/voice-input.js?v=20260726f"></script>
+    <script src="js/achievement-ui.js?v=20260716emoji"></script>
+    <script src="welcome-script.js?v=20260801a"></script>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true" width="0" height="0">
+  <symbol id="i-arrow-down-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10" />
+  <path d="M17 7v10H7" /></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7" />
+  <path d="M19 12H5" /></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" />
+  <path d="m12 5 7 7-7 7" /></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10" />
+  <path d="M7 17 17 7" /></symbol>
+  <symbol id="i-banknote" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2" />
+  <circle cx="12" cy="12" r="2" />
+  <path d="M6 12h.01M18 12h.01" /></symbol>
+  <symbol id="i-bar-chart-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+  <symbol id="i-book-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14" />
+  <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" /></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8" />
+  <rect width="16" height="12" x="4" y="8" rx="2" />
+  <path d="M2 14h2" />
+  <path d="M20 14h2" />
+  <path d="M15 13v2" />
+  <path d="M9 13v2" /></symbol>
+  <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+  <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+  <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+  <path d="M17.599 6.5a3 3 0 0 0 .399-1.375" />
+  <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
+  <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
+  <path d="M19.938 10.5a4 4 0 0 1 .585.396" />
+  <path d="M6 18a4 4 0 0 1-1.967-.516" />
+  <path d="M19.967 17.484A4 4 0 0 1 18 18" /></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+  <rect width="20" height="14" x="2" y="6" rx="2" /></symbol>
+  <symbol id="i-building-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+  <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+  <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+  <path d="M10 6h4" />
+  <path d="M10 10h4" />
+  <path d="M10 14h4" />
+  <path d="M10 18h4" /></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+  <circle cx="7" cy="17" r="2" />
+  <path d="M9 17h6" />
+  <circle cx="17" cy="17" r="2" /></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></symbol>
+  <symbol id="i-circle-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" />
+  <path d="m9 12 2 2 4-4" /></symbol>
+  <symbol id="i-clipboard-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+  <path d="M12 11h4" />
+  <path d="M12 16h4" />
+  <path d="M8 11h.01" />
+  <path d="M8 16h.01" /></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3" />
+  <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+  <path d="M3 12A9 3 0 0 0 21 12" /></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+  <polyline points="7 10 12 15 17 10" />
+  <line x1="12" x2="12" y1="15" y2="3" /></symbol>
+  <symbol id="i-factory" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+  <path d="M17 18h1" />
+  <path d="M12 18h1" />
+  <path d="M7 18h1" /></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+  <path d="M14 2v4a2 2 0 0 0 2 2h4" /></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+  <path d="M10 9H8" />
+  <path d="M16 13H8" />
+  <path d="M16 17H8" /></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+  <path d="M17 8l-5-5-5 5" />
+  <path d="M12 3v12" /></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M7 3v18" />
+  <path d="M3 7.5h4" />
+  <path d="M3 12h18" />
+  <path d="M3 16.5h4" />
+  <path d="M17 3v18" />
+  <path d="M17 7.5h4" />
+  <path d="M17 16.5h4" /></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></symbol>
+  <symbol id="i-gem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9Z" />
+  <path d="M11 3 8 9l4 13 4-13-3-6" />
+  <path d="M2 9h20" /></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" />
+  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+  <path d="M2 12h20" /></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.37.5 0 5.87 0 12.5c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58 0-.29-.01-1.04-.02-2.05-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.6-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.22.7.83.58A12 12 0 0 0 24 12.5C24 5.87 18.63.5 12 .5z" /></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+  <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+  <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+  <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" /></symbol>
+  <symbol id="i-landmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="22" y2="22" />
+  <line x1="6" x2="6" y1="18" y2="11" />
+  <line x1="10" x2="10" y1="18" y2="11" />
+  <line x1="14" x2="14" y1="18" y2="11" />
+  <line x1="18" x2="18" y1="18" y2="11" />
+  <polygon points="12 2 20 7 4 7" /></symbol>
+  <symbol id="i-lightbulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+  <path d="M9 18h6" />
+  <path d="M10 22h4" /></symbol>
+  <symbol id="i-loader" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4" />
+  <path d="m16.2 7.8 2.9-2.9" />
+  <path d="M18 12h4" />
+  <path d="m16.2 16.2 2.9 2.9" />
+  <path d="M12 18v4" />
+  <path d="m4.9 19.1 2.9-2.9" />
+  <path d="M2 12h4" />
+  <path d="m4.9 4.9 2.9 2.9" /></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+  <path d="M7 11V7a5 5 0 0 1 10 0v4" /></symbol>
+  <symbol id="i-log-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+  <polyline points="16 17 21 12 16 7" />
+  <line x1="21" x2="9" y1="12" y2="12" /></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" />
+  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z" />
+  <path d="M15 5.764v15" />
+  <path d="M9 3.236v15" /></symbol>
+  <symbol id="i-medal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15" />
+  <path d="M11 12 5.12 2.2" />
+  <path d="m13 12 5.88-9.8" />
+  <path d="M8 7h8" />
+  <circle cx="12" cy="17" r="5" />
+  <path d="M12 18v-2h-.5" /></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12" />
+  <line x1="4" x2="20" y1="6" y2="6" />
+  <line x1="4" x2="20" y1="18" y2="18" /></symbol>
+  <symbol id="i-message-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
+  <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
+  <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
+  <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
+  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" /></symbol>
+  <symbol id="i-party-popper" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.8 11.3 2 22l10.7-3.79" />
+  <path d="M4 3h.01" />
+  <path d="M22 8h.01" />
+  <path d="M15 2h.01" />
+  <path d="M22 20h.01" />
+  <path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10" />
+  <path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17" />
+  <path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7" />
+  <path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z" /></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+  <path d="m15 5 4 4" /></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="M12 5v14" /></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5" />
+  <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" /></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" />
+  <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5" />
+  <circle cx="12" cy="12" r="2" />
+  <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5" />
+  <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19" /></symbol>
+  <symbol id="i-refresh-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+  <path d="M21 3v5h-5" />
+  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+  <path d="M8 16H3v5" /></symbol>
+  <symbol id="i-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+  <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+  <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+  <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" /></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+  <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" />
+  <path d="M7 3v4a1 1 0 0 0 1 1h7" /></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+  <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+  <path d="M7 21h10" />
+  <path d="M12 3v18" />
+  <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" /></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8" />
+  <path d="m21 21-4.3-4.3" /></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+  <circle cx="12" cy="12" r="3" /></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+  <path d="M20 3v4" />
+  <path d="M22 5h-4" />
+  <path d="M4 17v2" />
+  <path d="M5 18H3" /></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></symbol>
+  <symbol id="i-stethoscope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2v2" />
+  <path d="M5 2v2" />
+  <path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1" />
+  <path d="M8 15a6 6 0 0 0 12 0v-3" />
+  <circle cx="20" cy="10" r="2" /></symbol>
+  <symbol id="i-swords" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5" />
+  <line x1="13" x2="19" y1="19" y2="13" />
+  <line x1="16" x2="20" y1="16" y2="20" />
+  <line x1="19" x2="21" y1="21" y2="19" />
+  <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5" />
+  <line x1="5" x2="9" y1="14" y2="18" />
+  <line x1="7" x2="4" y1="17" y2="20" />
+  <line x1="3" x2="5" y1="19" y2="21" /></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" />
+  <circle cx="12" cy="12" r="6" />
+  <circle cx="12" cy="12" r="2" /></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="i-thermometer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" /></symbol>
+  <symbol id="i-trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18" />
+  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+  <line x1="10" x2="10" y1="11" y2="17" />
+  <line x1="14" x2="14" y1="11" y2="17" /></symbol>
+  <symbol id="i-trending-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+  <polyline points="16 7 22 7 22 13" /></symbol>
+  <symbol id="i-triangle-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+  <path d="M12 9v4" />
+  <path d="M12 17h.01" /></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+  <path d="M4 22h16" />
+  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+  <circle cx="12" cy="7" r="4" /></symbol>
+  <symbol id="i-wheat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22 16 8" />
+  <path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+  <path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+  <path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94Z" />
+  <path d="M20 2h2v2a4 4 0 0 1-4 4h-2V6a4 4 0 0 1 4-4Z" />
+  <path d="M11.47 17.47 13 19l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L5 19l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
+  <path d="M15.47 13.47 17 15l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L9 15l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" />
+  <path d="M19.47 9.47 21 11l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L13 11l1.53-1.53a3.5 3.5 0 0 1 4.94 0Z" /></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" />
+  <path d="m6 6 12 12" /></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></symbol>
+
+  <!-- 行业图标补齐（向导模式） -->
+  <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+  <symbol id="i-shopping-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></symbol>
+  <symbol id="i-hard-hat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18a10 10 0 0 0 20 0"/><path d="M12 2a10 10 0 0 0-10 10h20A10 10 0 0 0 12 2Z"/><path d="M2 18h20"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3.5 3.5 3.5 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="i-flask-conical" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0Z"/><path d="M5.52 16h12.96"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a3 3 0 0 0-3-3H4a3 3 0 0 0-3 3v11a2 2 0 0 0 2 2h1"/><path d="M15 18H9"/><path d="M19 18h2a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2h-3"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></symbol>
+  <symbol id="i-tv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></symbol>
+  <symbol id="i-alert-triangle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-droplets" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.95-2.6-5.02-4-6.25C5.6 7.22 3 10.3 3 12.25 3 14.47 4.8 16.3 7 16.3Z"/><path d="M12.56 19.67c.47.18.97.28 1.49.33-.04.07-.08.14-.13.2-1.84 2.17-5.03 2.44-7.13.6-2.1-1.84-2.44-5.02-.6-7.13.15-.18.32-.34.5-.49"/></symbol>
+  <symbol id="i-gamepad-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h4"/><path d="M8 9v4"/><line x1="15" x2="17" y1="12" y2="12"/><line x1="16" x2="16" y1="11" y2="13"/><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h.01M17 12h.01"/></symbol>
+  <symbol id="i-heart-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1 3.5h5.27"/></symbol>
+  <symbol id="i-city" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9h1"/><path d="M9 13h1"/><path d="M9 17h1"/><path d="M14 15h1"/><path d="M14 11h1"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H9"/><circle cx="18" cy="5" r="3"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-more-horizontal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></symbol>
+
+</svg>
+<!-- ==================== 移动端留白修复 v7（核弹：JS 硬限像素高度，任何元素无法突破）==================== -->
+<style>
+/* 仅移动端生效 — 核弹级 */
+@media (max-width: 767px) {
+    /* 根层全部锁死 */
+    html, body { height:100% !important; min-height:0 !important; max-height:100% !important; overflow:hidden !important; margin:0 !important; padding:0 !important; overscroll-behavior:none !important; }
+    .app-shell { height:100vh !important; max-height:100vh !important; min-height:0 !important; overflow:hidden !important; display:flex !important; flex-direction:column !important; }
+    .app-main { flex:1 1 0% !important; min-height:0 !important; height:0 !important; overflow:hidden !important; display:flex !important; flex-direction:column !important; }
+    .topbar { flex-shrink:0 !important; }
+
+    /* ★ 核弹：main-content 硬限制在可视区内，多出内容内部滚动 ★ */
+    .main-content {
+        width:100% !important;
+        min-height:0 !important;
+        max-height:calc(100vh - 56px) !important;
+        overflow-y:auto !important;
+        overflow-x:clip !important;
+        overscroll-behavior-y:contain !important;
+        padding-bottom:60px !important;
+        box-sizing:border-box !important;
+        -webkit-overflow-scrolling:touch;
+    }
+
+    /* 只隐藏 thinking-stream（它是493px留白元凶），进度/结果面板由JS业务逻辑控制显示 */
+    #thinking-stream {
+        display:none!important; height:0!important; min-height:0!important; max-height:0!important;
+        overflow:hidden!important; padding:0!important; margin:0!important;
+    }
+
+    .content-wrapper { width:100%!important; margin:0 auto!important; padding:0 12px!important; height:auto!important; min-height:0!important; }
+    .page { min-height:0!important; height:auto!important; }
+    .page.active { position:relative!important; min-height:0!important; height:auto!important; }
+    .page:not(.active) { position:absolute!important; visibility:hidden!important; pointer-events:none!important; display:none!important; }
+
+    /* 紧凑化 */
+    .content-card{padding:12px 14px!important;margin-bottom:10px!important;}
+    #demand-input{min-height:70px!important;max-height:110px!important;}
+    .page-header{padding-bottom:4px!important;margin-bottom:6px!important;}
+    .page-title{font-size:1rem!important;margin-bottom:2px!important;}
+    .page-subtitle{font-size:0.78rem!important;color:var(--text-secondary)!important;}
+
+    /* 移动端卡片红色上边框（竞品页标题header不加） */
+    #page-solution > .content-card,
+    #page-competitor > .content-card{
+        border-top: 3px solid var(--primary-color) !important;
+        border-left: none !important;
+    }
+    #page-competitor > .page-header {
+        border-left: none !important;
+    }
+    /* 页面切换：极轻上滑（10px→4px，0.25s→0.18s） */
+    .page {
+        transform: translateY(4px) !important;
+        opacity: 0 !important;
+        transition: opacity 0.18s ease, transform 0.18s ease !important;
+    }
+    .page.active {
+        transform: none !important;
+        opacity: 1 !important;
+    }
+    /* 内部卡片动画极轻：6px→3px，0.25s→0.2s */
+    .panel-default { animation: mobileFadeInUp 0.2s ease both !important; }
+    .progress-panel,
+    .kb-doc-card,
+    .dashboard-kpi-card,
+    .achievement-card,
+    .stat-card,
+    .glass-card,
+    .wizard-card,
+    .wizard-panel { animation: none !important; }
+    @keyframes mobileFadeInUp {
+        from { opacity: 0; transform: translateY(3px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+
+    /* 子页面独立导航条（返回按钮 + 标题，在header框外面） */
+    .mobile-sub-nav {
+        display: flex !important;
+        align-items: center;
+        gap: 0;
+        padding: 10px 12px;
+        background: var(--bg-elevated);
+        border-bottom: 1px solid var(--border-color);
+    }
+    .mobile-back-btn {
+        display: flex !important;
+        align-items: center;
+        border: none;
+        background: transparent;
+        color: var(--primary-color);
+        font-size: 0;
+        line-height: 1;
+        cursor: pointer;
+        padding: 6px 4px;
+        margin-right: 4px;
+    }
+    .mobile-back-btn svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .mobile-back-btn:active { opacity: 0.5; }
+    .mobile-sub-nav-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    /* 底部导航Tab隐藏顶部红色指示条 */
+    .mobile-nav-item.active::before { display: none !important; }
+
+    /* 手机端隐藏备案号 */
+    .mine-footer-icp { display: none !important; }
+
+    /* 我的页面底部信息沉到最下面 */
+    #page-mine.active {
+        display: flex !important;
+        flex-direction: column;
+        min-height: calc(100vh - 120px) !important;
+    }
+    #page-mine .mine-footer {
+        margin-top: auto;
+    }
+
+    /* 设置页选项紧凑化 */
+    #page-settings .setting-item {
+        padding: 8px 12px !important;
+        border-radius: 10px !important;
+        gap: 8px !important;
+    }
+    #page-settings .setting-label {
+        font-size: 0.85rem !important;
+    }
+    #page-settings .setting-desc {
+        font-size: 0.72rem !important;
+        margin-top: 1px !important;
+    }
+    #page-settings .settings-section {
+        padding: 12px !important;
+        margin-bottom: 8px !important;
+    }
+    #page-settings .settings-section-title {
+        font-size: 0.82rem !important;
+        margin-bottom: 8px !important;
+    }
+    /* 成就卡片一行3个 */
+    #page-achievement .achievement-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 8px !important;
+    }
+    #page-achievement .achievement-card {
+        padding: 10px 4px 8px !important;
+        border-radius: 10px !important;
+    }
+    #page-achievement .achievement-card .ach-icon {
+        font-size: 24px !important;
+        margin-bottom: 4px !important;
+    }
+    #page-achievement .achievement-card .ach-name {
+        font-size: 0.75rem !important;
+    }
+    #page-achievement .achievement-card .ach-desc {
+        display: none !important;
+    }
+</style>
+<script>
+// 移动端修复 v7：核弹——JS 计算精确像素高度硬锁
+(function(){
+    function lockMobile(){
+        if(window.innerWidth>767)return false;
+        var ih=window.innerHeight;
+        var tb=document.querySelector('.topbar');
+        var tbH=tb?tb.getBoundingClientRect().height:56;
+        var targetH=Math.floor(ih-tbH); // 精确到像素
+
+        // 每一层都硬设内联 style
+        document.documentElement.style.cssText='height:'+ih+'px!important;overflow:hidden!important';
+        document.body.style.cssText='height:'+ih+'px!important;min-height:0!important;overflow:hidden!important;margin:0!important;padding:0!important';
+        var shell=document.querySelector('.app-shell');
+        if(shell)shell.style.cssText='height:'+ih+'px!important;max-height:'+ih+'px!important;overflow:hidden!important;display:flex!important;flex-direction:column!important';
+        var am=document.querySelector('.app-main');
+        if(am)am.style.cssText='flex:1 1 0%!important;height:0!important;min-height:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important';
+
+        // ★ 核弹：main-content 高度精确锁定，不可被任何子元素撑破
+        var mc=document.querySelector('.main-content');
+        if(mc){
+            mc.style.height=targetH+'px!important';
+            mc.style.maxHeight=targetH+'px!important';
+            mc.style.minHeight='0!important';
+            mc.style.overflowY='auto!important';
+            mc.style.overflowX='clip!important';
+            mc.style.paddingBottom='60px!important';
+            mc.style.boxSizing='border-box!important';
+            mc.style.webkitOverflowScrolling='touch';
+        }
+
+        // 只隐藏 thinking-stream（493px留白元凶），进度/结果面板由业务JS控制
+        var ts=document.getElementById('thinking-stream');
+        if(ts)ts.style.setProperty('display','none','important');
+
+        return targetH;
+    }
+
+    // 执行
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',lockMobile);
+    else lockMobile();
+    window.addEventListener('resize',lockMobile);
+    window.addEventListener('orientationchange',function(){setTimeout(lockMobile,200)});
+})();
+
+
+// 移动端表格=>卡片自动转换（无需横滑，所有列一屏可见）
+(function(){
+    function transformTables(){
+        if(window.innerWidth>767)return;
+        var tables=document.querySelectorAll('.result-content table:not(.mobile-transformed)');
+        var tLen=tables.length;
+        for(var ti=0;ti<tLen;ti++){
+            var table=tables[ti];
+            var thList=table.querySelectorAll('thead th');
+            var headers=[];
+            var hLen=thList.length;
+            for(var hi=0;hi<hLen;hi++)headers.push(thList[hi].textContent.trim());
+            if(hLen===0){
+                var fths=table.querySelectorAll('tr:first-child th');
+                for(var fi=0;fi<fths.length;fi++)headers.push(fths[fi].textContent.trim());
+            }
+            var bodyRows=table.querySelectorAll('tbody tr');
+            if(bodyRows.length===0)bodyRows=table.querySelectorAll('tr');
+            if(bodyRows.length===0)continue;
+            var cWrap=document.createElement('div');
+            cWrap.className='mobile-table-cards';
+            for(var ri=0;ri<bodyRows.length;ri++){
+                var tr=bodyRows[ri];
+                var card=document.createElement('div');
+                card.className='mobile-table-card';
+                var tds=tr.querySelectorAll('td');
+                if(tds.length===0)tds=tr.querySelectorAll('th');
+                for(var di=0;di<tds.length;di++){
+                    var item=document.createElement('div');
+                    item.className='mobile-table-item';
+                    var lbl=document.createElement('span');
+                    lbl.className='mobile-table-label';
+                    lbl.textContent=headers[di]||('列'+(di+1));
+                    var val=document.createElement('div');
+                    val.className='mobile-table-value';
+                    val.innerHTML=tds[di].innerHTML;
+                    item.appendChild(lbl);
+                    item.appendChild(val);
+                    card.appendChild(item);
+                }
+                if(card.children.length>0)cWrap.appendChild(card);
+            }
+            if(cWrap.children.length>0){
+                table.classList.add('mobile-transformed');
+                table.parentNode.insertBefore(cWrap,table.nextSibling);
+            }
+        }
+    }
+
+    var _tTo=null;
+    function _sched(){clearTimeout(_tTo);_tTo=setTimeout(transformTables,150);}
+    var _obs=new MutationObserver(function(ml){for(var i=0;i<ml.length;i++){if(ml[i].addedNodes.length>0){_sched();break;}}});
+    if(document.body)_obs.observe(document.body,{childList:true,subtree:true});
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',transformTables);else transformTables();
+    window._transformMobileTables=_sched;
+})();
+</script>
+</body>
+</html>
