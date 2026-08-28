@@ -117,11 +117,11 @@ class KnowledgeBaseService:
 
         abs_dir = os.path.abspath(directory)
         if not os.path.exists(abs_dir):
-            print(f"[重建] [WARN] 目录不存在: {abs_dir}")
+            logger.info(f'[重建] [WARN] 目录不存在: {abs_dir}')
             return []
 
         label = f"[{dir_label}]" if dir_label else ""
-        print(f"[重建] {label} 加载文档目录: {abs_dir}")
+        logger.info(f'[重建] {label} 加载文档目录: {abs_dir}')
 
         loader = DocumentLoader()
         raw_docs = []
@@ -135,21 +135,21 @@ class KnowledgeBaseService:
                             d.metadata["_kb_src"] = fpath  # 真实源文件路径（含行业子目录，唯一）
                         raw_docs.extend(loaded)
                     except Exception as e:
-                        print(f"[重建] 加载失败 {fpath}: {e}")
+                        logger.info(f'[重建] 加载失败 {fpath}: {e}')
 
         if raw_docs:
-            print(f"[重建] {label} 加载到 {len(raw_docs)} 个原始文档")
+            logger.info(f'[重建] {label} 加载到 {len(raw_docs)} 个原始文档')
             subdirs = [d for d in os.listdir(abs_dir) if os.path.isdir(os.path.join(abs_dir, d))]
             if subdirs:
-                print(f"[重建] {label} 包含 {len(subdirs)} 个子目录: {', '.join(subdirs[:5])}{'...' if len(subdirs) > 5 else ''}")
+                logger.info(f"[重建] {label} 包含 {len(subdirs)} 个子目录: {', '.join(subdirs[:5])}{('...' if len(subdirs) > 5 else '')}")
         else:
-            print(f"[重建] {label} [WARN] 未加载到任何文档片段")
+            logger.info(f'[重建] {label} [WARN] 未加载到任何文档片段')
 
         # 切分为 chunk（与 load_documents_from_directory 行为一致）
         splitter = get_splitter("recursive", chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
         docs = splitter.split(raw_docs) if raw_docs else []
         if docs:
-            print(f"[重建] {label} 分割为 {len(docs)} 个文档片段")
+            logger.info(f'[重建] {label} 分割为 {len(docs)} 个文档片段')
 
         return docs
 
@@ -166,7 +166,7 @@ class KnowledgeBaseService:
                 if isinstance(data, dict) and 'files' in data:
                     return data
             except Exception as e:
-                print(f"[增量][WARN] manifest 解析失败，将走全量重建: {e}")
+                logger.info(f'[增量][WARN] manifest 解析失败，将走全量重建: {e}')
         return {"version": 1, "files": {}}
 
     def _save_manifest(self, data):
@@ -177,7 +177,7 @@ class KnowledgeBaseService:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             os.replace(tmp, p)  # 原子替换，避免写一半损坏
         except Exception as e:
-            print(f"[增量][WARN] manifest 写入失败（不影响本次重建）: {e}")
+            logger.info(f'[增量][WARN] manifest 写入失败（不影响本次重建）: {e}')
 
     def _file_manifest_key(self, file_path, category):
         base = os.path.abspath(self._get_doc_base_dir(category))
@@ -229,11 +229,11 @@ class KnowledgeBaseService:
             if os.path.exists(competitor_dir):
                 competitor_docs = self._load_docs_from_dir(competitor_dir, "竞品方案")
             else:
-                print(f"[重建] [WARN] 竞品目录不存在，跳过: {competitor_dir}")
+                logger.info(f'[重建] [WARN] 竞品目录不存在，跳过: {competitor_dir}')
 
             all_documents = huawei_docs + competitor_docs
             if not all_documents:
-                print("[重建] [ERR] 未加载到任何文档！请检查目录结构")
+                logger.info('[重建] [ERR] 未加载到任何文档！请检查目录结构')
                 return 0
 
             # 2. 按源文件分组，计算内容哈希
@@ -289,7 +289,7 @@ class KnowledgeBaseService:
                                     os.rmdir(parent)
                                     parent = nxt
                             except Exception as e:
-                                print(f"[增量][WARN] 修剪删除磁盘文件失败 {fp}: {e}")
+                                logger.info(f'[增量][WARN] 修剪删除磁盘文件失败 {fp}: {e}')
                         ids = old_files.get(key, {}).get('chunk_ids', [])
                         if ids:
                             try:
@@ -297,7 +297,7 @@ class KnowledgeBaseService:
                             except Exception:
                                 pass
                         current.pop(key, None)
-                        print(f"[增量] 修剪上游已删除文件: {key}")
+                        logger.info(f'[增量] 修剪上游已删除文件: {key}')
 
             # 切分参数指纹：CHUNK_SIZE/CHUNK_OVERLAP 改变会改变 chunk 边界，
             # 旧向量按旧边界切分，与新向量混排会 silently 拉低检索质量（不报错但劣化）。
@@ -305,15 +305,14 @@ class KnowledgeBaseService:
             cur_chunk_params = f"{CHUNK_SIZE}-{CHUNK_OVERLAP}"
             old_chunk_params = old.get('chunk_params')
             if old_chunk_params is not None and old_chunk_params != cur_chunk_params:
-                print(f"[增量][参数变更] 切分参数 {old_chunk_params} → {cur_chunk_params}，"
-                      f"旧 chunk 边界失效，强制全量重建...")
+                logger.info(f'[增量][参数变更] 切分参数 {old_chunk_params} → {cur_chunk_params}，旧 chunk 边界失效，强制全量重建...')
                 try:
                     existing = self.vector_db.get()
                     existing_ids = existing.get('ids', [])
                     if existing_ids:
                         self.vector_db.delete(ids=existing_ids)
                 except Exception as e:
-                    print(f"[增量][WARN] 参数变更清理失败（忽略）: {e}")
+                    logger.info(f'[增量][WARN] 参数变更清理失败（忽略）: {e}')
                 old_files = {}  # 全部进入 to_rebuild
 
             # 兼容旧版：无 manifest 但集合已有向量 → 先全量清理（一次性迁移）
@@ -322,10 +321,10 @@ class KnowledgeBaseService:
                     existing = self.vector_db.get()
                     existing_ids = existing.get('ids', [])
                     if existing_ids:
-                        print(f"[增量][迁移] 检测到旧版向量库（{len(existing_ids)} 条），清理后按确定性 id 重建...")
+                        logger.info(f'[增量][迁移] 检测到旧版向量库（{len(existing_ids)} 条），清理后按确定性 id 重建...')
                         self.vector_db.delete(ids=existing_ids)
                 except Exception as e:
-                    print(f"[增量][WARN] 迁移清理失败（忽略）: {e}")
+                    logger.info(f'[增量][WARN] 迁移清理失败（忽略）: {e}')
 
             to_keep, to_rebuild = set(), {}
             for key, info in current.items():
@@ -341,9 +340,9 @@ class KnowledgeBaseService:
                 if ids:
                     try:
                         self.vector_db.delete(ids=ids)
-                        print(f"[增量] 清理已移除文件: {key} ({len(ids)} 片段)")
+                        logger.info(f'[增量] 清理已移除文件: {key} ({len(ids)} 片段)')
                     except Exception as e:
-                        print(f"[增量][WARN] 清理失败 {key}: {e}")
+                        logger.info(f'[增量][WARN] 清理失败 {key}: {e}')
 
             # 5. 重建变更 / 新增文件（仅这部分需要 CPU embedding）
             new_files = {k: dict(old_files[k]) for k in to_keep}
@@ -374,10 +373,10 @@ class KnowledgeBaseService:
                         source_huawei if key.startswith('h:') else source_competitor, key[2:]))
                     origin = 'system' if in_source else 'user'
                     new_files[key] = {"hash": info['hash'], "chunk_ids": ids, "origin": origin}
-                    print(f"[增量] 重建: {key} ({n} 片段, origin={origin})")
+                    logger.info(f'[增量] 重建: {key} ({n} 片段, origin={origin})')
                 except Exception as e:
                     # 单文件失败隔离：跳过并下次重试，不中断整个重建、不产生中间态崩溃
-                    print(f"[增量][WARN] 文件重建失败（跳过，下次同步重试）: {key}: {e}")
+                    logger.info(f'[增量][WARN] 文件重建失败（跳过，下次同步重试）: {key}: {e}')
                     import traceback; traceback.print_exc()
 
             # 6. 持久化 manifest（含切分参数指纹，供下次检测参数变更）
@@ -389,16 +388,15 @@ class KnowledgeBaseService:
             )
 
             total_fragments = sum(len(v.get('chunk_ids', [])) for v in new_files.values())
-            print(f"[重建][OK] 增量完成：保留 {len(to_keep)} 个未变文件，重建 {len(to_rebuild)} 个变更文件，"
-                  f"删除 {len(to_delete)} 个已移除文件，当前共 {total_fragments} 个片段")
+            logger.info(f'[重建][OK] 增量完成：保留 {len(to_keep)} 个未变文件，重建 {len(to_rebuild)} 个变更文件，删除 {len(to_delete)} 个已移除文件，当前共 {total_fragments} 个片段')
             return total_fragments
 
         except ImportError as e:
-            print(f"[重建] [ERR] 导入失败: {e}")
+            logger.info(f'[重建] [ERR] 导入失败: {e}')
             import traceback; traceback.print_exc()
             return 0
         except Exception as e:
-            print(f"[重建] [ERR] 构建知识库失败: {e}")
+            logger.info(f'[重建] [ERR] 构建知识库失败: {e}')
             import traceback; traceback.print_exc()
             return 0
 
@@ -429,17 +427,17 @@ class KnowledgeBaseService:
         try:
             # 1. 复制华为方案文档
             if os.path.exists(src_huawei):
-                print(f"[用户{user_id}] 复制华为方案: {src_huawei} → {dst_huawei}")
+                logger.info(f'[用户{user_id}] 复制华为方案: {src_huawei} → {dst_huawei}')
                 shutil.copytree(src_huawei, dst_huawei, dirs_exist_ok=True)
 
             # 2. 复制竞品文档
             if os.path.exists(src_competitor):
-                print(f"[用户{user_id}] 复制竞品方案: {src_competitor} → {dst_competitor}")
+                logger.info(f'[用户{user_id}] 复制竞品方案: {src_competitor} → {dst_competitor}')
                 shutil.copytree(src_competitor, dst_competitor, dirs_exist_ok=True)
 
             # 3. 复制向量数据库
             if os.path.exists(src_vectordb):
-                print(f"[用户{user_id}] 复制向量库: {src_vectordb} → {dst_vectordb}")
+                logger.info(f'[用户{user_id}] 复制向量库: {src_vectordb} → {dst_vectordb}')
                 shutil.copytree(src_vectordb, dst_vectordb, dirs_exist_ok=True)
                 # 注意：ChromaDB 的 SQLite 文件中有绝对路径引用，但使用 persist_directory 参数可以正常加载
 
@@ -447,14 +445,14 @@ class KnowledgeBaseService:
             try:
                 kb = KnowledgeBaseService(user_id=user_id)
                 stats = kb.get_stats()
-                print(f"[用户{user_id}] 复制完成，共 {stats.get('total_documents', 0)} 个向量片段")
+                logger.info(f"[用户{user_id}] 复制完成，共 {stats.get('total_documents', 0)} 个向量片段")
             except Exception as verify_err:
-                print(f"[用户{user_id}] [WARN] 验证知识库失败（可忽略，后续使用时自动修正）: {verify_err}")
+                logger.info(f'[用户{user_id}] [WARN] 验证知识库失败（可忽略，后续使用时自动修正）: {verify_err}')
 
             return True
 
         except Exception as e:
-            print(f"[用户{user_id}] [ERR] 复制知识库失败: {e}")
+            logger.info(f'[用户{user_id}] [ERR] 复制知识库失败: {e}')
             import traceback; traceback.print_exc()
             # 失败时清理部分复制的目录
             if os.path.exists(user_base):
@@ -699,9 +697,9 @@ class KnowledgeBaseService:
                         industry_counts[industry] = count
                         total_files += count
                         if count > 0:
-                            print(f"[OK] {industry}: {count} 个文档")
+                            logger.info(f'[OK] {industry}: {count} 个文档')
                     except Exception as e:
-                        print(f"[WARN] 读取 {industry} 目录失败: {e}")
+                        logger.info(f'[WARN] 读取 {industry} 目录失败: {e}')
                         industry_counts[industry] = 0
                 else:
                     industry_counts[industry] = 0
@@ -736,13 +734,13 @@ class KnowledgeBaseService:
             accuracy = base_accuracy + industry_bonus + doc_bonus + competitor_bonus
             accuracy = min(accuracy, 95)
 
-            print(f"\n[STATS] 知识库统计 (user_id={self.user_id}):")
-            print(f"  - 总文档片段数: {total_documents}")
-            print(f"  - 华为方案文件数: {total_files}")
-            print(f"  - 竞品文件数: {total_competitor_files} (覆盖{len(competitor_companies)}家竞品)")
-            print(f"  - 覆盖行业数: {len(supported_industries)}")
-            print(f"  - 覆盖行业: {', '.join(supported_industries) if supported_industries else '无'}")
-            print(f"  - 方案覆盖度: {accuracy}%\n")
+            logger.info(f'\n[STATS] 知识库统计 (user_id={self.user_id}):')
+            logger.info(f'  - 总文档片段数: {total_documents}')
+            logger.info(f'  - 华为方案文件数: {total_files}')
+            logger.info(f'  - 竞品文件数: {total_competitor_files} (覆盖{len(competitor_companies)}家竞品)')
+            logger.info(f'  - 覆盖行业数: {len(supported_industries)}')
+            logger.info(f"  - 覆盖行业: {(', '.join(supported_industries) if supported_industries else '无')}")
+            logger.info(f'  - 方案覆盖度: {accuracy}%\n')
 
             return {
                 "total_documents": total_documents,
@@ -755,7 +753,7 @@ class KnowledgeBaseService:
                 "accuracy": accuracy
             }
         except Exception as e:
-            print(f"[ERR] 统计失败: {e}")
+            logger.info(f'[ERR] 统计失败: {e}')
             import traceback
             traceback.print_exc()
             return {
@@ -932,7 +930,7 @@ class KnowledgeBaseService:
                 ids = self._chunk_ids_for_file(file_path, category, len(chunks))
                 self.vector_db.add_documents(chunks, ids=ids)
                 self._manifest_upsert_file(file_path, category, ids)
-                print(f"[索引] {os.path.basename(file_path)} → {len(chunks)} 个向量片段")
+                logger.info(f'[索引] {os.path.basename(file_path)} → {len(chunks)} 个向量片段')
             return len(chunks)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -950,10 +948,10 @@ class KnowledgeBaseService:
                         self.vector_db.delete(ids=ids)
                         removed += len(ids)
                     except Exception as e:
-                        print(f"[索引] 删除向量失败 {file_path}: {e}")
+                        logger.info(f'[索引] 删除向量失败 {file_path}: {e}')
                 m['files'].pop(key, None)
                 self._save_manifest(m)
-                print(f"[索引] 已移除 {os.path.basename(file_path)}: {len(ids)} 个向量（manifest）")
+                logger.info(f'[索引] 已移除 {os.path.basename(file_path)}: {len(ids)} 个向量（manifest）')
                 return removed
         # 兜底：按 source 文件名匹配（兼容旧版自动 uuid 向量 / 未传 category 的场景）
         try:
@@ -966,10 +964,10 @@ class KnowledgeBaseService:
             if ids_to_remove:
                 self.vector_db.delete(ids=ids_to_remove)
                 removed += len(ids_to_remove)
-                print(f"[索引] 已移除 {filename}: {len(ids_to_remove)} 个向量")
+                logger.info(f'[索引] 已移除 {filename}: {len(ids_to_remove)} 个向量')
             return removed
         except Exception as e:
-            print(f"[索引] 移除向量失败 {file_path}: {e}")
+            logger.info(f'[索引] 移除向量失败 {file_path}: {e}')
             return removed
 
 

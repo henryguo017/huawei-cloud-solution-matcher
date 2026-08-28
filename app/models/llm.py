@@ -328,7 +328,7 @@ async def test_llm_connection(provider: str = None) -> bool:
         provider_instance = LLMFactory.create(provider)
         return await provider_instance.test_connection()
     except Exception as e:
-        print(f"连接测试失败: {e}")
+        logger.info(f'连接测试失败: {e}')
         return False
 
 
@@ -348,7 +348,7 @@ def _load_embedding_model():
 
         local_path = EMBEDDING_MODEL_LOCAL_PATH
         if os.path.exists(local_path) and os.path.exists(os.path.join(local_path, "config.json")):
-            print(f"[OK] 使用本地向量模型: {local_path}")
+            logger.info(f'[OK] 使用本地向量模型: {local_path}')
             _local_embedding_model = SentenceTransformer(local_path)
             return _local_embedding_model
 
@@ -360,21 +360,21 @@ def _load_embedding_model():
                 "2. 或设置 OFFLINE_MODE=false 允许在线下载"
             )
 
-        print(f"[...] 正在下载向量模型: {EMBEDDING_MODEL_NAME}")
-        print(f"[TIP] 使用国内镜像: {HF_ENDPOINT}")
+        logger.info(f'[...] 正在下载向量模型: {EMBEDDING_MODEL_NAME}')
+        logger.info(f'[TIP] 使用国内镜像: {HF_ENDPOINT}')
         _local_embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-        print("[OK] 向量模型加载完成!")
+        logger.info('[OK] 向量模型加载完成!')
 
         try:
             _local_embedding_model.save(local_path)
-            print(f"[OK] 模型已缓存到: {local_path}")
+            logger.info(f'[OK] 模型已缓存到: {local_path}')
         except:
             pass
 
         return _local_embedding_model
 
     except Exception as e:
-        print(f"[WARN] 向量模型加载失败: {e}")
+        logger.info(f'[WARN] 向量模型加载失败: {e}')
         return None
 
 
@@ -435,30 +435,30 @@ def get_embeddings() -> LocalEmbeddings:
 
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("LLM服务测试")
-    print("=" * 50)
+    logger.info('=' * 50)
+    logger.info('LLM服务测试')
+    logger.info('=' * 50)
 
-    print(f"\n支持的LLM提供商: {LLMFactory.get_supported_providers()}")
-    print(f"当前LLM提供商: {LLM_PROVIDER}")
+    logger.info(f'\n支持的LLM提供商: {LLMFactory.get_supported_providers()}')
+    logger.info(f'当前LLM提供商: {LLM_PROVIDER}')
 
     async def _test():
         try:
             if await test_llm_connection():
-                print(f"[OK] {LLM_PROVIDER} 连接测试成功")
+                logger.info(f'[OK] {LLM_PROVIDER} 连接测试成功')
                 res = await get_llm_response("你好，请简短回复")
-                print(f"[OK] 对话测试成功: {res[:50]}...")
+                logger.info(f'[OK] 对话测试成功: {res[:50]}...')
             else:
-                print(f"[FAIL] {LLM_PROVIDER} 连接测试失败")
+                logger.info(f'[FAIL] {LLM_PROVIDER} 连接测试失败')
         except Exception as e:
-            print(f"[FAIL] 测试失败: {e}")
+            logger.info(f'[FAIL] 测试失败: {e}')
 
-        print("\n" + "=" * 50)
-        print("向量模型测试")
-        print("=" * 50)
+        logger.info('\n' + '=' * 50)
+        logger.info('向量模型测试')
+        logger.info('=' * 50)
 
         vec = get_embedding_vector("测试文本")
-        print(f"[OK] 向量维度: {len(vec)}")
-        print("\n[DONE] 全部测试完成!")
+        logger.info(f'[OK] 向量维度: {len(vec)}')
+        logger.info('\n[DONE] 全部测试完成!')
 
     asyncio.run(_test())

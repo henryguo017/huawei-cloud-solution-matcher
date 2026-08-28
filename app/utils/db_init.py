@@ -236,7 +236,7 @@ def init_database():
     conn.commit()
     conn.close()
     
-    print("[OK] Database initialized successfully")
+    logger.info('[OK] Database initialized successfully')
     return True
 
 def init_admin_user():

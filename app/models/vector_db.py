@@ -2,6 +2,8 @@ from app.models.llm import get_embeddings
 from langchain_community.vectorstores import Chroma
 from app.config import *
 
+import logging
+logger = logging.getLogger(__name__)
 def get_vector_db(embeddings, persist_directory=VECTOR_DB_PERSIST_DIRECTORY):
     """
     获取向量数据库实例
@@ -36,12 +38,12 @@ if __name__ == "__main__":
 
         # 检索测试
         search_res = db.similarity_search("农业", k=1)
-        print("✅ 向量数据库适配DeepSeek测试成功")
-        print("检索结果：", search_res[0].page_content)
+        logger.info('✅ 向量数据库适配DeepSeek测试成功')
+        logger.info(" ".join(map(str, ['检索结果：', search_res[0].page_content])))
 
         # 清空测试数据
         db.delete_collection()
 
     except Exception as e:
-        print("❌ 向量库测试失败")
-        print("报错：", str(e))
+        logger.info('❌ 向量库测试失败')
+        logger.info(" ".join(map(str, ['报错：', str(e)])))

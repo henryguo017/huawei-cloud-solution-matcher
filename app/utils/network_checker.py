@@ -11,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.config import DETECTION_TIMEOUT
 
+import logging
+logger = logging.getLogger(__name__)
 
 @dataclass
 class EndpointStatus:
@@ -219,9 +221,9 @@ def print_network_report(report: NetworkReport = None):
     if report is None:
         report = detect_network_environment()
     
-    print("=" * 60)
-    print("网络环境检测报告")
-    print("=" * 60)
+    logger.info('=' * 60)
+    logger.info('网络环境检测报告')
+    logger.info('=' * 60)
     
     endpoints = [
         ("DeepSeek API", report.deepseek_api),
@@ -231,35 +233,35 @@ def print_network_report(report: NetworkReport = None):
         ("HuggingFace 镜像", report.huggingface_mirror),
     ]
     
-    print("\n[端点状态]")
+    logger.info('\n[端点状态]')
     for name, status in endpoints:
         if status.accessible:
-            print(f"  [OK] {name}: {status.response_time:.0f}ms")
+            logger.info(f'  [OK] {name}: {status.response_time:.0f}ms')
         else:
-            print(f"  [FAIL] {name}: {status.error_message}")
+            logger.info(f'  [FAIL] {name}: {status.error_message}')
     
-    print("\n[配置建议]")
+    logger.info('\n[配置建议]')
     for suggestion in report.suggestions:
-        print(f"  {suggestion}")
+        logger.info(f'  {suggestion}')
     
-    print("\n[可用提供商]")
+    logger.info('\n[可用提供商]')
     providers = report.get_available_providers()
     if providers:
         for p in providers:
-            print(f"  - {p}")
+            logger.info(f'  - {p}')
     else:
-        print("  (无)")
+        logger.info('  (无)')
     
-    print("=" * 60)
+    logger.info('=' * 60)
     
     return report
 
 
 if __name__ == "__main__":
-    print("正在检测网络环境...\n")
+    logger.info('正在检测网络环境...\n')
     report = print_network_report()
     
     if report.is_usable():
-        print("\n[OK] 系统可以正常运行!")
+        logger.info('\n[OK] 系统可以正常运行!')
     else:
-        print("\n[FAIL] 系统无法运行，请根据上述建议进行配置")
+        logger.info('\n[FAIL] 系统无法运行，请根据上述建议进行配置')

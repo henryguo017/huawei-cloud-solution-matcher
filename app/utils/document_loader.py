@@ -2,6 +2,8 @@ import os
 from app.knowledge.loaders import get_loader
 from app.knowledge.splitters import get_splitter
 
+import logging
+logger = logging.getLogger(__name__)
 class DocumentLoader:
     """文档加载工具类（委托给 app.knowledge 策略族，对外接口不变）
 
@@ -35,9 +37,9 @@ class DocumentLoader:
                     try:
                         documents = self.load_single_file(file_path)
                         all_documents.extend(documents)
-                        print(f"成功加载: {file_path}")
+                        logger.info(f'成功加载: {file_path}')
                     except Exception as e:
-                        print(f"加载失败: {file_path}, 错误: {e}")
+                        logger.info(f'加载失败: {file_path}, 错误: {e}')
         
         return all_documents
     
@@ -57,11 +59,11 @@ def load_documents_from_directory(directory, chunk_size=1000, chunk_overlap=200)
 
     raw_docs = loader.load_directory(directory)
     if not raw_docs:
-        print(f"[WARN] 目录 {directory} 下未找到任何支持的文件(.txt/.pdf)")
+        logger.info(f'[WARN] 目录 {directory} 下未找到任何支持的文件(.txt/.pdf)')
         return []
 
     chunks = loader.split_documents(raw_docs)
-    print(f"[OK] 加载 {len(raw_docs)} 个原始文档 → 分割为 {len(chunks)} 个chunk (chunk_size={chunk_size}, overlap={chunk_overlap})")
+    logger.info(f'[OK] 加载 {len(raw_docs)} 个原始文档 → 分割为 {len(chunks)} 个chunk (chunk_size={chunk_size}, overlap={chunk_overlap})')
     return chunks
 
 
@@ -82,15 +84,15 @@ if __name__ == "__main__":
         documents = loader.load_directory("./test_docs")
         splits = loader.split_documents(documents)
         
-        print("文档加载工具测试成功！")
-        print(f"加载文档数: {len(documents)}")
-        print(f"分割后块数: {len(splits)}")
-        print(f"第一个块内容: {splits[0].page_content}")
-        print(f"第一个块元数据: {splits[0].metadata}")
+        logger.info('文档加载工具测试成功！')
+        logger.info(f'加载文档数: {len(documents)}')
+        logger.info(f'分割后块数: {len(splits)}')
+        logger.info(f'第一个块内容: {splits[0].page_content}')
+        logger.info(f'第一个块元数据: {splits[0].metadata}')
         
         # 清理测试文件
         import shutil
         shutil.rmtree("./test_docs")
         
     except Exception as e:
-        print(f"文档加载工具测试失败: {e}")
+        logger.info(f'文档加载工具测试失败: {e}')
