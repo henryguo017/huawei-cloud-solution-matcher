@@ -1,0 +1,33 @@
+# AWS智慧零售解决方案
+
+## 公司概况
+AWS 依托亚马逊电商与无人店技术，为零售商提供个性化、全渠道商务、智能门店与数据分析方案，含 AWS 原生服务（Amazon Personalize）与可对外输出技术（Just Walk Out、Amazon One）。
+
+## 智慧零售核心方案
+
+### 1. 个性化推荐（Amazon Personalize）
+- 实时推荐与排序，可度量对转化率/客单价的影响；SageMaker 支撑需求预测与客户分群。
+
+### 2. 无人结账与智能门店
+- Just Walk Out 融合 AI、计算机视觉、传感器融合与 RFID，实现“拿了就走”无感结账，用于 Amazon Go/Fresh/Whole Foods 及场馆、机场等第三方门店；Just Walk Out Analytics 提供客流、商品关联与货架效率洞察。
+- 智能门店方案含 POS 上云、店内视频分析。
+
+### 3. 组合式电商（Composable Commerce）
+- 以微服务、容器、API Gateway、AppSync 解耦目录/购物车/支付/个性化；支持直播电商（Amazon IVS）、AR/VR 3D 商品可视化（Hexa、Obsess 虚拟门店）。
+
+### 4. 客户数据平台
+- CDP/Customer 360 整合联络中心、邮件、Web/App、POS、CRM 数据形成统一档案；Amazon Connect 云联络中心结合对话式 AI 智能路由。
+
+## 竞争优势
+- 源自亚马逊一线零售实践，Just Walk Out、推荐等技术经真实规模化验证；全链路能力完整，AI/ML 工具链成熟；全球伙伴生态完善。
+
+## 主要客户案例（仅可核实）
+- Daiso（日本大创）：无服务器集中式 POS 数据处理系统与数据分析工具。
+- 伦敦 ExCeL 的 Market Express 借助 Just Walk Out，繁忙时段服务客户数提升约 3 倍、年度营收增长约 56%（AWS 公开案例）。
+- 另披露 Neiman Marcus、ALDO、Sainsbury's、Zappos、Morrisons 等为客户。
+
+## 核心劣势（中国市场）
+- 大量前沿零售/生成式AI服务仅限海外区域，中国区不开放或仅作“出海推荐”，本土零售商无法直接使用。
+- 中国零售云由阿里云、腾讯云主导，本土生态与支付/小程序链路深度绑定，AWS 缺乏本地化商务生态。
+- Just Walk Out 属亚马逊自有体系，对外授权与落地受限，难作通用零售 SaaS 大规模输出。
+- 中国大陆无本地公有云直接运营（依赖光环新网/西云数据），数据驻留与合规不及本土厂商。

@@ -1,0 +1,43 @@
+# Oracle Cloud智慧金融解决方案
+
+## 公司概况
+Oracle在金融行业拥有数十年根基，全球绝大多数银行的存款、贷款、支付与核心系统运行在Oracle数据库之上。其金融服务能力由三大支柱构成：核心银行系统Oracle FLEXCUBE、Oracle Financial Services（OFS）风险与合规套件，以及Oracle Cloud Infrastructure（OCI）与自治数据库。2025年，Oracle继续以"云上核心银行"为重点，推动FLEXCUBE在OCI上的现代化部署。
+
+## 智慧金融核心方案
+
+### 1. Oracle FLEXCUBE Universal Banking
+- 全球领先的核心银行系统，覆盖零售银行、企业银行、SME、伊斯兰银行与微型金融等全业务线
+- 支持多实体、多租户、多国家、多语言运营，内置符合各地区监管要求的本地化集群（含中国集群）
+- 提供24x7不间断银行业务与零停机升级能力，交易处理兼顾实时与批处理
+- 预集成机器学习适配器与NLP框架，驱动后台自动化；开放REST API库、集成中心，原生支持SAML 2.0与ISO 20022报文标准
+
+### 2. Oracle Banking 数字化套件
+- Oracle Banking Origination：无缝开户与贷款发起，加速信贷决策与审批
+- Oracle Banking Digital Experience：跨渠道统一数字客户体验
+- Oracle Banking Payments：统一支付处理平台，支持多网络、多币种实时清算与对账
+- Oracle Banking Branch：网点转型与客户关系深化
+
+### 3. Oracle Financial Services（OFS）风险与合规
+- 风险控制覆盖Basel III/IV资本充足率、IFRS 9预期信用损失、反洗钱（AML）与反欺诈
+- 金融犯罪与合规监控、流动性与资本管理、财务数据平台与监管报送
+- 面向保险、资本市场的投后运营与资金集中管理
+
+### 4. OCI与自治数据库金融底座
+- Exadata与Oracle Autonomous Database提供金融级高可用、弹性扩展与自动化运维
+- OCI支持多云互联（如OCI-Azure、OCI-GCP）与主权云部署，满足数据驻留要求
+- 数据库即服务降低容灾与备份复杂度，适配核心交易与实时分析混合负载
+
+## 竞争优势
+- 全球银行核心系统的事实标准，客户迁移成本高、黏性强
+- 数据库与自治技术积累深厚，金融级稳定与安全能力领先
+- 覆盖核心、风险、支付、数字渠道的全栈产品组合，合规经验覆盖多国监管
+
+## 主要客户案例
+- Unico Housing Finance：将FLEXCUBE部署于OCI，借云降低运营成本并提升可用性（Oracle官方披露案例）
+- 全球大量银行的存款、贷款与支付系统以Oracle数据库为底座，FLEXCUBE在新兴市场与伊斯兰银行领域份额领先
+
+## 核心劣势（中国市场）
+- 金融"信创"去"IOE"（IBM/Oracle/EMC）趋势明确，国有大行与股份行加速以国产数据库（如OceanBase、GaussDB、TiDB）替换Oracle
+- 中国本土银行核心系统由长亮、神码、中电金信等厂商主导，FLEXCUBE本地化适配与实施生态偏弱
+- 许可证与订阅模式复杂、总体拥有成本偏高，对中小金融机构门槛较高
+- 云IaaS全球份额远小于AWS、Azure、Google Cloud，在中国大陆缺乏本地数据中心与政企合规通道

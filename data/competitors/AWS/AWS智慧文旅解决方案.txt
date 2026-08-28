@@ -1,0 +1,44 @@
+# AWS智慧文旅解决方案
+
+## 公司概况
+AWS通过"AWS for Travel & Hospitality"专属方案与丰富的云服务组合，为全球旅游、酒店、航空、景区和文化机构提供数字化转型支持，覆盖零售与个性化、互联体验、客户服务、优化核心业务、优化IT与可持续性等方向。官方披露，Hyatt通过个性化推荐实现近4000万美元的营收提升，United Airlines将忠诚度计划游戏化，印证了其在文旅场景的落地能力。
+
+## 智慧文旅核心方案
+
+### 1. AWS for Travel & Hospitality 旅游酒店专属方案
+- 专为旅游与酒店行业设计的云解决方案框架，覆盖航空、酒店、在线旅游平台(OTA)、景区等全旅游产业链
+- 提供行业参考架构与最佳实践，联合AWS Partner Network(APN)中的旅游科技伙伴提供端到端方案
+
+### 2. Amazon Personalize 旅游个性化推荐
+- 基于机器学习的全托管个性化推荐服务，无需ML经验即可使用
+- 为游客提供个性化景点、行程、酒店与餐饮推荐，并基于用户行为实时动态优化
+
+### 3. Unified Profiles for Travelers and Guests 统一旅客画像
+- 从预订、住宿、忠诚度等系统中整合旅客/宾客数据，构建统一画像
+- 结合Amazon Personalize与Amazon Bedrock，生成超个性化(hyperpersonalized)营销内容，并通过SMS、WhatsApp、邮件、推送精准触达
+
+### 4. Amazon Connect 与 Amazon Lex 智能客服
+- Amazon Connect：全渠道云联络中心，支撑语音、聊天、短信等多方式游客服务
+- Amazon Lex：基于Alexa同名技术的对话式AI，构建景区导览、酒店前台与旅游咨询机器人
+
+### 5. AWS 数据分析与媒体服务
+- Amazon Redshift/Athena/QuickSight：旅客行为分析、游客画像与旅游趋势BI
+- Amazon CloudFront与AWS Elemental：文旅内容全球分发与高清/4K视频、景区直播加速
+
+## 竞争优势
+- 全球覆盖的云基础设施，适配跨国旅游企业与出境游场景
+- 机器学习服务成熟，个性化推荐与智能客服能力领先
+- 拥有United Airlines、Hyatt、G6 Hospitality、Braze等全球文旅客户，生态完善(含AWS Marketplace旅游应用)
+
+## 主要客户案例
+- Hyatt Hotels：通过Amazon Personalize个性化推荐，实现近4000万美元营收提升
+- United Airlines：利用机器学习规模化个性化，并将里程兑换忠诚度计划游戏化
+- G6 Hospitality：基于AWS为宾客提供无缝、互联且更个性化的体验并降低成本
+- Braze：借助多项AWS服务（存储、计算、ML）为客户提供个性化客户互动
+- 多家全球航空公司与酒店集团采用AWS进行数字化转型（典型行业实践，不对未核实企业名做具体引用）
+
+## 核心劣势（中国市场）
+- 中国本土旅游企业（携程、美团、飞猪等）主要使用国内云服务
+- 数据跨境合规限制，难以满足中国文旅数据本地化存储与出境要求
+- 与国内文旅场景（健康码、预约入园、文旅融合等）适配不足，缺乏微信、支付宝等本地化集成
+- 中国区服务目录有限，上述个性化与生成式AI营销能力多在海外区域提供，面临阿里云、腾讯云等本土厂商强竞争

@@ -1,0 +1,45 @@
+# 微软Azure智慧政务解决方案
+
+## 公司概况
+微软面向公共部门提供Azure Government、Microsoft 365 Government（GCC/GCC High/DoD）、Dynamics 365 Government与Microsoft Security等合规云服务，主要服务于美国联邦、州及地方政府机构，覆盖国防部、退伍军人事务部、小企业管理局等。需要说明的是，Azure Government为美国专属主权云，并不在中国大陆提供。
+
+## 智慧政务核心方案
+
+### 1. Azure Government 政府专属云
+- 物理隔离的Azure实例，专为美国政府构建，由经筛选的美国公民运营
+- 提供FedRAMP High、DoD Impact Level 4/5合规，支持CJIS、IRS 1075、HIPAA
+- 覆盖从商业云到机密级（Azure Government Secret/Top Secret）的全数据分级算力
+
+### 2. Microsoft 365 Government 政务协同
+- GCC/GCC High/DoD多档合规办公套件，含Teams、SharePoint、Office
+- Microsoft 365 Copilot for Government基于机构安全数据提升办公效率
+- Copilot Studio for US Government构建安全合规的低代码AI代理
+
+### 3. Dynamics 365 Government 政务业务应用
+- 现代化案件管理、项目与公共服务运营
+- 与Power Platform结合，实现政务流程自动化与公民服务数字化
+
+### 4. Microsoft Security 零信任安全
+- Entra、Purview、Defender等集成零信任架构，保护身份、端点与敏感数据
+- 满足政府数据分类与审计要求
+
+### 5. AI for Government（Microsoft Foundry / Azure OpenAI）
+- 在合规云上构建负责任的政务AI，自动化任务、生成洞察
+- 例如警方报告生成、福利案例管理等场景落地
+
+## 竞争优势
+- 美国政府云合规资质完备（FedRAMP、DoD IL5等），主权云物理隔离
+- 与Microsoft 365、Dynamics 365、Security深度集成，提供端到端政务生产力
+- 在政府AI与零信任安全领域技术领先，拥有数十年政府合作经验
+
+## 主要客户案例
+- 美国国防部（DoD）：通过DEOS项目向300余万员工部署Microsoft 365；疫情期间数周内将百万级员工转为远程办公
+- 美国小企业管理局（SBA）：基于Dynamics 365管理逾2300万案例，年运营节省数百万美元
+- 美国退伍军人事务部（VA）：Project Convergence试点下一代医院，部署HoloLens 2辅助医疗
+- 美国州及地方政府（如Vermont Judiciary、Washington State）：利用Azure实现记录发布与服务器迁移
+
+## 核心劣势（中国市场）
+- Azure Government为美国专属主权云，不向中国政府部门开放；中国大陆政务客户只能使用由世纪互联运营的Azure中国，不具备政府专属合规资质
+- 无法满足中国政务云对"等保2.0"、密码应用安全性评估（密评）、数据不出境等强监管要求
+- 缺乏信创适配（国产芯片、国产操作系统/数据库），难以进入党政机关与关键行业信创采购
+- 在中国政务市场既无标杆案例，也缺乏本地化政务交付团队与生态，竞争力明显弱于华为云、阿里云、浪潮等本土厂商

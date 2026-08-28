@@ -1,0 +1,28 @@
+# Google Cloud 智慧政务解决方案
+
+## 公司概况
+Google Public Sector（2022 年成立）是 Google 面向美国政府与教育机构的专属实体，提供 AI、安全与云原生基础设施。政务方案以"AI 与安全的结合"为核心，覆盖联邦、州/地方、国防与教育机构。合规以美国体系为主（FedRAMP High、DoD IL5），并通过 GDC Hosted 气隙私有云满足严格数据驻留。
+
+## 核心方案
+
+### 1. 政府生成式 AI Gemini for Government
+面向政府的 Gemini 企业级 AI，提供跨组织知识检索、文档处理与自然语言问答，已部署于美国国防部 GenAI.mil，服务约 300 万军民人员。Workspace for Government 集成 Gemini，已获 FedRAMP High 授权。
+
+### 2. 文档、翻译与主权云
+Document AI 加速证照表单处理；Translation Hub 支持 135 种语言。Anthos 跨环境一致部署；GDC Hosted 为气隙私有云满足国防情报数据驻留；Apigee 做政务 API 管理。
+
+### 3. 安全、分析与科研
+Mandiant 与 Google Threat Intelligence、Gemini in SecOps 构成现代安全运营，Zero Trust 为默认架构。BigQuery 支撑政务分析与科研（PubMed 数据已入 BigQuery 并支持 Vertex AI 向量检索）；RAD Lab 加速科研计算。
+
+## 竞争优势
+- 安全与 AI 全栈结合，Mandiant 威胁情报与 Gemini 形成差异化。
+- 主权云（GDC Hosted）与 IL5 授权满足高密级需求。
+- Workspace 与 Pixel 端到端安全办公生态，落地快、易用性高。
+
+## 主要客户案例
+可核实案例：美国国防部 CDAO 选定 Gemini for Government 部署于 GenAI.mil；美国交通部（DOT）全面转向 Google Workspace；犹他州向 2.2 万公务员部署 Workspace + Gemini，数月采纳率近 40%；洛杉矶市 2.7 万+员工用 Google AI 服务 400 万+居民；NATO 部署 Google Distributed Cloud 实现主权 AI。
+
+## 核心劣势
+- 合规与数据驻留围绕美国（FedRAMP/IL5）体系，几乎不覆盖中国等保、密评与信创要求。
+- 在中国大陆无运营实体与本地云，无法参与中国政务云、数字政府项目。
+- 相比华为/阿里等本土厂商，缺乏本地政务生态、集成商与专属交付团队；GDC Hosted 成本高、部署重。

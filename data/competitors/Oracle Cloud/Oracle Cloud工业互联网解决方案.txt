@@ -1,0 +1,27 @@
+# Oracle Cloud工业互联网解决方案
+
+## 公司概况
+Oracle在工业领域主要提供ERP/SCM和IoT解决方案。
+
+## 工业互联网核心方案
+
+### 1. Oracle IoT Cloud
+- 工业设备连接和数据采集
+- 预测性维护
+- 数字孪生
+
+### 2. Oracle Fusion Cloud SCM
+- 供应链规划和执行
+- 智能制造执行系统集成
+
+### 3. Oracle Autonomous Database
+- 工业数据存储和分析
+- 低运维成本的数据库方案
+
+## 竞争优势
+- ERP和SCM软件在制造业的深入应用
+- 自治数据库技术
+
+## 核心劣势（中国市场）
+- 国产化替代趋势不利
+- 工业IoT生态不如AWS/Azure
