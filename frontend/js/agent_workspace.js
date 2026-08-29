@@ -357,23 +357,24 @@
                             '</div>' +
                             '<div class="ws-toolbar" id="ws-toolbar">' +
                                 '<button class="ws-tool-btn ws-input-attach" id="ws-input-attach" type="button" title="附件 / 上传" aria-label="附件 / 上传">' +
-                                    '<svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>' +
+                                    '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">附件</span>' +
                                 '</button>' +
                                 '<button class="ws-tool-btn" id="ws-ctx-usage" type="button" title="上下文用量" aria-label="上下文用量">' +
-                                    '<svg class="icon" aria-hidden="true"><use href="#i-thermometer"></use></svg>' +
+                                    '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-thermometer"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">用量</span>' +
                                 '</button>' +
                                 '<button class="ws-tool-btn" id="ws-enhance" type="button" title="优化提示词（一键改写得更清晰可执行）" aria-label="优化提示词">' +
-                                    '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>' +
+                                    '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">优化</span>' +
                                 '</button>' +
                                 '<button class="ws-tool-btn" id="ws-web-toggle" type="button" title="联网搜索（开启）" aria-label="联网搜索开关">' +
-                                    '<svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>' +
+                                    '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">联网</span>' +
+                                    '<span class="ws-tool-badge">ON</span>' +
                                 '</button>' +
                                 '<button class="ws-tool-btn" id="ws-perm-settings" type="button" title="工具权限设置" aria-label="工具权限设置">' +
-                                    '<svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>' +
+                                    '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">权限</span>' +
                                 '</button>' +
                             '</div>' +
@@ -1950,10 +1951,13 @@
         _applyWebSearchUI: function () {
             var btn = this.els.webToggleBtn;
             if (!btn) return;
-            btn.classList.toggle('active', !this.webSearchDisabled);
+            var isActive = !this.webSearchDisabled;
+            btn.classList.toggle('active', isActive);
             btn.title = this.webSearchDisabled ? '联网搜索（已关闭，点击开启）' : '联网搜索（已开启，点击关闭）';
             var label = btn.querySelector('.ws-tool-btn-label');
-            if (label) label.textContent = this.webSearchDisabled ? '已离线' : '联网';
+            if (label) label.textContent = '联网';
+            var badge = btn.querySelector('.ws-tool-badge');
+            if (badge) badge.textContent = 'ON';
         },
         /* #1 上下文用量：GET /agent/context-usage → 浮层展示 token 占比条 */
         _showContextUsage: function () {
@@ -1971,6 +1975,7 @@
             });
         },
         _openContextUsagePopover: function (data) {
+            var self = this;
             var root = this.root;
             var old = root.querySelector('#ws-ctx-pop');
             if (old) old.remove();
@@ -1986,15 +1991,42 @@
                 var p = window ? Math.min(100, Math.round(v * 100 / window)) : 0;
                 return '<div class="ws-ctx-row"><span class="ws-ctx-name">' + pair[1] + '</span>' +
                     '<span class="ws-ctx-bar"><i style="width:' + p + '%"></i></span>' +
-                    '<span class="ws-ctx-num">' + v + '</span></div>';
+                    '<span class="ws-ctx-num">' + v.toLocaleString() + '</span></div>';
             }).join('');
+            // 智能提示：>80% 严重 / >50% 警告 / 否则 普通
+            var tipHtml = '';
+            if (percent > 80) {
+                tipHtml = '<div class="ws-ctx-tip critical">⚠ 上下文已用 ' + percent + '%，建议立即开启新对话以避免溢出。</div>';
+            } else if (percent > 50) {
+                tipHtml = '<div class="ws-ctx-tip warn">⚠ 上下文已用 ' + percent + '%，留意容量；临近上限前开启新对话。</div>';
+            } else {
+                tipHtml = '<div class="ws-ctx-tip">对话越长占比越高，临近上限时建议开启新对话。</div>';
+            }
             var pop = document.createElement('div');
             pop.id = 'ws-ctx-pop';
             pop.className = 'ws-ctx-pop';
-            pop.innerHTML = '<div class="ws-ctx-head">上下文用量（预估）<span class="ws-ctx-pct">' + percent + '%</span></div>' +
-                '<div class="ws-ctx-total">总 ' + total + ' / 窗口 ' + window + ' tokens' + (data && data.estimated ? ' · 估算值' : '') + '</div>' +
-                rows + '<div class="ws-ctx-tip">对话越长占比越高，临近上限时建议开启新对话。</div>';
+            pop.innerHTML = '<div class="ws-ctx-bar-top"></div>' +
+                '<div class="ws-ctx-inner">' +
+                    '<div class="ws-ctx-head-row">' +
+                        '<div>' +
+                            '<div class="ws-ctx-title">上下文用量（预估）</div>' +
+                            '<div class="ws-ctx-percent">' + percent + '%</div>' +
+                        '</div>' +
+                        '<button type="button" class="ws-ctx-refresh" id="ws-ctx-refresh" title="重新查询">↻</button>' +
+                    '</div>' +
+                    '<div class="ws-ctx-total">总 ' + total.toLocaleString() + ' / 窗口 ' + window.toLocaleString() + ' tokens' + (data && data.estimated ? ' · 估算值' : '') + '</div>' +
+                    '<div class="ws-ctx-bar-big"><div style="width:' + percent + '%"></div></div>' +
+                    rows + tipHtml +
+                '</div>';
             root.appendChild(pop);
+            // 刷新按钮
+            var refreshBtn = pop.querySelector('#ws-ctx-refresh');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function (ev) {
+                    ev.stopPropagation();
+                    self._showContextUsage();
+                });
+            }
             setTimeout(function () {
                 var close = function (ev) {
                     if (pop.contains(ev.target)) return;
@@ -2032,41 +2064,66 @@
                 self._toast('优化失败，保持原提示词', 'warning');
             });
         },
-        /* #3 工具权限设置浮层 */
+        /* #3 工具权限设置浮层（v=20260829d 重做：每工具独立卡片 + iOS 分段开关） */
         _openPermissionSettings: function () {
             var root = this.root;
             var old = root.querySelector('#ws-perm-pop');
             if (old) { old.remove(); return; }
             var self = this;
             var tools = [
-                ['web_search', '联网搜索'],
-                ['generate_doc', '生成文档'],
-                ['read_customer_file', '读取客户文件']
+                ['web_search', '联网搜索', 'Tavily / Serper 实时检索'],
+                ['generate_doc', '生成文档', '导出 Word / PDF / PPTX'],
+                ['read_customer_file', '读取客户文件', '访问上传的 PPT / DOC / XLS']
             ];
             var def = { web_search: 'allow', generate_doc: 'ask', read_customer_file: 'ask' };
             var rows = tools.map(function (t) {
                 var cur = self.toolPermissions[t[0]] || def[t[0]] || 'allow';
-                var opts = [['allow', '自动允许'], ['ask', '每次询问'], ['deny', '禁止执行']].map(function (o) {
-                    return '<label class="ws-perm-opt' + (cur === o[0] ? ' on' : '') + '">' +
-                        '<input type="radio" name="perm_' + t[0] + '" value="' + o[0] + '"' + (cur === o[0] ? ' checked' : '') + '>' +
-                        '<span>' + o[1] + '</span></label>';
+                var segs = [['allow', '允许'], ['ask', '询问'], ['deny', '禁止']].map(function (o) {
+                    return '<span class="ws-perm-seg-item' + (cur === o[0] ? ' on' : '') + '" data-val="' + o[0] + '">' + o[1] + '</span>';
                 }).join('');
-                return '<div class="ws-perm-row"><span class="ws-perm-name">' + t[1] + '</span><div class="ws-perm-opts">' + opts + '</div></div>';
+                return '<div class="ws-perm-card">' +
+                    '<div class="ws-perm-card-row">' +
+                        '<div class="ws-perm-card-info">' +
+                            '<div class="ws-perm-name">' + t[1] + '</div>' +
+                            '<div class="ws-perm-sub">' + t[2] + '</div>' +
+                        '</div>' +
+                        '<div class="ws-perm-seg" data-tool="' + t[0] + '">' + segs + '</div>' +
+                    '</div>' +
+                '</div>';
             }).join('');
             var pop = document.createElement('div');
             pop.id = 'ws-perm-pop';
             pop.className = 'ws-perm-pop';
-            pop.innerHTML = '<div class="ws-perm-head">工具权限 <span class="ws-perm-close" id="ws-perm-close">×</span></div>' +
-                '<div class="ws-perm-desc">设置 Agent 自主执行工具前的策略；显式「导出」按钮不受限。</div>' +
-                rows +
-                '<div class="ws-perm-foot"><button type="button" class="ws-perm-save" id="ws-perm-save">保存</button></div>';
+            pop.innerHTML = '<div class="ws-perm-bar-top"></div>' +
+                '<div class="ws-perm-inner">' +
+                    '<div class="ws-perm-head">' +
+                        '<div class="ws-perm-head-title">' +
+                            '<span class="ws-perm-head-icon">⚿</span>' +
+                            '工具权限' +
+                        '</div>' +
+                        '<span class="ws-perm-close" id="ws-perm-close" title="关闭">×</span>' +
+                    '</div>' +
+                    '<div class="ws-perm-desc">设置 Agent 自主调用工具前的策略；显式「导出」按钮不受限。</div>' +
+                    rows +
+                    '<button type="button" class="ws-perm-save-new" id="ws-perm-save">保存设置</button>' +
+                '</div>';
             root.appendChild(pop);
+            // 分段开关：点击切换 on 态
+            pop.querySelectorAll('.ws-perm-seg').forEach(function (seg) {
+                seg.addEventListener('click', function (ev) {
+                    var item = ev.target.closest('.ws-perm-seg-item');
+                    if (!item) return;
+                    seg.querySelectorAll('.ws-perm-seg-item').forEach(function (s) { s.classList.remove('on'); });
+                    item.classList.add('on');
+                });
+            });
             pop.querySelector('#ws-perm-close').addEventListener('click', function () { pop.remove(); });
             pop.querySelector('#ws-perm-save').addEventListener('click', function () {
                 var next = {};
-                tools.forEach(function (t) {
-                    var sel = pop.querySelector('input[name="perm_' + t[0] + '"]:checked');
-                    if (sel) next[t[0]] = sel.value;
+                pop.querySelectorAll('.ws-perm-seg').forEach(function (seg) {
+                    var tool = seg.getAttribute('data-tool');
+                    var onItem = seg.querySelector('.ws-perm-seg-item.on');
+                    if (tool && onItem) next[tool] = onItem.getAttribute('data-val');
                 });
                 self.toolPermissions = next;
                 self._saveToolbarPrefs();
@@ -2100,6 +2157,11 @@
                 '<div class="ws-perm-modal-reason">' + escHtml(reason) + '</div>' +
                 '<div class="ws-perm-modal-tool">工具：<b>' + escHtml(tool) + '</b></div>' +
                 (inpStr ? '<div class="ws-perm-modal-input">参数：' + escHtml(inpStr) + '</div>' : '') +
+                '<label class="ws-perm-remember" id="ws-perm-remember" title="勾选后保存为该工具的策略，不再询问">' +
+                    '<input type="checkbox" id="ws-perm-remember-cb">' +
+                    '<span class="ws-perm-remember-tick"></span>' +
+                    '<span>记住选择：不再询问</span>' +
+                '</label>' +
                 '<div class="ws-perm-modal-actions">' +
                     '<button type="button" class="ws-perm-deny" id="ws-perm-deny">拒绝</button>' +
                     '<button type="button" class="ws-perm-allow" id="ws-perm-allow">允许执行</button>' +
@@ -2112,10 +2174,20 @@
                 self._permModalOpen = false;
                 overlay.remove();
             };
+            // 记住选择：checkbox 状态写回 toolPermissions（持久化到 localStorage）
+            var applyRemember = function (decision) {
+                var cb = overlay.querySelector('#ws-perm-remember-cb');
+                if (!cb || !cb.checked || !tool) return;
+                self.toolPermissions = self.toolPermissions || {};
+                self.toolPermissions[tool] = decision; // 'allow' | 'deny'
+                if (typeof self._saveToolbarPrefs === 'function') self._saveToolbarPrefs();
+            };
             overlay.querySelector('#ws-perm-allow').addEventListener('click', function () {
+                applyRemember('allow');
                 self._resolvePermission(rid, 'allow'); finish();
             });
             overlay.querySelector('#ws-perm-deny').addEventListener('click', function () {
+                applyRemember('deny');
                 self._resolvePermission(rid, 'deny'); finish();
             });
         },
