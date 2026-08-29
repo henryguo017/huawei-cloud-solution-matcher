@@ -34,7 +34,7 @@ from api.models import MatchRequest, MatchResponse, ClarifyRequest, SourceDocume
 from api.sse_utils import sse_json_default as _sse_json_default
 from api.routes import _build_client_context_block
 from app.agent import get_agent
-from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT
+from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT, MATCH_LLM_MODEL
 from app.services.knowledge_base import set_kb_user_context
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,8 @@ class AgentChatRequest(BaseModel):
     model: Optional[str] = None      # Agent 用户临时切换的模型（Pro/Flash），None 走 config 默认
     thinking: Optional[str] = None   # "enabled" 启用深度思考 / "disabled" 关闭；None 走 config 默认
     rerun_plan_index: Optional[int] = None  # P2-D5：Plan 单步重跑（后端从 _step_results 取原参数重跑该步并重新汇总）
+    tool_permissions: Optional[dict] = None  # #3 工具权限策略 {tool: "allow"|"ask"|"deny"}，None 走 harness 默认
+    disable_web_search: bool = False         # #6 联网搜索开关：True 时 Agent 不调用 web_search
 
 
 @router.post("/agent/chat", tags=["Agent 对话"])
@@ -87,6 +89,8 @@ async def agent_chat(
                 model=model_override,
                 thinking=thinking_override,
                 rerun_plan_index=body.rerun_plan_index,
+                tool_permissions=body.tool_permissions,
+                disable_web_search=body.disable_web_search,
             )
             await event_queue.put({
                 "type": "result",
@@ -161,6 +165,92 @@ async def agent_memory_stats(user: dict = Depends(get_current_user)):
     except Exception as e:
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=f"查询记忆失败: {e}")
+
+
+# ========== Agent 工具栏能力（上下文用量 / 提示词优化 / 工具权限确认） ==========
+
+@router.get("/agent/context-usage", tags=["Agent 上下文"])
+async def agent_context_usage(session_id: str = "", user: dict = Depends(get_current_user)):
+    """#1 上下文用量预估：返回 system/tools/memory/conversation 各桶 token 估算与总占用百分比。"""
+    try:
+        from app.agent import get_agent
+        uid = user.get("id") or user.get("user_id") or 0
+        sid = session_id or f"agent_{uid}"
+        agent = get_agent()
+        if uid and isinstance(uid, int):
+            try:
+                from app.services.knowledge_base import set_kb_user_context
+                set_kb_user_context(uid)
+            except Exception:
+                pass
+            agent._user_id = uid
+        data = agent.estimate_context_usage(sid)
+        return {"ok": True, **data}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"上下文用量统计失败: {e}")
+
+
+class EnhancePromptRequest(BaseModel):
+    prompt: str
+    session_id: str = ""
+
+
+@router.post("/agent/enhance-prompt", tags=["Agent 提示词"])
+async def agent_enhance_prompt(
+    body: EnhancePromptRequest,
+    user: dict = Depends(get_current_user),
+):
+    """#2 提示词优化：把用户原始诉求改写为更清晰、结构化、可执行的指令，便于 Agent 检索与生成。"""
+    raw = (body.prompt or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="prompt 不能为空")
+    if len(raw) > 2000:
+        raw = raw[:2000]
+    optimizer_prompt = (
+        "你是华为云售前方案助手的「提示词优化器」。请把用户的原始诉求改写为更清晰、结构化、可执行的指令，"
+        "让方案 Agent 能更精准地检索知识库、匹配竞品并生成落地方案。\n"
+        "改写要求：\n"
+        "1. 若原话缺失行业/场景/规模/目标，基于常识合理补全，并用 [假设: ...] 标注你的推断；\n"
+        "2. 用一句话明确「希望得到什么产出」（如方案书/竞品对比/架构建议）；\n"
+        "3. 保留用户原意，不擅自扩大范围，不添加无关要求；\n"
+        "4. 输出语言与用户输入一致（中文需求用中文输出）；\n"
+        "5. 只输出优化后的提示词本身，不要任何解释、不要代码围栏、不要前缀。\n\n"
+        f"原始提示词：\n\"\"\"\n{raw}\n\"\"\"\n\n优化后提示词："
+    )
+    try:
+        from app.models.llm import get_llm_response
+        enhanced = await get_llm_response(optimizer_prompt, model=MATCH_LLM_MODEL)
+        enhanced = (enhanced or "").strip()
+        # 去除可能的代码围栏（模型偶有违规包裹）
+        if enhanced.startswith("```"):
+            enhanced = enhanced.strip("`")
+            if enhanced.startswith("json") or enhanced.startswith("markdown") or enhanced.startswith("text"):
+                enhanced = enhanced.split("\n", 1)[-1] if "\n" in enhanced else enhanced
+            enhanced = enhanced.strip("`").strip()
+        if not enhanced:
+            return {"ok": True, "enhanced": raw, "unchanged": True}
+        return {"ok": True, "enhanced": enhanced, "unchanged": False}
+    except Exception as e:
+        logger.warning("[agent/enhance-prompt] 优化失败: %s", e)
+        # 优化失败不阻断用户：原样返回，前端按原 prompt 发送
+        return {"ok": True, "enhanced": raw, "unchanged": True, "error": str(e)}
+
+
+class PermissionDecisionRequest(BaseModel):
+    decision: str  # "allow" | "deny"
+
+
+@router.post("/agent/permission/{request_id}", tags=["Agent 权限"])
+async def agent_permission_resolve(request_id: str, body: PermissionDecisionRequest):
+    """#3 工具权限确认：前端用户点击「允许/拒绝」后回传决策，唤醒 Agent 阻塞的 Future。"""
+    try:
+        from app.agent.permission_gate import resolve_permission
+        hit = resolve_permission(request_id, body.decision or "deny")
+        return {"ok": True, "hit": hit}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"权限确认失败: {e}")
 
 
 def _resolve_agent_session_id(user: dict, client_id: Optional[int]) -> str:

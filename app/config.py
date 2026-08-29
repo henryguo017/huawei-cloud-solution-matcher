@@ -42,13 +42,17 @@ OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.1"))
 
 # DeepSeek配置 (国内推荐)
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-DEEPSEEK_MODEL_NAME = os.getenv("DEEPSEEK_MODEL_NAME", "deepseek-v4-pro")
-# 匹配生成专用模型（标准/向导模式）。Agent 模式仍使用上面的 DEEPSEEK_MODEL_NAME(pro)。
-# 分流目的：标准/向导模式对延迟更敏感，flash 模型墙钟显著更短、基本不触发 60s 超时重试；
-# 通过环境变量可随时切换回 pro（铁律③：改默认值须同步 .env.example，或直接改服务器 .env）。
+DEEPSEEK_MODEL_NAME = os.getenv("DEEPSEEK_MODEL_NAME", "deepseek-v4-flash")
+# 全局默认模型：deepseek-v4-flash（2026-08-29 起默认 flash，apikey 成本考量：方案生成/匹配 flash 足够）。
+# Agent 模式主路径（harness._call_llm / 直接回复）已显式默认 MATCH_LLM_MODEL(flash)，
+# 即使本变量在 .env 设为 pro，Agent 仍走 flash 不烧钱；pro 仅可通过前端模型切换（请求级 model=deepseek-v4-pro）触发。
+# 如需全局恢复 pro：改此处为 deepseek-v4-pro 或改服务器 .env（铁律③：改默认值须同步 .env.example）。
 MATCH_LLM_MODEL = os.getenv("MATCH_LLM_MODEL", "deepseek-v4-flash")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 DEEPSEEK_TEMPERATURE = float(os.getenv("DEEPSEEK_TEMPERATURE", "0.1"))
+
+# Agent 上下文窗口上限（token）：供前端「上下文用量」预估展示（#1），非硬性截断。
+AGENT_CONTEXT_WINDOW = int(os.getenv("AGENT_CONTEXT_WINDOW", "64000"))
 
 # DeepSeek V4 thinking 模式控制（2026-07-31 V4-Flash-0731 正式版起默认开启思考！
 # 思考模式下：①每次请求先无上限输出 reasoning_content，匹配耗时从 ~50s 飙到 140-170s；

@@ -26,15 +26,6 @@
     var DRAWER_BREAKPOINT = 1400;
     var MAX_INPUT = 2000;
     var MAX_CONVOS = 50;
-    /* Agent 工具栏默认模型：默认 deepseek-v4-pro（高质量），用户可切换 Pro/Flash */
-    var DEFAULT_AGENT_MODEL = 'deepseek-v4-pro';
-    var DEFAULT_AGENT_MODEL_LABEL = 'Deepseek-V4-Pro';
-    var MODEL_LABEL_MAP = {
-        'deepseek-v4-pro': 'Deepseek-V4-Pro',
-        'deepseek-v4-flash': 'Deepseek-V4-Flash'
-    };
-    var THINKING_STORAGE_KEY = 'agent_thinking_enabled_v1';
-    var MODEL_STORAGE_KEY = 'agent_model_choice_v1';
 
     /* 方案预览解析词库（v1 前端轻量解析，后续可由后端 structured 字段替代） */
     var PRODUCT_DB = {
@@ -214,10 +205,11 @@
         drawerOpen: false,
         prevNarrow: false,
         sidebarCollapsed: false,
-        agentModel: DEFAULT_AGENT_MODEL,         // Agent 对话当前模型（用户可切 Pro/Flash）
-        agentThinking: false,                    // Agent 对话是否启用深度思考
         selectedClient: null,          // 方案 B：当前客户上下文 {id, name, industry}
         clients: [],                   // /clients 缓存
+        webSearchDisabled: false,      // #6 联网搜索开关（持久化到 localStorage）
+        toolPermissions: {},          // #3 工具权限策略 {tool: "allow"|"ask"|"deny"}（持久化到 localStorage）
+        _permModalOpen: false,        // #3 权限确认弹窗是否打开（防止重复弹）
         capOpen: true,                 // 能力面板是否展开（默认展开，进入 Agent 模式即展开能力入口）
         readOnly: false,               // 当前对话是否为只读（仅打开归档对话时为真：隐藏输入框、不允许继续对话）
         els: {},
@@ -368,27 +360,22 @@
                                     '<svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>' +
                                     '<span class="ws-tool-btn-label">附件</span>' +
                                 '</button>' +
-                                '<button class="ws-tool-btn ws-thinking-toggle" id="ws-thinking-toggle" type="button" title="深度思考" aria-pressed="false" aria-label="深度思考">' +
-                                    '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>' +
-                                    '<span class="ws-tool-btn-label">深度思考</span>' +
+                                '<button class="ws-tool-btn" id="ws-ctx-usage" type="button" title="上下文用量" aria-label="上下文用量">' +
+                                    '<svg class="icon" aria-hidden="true"><use href="#i-thermometer"></use></svg>' +
+                                    '<span class="ws-tool-btn-label">用量</span>' +
                                 '</button>' +
-                                '<div class="ws-model-pick" id="ws-model-pick">' +
-                                    '<button class="ws-tool-btn ws-model-btn" id="ws-model-btn" type="button" title="选择模型" aria-haspopup="listbox">' +
-                                        '<svg class="icon" aria-hidden="true"><use href="#i-cpu"></use></svg>' +
-                                        '<span class="ws-tool-btn-label ws-model-label" id="ws-model-label">' + (DEFAULT_AGENT_MODEL_LABEL) + '</span>' +
-                                        '<svg class="icon ws-model-caret" aria-hidden="true"><use href="#i-chevron-down"></use></svg>' +
-                                    '</button>' +
-                                    '<ul class="ws-model-menu" id="ws-model-menu" role="listbox" hidden>' +
-                                        '<li role="option" data-value="deepseek-v4-pro" data-thinking="disabled" class="ws-model-item">' +
-                                            '<span class="ws-model-item-name">Deepseek-V4-Pro</span>' +
-                                            '<span class="ws-model-item-tag">高质量</span>' +
-                                        '</li>' +
-                                        '<li role="option" data-value="deepseek-v4-flash" data-thinking="disabled" class="ws-model-item">' +
-                                            '<span class="ws-model-item-name">Deepseek-V4-Flash</span>' +
-                                            '<span class="ws-model-item-tag">快速</span>' +
-                                        '</li>' +
-                                    '</ul>' +
-                                '</div>' +
+                                '<button class="ws-tool-btn" id="ws-enhance" type="button" title="优化提示词（一键改写得更清晰可执行）" aria-label="优化提示词">' +
+                                    '<svg class="icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>' +
+                                    '<span class="ws-tool-btn-label">优化</span>' +
+                                '</button>' +
+                                '<button class="ws-tool-btn" id="ws-web-toggle" type="button" title="联网搜索（开启）" aria-label="联网搜索开关">' +
+                                    '<svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg>' +
+                                    '<span class="ws-tool-btn-label">联网</span>' +
+                                '</button>' +
+                                '<button class="ws-tool-btn" id="ws-perm-settings" type="button" title="工具权限设置" aria-label="工具权限设置">' +
+                                    '<svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>' +
+                                    '<span class="ws-tool-btn-label">权限</span>' +
+                                '</button>' +
                             '</div>' +
                         '</div>' +
                         '<div class="ws-context-picker" id="ws-context-picker">' +
@@ -437,11 +424,6 @@
                 inputAttach: this.root.querySelector('#ws-input-attach'),
                 count: this.root.querySelector('#ws-input-count'),
                 sendBtn: this.root.querySelector('#ws-send'),
-                thinkingToggle: this.root.querySelector('#ws-thinking-toggle'),
-                modelPick: this.root.querySelector('#ws-model-pick'),
-                modelBtn: this.root.querySelector('#ws-model-btn'),
-                modelLabel: this.root.querySelector('#ws-model-label'),
-                modelMenu: this.root.querySelector('#ws-model-menu'),
                 tasks: this.root.querySelector('#ws-tasks'),
                 archiveEntry: this.root.querySelector('#ws-archive-entry'),
                 archiveEntryCount: this.root.querySelector('#ws-archive-entry-count'),
@@ -457,7 +439,11 @@
                 previewCompetitors: this.root.querySelector('#ws-preview-competitors'),
                 previewCompetitorList: this.root.querySelector('#ws-preview-competitor-list'),
                 previewCosts: this.root.querySelector('#ws-preview-costs'),
-                previewCostList: this.root.querySelector('#ws-preview-cost-list')
+                previewCostList: this.root.querySelector('#ws-preview-cost-list'),
+                ctxUsageBtn: this.root.querySelector('#ws-ctx-usage'),
+                enhanceBtn: this.root.querySelector('#ws-enhance'),
+                webToggleBtn: this.root.querySelector('#ws-web-toggle'),
+                permSettingsBtn: this.root.querySelector('#ws-perm-settings')
             };
             this._renderWelcome();
         },
@@ -485,7 +471,7 @@
                             '<div class="ws-welcome-sub">描述你的客户需求，或选择下方能力胶囊快速开始，我来匹配方案、分析竞品、检索知识库。</div>' +
                         '</div>' +
                         '<div class="ws-caps-row">' + capsHtml + '</div>' +
-                        '<div class="ws-welcome-hint">在下方输入需求 · 工具栏可加附件 / 切模型 / 启深度思考 / 语音输入</div>' +
+                        '<div class="ws-welcome-hint">在下方输入需求 · 工具栏可加附件 / 语音输入</div>' +
                         '<div class="ws-kb-status">知识库就绪 · 点击上方能力可一键填入示例</div>' +
                     '</div>' +
                 '</div>';
@@ -509,68 +495,10 @@
             if (this.els.headerMore) this.els.headerMore.addEventListener('click', function (e) { e.stopPropagation(); self._showHeaderMoreMenu(e.currentTarget); });
             root.querySelector('#ws-drawer-mask').addEventListener('click', function () { self._toggleDrawer(); });
 
-            // ===== Agent 输入工具栏：附件 / 深度思考 / 模型选择 / 语音 =====
-            if (this.els.thinkingToggle) {
-                this.els.thinkingToggle.addEventListener('click', function () {
-                    self.agentThinking = !self.agentThinking;
-                    self.els.thinkingToggle.setAttribute('aria-pressed', self.agentThinking ? 'true' : 'false');
-                    self.els.thinkingToggle.classList.toggle('active', self.agentThinking);
-                    self.els.thinkingToggle.title = self.agentThinking ? '深度思考（已开启）' : '深度思考';
-                    try { localStorage.setItem(THINKING_STORAGE_KEY, self.agentThinking ? '1' : '0'); } catch (_) {}
-                });
-            }
-            if (this.els.modelBtn && this.els.modelMenu) {
-                // 恢复用户上次选择
-                var savedModel = null;
-                try { savedModel = localStorage.getItem(MODEL_STORAGE_KEY); } catch (_) {}
-                if (savedModel && MODEL_LABEL_MAP[savedModel]) {
-                    this.agentModel = savedModel;
-                    if (this.els.modelLabel) this.els.modelLabel.textContent = MODEL_LABEL_MAP[savedModel];
-                    var savedLi = this.els.modelMenu.querySelector('[data-value="' + savedModel + '"]');
-                    if (savedLi) {
-                        this.els.modelMenu.querySelectorAll('.ws-model-item').forEach(function (x) { x.classList.remove('active'); });
-                        savedLi.classList.add('active');
-                    }
-                } else {
-                    var defaultLi = this.els.modelMenu.querySelector('[data-value="' + DEFAULT_AGENT_MODEL + '"]');
-                    if (defaultLi) defaultLi.classList.add('active');
-                }
-                // 恢复深度思考开关
-                var savedThinking = null;
-                try { savedThinking = localStorage.getItem(THINKING_STORAGE_KEY); } catch (_) {}
-                if (savedThinking === '1' && this.els.thinkingToggle) {
-                    this.agentThinking = true;
-                    this.els.thinkingToggle.classList.add('active');
-                    this.els.thinkingToggle.setAttribute('aria-pressed', 'true');
-                    this.els.thinkingToggle.title = '深度思考（已开启）';
-                }
-                this.els.modelBtn.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    var hidden = self.els.modelMenu.hidden;
-                    self.els.modelMenu.hidden = !hidden ? true : false;
-                });
-                this.els.modelMenu.querySelectorAll('.ws-model-item').forEach(function (li) {
-                    li.addEventListener('click', function (ev) {
-                        ev.stopPropagation();
-                        var val = li.getAttribute('data-value');
-                        if (!val || !MODEL_LABEL_MAP[val]) return;
-                        self.agentModel = val;
-                        if (self.els.modelLabel) self.els.modelLabel.textContent = MODEL_LABEL_MAP[val];
-                        self.els.modelMenu.querySelectorAll('.ws-model-item').forEach(function (x) { x.classList.remove('active'); });
-                        li.classList.add('active');
-                        self.els.modelMenu.hidden = true;
-                        try { localStorage.setItem(MODEL_STORAGE_KEY, val); } catch (_) {}
-                    });
-                });
-                // 点击外部关闭
-                document.addEventListener('click', function (e) {
-                    if (self.els.modelPick && self.els.modelPick.contains(e.target)) return;
-                    self.els.modelMenu.hidden = true;
-                });
-            }
+            // ===== Agent 输入工具栏：附件 / 语音 =====
             // 语音输入：voice-input.js 的 TARGETS 已配置 #ws-input → .ws-toolbar。
             // 其 init() 只在 DOMContentLoaded 执行，此时 #ws-input 尚不存在；这里在渲染完成后补一次 init，
-            // 让 voice-input.js 把真正的 .voice-mic-btn 注入到工具栏（与 [+附件][✨深度思考][模型] 同排）。
+            // 让 voice-input.js 把真正的 .voice-mic-btn 注入到工具栏（与 [+附件] 同排）。
             if (window.CloudSolVoice && typeof window.CloudSolVoice.init === 'function') {
                 try { window.CloudSolVoice.init(); } catch (_) {}
             }
@@ -623,6 +551,28 @@
                         });
                     });
                 });
+            }
+
+            // ===== Agent 工具栏能力（#1 上下文用量 / #2 提示词优化 / #6 联网开关 / #3 工具权限）=====
+            self._loadToolbarPrefs();
+            self._applyWebSearchUI();
+
+            if (this.els.ctxUsageBtn) {
+                this.els.ctxUsageBtn.addEventListener('click', function () { self._showContextUsage(); });
+            }
+            if (this.els.enhanceBtn) {
+                this.els.enhanceBtn.addEventListener('click', function () { self._enhancePrompt(); });
+            }
+            if (this.els.webToggleBtn) {
+                this.els.webToggleBtn.addEventListener('click', function () {
+                    self.webSearchDisabled = !self.webSearchDisabled;
+                    self._applyWebSearchUI();
+                    self._saveToolbarPrefs();
+                    self._toast(self.webSearchDisabled ? '已关闭联网搜索' : '已开启联网搜索', 'info');
+                });
+            }
+            if (this.els.permSettingsBtn) {
+                this.els.permSettingsBtn.addEventListener('click', function () { self._openPermissionSettings(); });
             }
 
             // 方案 B：客户上下文选择器（放在主区输入框下方，点击展开下拉）
@@ -742,7 +692,7 @@
            让全白欢迎内容铺满主区 */
         _hideWelcomeChrome: function () {
             // 欢迎态只隐藏 chat-header（已用 ws-welcome 居中标题替代），不隐藏 inputBar 与 toolbar，
-            // 这样新话题页也能看到模型选择/深度思考/语音等工具栏；compose 卡仅作欢迎引导填充
+            // 这样新话题页也能看到附件/语音等工具栏；compose 卡仅作欢迎引导填充
             if (this.els.chatHeader) this.els.chatHeader.style.display = 'none';
             if (this.els.title) this.els.title.style.display = 'none';
         },
@@ -1351,7 +1301,7 @@
                         '<div class="ws-thinking" id="ws-thinking">' +
                             '<button type="button" class="ws-thinking-head" id="ws-thinking-toggle">' +
                                 '<span class="ws-think-spin"></span>' +
-                                '<span class="ws-thinking-title">深度思考</span>' +
+                                '<span class="ws-thinking-title">执行计划</span>' +
                                 '<span class="ws-thinking-count" id="ws-thinking-count">0 步</span>' +
                                 '<span class="ws-thinking-caret"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>' +
                             '</button>' +
@@ -1488,6 +1438,8 @@
                 message: '__rerun_plan__',
                 session_id: sessionId,
                 rerun_plan_index: idx,
+                tool_permissions: self.toolPermissions || {},
+                disable_web_search: !!self.webSearchDisabled
             });
             var ctrl = new AbortController();
             self.currentCtrl = ctrl;
@@ -1607,6 +1559,7 @@
             var self = this;
             var shell = this._appendAgentShell();
             self.currentShell = shell;
+            shell.prompt = message;             // #5 重新生成：记录原始诉求，供 ↻ 复用
             self._thinkCount = 0;
             var fullAnswer = '';
             var toolNames = [];
@@ -1705,6 +1658,9 @@
                 } else if (t === 'reflexion') {
                     // P1-3：Agent 自我反思 → 在思考面板追加反思气泡，让用户看到纠错过程
                     self._appendReflexionBubble(shell, ev.text || '');
+                } else if (t === 'permission_request') {
+                    // #3 工具权限确认：Agent 即将执行高风险工具，弹出 human-in-the-loop 确认框
+                    self._openPermissionModal(ev);
                 } else if (t === 'clarify') {
                     if (!clarified) {
                         clarified = true;
@@ -1798,8 +1754,8 @@
                     message: message,
                     session_id: sessionId,
                     client_id: self.selectedClient ? self.selectedClient.id : null,
-                    model: self.agentModel,
-                    thinking: self.agentThinking ? 'enabled' : 'disabled'
+                    tool_permissions: self.toolPermissions || {},
+                    disable_web_search: !!self.webSearchDisabled
                 }),
                 signal: signal
             }).then(function (resp) {
@@ -1938,6 +1894,7 @@
             if (actions.querySelector('.ws-export-btn')) return;  // 幂等：不重复追加
             actions.style.display = '';
             var isComp = formatMode === 'competitor';
+            var self = this;
             var btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'ws-export-btn';
@@ -1946,10 +1903,231 @@
                 (isComp ? '导出竞品分析 (Word)' : '导出方案书 (Word)');
             // 用 appendChild 而非 innerHTML 替换：避免覆盖已存在的 doc_generated 下载 chip
             actions.appendChild(btn);
-            var self = this;
             btn.addEventListener('click', function () {
                 self._exportAnswer(shell, answer, btn.getAttribute('data-format'));
             });
+            // #5 重新生成：答案就绪后附 ↻ 按钮（幂等，仅在尚无时追加）
+            if (!actions.querySelector('.ws-regen-btn')) {
+                var rb = document.createElement('button');
+                rb.type = 'button';
+                rb.className = 'ws-regen-btn';
+                rb.title = '用相同诉求重新生成';
+                rb.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-refresh-cw"></use></svg>重新生成';
+                actions.appendChild(rb);
+                rb.addEventListener('click', function () {
+                    self._regenerate(shell);
+                });
+            }
+        },
+        /* #5 重新生成：用相同诉求再跑一次（新开一条 Assistant 气泡，保持当前对话上下文） */
+        _regenerate: function (shell) {
+            var prompt = shell && shell.prompt;
+            if (!prompt) return;
+            this._appendUser(prompt);
+            this._run(prompt);
+        },
+        /* ===== 工具栏能力方法（#1/#2/#6/#3） ===== */
+        _loadToolbarPrefs: function () {
+            try {
+                var raw = localStorage.getItem('hwcloud_agent_toolbar');
+                if (raw) {
+                    var d = JSON.parse(raw);
+                    if (d && typeof d === 'object') {
+                        this.webSearchDisabled = !!d.webSearchDisabled;
+                        this.toolPermissions = (d.toolPermissions && typeof d.toolPermissions === 'object') ? d.toolPermissions : {};
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        },
+        _saveToolbarPrefs: function () {
+            try {
+                localStorage.setItem('hwcloud_agent_toolbar', JSON.stringify({
+                    webSearchDisabled: !!this.webSearchDisabled,
+                    toolPermissions: this.toolPermissions || {}
+                }));
+            } catch (e) { /* ignore */ }
+        },
+        _applyWebSearchUI: function () {
+            var btn = this.els.webToggleBtn;
+            if (!btn) return;
+            btn.classList.toggle('active', !this.webSearchDisabled);
+            btn.title = this.webSearchDisabled ? '联网搜索（已关闭，点击开启）' : '联网搜索（已开启，点击关闭）';
+            var label = btn.querySelector('.ws-tool-btn-label');
+            if (label) label.textContent = this.webSearchDisabled ? '已离线' : '联网';
+        },
+        /* #1 上下文用量：GET /agent/context-usage → 浮层展示 token 占比条 */
+        _showContextUsage: function () {
+            var self = this;
+            var token = this.userToken();
+            if (!token) { this._toast('请先登录', 'warning'); return; }
+            fetch('/api/agent/context-usage?session_id=' + encodeURIComponent(this.sessionId || ''), {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer ' + token }
+            }).then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+            .then(function (d) {
+                self._openContextUsagePopover(d && d.buckets ? d : null);
+            }).catch(function (e) {
+                self._toast('获取上下文用量失败', 'warning');
+            });
+        },
+        _openContextUsagePopover: function (data) {
+            var root = this.root;
+            var old = root.querySelector('#ws-ctx-pop');
+            if (old) old.remove();
+            var buckets = (data && data.buckets) || {};
+            var total = data && data.total ? data.total : 0;
+            var window = data && data.window ? data.window : 64000;
+            var percent = data && typeof data.percent === 'number' ? data.percent : 0;
+            var rows = [
+                ['system', '系统提示'], ['tools', '工具描述'],
+                ['memory', '长程记忆'], ['conversation', '对话历史']
+            ].map(function (pair) {
+                var v = buckets[pair[0]] || 0;
+                var p = window ? Math.min(100, Math.round(v * 100 / window)) : 0;
+                return '<div class="ws-ctx-row"><span class="ws-ctx-name">' + pair[1] + '</span>' +
+                    '<span class="ws-ctx-bar"><i style="width:' + p + '%"></i></span>' +
+                    '<span class="ws-ctx-num">' + v + '</span></div>';
+            }).join('');
+            var pop = document.createElement('div');
+            pop.id = 'ws-ctx-pop';
+            pop.className = 'ws-ctx-pop';
+            pop.innerHTML = '<div class="ws-ctx-head">上下文用量（预估）<span class="ws-ctx-pct">' + percent + '%</span></div>' +
+                '<div class="ws-ctx-total">总 ' + total + ' / 窗口 ' + window + ' tokens' + (data && data.estimated ? ' · 估算值' : '') + '</div>' +
+                rows + '<div class="ws-ctx-tip">对话越长占比越高，临近上限时建议开启新对话。</div>';
+            root.appendChild(pop);
+            setTimeout(function () {
+                var close = function (ev) {
+                    if (pop.contains(ev.target)) return;
+                    pop.remove();
+                    document.removeEventListener('click', close, true);
+                };
+                document.addEventListener('click', close, true);
+            }, 0);
+        },
+        /* #2 提示词优化：POST /agent/enhance-prompt → 回填输入框 */
+        _enhancePrompt: function () {
+            var self = this;
+            var input = this._getActiveInput();
+            var raw = input ? (input.value || '').trim() : '';
+            if (!raw) { this._toast('先在输入框写点需求，再点优化', 'info'); return; }
+            var token = this.userToken();
+            if (!token) { this._toast('请先登录', 'warning'); return; }
+            this._toast('正在优化提示词…', 'info');
+            fetch('/api/agent/enhance-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ prompt: raw, session_id: this.sessionId || '' })
+            }).then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+            .then(function (d) {
+                var enhanced = (d && d.enhanced) ? d.enhanced : raw;
+                if (input) {
+                    input.value = enhanced;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    self._autoResizeInput && self._autoResizeInput();
+                    input.focus();
+                }
+                if (d && d.unchanged) self._toast('提示词无需优化，已保持原样', 'info');
+                else self._toast('提示词已优化，可直接发送', 'success');
+            }).catch(function () {
+                self._toast('优化失败，保持原提示词', 'warning');
+            });
+        },
+        /* #3 工具权限设置浮层 */
+        _openPermissionSettings: function () {
+            var root = this.root;
+            var old = root.querySelector('#ws-perm-pop');
+            if (old) { old.remove(); return; }
+            var self = this;
+            var tools = [
+                ['web_search', '联网搜索'],
+                ['generate_doc', '生成文档'],
+                ['read_customer_file', '读取客户文件']
+            ];
+            var def = { web_search: 'allow', generate_doc: 'ask', read_customer_file: 'ask' };
+            var rows = tools.map(function (t) {
+                var cur = self.toolPermissions[t[0]] || def[t[0]] || 'allow';
+                var opts = [['allow', '自动允许'], ['ask', '每次询问'], ['deny', '禁止执行']].map(function (o) {
+                    return '<label class="ws-perm-opt' + (cur === o[0] ? ' on' : '') + '">' +
+                        '<input type="radio" name="perm_' + t[0] + '" value="' + o[0] + '"' + (cur === o[0] ? ' checked' : '') + '>' +
+                        '<span>' + o[1] + '</span></label>';
+                }).join('');
+                return '<div class="ws-perm-row"><span class="ws-perm-name">' + t[1] + '</span><div class="ws-perm-opts">' + opts + '</div></div>';
+            }).join('');
+            var pop = document.createElement('div');
+            pop.id = 'ws-perm-pop';
+            pop.className = 'ws-perm-pop';
+            pop.innerHTML = '<div class="ws-perm-head">工具权限 <span class="ws-perm-close" id="ws-perm-close">×</span></div>' +
+                '<div class="ws-perm-desc">设置 Agent 自主执行工具前的策略；显式「导出」按钮不受限。</div>' +
+                rows +
+                '<div class="ws-perm-foot"><button type="button" class="ws-perm-save" id="ws-perm-save">保存</button></div>';
+            root.appendChild(pop);
+            pop.querySelector('#ws-perm-close').addEventListener('click', function () { pop.remove(); });
+            pop.querySelector('#ws-perm-save').addEventListener('click', function () {
+                var next = {};
+                tools.forEach(function (t) {
+                    var sel = pop.querySelector('input[name="perm_' + t[0] + '"]:checked');
+                    if (sel) next[t[0]] = sel.value;
+                });
+                self.toolPermissions = next;
+                self._saveToolbarPrefs();
+                pop.remove();
+                self._toast('工具权限已保存', 'success');
+            });
+            setTimeout(function () {
+                var close = function (ev) {
+                    if (pop.contains(ev.target)) return;
+                    pop.remove();
+                    document.removeEventListener('click', close, true);
+                };
+                document.addEventListener('click', close, true);
+            }, 0);
+        },
+        /* #3 权限确认弹窗（Agent 执行高风险工具前阻塞等待） */
+        _openPermissionModal: function (ev) {
+            if (this._permModalOpen) return;
+            this._permModalOpen = true;
+            var root = this.root;
+            var rid = ev && ev.request_id ? ev.request_id : '';
+            var tool = ev && ev.tool ? ev.tool : '';
+            var reason = ev && ev.reason ? ev.reason : 'Agent 准备执行一个工具，需要你的确认。';
+            var inp = (ev && ev.input) ? ev.input : {};
+            var inpStr = Object.keys(inp).map(function (k) { return k + '：' + inp[k]; }).join('；');
+            var overlay = document.createElement('div');
+            overlay.className = 'ws-perm-overlay';
+            overlay.id = 'ws-perm-overlay';
+            overlay.innerHTML = '<div class="ws-perm-modal">' +
+                '<div class="ws-perm-modal-title"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg>工具执行确认</div>' +
+                '<div class="ws-perm-modal-reason">' + escHtml(reason) + '</div>' +
+                '<div class="ws-perm-modal-tool">工具：<b>' + escHtml(tool) + '</b></div>' +
+                (inpStr ? '<div class="ws-perm-modal-input">参数：' + escHtml(inpStr) + '</div>' : '') +
+                '<div class="ws-perm-modal-actions">' +
+                    '<button type="button" class="ws-perm-deny" id="ws-perm-deny">拒绝</button>' +
+                    '<button type="button" class="ws-perm-allow" id="ws-perm-allow">允许执行</button>' +
+                '</div></div>';
+            root.appendChild(overlay);
+            var self = this;
+            var done = false;
+            var finish = function () {
+                if (done) return; done = true;
+                self._permModalOpen = false;
+                overlay.remove();
+            };
+            overlay.querySelector('#ws-perm-allow').addEventListener('click', function () {
+                self._resolvePermission(rid, 'allow'); finish();
+            });
+            overlay.querySelector('#ws-perm-deny').addEventListener('click', function () {
+                self._resolvePermission(rid, 'deny'); finish();
+            });
+        },
+        _resolvePermission: function (requestId, decision) {
+            var token = this.userToken();
+            var body = JSON.stringify({ decision: decision });
+            var url = '/api/agent/permission/' + encodeURIComponent(requestId);
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (token || '') },
+                body: body
+            }).then(function (r) { return r.ok; }).catch(function () { return false; });
         },
         /* P1-2：doc_generated 事件 → 渲染可下载文档 chip（与导出按钮共存于 actions 面板） */
         _renderDocChip: function (shell, downloadUrl, fileName, fmt) {

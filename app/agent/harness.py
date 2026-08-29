@@ -36,7 +36,7 @@ from app.services.solution_prompt import (
 from app.services.solution_matcher import SolutionMatcherService
 from app.agent.clarify_store import ClarifySessionStore
 from app.agent.intent import classify_intent
-from app.config import MATCH_LLM_MODEL, SUPPORTED_COMPETITORS, AGENT_TWO_PHASE, AGENT_MULTI_AGENT
+from app.config import MATCH_LLM_MODEL, SUPPORTED_COMPETITORS, AGENT_TWO_PHASE, AGENT_MULTI_AGENT, AGENT_CONTEXT_WINDOW
 
 logger = logging.getLogger(__name__)
 
@@ -499,7 +499,7 @@ class AgentHarness:
                         "type": "thought", "step": self._step_count, "text": thought[:300],
                     })
                 self.memory.add_action(session_id, tool_name, str(tool_input))
-                observation = await self._execute_tool(tool_name, tool_input)
+                observation = await self._execute_tool(tool_name, tool_input, event_callback)
                 self.memory.add_observation(session_id, observation)
                 tool_calls_log.append({
                     "step": self._step_count, "tool": tool_name,
@@ -686,6 +686,8 @@ class AgentHarness:
         model: Optional[str] = None,
         thinking: Optional[str] = None,
         rerun_plan_index: Optional[int] = None,
+        tool_permissions: Optional[dict] = None,
+        disable_web_search: bool = False,
     ) -> Dict[str, Any]:
         """
         运行 ReAct 循环
@@ -718,6 +720,9 @@ class AgentHarness:
         self._run_model = model or None
         self._run_thinking = thinking or None
         self._user_info = user_info or {}
+        # #3 工具权限策略（allow/ask/deny）与 #6 联网搜索开关（前端工具栏透传，None 走默认）
+        self._tool_permissions = tool_permissions or {}
+        self._disable_web_search = bool(disable_web_search)
 
         # P2-D5：Plan 单步重跑 —— 复用上一次的 plan / 各步原参数，重跑指定步并重新汇总
         if rerun_plan_index is not None:
@@ -789,7 +794,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             tools_desc = self.tools.get_tools_prompt()
 
             # ── 意图路由（A 方案）：首轮先识别意图，非方案类直接轻量回复，不进 ReAct/14章流水线 ──
-            intent = await classify_intent(user_input)
+            intent = classify_intent(user_input)
             self._intent = intent.get("intent", "solution")
             self._format_mode = "competitor" if self._intent == "competitor" else "solution"
             competitors = intent.get("competitors", []) or []
@@ -1053,6 +1058,24 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     # P1-2：generate_doc 拦截——LLM 在 ReAct 内要求导出时（主路径是 export 意图，
                     # 此处为兜底），直接取缓存终稿导出，不依赖 LLM 传 content（它本就没有终稿文本）。
                     if tool_name == "generate_doc":
+                        # #3 工具权限闸门（generate_doc 走专门拦截分支，未经过 _execute_tool）
+                        gate = await self._gate_tool(tool_name, tool_input, event_callback)
+                        if gate is not None:
+                            tool_calls_log.append({
+                                "step": self._step_count, "tool": tool_name,
+                                "input": tool_input, "result": gate,
+                            })
+                            self.memory.add_action(session_id, tool_name, str(tool_input))
+                            await self._emit(event_callback, {
+                                "type": "tool_end",
+                                "step": self._step_count,
+                                "tool": tool_name,
+                                "summary": "已跳过文档生成（被权限策略拦截）",
+                            })
+                            current_prompt += f"""
+Observation: {gate}
+请继续（如用户还要求其它操作再调用工具，否则给出 Final Answer）。"""
+                            continue
                         fmt = str(tool_input.get("format", "word") or "word").lower()
                         if fmt not in ("word", "pdf", "pptx"):
                             fmt = "word"
@@ -1102,7 +1125,7 @@ Observation: {obs}
                     })
 
                     # 执行工具
-                    observation = await self._execute_tool(tool_name, tool_input)
+                    observation = await self._execute_tool(tool_name, tool_input, event_callback)
                     self._log("observation", observation[:300])
                     self.memory.add_observation(session_id, observation)
 
@@ -1206,8 +1229,7 @@ Final Answer: [完整方案]）"""
             try:
                 return await get_llm_response(
                     prompt,
-                    model=getattr(self, "_run_model", None),
-                    thinking=getattr(self, "_run_thinking", None),
+                    model=getattr(self, "_run_model", None) or MATCH_LLM_MODEL,
                 )
             except Exception as e:
                 last_error = e
@@ -1218,8 +1240,12 @@ Final Answer: [完整方案]）"""
 
     # ---- 工具执行 ----
 
-    async def _execute_tool(self, tool_name: str, tool_input: dict) -> str:
+    async def _execute_tool(self, tool_name: str, tool_input: dict, event_callback=None) -> str:
         """执行指定工具，返回 Observation 字符串"""
+        # #3 工具权限闸门 + #6 联网搜索开关（所有工具路径的统一拦截点）
+        gate = await self._gate_tool(tool_name, tool_input, event_callback)
+        if gate is not None:
+            return gate
         tool = self.tools.get(tool_name)
         if not tool:
             return f"错误：工具 '{tool_name}' 不存在。可用工具：{self.tools.get_tool_names()}"
@@ -1231,6 +1257,117 @@ Final Answer: [完整方案]）"""
             return f"错误：工具 '{tool_name}' 参数不正确：{e}。期望参数：{json.dumps(tool.parameters, ensure_ascii=False)}"
         except Exception as e:
             return f"工具 '{tool_name}' 执行失败：{str(e)}"
+
+    # ---- 工具权限闸门（#3 human-in-the-loop）/ 联网搜索开关（#6）----
+    # 默认策略：高风险工具在 Agent 自主决策执行时先征求确认；显式「导出」意图不走此闸门。
+    DEFAULT_TOOL_POLICY = {
+        "generate_doc": "ask",
+        "read_customer_file": "ask",
+        "web_search": "allow",
+    }
+
+    async def _gate_tool(self, tool_name: str, tool_input: dict, event_callback=None) -> Optional[str]:
+        """返回 None 表示放行；返回字符串表示跳过工具并作为 Observation 注入。
+
+        - #6 联网搜索关闭：直接跳过 web_search，不再联网。
+        - #3 策略 deny：跳过；ask：发 permission_request SSE 并阻塞等待用户决策。
+        """
+        # #6 联网搜索开关
+        if tool_name == "web_search" and getattr(self, "_disable_web_search", False):
+            return "（已关闭联网搜索，本次跳过网络检索，仅基于本地知识库作答。）"
+        policy = (getattr(self, "_tool_permissions", None) or {}).get(tool_name) \
+            or self.DEFAULT_TOOL_POLICY.get(tool_name)
+        if policy == "deny":
+            return f"（工具「{tool_name}」已被你设为禁止执行，已跳过。）"
+        if policy == "ask":
+            try:
+                from app.agent.permission_gate import request_permission
+            except Exception:  # noqa: BLE001
+                return None
+            import uuid as _uuid
+            request_id = str(_uuid.uuid4())
+            reason = self._permission_reason(tool_name)
+            safe_input = self._permission_safe_input(tool_name, tool_input)
+            await self._emit(event_callback, {
+                "type": "permission_request",
+                "request_id": request_id,
+                "tool": tool_name,
+                "input": safe_input,
+                "reason": reason,
+            })
+            try:
+                decision = await request_permission(request_id, tool_name, tool_input, reason)
+            except Exception as e:  # noqa: BLE001
+                self._log("warn", f"权限确认异常（默认放行）: {e}")
+                return None
+            if decision != "allow":
+                return f"（你拒绝了工具「{tool_name}」的执行，已跳过该步骤。）"
+        return None
+
+    def _permission_reason(self, tool_name: str) -> str:
+        return {
+            "generate_doc": "Agent 准备生成一份可下载的方案书（Word/PDF/PPTX），将占用存储并生成文件。",
+            "read_customer_file": "Agent 准备读取你上传的客户资料文件。",
+            "web_search": "Agent 准备联网检索（华为云官网 / 竞品动态），可能产生额外请求。",
+        }.get(tool_name, f"Agent 准备执行工具「{tool_name}」。")
+
+    def _permission_safe_input(self, tool_name: str, tool_input: dict) -> dict:
+        """URL / 路径脱敏：只暴露对决策有用的最小信息。"""
+        ti = tool_input or {}
+        if tool_name == "web_search":
+            return {"query": str(ti.get("query", ""))[:120]}
+        if tool_name == "read_customer_file":
+            return {"path": str(ti.get("path", ""))[:160]}
+        if tool_name == "generate_doc":
+            return {"fmt": str(ti.get("format", ti.get("fmt", "word")))}
+        return {k: str(v)[:120] for k, v in ti.items()}
+
+    # ---- 上下文用量预估（#1）----
+    @staticmethod
+    def _est_tokens(text: str) -> int:
+        """中文 + 英文混排的粗略 token 估算（约 1.6 字符 / token）。"""
+        if not text:
+            return 0
+        return max(1, int(len(text) / 1.6))
+
+    def estimate_context_usage(self, session_id: str) -> dict:
+        """预估当前会话上下文占用（token 估算，仅展示用，非精确分词）。"""
+        # 系统提示词（方案类基准 + Final Answer 指南）：本模块顶层常量，直接引用
+        system_text = (REACT_SYSTEM_PROMPT_BASE or "") + (REACT_FINAL_GUIDE or "")
+        tools_text = ""
+        try:
+            tools_text = self.tools.get_tools_prompt() or ""
+        except Exception:  # noqa: BLE001
+            tools_text = ""
+        memory_text = ""
+        try:
+            from app.agent.memory_profiles import build_memory_context, build_profile_context
+            uid = getattr(self, "_user_id", None)
+            if isinstance(uid, int) and uid > 0:
+                memory_text = (build_memory_context(uid, "") or "") + (build_profile_context(uid) or "")
+        except Exception:  # noqa: BLE001
+            memory_text = ""
+        conv_text = ""
+        try:
+            hist = self.memory.get_conversation_history(session_id) or ""
+            conv_text = hist if isinstance(hist, str) else str(hist)
+        except Exception:  # noqa: BLE001
+            conv_text = ""
+        window = int(AGENT_CONTEXT_WINDOW or 64000)
+        buckets = {
+            "system": self._est_tokens(system_text),
+            "tools": self._est_tokens(tools_text),
+            "memory": self._est_tokens(memory_text),
+            "conversation": self._est_tokens(conv_text),
+        }
+        total = sum(buckets.values())
+        return {
+            "buckets": buckets,
+            "total": total,
+            "window": window,
+            "percent": min(100, round(total * 100 / window)) if window else 0,
+            "estimated": True,
+        }
 
     # ---- 输出解析 ----
 
@@ -1688,8 +1825,7 @@ Final Answer: [完整方案]）"""
         try:
             return await get_llm_response(
                 prompt,
-                model=getattr(self, "_run_model", None),
-                thinking=getattr(self, "_run_thinking", None),
+                model=getattr(self, "_run_model", None) or MATCH_LLM_MODEL,
             )
         except Exception:
             return "抱歉，当前服务暂时不可用，请稍后重试。如问题持续，请联系管理员。"
@@ -2015,7 +2151,6 @@ Final Answer: [完整方案]）"""
             reply = await get_llm_response(
                 prompt,
                 model=getattr(self, "_run_model", None) or MATCH_LLM_MODEL,
-                thinking=getattr(self, "_run_thinking", None),
             )
             reply = (reply or "").strip()
             if not reply:
