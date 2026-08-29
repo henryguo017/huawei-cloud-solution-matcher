@@ -1404,6 +1404,22 @@ body.view-agent .theme-label { margin-bottom: 8px; }
 }
 .ws-perm-remember input:checked + .ws-perm-remember-tick::after { content: "✓"; }
 
+/* 轻量顶部 toast（v=20260829e：自包含实现，修复 _toast fallback 到 window.alert 的 bug） */
+@keyframes ws-toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes ws-toast-out {
+    from { opacity: 1; transform: translateX(-50%) translateY(0); }
+    to   { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+}
+.ws-toast {
+    font-family: var(--font-family);
+    pointer-events: auto;
+    user-select: none;
+}
+.ws-toast:hover { animation-play-state: paused; }
+
 /* 思考过程面板（流式、可折叠，参照 DeepSeek 思考过程设计） */
 .ws-thinking {
     background: var(--bg-elevated);

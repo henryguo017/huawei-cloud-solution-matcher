@@ -861,15 +861,31 @@
             this._renderTasks();
             return true;
         },
-        /* 轻量 toast：优先用经典 UI.showToast，缺失时降级为 console */
+        /* 轻量 toast：自包含顶部气泡，不依赖 window.UI（Agent 视图没有 UI 命名空间） */
         _toast: function (msg, type) {
-            try {
-                if (window.UI && typeof window.UI.showToast === 'function') {
-                    window.UI.showToast(msg, type || 'info');
-                } else if (window.alert) {
-                    window.alert(msg);
-                }
-            } catch (e) { /* 忽略 */ }
+            type = type || 'info';
+            var palette = {
+                info:    { bg: '#ffffff', color: '#1f2328', border: '#e6e8eb',         icon: 'ⓘ' },
+                success: { bg: '#ffffff', color: '#1f2328', border: 'rgba(199,0,11,0.30)', icon: '✓' },
+                warning: { bg: '#fff8f0', color: '#8a5a00', border: '#ffe0b3',         icon: '⚠' },
+                error:   { bg: '#fff0f0', color: '#C7000B', border: 'rgba(199,0,11,0.30)', icon: '✕' }
+            };
+            var c = palette[type] || palette.info;
+            var esc = function (s) { return String(s).replace(/[<>&"']/g, function (ch) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
+            var t = document.createElement('div');
+            t.className = 'ws-toast ws-toast-' + type;
+            t.setAttribute('role', 'status');
+            t.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:3000;' +
+                'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';' +
+                'border-radius:12px;padding:10px 16px;font-size:13px;font-weight:500;' +
+                'box-shadow:0 8px 24px rgba(0,0,0,0.12);' +
+                'display:inline-flex;align-items:center;gap:8px;' +
+                'max-width:80vw;pointer-events:auto;' +
+                'animation:ws-toast-in 0.22s cubic-bezier(0.4,0,0.2,1),ws-toast-out 0.28s ease 2.4s forwards;';
+            t.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:' + c.color + ';color:#fff;font-size:11px;font-weight:700;flex-shrink:0;">' + c.icon + '</span>' +
+                '<span>' + esc(msg) + '</span>';
+            document.body.appendChild(t);
+            setTimeout(function () { if (t && t.parentNode) t.remove(); }, 2800);
         },
         /* 复制当前整段对话为纯文本到剪贴板（WorkBuddy 顶栏第 3 个图标） */
         _copyConversation: function () {
@@ -2036,15 +2052,14 @@
                 document.addEventListener('click', close, true);
             }, 0);
         },
-        /* #2 提示词优化：POST /agent/enhance-prompt → 回填输入框 */
+        /* #2 提示词优化：v=20260829e 改零弹窗——直接写回输入框，无 loading/success/error 任何 toast */
         _enhancePrompt: function () {
             var self = this;
             var input = this._getActiveInput();
             var raw = input ? (input.value || '').trim() : '';
-            if (!raw) { this._toast('先在输入框写点需求，再点优化', 'info'); return; }
+            if (!raw) return; // 输入为空：静默 no-op
             var token = this.userToken();
-            if (!token) { this._toast('请先登录', 'warning'); return; }
-            this._toast('正在优化提示词…', 'info');
+            if (!token) return; // 未登录：静默 no-op
             fetch('/api/agent/enhance-prompt', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -2052,17 +2067,12 @@
             }).then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
             .then(function (d) {
                 var enhanced = (d && d.enhanced) ? d.enhanced : raw;
-                if (input) {
-                    input.value = enhanced;
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    self._autoResizeInput && self._autoResizeInput();
-                    input.focus();
-                }
-                if (d && d.unchanged) self._toast('提示词无需优化，已保持原样', 'info');
-                else self._toast('提示词已优化，可直接发送', 'success');
-            }).catch(function () {
-                self._toast('优化失败，保持原提示词', 'warning');
-            });
+                if (!input) return;
+                input.value = enhanced;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                if (self._autoResizeInput) self._autoResizeInput();
+                input.focus();
+            }).catch(function () { /* 失败静默：输入框保留原文 */ });
         },
         /* #3 工具权限设置浮层（v=20260829d 重做：每工具独立卡片 + iOS 分段开关） */
         _openPermissionSettings: function () {
