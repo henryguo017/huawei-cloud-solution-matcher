@@ -569,7 +569,7 @@
                     self.webSearchDisabled = !self.webSearchDisabled;
                     self._applyWebSearchUI();
                     self._saveToolbarPrefs();
-                    self._toast(self.webSearchDisabled ? '已关闭联网搜索' : '已开启联网搜索', 'info');
+                    // 静默：active 态 + ON 徽章本身就是反馈，不要再弹窗
                 });
             }
             if (this.els.permSettingsBtn) {
