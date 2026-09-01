@@ -1330,6 +1330,7 @@
                         '</div>' +
                         '<div class="ws-msg-tools" id="ws-tools"></div>' +
                         '<div class="ws-msg-answer" id="ws-answer"></div>' +
+                        '<div class="ws-msg-ctx-hint" id="ws-ctx-hint" style="display:none;"></div>' +
                         '<div class="ws-msg-actions" id="ws-actions" style="display:none;"></div>' +
                         '<div class="ws-msg-clarify" id="ws-clarify" style="display:none;"></div>' +
                     '</div>' +
@@ -1339,6 +1340,7 @@
             return {
                 tools: wrap.querySelector('#ws-tools'),
                 answer: wrap.querySelector('#ws-answer'),
+                ctxHint: wrap.querySelector('#ws-ctx-hint'),
                 actions: wrap.querySelector('#ws-actions'),
                 clarify: wrap.querySelector('#ws-clarify'),
                 thinking: wrap.querySelector('#ws-thinking'),
@@ -1512,6 +1514,8 @@
                         if (fullAnswer && fullAnswer.trim()) {
                             self._appendExportActions(shell, fullAnswer, ev.format_mode || 'solution');
                         }
+                        // 方案 A：渲染客户背景上下文参考提示（与经典对齐）
+                        self._renderClientContextHint(shell, ev);
                     } else if (t === 'error') {
                         self._finishThinking();
                         shell.answer.innerHTML = '<div style="color:var(--error)">' + escHtml(ev.message || '重跑失败') + '</div>';
@@ -1732,6 +1736,8 @@
                     if (fullAnswer && fullAnswer.trim()) {
                         self._appendExportActions(shell, fullAnswer, ev.format_mode || 'solution');
                     }
+                    // 方案 A：渲染客户背景上下文参考提示（与经典对齐）
+                    self._renderClientContextHint(shell, ev);
                 } else if (t === 'error') {
                     self._finishThinking();
                     shell.answer.innerHTML = '<div style="color:var(--error)">' + escHtml(ev.message || '请求失败') + '</div>';
@@ -1937,6 +1943,18 @@
                 rb.addEventListener('click', function () {
                     self._regenerate(shell);
                 });
+            }
+        },
+        /* 方案 A：结果气泡内小字提示 —— 本次匹配是否参考了某客户背景与历史方案
+           与经典模式 script.js:6565 对齐；仅 Agent 模式渲染，经典模式字节级不变 */
+        _renderClientContextHint: function (shell, ev) {
+            if (!shell || !shell.ctxHint) return;
+            var ctx = ev && ev.client_context_used;
+            if (ctx && ctx.client_name) {
+                shell.ctxHint.textContent = '本次已参考客户「' + String(ctx.client_name) + '」的背景与历史方案 ' + (ctx.history_count || 0) + ' 条';
+                shell.ctxHint.style.display = '';
+            } else {
+                shell.ctxHint.style.display = 'none';
             }
         },
         /* #5 重新生成：用相同诉求再跑一次（新开一条 Assistant 气泡，保持当前对话上下文） */

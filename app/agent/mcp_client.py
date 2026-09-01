@@ -1,13 +1,21 @@
 # -*- coding: utf-8 -*-
-"""MCP 客户端（P2-3 拉伸项）。
+"""MCP 客户端（P2-3 拉伸项 · 真实实现）。
 
 通过 stdio JSON-RPC 2.0 连接外部 MCP Server，并把远端工具注册进本地 ToolRegistry，
 使 Agent 可直接调用远端工具（与 app/agent/mcp_server.py 暴露的标准 MCP 互相对接）。
 
-⚠️ 本文件为 git 对象损坏后，按 mcp_server.py 的 ToolRegistry 接口重建的骨架实现；
-原实现已丢失，且全仓当前无任何 import 此文件的代码（属可选拉伸项）。
-若你有更完整的版本请直接覆盖。register_remote_tools 当前仅做结构占位，
-不会在没有任何已配置 MCP Server 时被调用，无副作用。
+设计要点（与项目铁律对齐）：
+  - 纯标准库（asyncio.subprocess + JSON-RPC 2.0），零新依赖；
+  - 默认关闭：AGENT_MCP_CLIENT=0 时 register_remote_tools 直接返回 0，不拉起任何子进程、无副作用；
+  - 优雅降级：任一 Server 连接/握手失败只记 warning 并跳过，绝不拖垮主链路；
+  - 远端工具名加前缀 `mcp__<label>__<tool>`，避免与本地工具重名冲突；
+  - 远端工具的参数完全由远端 JSON Schema（inputSchema）定义，原样透传，不被本地签名归一化丢弃；
+  - 懒加载：stdio 传输层（MCPClient）不依赖任何 app 模块，可在无 chromadb/langchain 的环境单独测试；
+    仅 register_remote_tools 真正注册时才按需 import 本地 Tool 基类（部署环境已具备）。
+
+启动外部 Server 的约定（MCP_SERVERS 配置项）：
+  MCP_SERVERS='[{"command":["python","-m","app.agent.mcp_server"],"label":"self"}]'
+  command 为可执行命令（列表）；label 用于命名空间，缺省取 command 首个 token。
 """
 import json
 import logging
@@ -17,72 +25,263 @@ from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# MCP 协议常量
+PROTOCOL_VERSION = "2024-11-05"
+CLIENT_INFO = {"name": "huawei-cloud-agent", "version": "1.0"}
+
+# 模块级缓存：已建立的 MCPClient（长期存活，按需复用），用于关闭回收
+_CLIENTS: List["MCPClient"] = []
+_REGISTERED_NAMES: List[str] = []
+
+
+def _format_tool_result(result: Any) -> str:
+    """把 MCP tools/call 的 result 规整成给 LLM 看的文本字符串。"""
+    if result is None:
+        return "(工具无返回内容)"
+    if isinstance(result, str):
+        return result
+    # MCP 标准：{"content":[{"type":"text","text":"..."}], "isError":bool}
+    if isinstance(result, dict):
+        content = result.get("content")
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    parts.append(item.get("text", ""))
+                else:
+                    parts.append(json.dumps(item, ensure_ascii=False, default=str))
+            text = "\n".join(p for p in parts if p)
+            if result.get("isError"):
+                return f"Error: {text}" if text else "(工具返回错误，无详情)"
+            return text or "(工具无返回内容)"
+        # 退化：直接序列化整个 result
+        return json.dumps(result, ensure_ascii=False, default=str)
+    return json.dumps(result, ensure_ascii=False, default=str)
+
 
 class MCPClient:
-    """单个 stdio MCP Server 的 JSON-RPC 2.0 客户端。"""
+    """单个 stdio MCP Server 的 JSON-RPC 2.0 客户端（长期存活，纯标准库）。"""
 
     def __init__(self, command: List[str], timeout: float = 30.0, label: str = ""):
-        self.command = command
+        self.command = list(command)
         self.timeout = timeout
-        self.label = label or " ".join(command)
+        self.label = label or (command[0] if command else "mcp")
         self._proc: Optional[asyncio.subprocess.Process] = None
         self._req_id = 0
         self._tools: List[Dict[str, Any]] = []
 
     async def connect(self) -> None:
-        self._proc = await asyncio.create_subprocess_exec(
-            *self.command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        await self._rpc("initialize", {
-            "protocolVersion": "2024-11-05",
+        try:
+            self._proc = await asyncio.create_subprocess_exec(
+                *self.command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            raise RuntimeError(f"无法启动 MCP Server 进程 {self.command}: {e}")
+
+        # 1) initialize 握手
+        init_result = await self._rpc("initialize", {
+            "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {},
-            "clientInfo": {"name": "huawei-cloud-agent", "version": "1.0"},
+            "clientInfo": CLIENT_INFO,
         })
+        if not init_result:
+            raise RuntimeError("MCP initialize 无响应（进程可能已退出）")
+        # 2) 通知服务端已初始化（部分 server 要求后再响应 tools/list）
+        await self._rpc("notifications/initialized", {}, notify=True)
+        # 3) 拉取工具清单
         self._tools = await self.list_tools()
+        if not self._tools:
+            logger.warning(f"[MCP] Server「{self.label}」未暴露任何工具")
 
     async def _rpc(self, method: str, params: Dict[str, Any], notify: bool = False) -> Dict[str, Any]:
-        if self._proc is None or self._proc.stdin is None:
+        if self._proc is None or self._proc.stdin is None or self._proc.stdout is None:
             raise RuntimeError("MCPClient 未连接")
         self._req_id += 1
-        payload = {"jsonrpc": "2.0", "method": method, "params": params, "id": self._req_id}
-        self._proc.stdin.write((json.dumps(payload) + "\n").encode("utf-8"))
+        req_id = self._req_id
+        payload = {"jsonrpc": "2.0", "method": method, "params": params, "id": req_id}
+        self._proc.stdin.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
         await self._proc.stdin.drain()
         if notify:
             return {}
-        line = await self._proc.stdout.readline()
-        if not line:
-            return {}
-        return json.loads(line.decode("utf-8"))
+        return await self._read_response(req_id)
+
+    async def _read_response(self, expected_id: int) -> Dict[str, Any]:
+        """读取一行 JSON-RPC 响应，跳过通知（无 id）与不匹配的行，直到命中 expected_id。"""
+        assert self._proc is not None and self._proc.stdout is not None
+        while True:
+            try:
+                line = await asyncio.wait_for(self._proc.stdout.readline(), timeout=self.timeout)
+            except asyncio.TimeoutError:
+                raise RuntimeError(f"MCP 读取响应超时（>{self.timeout}s），method 可能未响应")
+            if not line:
+                # EOF：进程退出
+                raise RuntimeError("MCP 连接已断开（stdout EOF）")
+            s = line.decode("utf-8", errors="replace").strip()
+            if not s:
+                continue
+            try:
+                msg = json.loads(s)
+            except json.JSONDecodeError:
+                # 容忍非 JSON 噪声行（如某些 server 往 stdout 打日志）
+                continue
+            if not isinstance(msg, dict):
+                continue
+            # 通知类（无 id 或是 notifications/* 方法）直接跳过
+            if "id" not in msg or msg.get("id") is None:
+                continue
+            if msg.get("id") == expected_id:
+                if "error" in msg:
+                    raise RuntimeError(f"MCP 错误响应: {msg['error']}")
+                return msg.get("result", {})
+            # id 不匹配（理论单并发不该发生）继续读
 
     async def list_tools(self) -> List[Dict[str, Any]]:
         resp = await self._rpc("tools/list", {})
-        return resp.get("result", {}).get("tools", []) if resp else []
+        return resp.get("tools", []) if resp else []
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
-        resp = await self._rpc("tools/call", {"name": name, "arguments": arguments})
-        return resp.get("result")
+        # _read_response 已返回 MCP 内层 result（{content:[...], isError:...}），此处直接透传
+        resp = await self._rpc("tools/call", {"name": name, "arguments": arguments or {}})
+        if not resp:
+            return "(工具调用无响应)"
+        return resp
 
     async def close(self) -> None:
-        if self._proc:
+        if self._proc is None:
+            return
+        try:
+            # 先发 shutdown 通知，再终止
             try:
-                self._proc.terminate()
-                await self._proc.wait()
+                await self._rpc("shutdown", {}, notify=True)
             except Exception:
                 pass
+            if self._proc.returncode is None:
+                self._proc.terminate()
+            try:
+                await asyncio.wait_for(self._proc.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                self._proc.kill()
+        except Exception as e:
+            logger.warning(f"[MCP] 关闭 Server「{self.label}」异常（忽略）: {e}")
+        finally:
             self._proc = None
 
 
-def register_remote_tools(tool_registry, servers: Optional[List[Dict[str, Any]]] = None) -> int:
+def _sanitize_label(label: str) -> str:
+    """命名空间只允许安全字符，避免注入到工具名。"""
+    cleaned = "".join(ch if (ch.isalnum() or ch in "-_") else "_" for ch in (label or ""))
+    return cleaned or "mcp"
+
+
+def _load_servers_from_config(config_value: Optional[str]) -> List[Dict[str, Any]]:
+    """解析 MCP_SERVERS 配置（JSON 数组）。非法则回退空表。"""
+    if not config_value:
+        return []
+    try:
+        data = json.loads(config_value)
+    except json.JSONDecodeError:
+        logger.warning("[MCP] MCP_SERVERS 不是合法 JSON，已忽略")
+        return []
+    if not isinstance(data, list):
+        logger.warning("[MCP] MCP_SERVERS 应为数组，已忽略")
+        return []
+    servers = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        cmd = item.get("command")
+        if not isinstance(cmd, list) or not cmd:
+            logger.warning(f"[MCP] 跳过无效 server 配置（缺少 command）: {item}")
+            continue
+        servers.append({"command": cmd, "label": item.get("label", "")})
+    return servers
+
+
+def _create_remote_tool(client: "MCPClient", original_name: str, full_name: str,
+                        description: str, parameters: Dict[str, Any]):
+    """构造一个继承本地 Tool 的远端工具包装（懒加载 Tool 基类，避免无 chromadb 环境导入失败）。"""
+    from app.agent.tools import Tool
+
+    class RemoteTool(Tool):
+        def __init__(self):
+            self._client = client
+            self._remote_name = original_name
+            super().__init__(name=full_name, description=description,
+                             parameters=parameters, func=self._placeholder)
+
+        async def _placeholder(self, **kwargs):
+            return ""
+
+        def _normalize_args(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+            # 远端工具参数完全由远端 inputSchema 定义，原样透传，避免被 base 按函数签名丢弃
+            return kwargs
+
+        async def execute(self, **kwargs) -> str:
+            try:
+                result = await self._client.call_tool(self._remote_name, kwargs)
+                return _format_tool_result(result)
+            except Exception as e:
+                logger.error(f"[MCP] 远端工具 {full_name} 调用失败: {e}")
+                return f"Error: {str(e)}"
+
+    return RemoteTool()
+
+
+async def register_remote_tools(tool_registry, servers: Optional[List[Dict[str, Any]]] = None) -> List[str]:
     """把若干 MCP Server 暴露的工具注册进本地 ToolRegistry。
 
-    servers: [{"command": [...], "label": "..."}, ...]
-    返回成功注册的工具数。当前为骨架：未实际拉起子进程（避免无配置时副作用），
-    真实实现应逐个 MCPClient.connect() 后把远端 tool schema 适配为本地 Tool 并 add 进 registry。
+    返回成功注册的工具名列表（带 mcp__<label>__ 前缀）。
+    - 任一声道失败只记 warning 并跳过，不影响其它 Server 与主链路；
+    - 同一个 label 下的重名远端工具会被跳过（不覆盖本地工具）。
     """
     servers = servers or []
-    logger.debug(f"[mcp_client] register_remote_tools 被调用，servers={len(servers)}")
-    # TODO(原实现): 逐个 connect + 适配 schema + tool_registry.add(...)
-    return 0
+    registered: List[str] = []
+    for srv in servers:
+        command = srv.get("command") or []
+        label = _sanitize_label(srv.get("label") or (command[0] if command else "mcp"))
+        client = MCPClient(command=command, label=label)
+        try:
+            logger.info(f"[MCP] 正在连接 Server「{label}」: {command}")
+            await asyncio.wait_for(client.connect(), timeout=client.timeout + 5)
+        except Exception as e:
+            logger.warning(f"[MCP] 连接 Server「{label}」失败，已跳过: {e}")
+            await client.close()
+            continue
+        _CLIENTS.append(client)
+        for t in client._tools:
+            remote_name = t.get("name")
+            if not remote_name:
+                continue
+            full_name = f"mcp__{label}__{remote_name}"
+            if tool_registry.get(full_name):
+                logger.warning(f"[MCP] 工具名冲突，跳过: {full_name}")
+                continue
+            if tool_registry.get(remote_name):
+                # 远端未加前缀的原始名与本地冲突，跳过避免覆盖
+                logger.warning(f"[MCP] 远端工具「{remote_name}」与本地工具重名，已用前缀跳过")
+                continue
+            desc = t.get("description", f"远端工具（来自 MCP Server {label}）")
+            params = t.get("inputSchema") or {"type": "object", "properties": {}}
+            tool = _create_remote_tool(client, remote_name, full_name, desc, params)
+            tool_registry.register(tool)
+            registered.append(full_name)
+            logger.info(f"[MCP] 已注册远端工具: {full_name}")
+    if registered:
+        _REGISTERED_NAMES.extend(registered)
+        logger.info(f"[MCP] 共注册 {len(registered)} 个远端工具")
+    return registered
+
+
+async def shutdown_all() -> None:
+    """关闭所有已建立的 MCP Server 子进程（应用退出时调用）。"""
+    for client in _CLIENTS:
+        await client.close()
+    _CLIENTS.clear()
+    _REGISTERED_NAMES.clear()
+
+
+def get_registered_names() -> List[str]:
+    return list(_REGISTERED_NAMES)

@@ -20,6 +20,7 @@ from app.agent.tools import ToolRegistry, create_default_tools
 from app.agent.memory import ConversationMemory
 from app.agent.harness import AgentHarness
 from app.models.llm import get_llm_response
+from app import config as _app_config
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,33 @@ class SolutionAgent:
             verbose=verbose,
         )
 
+        # P2-3：MCP 远程工具仅加载一次（懒加载，首次 run 时按配置连接）
+        self._mcp_loaded = False
+
+    async def _ensure_mcp_tools(self) -> None:
+        """P2-3：按 AGENT_MCP_CLIENT / MCP_SERVERS 配置，把远端 MCP 工具注册进 ToolRegistry。
+
+        默认 AGENT_MCP_CLIENT=0 → 直接返回，不拉起任何子进程、零副作用。
+        任一 Server 失败自动跳过（优雅降级，绝不拖垮主链路）。仅首次 run 时执行。
+        """
+        if self._mcp_loaded:
+            return
+        self._mcp_loaded = True  # 先置位，避免并发重复连接
+        if (_app_config.AGENT_MCP_CLIENT or "0").strip() != "1":
+            return
+        try:
+            from app.agent import mcp_client as mcp_mod
+            servers = mcp_mod._load_servers_from_config(_app_config.MCP_SERVERS)
+            if not servers:
+                logger.info("[MCP] AGENT_MCP_CLIENT=1 但未配置 MCP_SERVERS，跳过")
+                return
+            names = await mcp_mod.register_remote_tools(self.tools, servers)
+            self.harness.set_remote_tool_names(names)
+            if names:
+                logger.info(f"[MCP] 已加载 {len(names)} 个远端工具：{names}")
+        except Exception as e:
+            logger.warning(f"[MCP] 加载远端工具失败（忽略，不影响主链路）: {e}")
+
     async def run(
         self,
         user_input: str,
@@ -101,6 +129,8 @@ class SolutionAgent:
             }
         """
         logger.info(f"Agent.run() session={session_id} input={user_input[:100]}...")
+        # P2-3：懒加载远端 MCP 工具（默认关闭；仅首次运行时按配置连接一次）
+        await self._ensure_mcp_tools()
         return await self.harness.run(
             user_input=user_input,
             session_id=session_id,

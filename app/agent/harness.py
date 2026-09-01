@@ -209,8 +209,13 @@ class AgentHarness:
         self._two_phase_enabled = True     # P2：运行期开关（run() 内按 config 覆盖）
         self._multi_agent_enabled = True   # P2：多智能体开关
         self._memory_context_injected = False  # P2-2：长程记忆注入标记（仅首轮注入一次）
+        self._remote_tool_names: list = []     # P2-3：已注册远端 MCP 工具名（plan 步工具集的逃生舱）
 
     # ---- 主入口 ----
+
+    def set_remote_tool_names(self, names: list) -> None:
+        """P2-3：注入已注册远端 MCP 工具名（由 SolutionAgent 在 _ensure_mcp_tools 后调用）。"""
+        self._remote_tool_names = list(names) if names else []
 
     async def _emit(self, event_callback, event: Dict[str, Any]) -> None:
         """安全调用事件回调"""
@@ -381,6 +386,9 @@ class AgentHarness:
                 else:
                     toolset = list(self.PLAN_STEP_TOOL_MAP.get(intent, [])[idx]) \
                         if idx < len(self.PLAN_STEP_TOOL_MAP.get(intent, [])) else []
+                # P2-3：远端 MCP 工具作为每步的「逃生舱」，LLM 可随时按需调用
+                if self._remote_tool_names:
+                    toolset = toolset + self._remote_tool_names
                 obs = await self._execute_step(idx, step, toolset, event_callback, session_id, tool_calls_log,
                                                role_prompt=role["prompt"] if role else None)
                 if obs is None:
@@ -695,6 +703,9 @@ class AgentHarness:
             })
         toolset = list(role["tools"]) if role else list(self.PLAN_STEP_TOOL_MAP.get(self._intent, [])[idx]) \
             if idx < len(self.PLAN_STEP_TOOL_MAP.get(self._intent, [])) else []
+        # P2-3：远端 MCP 工具作为每步的「逃生舱」
+        if self._remote_tool_names:
+            toolset = toolset + self._remote_tool_names
         tool_calls_log: list = []
         # 重跑该步前先复位该步状态为 pending → running
         self._mark_plan_status(idx, "pending")
@@ -2231,6 +2242,9 @@ Final Answer: [完整方案]）"""
                     list(self.PLAN_STEP_TOOL_MAP.get(self._intent, [])[i])
                     if i < len(self.PLAN_STEP_TOOL_MAP.get(self._intent, [])) else []
                 )
+                # P2-3：远端 MCP 工具作为每步的「逃生舱」
+                if self._remote_tool_names:
+                    toolset = toolset + self._remote_tool_names
                 obs = await self._execute_step(
                     i, plan_v2[i], toolset, event_callback, session_id, tool_calls_log,
                     role_prompt=role["prompt"] if role else None,

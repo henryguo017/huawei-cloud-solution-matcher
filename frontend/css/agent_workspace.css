@@ -1086,6 +1086,17 @@ body.view-agent .theme-label { margin-bottom: 8px; }
 .ws-msg-answer .ws-md-hr { border: none; border-top: 1px solid #E5E7EB; margin: 16px 0; }
 .ws-msg-answer .ws-md-img { color: var(--text-muted); font-size: 0.9em; }
 
+/* 方案 A：Agent 结果气泡内"本次已参考客户背景与历史方案 N 条"小字提示（对齐经典 .client-context-hint） */
+.ws-msg-ctx-hint {
+    margin: 0 0 12px;
+    padding: 8px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary, #4b525b);
+    background: rgba(199, 0, 11, 0.04);
+    border-left: 3px solid var(--primary-color, #C7000B);
+    border-radius: var(--radius-sm, 6px);
+}
 /* P0：答案就绪后的操作行（导出方案书 / 竞品分析 Word） */
 .ws-msg-actions {
     display: flex; align-items: center; gap: 10px;

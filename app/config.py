@@ -137,6 +137,16 @@ REFLEXION_MAX_REPLANS = int(os.getenv("REFLEXION_MAX_REPLANS", "2"))
 AGENT_PARALLEL_TOOLS = os.getenv("AGENT_PARALLEL_TOOLS", "1")
 MAX_PARALLEL = int(os.getenv("MAX_PARALLEL", "3"))
 
+# ==================== P2-3 MCP 远程工具客户端开关 ====================
+# AGENT_MCP_CLIENT=1：启动时（首次 Agent 运行）按 MCP_SERVERS 配置连接外部 MCP Server，
+# 把远端工具注册进本地 ToolRegistry，Agent 即可调用远端标准化工具。
+# 默认关闭（0）：不拉起任何子进程、零副作用；任一 Server 连接失败自动跳过（优雅降级）。
+AGENT_MCP_CLIENT = os.getenv("AGENT_MCP_CLIENT", "0")
+# MCP_SERVERS：JSON 数组，每项 {"command":[...], "label":"命名空间"}。
+# 例：'[{"command":["python","-m","app.agent.mcp_server"],"label":"self"}]'
+# label 仅允许 [A-Za-z0-9_-]，用于工具名前缀 mcp__<label>__<tool>，避免重名冲突。
+MCP_SERVERS = os.getenv("MCP_SERVERS", "")
+
 # ==================== 华为云官方动态聚合（华为云自家社区博客） ====================
 # 顶栏「资讯」弹窗第二个标签页。只聚合华为云官方渠道（产品发布/版本更新/优惠活动/认证考试/技术博客）。
 # 数据源：华为云社区博客 https://bbs.huaweicloud.com/blogs（华为云自家域名，服务端渲染 HTML，可抓取）。
@@ -172,6 +182,15 @@ def _resolve_data_path(p):
 
 VECTOR_DB_PROVIDER = os.getenv("VECTOR_DB_PROVIDER", "chroma")
 VECTOR_DB_PERSIST_DIRECTORY = _resolve_data_path(os.getenv("VECTOR_DB_PERSIST_DIRECTORY", os.path.join(BASE_DIR, "data", "vector_db")))
+# VECTOR_DB_PROVIDER=gaussdb 时的华为云 GaussDB（pgvector）扩展点凭据（默认 chroma 无需配置）。
+# 启用 gaussdb 还需在 requirements.txt 增加 psycopg2-binary；当前 GaussDBVectorDB 为结构化扩展点，
+# 凭据缺失/驱动未装时抛 VectorDBConfigError（可操作指引），不阻断默认 chroma 模式。
+GAUSSDB_HOST = os.getenv("GAUSSDB_HOST", "")
+GAUSSDB_PORT = os.getenv("GAUSSDB_PORT", "")
+GAUSSDB_USER = os.getenv("GAUSSDB_USER", "")
+GAUSSDB_PASSWORD = os.getenv("GAUSSDB_PASSWORD", "")
+GAUSSDB_DATABASE = os.getenv("GAUSSDB_DATABASE", "")
+GAUSSDB_EMBEDDING_TABLE = os.getenv("GAUSSDB_EMBEDDING_TABLE", "huawei_solutions")
 
 # 向量检索配置
 VECTOR_SEARCH_TOP_K = int(os.getenv("VECTOR_SEARCH_TOP_K", "5"))
