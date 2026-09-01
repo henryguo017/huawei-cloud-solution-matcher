@@ -11,6 +11,7 @@
 import os
 import json
 import asyncio
+import inspect
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
@@ -49,9 +50,32 @@ class Tool:
         params_str = json.dumps(self.parameters, ensure_ascii=False, indent=2)
         return f"- {self.name}: {self.description}\n  Parameters: {params_str}"
 
+    def _normalize_args(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """吸收 LLM 偶发的参数名漂移，按函数真实签名对齐，避免 TypeError 让检索整段失败。
+
+        已知漂移：search_competitor 收到 query（应为 competitor）、list_dir 收到 path（应为 dir）、
+        search_kb 收到 top_k/limit（函数无此参数）。统一在分发层处理，工具函数本身保持干净。
+        """
+        try:
+            sig = inspect.signature(self.func)
+        except (TypeError, ValueError):
+            return kwargs
+        accepted = set(sig.parameters.keys())
+        # 仅当目标参数未被显式传入时才做别名映射，避免覆盖真实参数
+        alias_map = {"query": "competitor", "path": "dir"}
+        norm: Dict[str, Any] = {}
+        for k, v in kwargs.items():
+            if k in accepted:
+                norm[k] = v
+            elif k in alias_map and alias_map[k] in accepted and alias_map[k] not in kwargs:
+                norm[alias_map[k]] = v
+            # 其余未知参数（top_k/limit 等）直接丢弃
+        return norm
+
     async def execute(self, **kwargs) -> str:
         """执行工具，返回 Observation 字符串"""
         try:
+            kwargs = self._normalize_args(kwargs)
             result = self.func(**kwargs)
             if asyncio.iscoroutine(result):
                 result = await result

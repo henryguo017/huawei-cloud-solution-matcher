@@ -1673,8 +1673,11 @@
                     // P1-2：后端已生成可下载文档 → 渲染下载 chip（与导出按钮共存）
                     self._renderDocChip(shell, ev.download_url, ev.file_name, ev.fmt);
                 } else if (t === 'reflexion') {
-                    // P1-3：Agent 自我反思 → 在思考面板追加反思气泡，让用户看到纠错过程
-                    self._appendReflexionBubble(shell, ev.text || '');
+                    // P1-3 / P3-1：Agent 自我反思 / 真重规划 → 在思考面板追加反思气泡
+                    self._appendReflexionBubble(shell, ev);
+                } else if (t === 'self_check') {
+                    // P3-3：自检 Gate → 在思考面板追加质量自检徽标，让用户看到交付前验收过程
+                    self._appendSelfCheckBadge(shell, ev);
                 } else if (t === 'permission_request') {
                     // #3 工具权限确认：Agent 即将执行高风险工具，弹出 human-in-the-loop 确认框
                     self._openPermissionModal(ev);
@@ -2253,13 +2256,37 @@
                 self._toast('文档下载失败', 'error');
             });
         },
-        /* P1-3：reflexion 事件 → 在思考面板追加反思气泡，让用户看到 Agent 自我纠错 */
-        _appendReflexionBubble: function (shell, text) {
+        /* P1-3 / P3-1：reflexion 事件 → 在思考面板追加反思气泡，让用户看到自我纠错 / 重规划过程 */
+        _appendReflexionBubble: function (shell, ev) {
             if (!shell || !shell.thinkingBody) return;
+            var text = (ev && ev.text) ? ev.text : '';
+            var replanned = !!(ev && ev.replanned);
             var note = document.createElement('div');
-            note.className = 'ws-reflexion-bubble';
-            note.innerHTML = '<span class="ws-reflexion-tag">反思</span>' +
+            note.className = 'ws-reflexion-bubble' + (replanned ? ' ws-reflexion-replan' : '');
+            var tag = replanned ? '重规划' : '反思';
+            note.innerHTML = '<span class="ws-reflexion-tag">' + tag + '</span>' +
                 '<span class="ws-reflexion-text">' + escHtml(String(text || '')) + '</span>';
+            shell.thinkingBody.appendChild(note);
+            this._scrollBottom();
+        },
+
+        /* P3-3：self_check 事件 → 在思考面板追加质量自检徽标，让用户看到交付前验收 */
+        _appendSelfCheckBadge: function (shell, ev) {
+            if (!shell || !shell.thinkingBody) return;
+            var gate = ev.gate || 'pass';
+            var score = typeof ev.score === 'number' ? ev.score : 0;
+            var map = {
+                pass: { cls: 'pass', label: '质量自检通过', icon: '✓' },
+                fail: { cls: 'fail', label: '质量自检未过·二次合成中', icon: '↻' },
+                warn: { cls: 'warn', label: '质量自检未达标·已放行', icon: '!' },
+            };
+            var m = map[gate] || map.pass;
+            var gaps = Array.isArray(ev.gaps) && ev.gaps.length
+                ? '<span class="ws-selfcheck-gaps">待补：' + escHtml(ev.gaps.slice(0, 3).join('、')) + '</span>' : '';
+            var note = document.createElement('div');
+            note.className = 'ws-selfcheck-badge ws-selfcheck-' + m.cls;
+            note.innerHTML = '<span class="ws-selfcheck-tag">' + m.icon + ' ' + m.label + '</span>' +
+                '<span class="ws-selfcheck-score">评分 ' + score + '</span>' + gaps;
             shell.thinkingBody.appendChild(note);
             this._scrollBottom();
         },

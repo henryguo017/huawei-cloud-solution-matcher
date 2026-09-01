@@ -36,7 +36,11 @@ from app.services.solution_prompt import (
 from app.services.solution_matcher import SolutionMatcherService
 from app.agent.clarify_store import ClarifySessionStore
 from app.agent.intent import classify_intent
-from app.config import MATCH_LLM_MODEL, SUPPORTED_COMPETITORS, AGENT_TWO_PHASE, AGENT_MULTI_AGENT, AGENT_CONTEXT_WINDOW
+from app.config import (
+    MATCH_LLM_MODEL, SUPPORTED_COMPETITORS, AGENT_TWO_PHASE, AGENT_MULTI_AGENT, AGENT_CONTEXT_WINDOW,
+    AGENT_SELF_CHECK, SELF_CHECK_PASS, SELF_CHECK_MAX_ITERS,
+    AGENT_REFLEXION_REPLAN, REFLEXION_MAX_REPLANS, AGENT_PARALLEL_TOOLS, MAX_PARALLEL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +199,10 @@ class AgentHarness:
         self._consecutive_tool_failures: int = 0   # P1-3：连续工具失败计数（触发反思）
         self._reflexion_count: int = 0     # P1-3：反思触发次数
         self._reflexion_success: bool = False       # P1-3：反思是否最终纠正成功
+        self._last_trajectory: str = ""    # P1-3：最近执行轨迹（反思用，run() 内亦会重置）
+        # P3-1：真反思-重规划状态
+        self._replan_count: int = 0        # 已重规划次数（受 REFLEXION_MAX_REPLANS 保护）
+        self._last_replanned: bool = False # 本次运行是否触发过重规划（写入 result.replanned）
         # P2-1-A：真·两阶段执行状态（plan 驱动执行顺序）
         self._step_results: dict = {}      # P2：每步执行结果（供 D5 重跑与多智能体消费）
         self._phase_outputs: dict = {}     # P2-1-B：多智能体各阶段产物（demand/architect/reviewer）
@@ -387,8 +395,21 @@ class AgentHarness:
                     "summary": "本步完成",
                 })
 
-            # 汇总各步结果 → 终稿（走统一增强管线 + 自检）
-            final = await self._synthesize_final(user_input, plan, step_outputs, event_callback)
+            # P3-1 真反思-重规划：若任一执行步含 Error:（失败步），且开关开启、预算未超，
+            # 则读失败步 → planner 产修订计划 → 重跑失败步 → 重新汇总；否则走常规汇总。
+            failed = [i for i in range(len(plan)) if "Error:" in (self._step_results.get(i, "") or "")]
+            replan_enabled = (AGENT_REFLEXION_REPLAN or "1").strip() == "1"
+            if failed and replan_enabled and self._replan_count < REFLEXION_MAX_REPLANS:
+                replanned = await self._reflexion_replan(event_callback, session_id, tool_calls_log)
+                if replanned is not None:
+                    final = replanned
+                else:
+                    final = await self._synthesize_final(user_input, plan, step_outputs, event_callback)
+            else:
+                final = await self._synthesize_final(user_input, plan, step_outputs, event_callback)
+            # P3-3 自检 Gate：终稿交付前过质量闸门（不过则二次合成），在增强管线前完成，
+            # 保证前端流式内容即闸门后的终稿。
+            final, _ = await self._self_check_gate(final, user_input, event_callback)
             final = await self._finalize_answer(user_input, final, tool_calls_log, event_callback=event_callback)
             self._last_draft = final
             self.memory.add_agent_response(session_id, final)
@@ -479,6 +500,37 @@ class AgentHarness:
                 break
 
             if parse_result["type"] == "action":
+                # P3-2 并行子体：若单轮产出多个「只读检索」Action，且开关开启、落在步级工具集内、
+                # 数量不过 MAX_PARALLEL，则用 asyncio.gather 并发执行（权限闸门各自阻塞、自然等齐）。
+                parallel_actions = self._parse_react_actions(llm_response)
+                readonly_set = {"search_kb", "search_competitor", "web_search"}
+                if (parallel_actions
+                        and (AGENT_PARALLEL_TOOLS or "1").strip() == "1"
+                        and len(parallel_actions) >= 2
+                        and all(a["tool_name"] in readonly_set for a in parallel_actions)
+                        and all(a["tool_name"] in toolset for a in parallel_actions)
+                        and len(parallel_actions) <= MAX_PARALLEL):
+                    thought = parse_result.get("thought", "")
+                    if thought:
+                        self.memory.add_thought(session_id, thought)
+                        await self._emit(event_callback, {
+                            "type": "thought", "step": self._step_count, "text": thought[:300],
+                        })
+                    self._log("system", f"[P3-2 并行] 步{idx + 1} 并发 {len(parallel_actions)} 个只读工具")
+                    obs_list = await asyncio.gather(*[
+                        self._exec_one_action(idx, a["tool_name"], a["tool_input"], event_callback, session_id, tool_calls_log)
+                        for a in parallel_actions
+                    ])
+                    for ob in obs_list:
+                        obs_lines.append(ob[:250])
+                    # 并行下不注入软反思（失败由 _plan_and_execute 外层重规划处理）；继续等 STEP_DONE
+                    step_prompt += (
+                        f"\n\n{_trunc(llm_response, 1200)}\n\n"
+                        + "\n\n".join(f"Observation: {_trunc(ob, 2500)}" for ob in obs_list)
+                        + "\n\n请继续（若本步目标已达成，请输出 STEP_DONE: [总结]）。"
+                    )
+                    continue
+                # 顺序路径（单 action，或含非只读工具 / 超上限 / 不在步级工具集 → 兼容旧行为）
                 tool_name = parse_result["tool_name"]
                 tool_input = parse_result["tool_input"]
                 if tool_name not in toolset:
@@ -486,7 +538,6 @@ class AgentHarness:
                     obs_lines.append(hint)
                     step_prompt += "\n" + hint
                     continue
-                # 点亮 running
                 self._mark_plan_status(idx, "running")
                 await self._emit(event_callback, {
                     "type": "tool_start", "step": self._step_count,
@@ -662,6 +713,7 @@ class AgentHarness:
         # 重新汇总（其余步沿用上次结果）
         step_outputs = [self._step_results.get(i, "") for i in range(len(plan))]
         final = await self._synthesize_final(self._plan_original_input or "", plan, step_outputs, event_callback)
+        final, self._quality_warn = await self._self_check_gate(self._plan_original_input or "", final, event_callback)
         final = await self._finalize_answer(self._plan_original_input or "", final, tool_calls_log, event_callback=event_callback)
         self._last_draft = final
         self.memory.add_agent_response(session_id, final)
@@ -1258,6 +1310,40 @@ Final Answer: [完整方案]）"""
         except Exception as e:
             return f"工具 '{tool_name}' 执行失败：{str(e)}"
 
+    async def _exec_one_action(
+        self, idx: int, tool_name: str, tool_input: dict,
+        event_callback, session_id: str, tool_calls_log: list,
+    ) -> str:
+        """P3-2：单工具执行的统一协程（顺序与并行路径共用）。
+
+        点亮 running → 发 tool_start → 执行 → 记轨迹/失败计数 → 发 tool_end，返回 observation。
+        失败计数沿用 P1-3 规则（连续失败由外层 _plan_and_execute 触发重规划）。
+        """
+        self._step_count += 1
+        self._mark_plan_status(idx, "running")
+        await self._emit(event_callback, {
+            "type": "tool_start", "step": self._step_count,
+            "tool": tool_name, "plan_index": idx,
+        })
+        self.memory.add_action(session_id, tool_name, str(tool_input))
+        observation = await self._execute_tool(tool_name, tool_input, event_callback)
+        self.memory.add_observation(session_id, observation)
+        tool_calls_log.append({
+            "step": self._step_count, "tool": tool_name,
+            "input": tool_input, "result": observation,
+        })
+        if "Error:" in observation:
+            self._consecutive_tool_failures += 1
+        else:
+            self._consecutive_tool_failures = 0
+        self._record_trajectory("", tool_name, observation)
+        summary = self._summarize_tool_result(tool_name, observation)
+        await self._emit(event_callback, {
+            "type": "tool_end", "step": self._step_count,
+            "tool": tool_name, "summary": summary, "plan_index": idx,
+        })
+        return observation
+
     # ---- 工具权限闸门（#3 human-in-the-loop）/ 联网搜索开关（#6）----
     # 默认策略：高风险工具在 Agent 自主决策执行时先征求确认；显式「导出」意图不走此闸门。
     DEFAULT_TOOL_POLICY = {
@@ -1480,6 +1566,37 @@ Final Answer: [完整方案]）"""
 
         # 确实无法解析
         return {"type": "unknown", "content": text}
+
+    @staticmethod
+    def _parse_react_actions(response: str) -> list:
+        """P3-2：解析可能含多个 Action 的 ReAct 输出，返回 action 列表。
+
+        每项：{"tool_name": str, "tool_input": dict, "thought": str}。
+        仅当拆分出 >=2 个 Action 时返回列表；否则返回 []（由调用方走单 action 顺序路径）。
+        Action Input 按 JSON 解析（失败兜底为 {"query": ...}），与 _parse_react_output 一致。
+        """
+        if not response:
+            return []
+        parts = re.split(r'\n\s*Action\s*[:：]', response, flags=re.IGNORECASE)
+        actions = []
+        for p in parts[1:]:
+            lines = p.splitlines()
+            name = lines[0].strip() if lines else ""
+            if not name:
+                continue
+            im = re.search(r'Action\s*Input\s*[:：]\s*(\{.*?\})', p, re.IGNORECASE | re.DOTALL)
+            tool_input = {}
+            if im:
+                try:
+                    tool_input = json.loads(im.group(1).strip())
+                except json.JSONDecodeError:
+                    tool_input = {"query": im.group(1).strip()}
+            else:
+                raw = p.strip()
+                if raw:
+                    tool_input = {"query": raw[:200]}
+            actions.append({"tool_name": name, "tool_input": tool_input, "thought": ""})
+        return actions if len(actions) >= 2 else []
 
     def _parse_clarify_questions(self, raw: str) -> list:
         """
@@ -1750,6 +1867,121 @@ Final Answer: [完整方案]）"""
             self._log("error", f"[自检] 失败，跳过: {e}")
         return answer
 
+    # ─────────────────── P3-3：自检 Gate（质量闸门） ───────────────────
+    async def _self_check_gate(
+        self, answer: str, user_input: str, event_callback=None,
+    ) -> tuple:
+        """P3-3 硬质量闸门：critic LLM 按 5 维 rubric 验收终稿（draft 阶段，finalize 之前）。
+
+        返回 (answer, quality_warn)：
+          - 通过 → 原 answer，quality_warn=False；
+          - 不通过且在迭代上限内 → 用 patch_hint 二次合成（不重跑工具、不流式），返回修订稿，quality_warn=False；
+          - 达上限仍不过 → 返回最后一次稿，quality_warn=True（不阻断用户，稳定性铁律）。
+        异常 → 静默返回原 answer，quality_warn=False（自检永不阻断）。
+        """
+        self._quality_warn = False
+        enabled = (AGENT_SELF_CHECK or "1").strip() == "1"
+        if not enabled or not answer or len(answer.strip()) < 200:
+            return answer, False
+        try:
+            from app.models.llm import get_llm_response
+            mention_competitor = bool(SUPPORTED_COMPETITORS and any(
+                c.lower() in (user_input or "").lower() for c in SUPPORTED_COMPETITORS
+            ))
+            rubric = (
+                "1. 需求/痛点覆盖\n2. 方案思路或架构\n3. 推荐产品组合"
+                + ("\n4. 竞品对比（用户提到了友商，必须含华为云 vs 友商对比）" if mention_competitor else "")
+                + "\n5. 无幻觉/有据可查\n6. 结构完整可执行"
+            )
+            current = answer
+            for it in range(1, SELF_CHECK_MAX_ITERS + 1):
+                critic_prompt = (
+                    "你是售前方案质量审查员，按以下 rubric 逐维度判断方案是否覆盖要点。\n"
+                    f"Rubric：\n{rubric}\n\n"
+                    "评分原则（重要）：\n"
+                    "- 评分依据『维度要点是否被覆盖』，而非篇幅长短。一份结构完整、各维度要点均已体现的方案"
+                    "（即使表述简练）应判 pass=true，score 给 80-95。\n"
+                    "- 仅当存在明确缺失的维度（如完全没提推荐产品、或用户提了友商却无任何对比）时才判"
+                    "pass=false，并在 gaps 中列出具体缺失维度。\n"
+                    "只输出 JSON（不要其它文字）：\n"
+                    '{"pass": true|false, "score": 0-100, "gaps": ["缺失维度1", ...], '
+                    '"patch_hint": "如何补强的简要指引"}\n\n'
+                    f"用户需求：{user_input}\n\n"
+                    f"待审查方案：\n{current[:6000]}\n\n"
+                    "审查结果 JSON："
+                )
+                raw = await get_llm_response(critic_prompt, model=MATCH_LLM_MODEL)
+                verdict = self._parse_self_check_verdict(raw)
+                passed = bool(verdict.get("pass")) and verdict.get("score", 0) >= SELF_CHECK_PASS
+                await self._emit(event_callback, {
+                    "type": "self_check",
+                    "gate": "pass" if passed else "fail",
+                    "score": verdict.get("score", 0),
+                    "gaps": verdict.get("gaps", []),
+                    "iter": it,
+                    "max_iters": SELF_CHECK_MAX_ITERS,
+                })
+                if passed:
+                    self._log("system", f"[P3-3 自检] 通过 score={verdict.get('score')}")
+                    return current, False
+                # 不通过 → 二次合成（非流式、不重跑工具）
+                self._log("system", f"[P3-3 自检] 第{it}次未过 score={verdict.get('score')}，二次合成")
+                hint = verdict.get("patch_hint", "") or "；".join(verdict.get("gaps", []))
+                revise_prompt = (
+                    "你是华为云售前方案撰写官。下面是一份方案，审查指出它存在以下不足，请据此修订为完整终稿。\n"
+                    "要求：①保留已达标的维度，只补强指出的不足；②不要大幅扩写无关内容，修订稿篇幅控制在"
+                    "原方案的 1.2 倍以内（建议 1500-3500 字）；③风格一致，涉及具体数据标注[资料N]或『需进一步核实』。\n"
+                    f"不足与修补指引：{hint}\n\n"
+                    f"用户需求：{user_input}\n\n"
+                    f"原方案：\n{current[:4000]}\n\n"
+                    "修订后完整方案："
+                )
+                revised = await self._call_llm(revise_prompt)
+                revised = (revised or "").strip()
+                if revised:
+                    current = revised
+                else:
+                    # 二次合成失败，保留原稿并标记 warn
+                    self._quality_warn = True
+                    return current, True
+            # 达上限仍不过
+            self._quality_warn = True
+            await self._emit(event_callback, {
+                "type": "self_check", "gate": "warn", "score": verdict.get("score", 0),
+                "gaps": verdict.get("gaps", []), "iter": SELF_CHECK_MAX_ITERS, "max_iters": SELF_CHECK_MAX_ITERS,
+            })
+            self._log("system", f"[P3-3 自检] 达上限仍不过，放行并附 quality_warn")
+            return current, True
+        except Exception as e:
+            self._log("error", f"[P3-3 自检] 异常跳过: {e}")
+            return answer, False
+
+    @staticmethod
+    def _parse_self_check_verdict(raw: str) -> dict:
+        """从 critic 回复中解析 {pass, score, gaps, patch_hint} JSON，容错。"""
+        if not raw:
+            return {"pass": True, "score": SELF_CHECK_PASS, "gaps": [], "patch_hint": ""}
+        text = raw.strip()
+        # 优先定位第一个 { 到最后一个 } 的 JSON 段
+        s, e = text.find("{"), text.rfind("}")
+        if s >= 0 and e > s:
+            try:
+                data = json.loads(text[s:e + 1])
+                if isinstance(data, dict):
+                    data["pass"] = str(data.get("pass", "")).strip().lower() in ("true", "1", "yes")
+                    try:
+                        data["score"] = int(float(data.get("score", SELF_CHECK_PASS)))
+                    except (TypeError, ValueError):
+                        data["score"] = SELF_CHECK_PASS
+                    data["gaps"] = data.get("gaps") or []
+                    data["patch_hint"] = data.get("patch_hint", "") or ""
+                    return data
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # 退化：含 "OK"/"通过" 视为通过
+        ok = any(k in text for k in ("OK", "通过", "合格", "pass"))
+        return {"pass": ok, "score": SELF_CHECK_PASS if ok else 0, "gaps": [], "patch_hint": ""}
+
     async def _ensure_demand(self, user_input: str, industry: str, demand_analysis: Dict[str, Any]) -> tuple:
         """B修复：行业缺失时兜底补跑 analyze_demand，保证行业剧本注入与检索过滤生效。"""
         if industry:
@@ -1910,6 +2142,119 @@ Final Answer: [完整方案]）"""
         except Exception as e:
             logger.warning(f"[Reflexion] 反思失败（跳过）: {e}")
             return ""
+
+    @staticmethod
+    def _parse_plan_v2(raw: str) -> list:
+        """从 planner 回复中解析修订计划（JSON 字符串数组），容错。"""
+        if not raw:
+            return []
+        text = raw.strip()
+        s, e = text.find("["), text.rfind("]")
+        if s >= 0 and e > s:
+            try:
+                data = json.loads(text[s:e + 1])
+                if isinstance(data, list):
+                    return [str(x).strip() for x in data if str(x).strip()]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # 退化：按行拆分非空项
+        items = [ln.strip().lstrip("0123456789.、-").strip() for ln in text.splitlines() if ln.strip()]
+        return items
+
+    async def _reflexion_replan(
+        self, event_callback, session_id: str, tool_calls_log: list,
+    ) -> Optional[str]:
+        """P3-1 真反思-重规划：替代 P1-3 软重试。
+
+        触发前提：调用方已确认存在失败步（_step_results 含 'Error:'）。本方法：
+          1. 读取失败步摘要；
+          2. 调 planner LLM 产出修订计划（plan_v2，长度与原 plan 一致，仅替换失败步文本）；
+          3. 对失败步用 _execute_step 重跑（复用角色/工具集，成功步结果保留）；
+          4. emit plan(plan_version=2) + reflexion(replanned=True) + step_done；
+          5. 重新 _synthesize_final 汇总，返回新终稿。
+        异常/超限 → 返回 None（由调用方回退常规汇总或旧软重试路径，稳定性铁律）。
+        """
+        replan_enabled = (AGENT_REFLEXION_REPLAN or "1").strip() == "1"
+        if not replan_enabled:
+            return None
+        if self._replan_count >= REFLEXION_MAX_REPLANS:
+            self._log("system", "[P3-1 重规划] 已达 REFLEXION_MAX_REPLANS 上限，跳过")
+            return None
+        failed = [i for i in range(len(self._plan)) if "Error:" in (self._step_results.get(i, "") or "")]
+        if not failed:
+            return None
+        try:
+            self._replan_count += 1
+            summary = "；".join(
+                f"第{i + 1}步失败：{(self._step_results.get(i, '') or '')[:120]}" for i in failed
+            )
+            self._log("system", f"[P3-1 重规划] 触发（第{self._replan_count}次）：{summary}")
+            # 反思事件（前端显示「重规划中」）
+            await self._emit(event_callback, {
+                "type": "reflexion",
+                "text": f"检测到 {len(failed)} 个步骤执行失败，已重规划并重跑失败步：{summary}",
+                "replanned": True,
+                "plan_version": 2,
+            })
+            # planner LLM → 修订计划（仅替换失败步文本，长度保持与原 plan 一致，前端安全）
+            planner_prompt = (
+                "你是任务规划师。以下方案执行中部分步骤失败，请根据原始需求与失败摘要，"
+                "针对【失败步骤】给出修订后的单步目标（一句），其余步骤保持不变。\n"
+                f"原始需求：{self._plan_original_input or ''}\n"
+                f"失败步骤摘要：{summary}\n\n"
+                "只输出 JSON 字符串数组，元素数量等于失败步骤数，每个元素是一句修订后的步骤目标。"
+                "例如：[\"重新检索制造业ERP上云资料（换用关键词）\", \"基于资料撰写方案\"]"
+            )
+            try:
+                pv_raw = await self._call_llm(planner_prompt)
+                pv = self._parse_plan_v2(pv_raw)
+            except Exception as e:
+                self._log("warn", f"[P3-1] planner 失败（用原步文本重跑）: {e}")
+                pv = []
+            plan_v2 = list(self._plan)
+            for k, i in enumerate(failed):
+                if k < len(pv):
+                    plan_v2[i] = pv[k]
+            # emit plan(plan_version=2) + 重新点亮 plan_status（成功步保持 done）
+            status_v2 = ["done" if i not in failed else "pending" for i in range(len(self._plan))]
+            await self._emit(event_callback, {
+                "type": "plan", "plan": plan_v2, "plan_status": status_v2, "plan_version": 2,
+            })
+            # 重跑失败步（复用角色/工具集）
+            for i in failed:
+                self._mark_plan_status(i, "pending")
+                role = None
+                if self._multi_agent_enabled and self._intent in ("solution", "competitor"):
+                    from app.agent.agents import get_role
+                    role = get_role(i)
+                toolset = list(role["tools"]) if role else (
+                    list(self.PLAN_STEP_TOOL_MAP.get(self._intent, [])[i])
+                    if i < len(self.PLAN_STEP_TOOL_MAP.get(self._intent, [])) else []
+                )
+                obs = await self._execute_step(
+                    i, plan_v2[i], toolset, event_callback, session_id, tool_calls_log,
+                    role_prompt=role["prompt"] if role else None,
+                )
+                if obs is None:
+                    # 重跑步要求澄清 → 放弃该步重规划（保留原失败结果，不阻断）
+                    self._log("warn", f"[P3-1] 第{i + 1}步重跑触发澄清，放弃重规划")
+                    self._mark_plan_status(i, "done")
+                    continue
+                self._step_results[i] = obs
+                self._mark_plan_status(i, "done")
+                await self._emit(event_callback, {
+                    "type": "step_done", "step_index": i, "summary": "重规划重跑完成",
+                })
+            # 重新汇总
+            step_outputs = [self._step_results.get(i, "") for i in range(len(self._plan))]
+            final = await self._synthesize_final(
+                self._plan_original_input or "", self._plan, step_outputs, event_callback,
+            )
+            self._last_replanned = True
+            return final
+        except Exception as e:
+            self._log("error", f"[P3-1 重规划] 异常降级: {e}")
+            return None
 
     # ───────────────────────── 账户数据真实取数 ─────────────────────────
     def _classify_account_subtype(self, text: str) -> str:
@@ -2203,6 +2548,8 @@ Final Answer: [完整方案]）"""
             "format_mode": getattr(self, "_format_mode", "solution"),  # P0：导出时决定 report_type（solution/competitor）
             "reflexion_used": self._reflexion_count > 0,   # P1-3：是否触发过反思
             "reflexion_success": self._reflexion_success,  # P1-3：反思是否成功注入
+            "replanned": getattr(self, "_last_replanned", False),  # P3-1：本次是否触发真重规划
+            "quality_warn": getattr(self, "_quality_warn", False),  # P3-3：自检 Gate 达上限仍不过时标记
         }
 
     # ---- 日志 ----

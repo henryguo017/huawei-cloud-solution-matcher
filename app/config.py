@@ -120,6 +120,23 @@ WEB_SEARCH_MAX_PER_SESSION = int(os.getenv("WEB_SEARCH_MAX_PER_SESSION", "3"))
 AGENT_TWO_PHASE = os.getenv("AGENT_TWO_PHASE", "1")
 AGENT_MULTI_AGENT = os.getenv("AGENT_MULTI_AGENT", "1")
 
+# ==================== P3 推理可靠性开关 ====================
+# AGENT_SELF_CHECK=1：交付前过「自检 Gate」（critic LLM 按 5 维 rubric 验收，不过则二次合成）。
+# SELF_CHECK_PASS：critic 评分阈值（0-100），低于此值视为不通过、触发二次合成。
+# 默认 70：critic 按「维度覆盖」而非「篇幅」评分，完整方案应达 80-95；仅明显缺维度才不过。
+# SELF_CHECK_MAX_ITERS：最多二次合成次数（不含首次），达上限仍不过则放行并附 quality_warn。
+# 均默认开启；异常自动跳过（稳定性铁律：自检永不阻断用户）。
+AGENT_SELF_CHECK = os.getenv("AGENT_SELF_CHECK", "1")
+SELF_CHECK_PASS = int(os.getenv("SELF_CHECK_PASS", "70"))
+SELF_CHECK_MAX_ITERS = int(os.getenv("SELF_CHECK_MAX_ITERS", "2"))
+# AGENT_REFLEXION_REPLAN=1：反思时做「真重规划」（读取失败步→planner 产 plan_v2→重跑失败步），
+# 替代 P1-3 软重试；=0 回退 P1-3 单 retry 文本注入。
+AGENT_REFLEXION_REPLAN = os.getenv("AGENT_REFLEXION_REPLAN", "1")
+REFLEXION_MAX_REPLANS = int(os.getenv("REFLEXION_MAX_REPLANS", "2"))
+# AGENT_PARALLEL_TOOLS=1：同 plan 步内只读工具（search_kb/search_competitor/web_search）经 asyncio.gather 并发。
+AGENT_PARALLEL_TOOLS = os.getenv("AGENT_PARALLEL_TOOLS", "1")
+MAX_PARALLEL = int(os.getenv("MAX_PARALLEL", "3"))
+
 # ==================== 华为云官方动态聚合（华为云自家社区博客） ====================
 # 顶栏「资讯」弹窗第二个标签页。只聚合华为云官方渠道（产品发布/版本更新/优惠活动/认证考试/技术博客）。
 # 数据源：华为云社区博客 https://bbs.huaweicloud.com/blogs（华为云自家域名，服务端渲染 HTML，可抓取）。

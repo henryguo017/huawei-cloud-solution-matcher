@@ -1582,6 +1582,34 @@ body.view-agent .theme-label { margin-bottom: 8px; }
 }
 .ws-reflexion-text { line-height: 1.5; }
 
+/* P3-1：真重规划气泡（区别于普通反思，用华为红强调「正在重规划」） */
+.ws-reflexion-bubble.ws-reflexion-replan {
+    background: rgba(199,0,11,0.10);
+    border: 1px solid rgba(199,0,11,0.32);
+}
+.ws-reflexion-bubble.ws-reflexion-replan .ws-reflexion-tag {
+    background: #C7000B; color: #fff;
+}
+
+/* P3-3：质量自检 Gate 徽标 */
+.ws-selfcheck-badge {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin-top: 4px; padding: 8px 10px;
+    border-radius: 10px; font-size: var(--font-size-sm); color: var(--text-primary);
+}
+.ws-selfcheck-tag {
+    flex-shrink: 0; padding: 1px 9px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; color: #fff;
+}
+.ws-selfcheck-score { color: var(--text-secondary); font-size: 11px; }
+.ws-selfcheck-gaps { color: var(--text-secondary); font-size: 11px; }
+.ws-selfcheck-pass { background: rgba(22,163,74,0.12); border: 1px solid rgba(22,163,74,0.32); }
+.ws-selfcheck-pass .ws-selfcheck-tag { background: #16A34A; }
+.ws-selfcheck-fail { background: rgba(199,0,11,0.10); border: 1px solid rgba(199,0,11,0.30); }
+.ws-selfcheck-fail .ws-selfcheck-tag { background: #C7000B; }
+.ws-selfcheck-warn { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.32); }
+.ws-selfcheck-warn .ws-selfcheck-tag { background: #F59E0B; }
+
 /* 思考步骤列表（流式追加） */
 .ws-thinking-body {
     display: flex; flex-direction: column; gap: 7px;
