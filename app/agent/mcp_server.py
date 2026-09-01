@@ -36,15 +36,21 @@ _INIT_RESULT = {
 }
 
 
-def _make_result(result) -> dict:
-    return {"jsonrpc": JSONRPC_VERSION, "result": result}
+def _make_result(result, req_id=None) -> dict:
+    msg = {"jsonrpc": JSONRPC_VERSION, "result": result}
+    if req_id is not None:
+        msg["id"] = req_id
+    return msg
 
 
-def _make_error(code: int, message: str, data=None) -> dict:
+def _make_error(code: int, message: str, data=None, req_id=None) -> dict:
     err = {"code": code, "message": message}
     if data is not None:
         err["data"] = data
-    return {"jsonrpc": JSONRPC_VERSION, "error": err}
+    msg = {"jsonrpc": JSONRPC_VERSION, "error": err}
+    if req_id is not None:
+        msg["id"] = req_id
+    return msg
 
 
 def _tool_schema(tool) -> dict:
@@ -62,17 +68,17 @@ async def _handle_request(req: dict, registry) -> dict:
     req_id = req.get("id")
 
     if method == "initialize":
-        return _make_result(_INIT_RESULT)
+        return _make_result(_INIT_RESULT, req_id)
     if method == "tools/list":
         tools = [_tool_schema(t) for t in registry.list_tools()]
-        return _make_result({"tools": tools})
+        return _make_result({"tools": tools}, req_id)
     if method == "tools/call":
         params = req.get("params", {}) or {}
         name = params.get("name", "")
         arguments = params.get("arguments", {}) or {}
         tool = registry.get(name)
         if not tool:
-            return _make_error(-32602, f"Tool not found: {name}")
+            return _make_error(-32602, f"Tool not found: {name}", req_id=req_id)
         try:
             # Tool.execute 内部已捕获异常并返回 "Error: ..." 字符串
             text = await tool.execute(**arguments)
@@ -80,16 +86,16 @@ async def _handle_request(req: dict, registry) -> dict:
             return _make_result({
                 "content": [{"type": "text", "text": text}],
                 "isError": is_error,
-            })
+            }, req_id)
         except Exception as e:
-            return _make_error(-32603, f"Tool execution failed: {e}")
+            return _make_error(-32603, f"Tool execution failed: {e}", req_id=req_id)
     if method == "ping":
-        return _make_result({})
+        return _make_result({}, req_id)
     if method in ("notifications/initialized", "notifications/cancelled"):
         return None  # 通知类：无响应
     if method == "shutdown":
-        return _make_result({})
-    return _make_error(-32601, f"Method not found: {method}")
+        return _make_result({}, req_id)
+    return _make_error(-32601, f"Method not found: {method}", req_id=req_id)
 
 
 async def serve_stdio(registry=None) -> None:

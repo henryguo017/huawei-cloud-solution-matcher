@@ -153,4 +153,7 @@ data/skill_packs/<industry>.json
 2. `app/services/notify.py`：先实现飞书 webhook（签名+卡片），经典与 Agent 完成事件各加一行调用（受 `FEISHU_WEBHOOK` 开关控制）；用 mock webhook（webhook.site）本地验证。
 3. `app/agent/mcp_server_cost_calc.py` + `MCP_SERVERS` 配置：自带 1 个 cost_calc Server，验证项目能力→MCP→Agent 闭环。
 
-> 以上为规划（v2），未动代码。确认执行顺序后我再逐阶段实现并给出验证。
+> 以上为规划（v2）。
+
+## 执行记录
+- 2026-09-02：P0 已开工并完成——MCP 权限网关覆盖 `mcp__*`（远端工具默认 human-in-the-loop 确认）+ 自带成本测算 MCP Server `app/agent/mcp_server_cost_calc.py`（注册名 `mcp__cost__cost_calc` / `mcp__cost__cost_reference_list`）。本地三测试（`verify_p0_permission_gate.py` / `verify_p0_cost_calc_server.py` / `verify_p0_cost_calc_integration.py`）全绿，未部署。下一阶段可推进 P1 飞书+钉钉群机器人通知。

@@ -1372,8 +1372,7 @@ Final Answer: [完整方案]）"""
         # #6 联网搜索开关
         if tool_name == "web_search" and getattr(self, "_disable_web_search", False):
             return "（已关闭联网搜索，本次跳过网络检索，仅基于本地知识库作答。）"
-        policy = (getattr(self, "_tool_permissions", None) or {}).get(tool_name) \
-            or self.DEFAULT_TOOL_POLICY.get(tool_name)
+        policy = self._resolve_tool_policy(tool_name)
         if policy == "deny":
             return f"（工具「{tool_name}」已被你设为禁止执行，已跳过。）"
         if policy == "ask":
@@ -1400,6 +1399,18 @@ Final Answer: [完整方案]）"""
             if decision != "allow":
                 return f"（你拒绝了工具「{tool_name}」的执行，已跳过该步骤。）"
         return None
+
+    def _resolve_tool_policy(self, tool_name: str) -> "str | None":
+        """解析工具权限策略：用户覆盖 > 远端 mcp__ 默认 ask > 内置默认策略。
+
+        策略逻辑下沉到 permission_gate.resolve_tool_policy（纯函数，可单测）。
+        """
+        from app.agent.permission_gate import resolve_tool_policy
+        return resolve_tool_policy(
+            tool_name,
+            getattr(self, "_tool_permissions", None),
+            self.DEFAULT_TOOL_POLICY,
+        )
 
     def _permission_reason(self, tool_name: str) -> str:
         return {

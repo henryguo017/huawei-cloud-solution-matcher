@@ -16,6 +16,30 @@ logger = logging.getLogger(__name__)
 _PENDING: "dict[str, asyncio.Future]" = {}
 _PERMISSION_TIMEOUT = 120  # 秒：用户未响应则默认拒绝，避免 SSE 连接悬挂
 
+# 远端 MCP 工具名前缀：由外部 Server 提供，能力不可信，默认走 human-in-the-loop 确认
+MCP_TOOL_PREFIX = "mcp__"
+
+
+def resolve_tool_policy(
+    tool_name: str,
+    user_overrides: "dict | None" = None,
+    default_policy: "dict | None" = None,
+) -> "str | None":
+    """解析某工具应执行的权限策略（纯函数，便于单测，不依赖重链 import）。
+
+    优先级：用户覆盖 > 远端 MCP 工具(mcp__)默认 ask > 内置默认策略。
+    返回 "allow" / "ask" / "deny" 之一；返回 None 表示无显式策略（放行）。
+    """
+    overrides = user_overrides or {}
+    if tool_name in overrides:
+        return overrides[tool_name]
+    # 远端工具（mcp__<label>__<tool>）由外部 Server 提供，能力不可信，
+    # 默认要求用户确认，避免越权调用或产生副作用（安全硬门槛，P0）。
+    if tool_name.startswith(MCP_TOOL_PREFIX):
+        return "ask"
+    default_policy = default_policy or {}
+    return default_policy.get(tool_name)
+
 
 def _new_future() -> asyncio.Future:
     return asyncio.get_running_loop().create_future()
