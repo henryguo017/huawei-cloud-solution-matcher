@@ -184,7 +184,7 @@ async def agent_context_usage(session_id: str = "", user: dict = Depends(get_cur
             except Exception:
                 pass
             agent._user_id = uid
-        data = agent.estimate_context_usage(sid)
+        data = agent.harness.estimate_context_usage(sid)
         return {"ok": True, **data}
     except Exception as e:
         from fastapi import HTTPException

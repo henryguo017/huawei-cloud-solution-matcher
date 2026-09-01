@@ -74,6 +74,8 @@ class SolutionAgent:
         model: Optional[str] = None,
         thinking: Optional[str] = None,
         rerun_plan_index: Optional[int] = None,
+        tool_permissions: Optional[dict] = None,
+        disable_web_search: bool = False,
     ) -> Dict[str, Any]:
         """
         运行 Agent
@@ -111,6 +113,8 @@ class SolutionAgent:
             model=model,
             thinking=thinking,
             rerun_plan_index=rerun_plan_index,
+            tool_permissions=tool_permissions,
+            disable_web_search=disable_web_search,
         )
 
     async def run_with_competitor(
