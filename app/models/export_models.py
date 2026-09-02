@@ -8,6 +8,10 @@ import uuid
 class ExportFormat(str, Enum):
     WORD = "word"
     PDF = "pdf"
+    # PPTX：P2-D4 演示稿导出。缺此项会导致 report_generator._render_and_save 中
+    # `elif format == ExportFormat.PPTX` 抛 AttributeError，进而使 PDF 分支（else）
+    # 也永远走不到 —— 即 PDF 与 PPTX 导出同时失效。改动此枚举务必同步检查该分支。
+    PPTX = "pptx"
 
 
 class TaskStatus(str, Enum):
