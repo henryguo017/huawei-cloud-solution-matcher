@@ -244,13 +244,27 @@ def _payload_for(platform: str, webhook: str, secret: str, title: str, text: str
 
 async def _notify_feishu(webhook: str, secret: str, title: str, text: str) -> None:
     payload = _payload_for("feishu", webhook, secret, title, text)
-    await asyncio.to_thread(_post_json, webhook, payload)
+    resp_text = await asyncio.to_thread(_post_json, webhook, payload)
+    try:
+        resp = json.loads(resp_text)
+        if resp.get("code") not in (None, 0):
+            logger.warning("[notify] 飞书拒绝: code=%s, msg=%s", resp.get("code"), resp.get("msg", ""))
+            return
+    except Exception:
+        pass
     logger.info("[notify] 飞书推送成功")
 
 
 async def _notify_dingtalk(webhook: str, secret: str, title: str, text: str) -> None:
     payload = _payload_for("dingtalk", webhook, secret, title, text)
-    await asyncio.to_thread(_post_json, webhook, payload)
+    resp_text = await asyncio.to_thread(_post_json, webhook, payload)
+    try:
+        resp = json.loads(resp_text)
+        if resp.get("errcode") not in (None, 0):
+            logger.warning("[notify] 钉钉拒绝: errcode=%s, errmsg=%s", resp.get("errcode"), resp.get("errmsg", ""))
+            return
+    except Exception:
+        pass
     logger.info("[notify] 钉钉推送成功")
 
 
@@ -364,7 +378,21 @@ def test_user_binding(user_id, platform: str):
     try:
         payload = _payload_for(platform, row["webhook"], row["secret"], "cloudsol 通知测试",
                                _build_markdown("这是一条测试消息", url=SITE_URL))
-        _post_json(row["webhook"], payload)
+        resp_text = _post_json(row["webhook"], payload)
+        # 解析平台返回，检查业务错误码（钉钉 errcode / 飞书 code），
+        # 否则 HTTP 200 + errcode!=0 会被误判为成功。
+        try:
+            resp = json.loads(resp_text)
+        except Exception:
+            return True, ""
+        if platform == "dingtalk":
+            err = resp.get("errcode")
+            if err not in (None, 0):
+                return False, "钉钉拒绝: errcode=%s, errmsg=%s" % (err, resp.get("errmsg", ""))
+        elif platform == "feishu":
+            code = resp.get("code")
+            if code not in (None, 0):
+                return False, "飞书拒绝: code=%s, msg=%s" % (code, resp.get("msg", ""))
         return True, ""
     except Exception as e:
         logger.warning("[notify] 测试推送失败: %s", e)

@@ -109,6 +109,12 @@ check("解绑后无飞书绑定", all(b["platform"] != "feishu" for b in notify.
 ok, err = notify.test_user_binding(3, "dingtalk")
 check("测试发送成功", ok is True and err == "")
 
+# 7b. 钉钉返回 errcode!=0 时必须识别为失败（不再误报成功）
+notify._post_json = lambda url, payload: '{"errcode":31001,"errmsg":"sign not match"}'
+ok2, err2 = notify.test_user_binding(3, "dingtalk")
+check("钉钉 errcode!=0 被识别为失败", ok2 is False and "31001" in err2)
+notify._post_json = lambda url, payload: "{}"  # 复原
+
 # 8. 无绑定无 env → 零推送
 notify.FEISHU_WEBHOOK = ""
 notify.FEISHU_SECRET = ""
