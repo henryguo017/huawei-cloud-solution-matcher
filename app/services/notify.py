@@ -31,6 +31,7 @@ import threading
 import sqlite3
 import urllib.request
 import urllib.error
+import urllib.parse
 
 logger = logging.getLogger(__name__)
 
@@ -216,11 +217,17 @@ def set_user_binding_enabled(user_id, platform: str, enabled: int) -> None:
 # ----------------------------------------------------------------------------
 # 平台推送（异步，内部用 to_thread 不阻塞事件循环）
 # ----------------------------------------------------------------------------
-def _payload_for(platform: str, webhook: str, secret: str, title: str, text: str) -> dict:
-    """构造飞书/钉钉推送 payload（签名一致）。"""
+def _build_request(platform: str, webhook: str, secret: str, title: str, text: str):
+    """构造飞书/钉钉推送请求，返回 (最终 url, body)。
+
+    关键平台差异（这是 310000 签名错误的根因）：
+      - 飞书 interactive card：timestamp/sign 放在 JSON body；
+      - 钉钉自定义机器人：timestamp/sign 必须拼到 URL 查询串，且 sign 需 urlencode。
+        钉钉服务端只认 URL 上的签名，body 里的会被无视 → 一直报 310000。
+    """
     ts, sign = _sign(secret)
     if platform == "feishu":
-        return {
+        body = {
             "msg_type": "interactive",
             "timestamp": ts,
             "sign": sign,
@@ -233,18 +240,23 @@ def _payload_for(platform: str, webhook: str, secret: str, title: str, text: str
                 "elements": [{"tag": "markdown", "content": text}],
             },
         }
-    # dingtalk
-    return {
+        return webhook, body
+    # dingtalk：签名拼到 URL 查询串（secret 为空表示未开加签，直接原样 URL）
+    if secret:
+        sep = "&" if "?" in webhook else "?"
+        url = webhook + sep + "timestamp=" + ts + "&sign=" + urllib.parse.quote_plus(sign)
+    else:
+        url = webhook
+    body = {
         "msgtype": "markdown",
         "markdown": {"title": title, "text": text},
-        "timestamp": ts,
-        "sign": sign,
     }
+    return url, body
 
 
 async def _notify_feishu(webhook: str, secret: str, title: str, text: str) -> None:
-    payload = _payload_for("feishu", webhook, secret, title, text)
-    resp_text = await asyncio.to_thread(_post_json, webhook, payload)
+    url, payload = _build_request("feishu", webhook, secret, title, text)
+    resp_text = await asyncio.to_thread(_post_json, url, payload)
     try:
         resp = json.loads(resp_text)
         if resp.get("code") not in (None, 0):
@@ -256,8 +268,8 @@ async def _notify_feishu(webhook: str, secret: str, title: str, text: str) -> No
 
 
 async def _notify_dingtalk(webhook: str, secret: str, title: str, text: str) -> None:
-    payload = _payload_for("dingtalk", webhook, secret, title, text)
-    resp_text = await asyncio.to_thread(_post_json, webhook, payload)
+    url, payload = _build_request("dingtalk", webhook, secret, title, text)
+    resp_text = await asyncio.to_thread(_post_json, url, payload)
     try:
         resp = json.loads(resp_text)
         if resp.get("errcode") not in (None, 0):
@@ -376,9 +388,9 @@ def test_user_binding(user_id, platform: str):
     if not row or not row["webhook"]:
         return False, "该平台未绑定或未启用"
     try:
-        payload = _payload_for(platform, row["webhook"], row["secret"], "cloudsol 通知测试",
-                               _build_markdown("这是一条测试消息", url=SITE_URL))
-        resp_text = _post_json(row["webhook"], payload)
+        url, payload = _build_request(platform, row["webhook"], row["secret"], "cloudsol 通知测试",
+                                      _build_markdown("这是一条测试消息", url=SITE_URL))
+        resp_text = _post_json(url, payload)
         # 解析平台返回，检查业务错误码（钉钉 errcode / 飞书 code），
         # 否则 HTTP 200 + errcode!=0 会被误判为成功。
         try:
