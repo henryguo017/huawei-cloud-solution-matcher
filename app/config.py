@@ -147,6 +147,17 @@ AGENT_MCP_CLIENT = os.getenv("AGENT_MCP_CLIENT", "0")
 # label 仅允许 [A-Za-z0-9_-]，用于工具名前缀 mcp__<label>__<tool>，避免重名冲突。
 MCP_SERVERS = os.getenv("MCP_SERVERS", "")
 
+# ==================== P1 飞书/钉钉群机器人通知（默认关） =================
+# 群自定义机器人 webhook + 加签 secret。留空 "" 表示关闭该平台推送（零副作用）。
+# 飞书：webhook 形如 https://open.feishu.cn/open-apis/bot/v2/hook/xxxx；secret 为安全设置里的签名校验密钥。
+# 钉钉：webhook 形如 https://oapi.dingtalk.com/robot/send?access_token=xxxx；secret 为「加签」密钥。
+# 触发：经典 match 完成 / Agent 生成成功；内容=方案名+行业+摘要+cloudsol 链接。
+# 签名：HMAC-SHA256(timestamp+"\n"+secret) → base64（飞书/钉钉同公式）。详见 app/services/notify.py。
+FEISHU_WEBHOOK = os.getenv("FEISHU_WEBHOOK", "")
+FEISHU_SECRET = os.getenv("FEISHU_SECRET", "")
+DINGTALK_WEBHOOK = os.getenv("DINGTALK_WEBHOOK", "")
+DINGTALK_SECRET = os.getenv("DINGTALK_SECRET", "")
+
 # ==================== 华为云官方动态聚合（华为云自家社区博客） ====================
 # 顶栏「资讯」弹窗第二个标签页。只聚合华为云官方渠道（产品发布/版本更新/优惠活动/认证考试/技术博客）。
 # 数据源：华为云社区博客 https://bbs.huaweicloud.com/blogs（华为云自家域名，服务端渲染 HTML，可抓取）。

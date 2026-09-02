@@ -105,6 +105,18 @@ async def agent_chat(
                 "reflexion_used": result.get("reflexion_used", False),     # P1-3：是否触发过反思
                 "reflexion_success": result.get("reflexion_success", False),  # P1-3：反思是否成功注入
             })
+
+            # P1-A 飞书/钉钉群机器人通知（默认关；仅 success 时触发；失败吞掉，不阻塞主链路）
+            if result.get("success"):
+                try:
+                    from app.services.notify import notify_agent_result
+                    notify_agent_result(
+                        message=message,
+                        answer=result.get("answer", ""),
+                        url="https://cloudsol.cn",
+                    )
+                except Exception as _nerr:
+                    logger.warning("[agent/chat] 通知发送失败（已忽略）: %s", _nerr)
         except Exception as e:
             logger.exception("[agent/chat] 运行失败 session=%s", session_id)
             await event_queue.put({"type": "error", "message": str(e)})

@@ -391,6 +391,17 @@ class SolutionMatcherService:
             }
         })
 
+        # P1-A 飞书/钉钉群机器人通知（默认关；失败吞掉，不阻塞主链路）
+        try:
+            from app.services.notify import notify_match_complete
+            notify_match_complete(
+                demand=customer_demand,
+                industry=industry or "",
+                url="https://cloudsol.cn",
+            )
+        except Exception as _nerr:
+            logger.warning("[match_stream] 通知发送失败（已忽略）: %s", _nerr)
+
     def _build_fallback_prompt(self, customer_demand: str, industry: str, playbook_text: str, client_context: str = "") -> str:
         """知识库为空时的通用生成 prompt（保留行业/话术/防幻觉约束）"""
         industry_line = f"客户所属行业：{industry}\n" if industry else ""
