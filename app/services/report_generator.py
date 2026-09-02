@@ -386,6 +386,58 @@ class ReportGeneratorService:
 
         prs.save(file_path)
 
+    # ---------------------------------------------------------------
+    # PDF 中文字体解析（跨平台）
+    # 事故背景（2026-09-02 线上发现）：原实现硬编码
+    #     pdfmetrics.registerFont(TTFont('SimSun', 'simsun.ttc'))
+    # 'simsun.ttc' 是 Windows 系统字体名，Linux 服务器上不存在该文件，
+    # reportlab 抛 "Can't open file "simsun.ttc""，导致 PDF 导出在 Linux
+    # 生产环境 100% 失败（Windows 本地开发却一切正常，故极易漏测）。
+    # 现按候选路径逐个尝试：Windows 系统目录 → Linux 常见 CJK 字体 → 仓库内置；
+    # 全部失败再回退 reportlab 内置 Adobe-GB1 CID 字体（不依赖任何字体文件）。
+    # ---------------------------------------------------------------
+    _PDF_CJK_FONT_CANDIDATES = (
+        # Windows：reportlab 能从系统字体目录解析裸文件名
+        'simsun.ttc', 'SimSun.ttf', 'msyh.ttc', 'simhei.ttf',
+        'C:/Windows/Fonts/simsun.ttc',
+        'C:/Windows/Fonts/SimSun.ttf',
+        'C:/Windows/Fonts/msyh.ttc',
+        'C:/Windows/Fonts/simhei.ttf',
+        # Linux 常见发行版
+        '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+        '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+        '/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf',
+        '/usr/share/fonts/truetype/arphic/uming.ttc',
+        '/usr/share/fonts/truetype/arphic/ukai.ttc',
+    )
+    _pdf_cjk_font_cache = None
+
+    def _resolve_pdf_cjk_font(self) -> str:
+        """返回 reportlab 可用的中文字体名；结果按实例缓存，避免重复注册。"""
+        if self._pdf_cjk_font_cache:
+            return self._pdf_cjk_font_cache
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+
+        for path in self._PDF_CJK_FONT_CANDIDATES:
+            try:
+                pdfmetrics.registerFont(TTFont('PDFCJK', path))
+                self._pdf_cjk_font_cache = 'PDFCJK'
+                logger.info('[PDF] 使用中文字体: %s', path)
+                return self._pdf_cjk_font_cache
+            except Exception:
+                continue
+
+        # 兜底：reportlab 内置 Adobe-GB1 CID 字体，无需任何外部字体文件。
+        # 代价是字体不内嵌、依赖阅读器自带中文字体，但至少不会让导出整体失败。
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+        self._pdf_cjk_font_cache = 'STSong-Light'
+        logger.warning('[PDF] 未找到任何本地中文字体，回退内置 CID 字体 STSong-Light'
+                       '（建议安装 fonts-wqy-zenhei 以获得内嵌字体的 PDF）')
+        return self._pdf_cjk_font_cache
+
     def _generate_pdf(self, report_data: Dict[str, Any], file_path: str,
                       cost_reference: Dict[str, Any] = None):
         """生成PDF报告（使用reportlab，成本参考以原生 Table 渲染，不乱码）"""
@@ -399,7 +451,8 @@ class ReportGeneratorService:
             from reportlab.pdfbase import pdfmetrics
             from reportlab.pdfbase.ttfonts import TTFont
             
-            pdfmetrics.registerFont(TTFont('SimSun', 'simsun.ttc'))
+            # 跨平台解析中文字体（Linux 无 simsun.ttc，勿改回硬编码）
+            cjk_font = self._resolve_pdf_cjk_font()
             
             doc = SimpleDocTemplate(file_path, pagesize=A4)
             styles = getSampleStyleSheet()
@@ -407,21 +460,21 @@ class ReportGeneratorService:
             title_style = ParagraphStyle(
                 'Title',
                 parent=styles['Title'],
-                fontName='SimSun',
+                fontName=cjk_font,
                 fontSize=24
             )
             
             body_style = ParagraphStyle(
                 'Body',
                 parent=styles['Normal'],
-                fontName='SimSun',
+                fontName=cjk_font,
                 fontSize=12
             )
             
             cell_style = ParagraphStyle(
                 'Cell',
                 parent=styles['Normal'],
-                fontName='SimSun',
+                fontName=cjk_font,
                 fontSize=9,
                 leading=12
             )

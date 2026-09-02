@@ -20,6 +20,7 @@
 """
 import importlib.util
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -87,7 +88,30 @@ def main():
     else:
         print("[OK]   report_generator.py 含 PDF 分支")
 
-    # 4) Agent 工具侧引用同样不能 404
+    # 4) PDF 不得再硬编码 Windows 字体 'simsun.ttc'
+    #    （Linux 无此文件 → "Can't open file"，PDF 导出 100% 失败）
+    #    注意：必须剥掉注释行再匹配，否则会因事故说明注释里引用了旧写法而误报。
+    code_only = "\n".join(
+        ln for ln in src.splitlines() if not ln.strip().startswith("#")
+    )
+    if re.search(r"TTFont\(\s*['\"]SimSun['\"]", code_only):
+        print("[FAIL] _generate_pdf 仍硬编码 TTFont('SimSun', ...)，Linux 上必然失败")
+        ok = False
+    else:
+        print("[OK]   _generate_pdf 未硬编码 SimSun（已排除注释行）")
+    if "_resolve_pdf_cjk_font" not in src:
+        print("[FAIL] 缺少跨平台字体解析 _resolve_pdf_cjk_font")
+        ok = False
+    else:
+        print("[OK]   含跨平台字体解析 _resolve_pdf_cjk_font")
+    # 兜底分支必须存在，否则无字体环境下会整体失败
+    if "STSong-Light" not in src:
+        print("[FAIL] 缺少 CID 兜底字体 STSong-Light")
+        ok = False
+    else:
+        print("[OK]   含 CID 兜底字体 STSong-Light")
+
+    # 5) Agent 工具侧引用同样不能 404
     tools = os.path.join(ROOT, "app", "agent", "tools.py")
     if os.path.exists(tools):
         tsrc = open(tools, encoding="utf-8").read()
