@@ -2212,9 +2212,9 @@
                                : '<span class="ws-notify-unbound">未绑定</span>') +
                     '</div>' +
                     '<div class="ws-notify-field"><label>Webhook 地址</label>' +
-                        '<input type="text" class="ws-notify-webhook" placeholder="https://..." autocomplete="off"></div>' +
+                        '<input type="text" class="ws-notify-webhook" value="' + escHtml(state && state.webhook ? state.webhook : '') + '" placeholder="https://..." autocomplete="off"></div>' +
                     '<div class="ws-notify-field"><label>签名 Secret</label>' +
-                        '<input type="password" class="ws-notify-secret" placeholder="粘贴机器人签名密钥（留空则不校验）" autocomplete="off"></div>' +
+                        '<input type="password" class="ws-notify-secret" placeholder="' + (bound ? '已保存，留空保持不变' : '粘贴机器人签名密钥（留空则不校验）') + '" autocomplete="off"></div>' +
                     '<label class="ws-notify-enable"><input type="checkbox" class="ws-notify-enabled"' + (enabled ? ' checked' : '') + '> 启用推送</label>' +
                     '<div class="ws-notify-actions">' +
                         '<button type="button" class="ws-notify-save">保存</button>' +
@@ -2257,7 +2257,9 @@
                         var webhook = (card.querySelector('.ws-notify-webhook').value || '').trim();
                         var secret = card.querySelector('.ws-notify-secret').value || '';
                         var enabled = card.querySelector('.ws-notify-enabled').checked ? 1 : 0;
-                        if (!webhook) { setMsg(card, 'Webhook 不能为空', false); return; }
+                        // 已绑定平台允许只勾选「启用推送」而留空 webhook/secret（后端保留原值）；仅新建绑定时要求 webhook
+                        var isNew = !!card.querySelector('.ws-notify-unbound');
+                        if (isNew && !webhook) { setMsg(card, 'Webhook 不能为空', false); return; }
                         saveBtn.disabled = true;
                         fetch('/api/user/notify/bind', {
                             method: 'POST',

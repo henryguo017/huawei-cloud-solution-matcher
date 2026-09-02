@@ -137,7 +137,11 @@ def get_user_bindings(user_id) -> list:
 
 
 def list_user_bindings(user_id) -> list:
-    """列表（脱敏，供前端设置页）：[{platform, enabled, webhook_masked}, ...]。"""
+    """列表（供前端设置页）：[{platform, enabled, webhook(本人可读，用于回填), webhook_masked}, ...]。
+
+    注：webhook 含 access_token 属敏感凭证，但仅返回给已登录的本人才（其自身机器人），
+    用于弹窗回填，避免「改个开关还要重填 webhook」。secret 仍永不回传。
+    """
     if not user_id:
         return []
     try:
@@ -150,6 +154,7 @@ def list_user_bindings(user_id) -> list:
             {
                 "platform": r["platform"],
                 "enabled": bool(r["enabled"]),
+                "webhook": r["webhook"],
                 "webhook_masked": _mask_webhook(r["webhook"]),
             }
             for r in rows
@@ -165,8 +170,12 @@ def list_user_bindings(user_id) -> list:
 
 
 def save_user_binding(user_id, platform: str, webhook: str, secret: str, enabled: int = 1) -> None:
-    """绑定 / 更新（幂等 upsert）。platform ∈ {feishu, dingtalk}。"""
-    if not user_id or platform not in ("feishu", "dingtalk") or not webhook:
+    """绑定 / 更新（幂等 upsert，支持部分更新）。
+
+    platform ∈ {feishu, dingtalk}。webhook/secret 为空时视为「保留原值」
+    （用于只改 enabled 勾选而不重填凭证）；前端仅对「新建绑定」强制要求 webhook 非空。
+    """
+    if not user_id or platform not in ("feishu", "dingtalk"):
         raise ValueError("invalid binding params")
     conn = _db_conn()
     try:
@@ -174,7 +183,8 @@ def save_user_binding(user_id, platform: str, webhook: str, secret: str, enabled
             "INSERT INTO user_notify_bindings (user_id, platform, webhook, secret, enabled, updated_at) "
             "VALUES (?, ?, ?, ?, ?, datetime('now','localtime')) "
             "ON CONFLICT(user_id, platform) DO UPDATE SET "
-            "webhook=excluded.webhook, secret=excluded.secret, "
+            "webhook=COALESCE(NULLIF(excluded.webhook, ''), user_notify_bindings.webhook), "
+            "secret=COALESCE(NULLIF(excluded.secret, ''), user_notify_bindings.secret), "
             "enabled=excluded.enabled, updated_at=datetime('now','localtime')",
             (user_id, platform, webhook, secret or "", enabled),
         )
