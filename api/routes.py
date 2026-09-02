@@ -1080,7 +1080,7 @@ async def match_solution_stream(
 
         async def run_match(ci=client_industry, cb=client_block):
             try:
-                await matcher.match_stream(enriched_demand, queue, industry=ci, client_context=cb)
+                await matcher.match_stream(enriched_demand, queue, industry=ci, client_context=cb, user_id=user_id)
             except Exception as e:
                 logger.error(f"[match/stream] 执行失败: {e}")
                 await queue.put({"type": "error", "message": str(e)})

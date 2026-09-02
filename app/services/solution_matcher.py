@@ -340,7 +340,7 @@ class SolutionMatcherService:
             "solution_json": self._parse_markdown_to_chapters(answer_result),
         }
 
-    async def match_stream(self, customer_demand, queue: asyncio.Queue, industry: Optional[str] = None, client_context: str = ""):
+    async def match_stream(self, customer_demand, queue: asyncio.Queue, industry: Optional[str] = None, client_context: str = "", user_id=None):
         """标准/向导匹配流式生成（P0-2）。
 
         检索 + 需求结构化复用 _prepare；生成阶段逐 token 推送给 queue。
@@ -391,10 +391,11 @@ class SolutionMatcherService:
             }
         })
 
-        # P1-A 飞书/钉钉群机器人通知（默认关；失败吞掉，不阻塞主链路）
+        # P1 飞书/钉钉群机器人通知（按用户推送，默认关；失败吞掉，不阻塞主链路）
         try:
-            from app.services.notify import notify_match_complete
-            notify_match_complete(
+            from app.services.notify import notify_for_user
+            notify_for_user(
+                user_id,
                 demand=customer_demand,
                 industry=industry or "",
                 url="https://cloudsol.cn",

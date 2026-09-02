@@ -377,6 +377,10 @@
                                     '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">权限</span>' +
                                 '</button>' +
+                                '<button class="ws-tool-btn" id="ws-notify-settings" type="button" title="消息通知（绑定自己的飞书/钉钉）" aria-label="消息通知绑定">' +
+                                    '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg></span>' +
+                                    '<span class="ws-tool-btn-label">通知</span>' +
+                                '</button>' +
                             '</div>' +
                         '</div>' +
                         '<div class="ws-context-picker" id="ws-context-picker">' +
@@ -444,7 +448,8 @@
                 ctxUsageBtn: this.root.querySelector('#ws-ctx-usage'),
                 enhanceBtn: this.root.querySelector('#ws-enhance'),
                 webToggleBtn: this.root.querySelector('#ws-web-toggle'),
-                permSettingsBtn: this.root.querySelector('#ws-perm-settings')
+                permSettingsBtn: this.root.querySelector('#ws-perm-settings'),
+                notifySettingsBtn: this.root.querySelector('#ws-notify-settings')
             };
             this._renderWelcome();
         },
@@ -574,6 +579,9 @@
             }
             if (this.els.permSettingsBtn) {
                 this.els.permSettingsBtn.addEventListener('click', function () { self._openPermissionSettings(); });
+            }
+            if (this.els.notifySettingsBtn) {
+                this.els.notifySettingsBtn.addEventListener('click', function () { self._openNotifySettings(); });
             }
 
             // 方案 B：客户上下文选择器（放在主区输入框下方，点击展开下拉）
@@ -2170,7 +2178,136 @@
                 document.addEventListener('click', close, true);
             }, 0);
         },
-        /* #3 权限确认弹窗（Agent 执行高风险工具前阻塞等待） */
+        /* 消息通知绑定（飞书/钉钉，按账号隔离）：GET 列表 → 两张卡片 → 保存/测试/解绑 */
+        _openNotifySettings: function () {
+            var self = this;
+            var root = this.root;
+            var old = root.querySelector('#ws-notify-pop');
+            if (old) { old.remove(); return; }
+            var token = this.userToken();
+            if (!token) { this._toast('请先登录', 'warning'); return; }
+
+            var pop = document.createElement('div');
+            pop.id = 'ws-notify-pop';
+            pop.className = 'ws-notify-pop';
+            pop.innerHTML = '<div class="ws-notify-bar-top"></div>' +
+                '<div class="ws-notify-inner">' +
+                    '<div class="ws-notify-head">' +
+                        '<div class="ws-notify-head-title"><span class="ws-notify-head-icon">🔔</span>消息通知</div>' +
+                        '<span class="ws-notify-close" id="ws-notify-close" title="关闭">×</span>' +
+                    '</div>' +
+                    '<div class="ws-notify-desc">绑定你自己的飞书 / 钉钉群机器人（签名校验 / 加签）。方案匹配或 Agent 生成完成后，推送到你自己的群。仅你本人可见。</div>' +
+                    '<div class="ws-notify-body" id="ws-notify-body"><div class="ws-notify-loading">加载中…</div></div>' +
+                '</div>';
+            root.appendChild(pop);
+            pop.querySelector('#ws-notify-close').addEventListener('click', function () { pop.remove(); });
+
+            function cardHtml(platform, label, state) {
+                var bound = !!(state && state.webhook_masked);
+                var enabled = state ? !!state.enabled : false;
+                return '<div class="ws-notify-card" data-platform="' + platform + '">' +
+                    '<div class="ws-notify-card-head">' +
+                        '<span class="ws-notify-name">' + label + '</span>' +
+                        (bound ? '<span class="ws-notify-masked">' + escHtml(state.webhook_masked) + '</span>'
+                               : '<span class="ws-notify-unbound">未绑定</span>') +
+                    '</div>' +
+                    '<div class="ws-notify-field"><label>Webhook 地址</label>' +
+                        '<input type="text" class="ws-notify-webhook" placeholder="https://..." autocomplete="off"></div>' +
+                    '<div class="ws-notify-field"><label>签名 Secret</label>' +
+                        '<input type="password" class="ws-notify-secret" placeholder="粘贴机器人签名密钥（留空则不校验）" autocomplete="off"></div>' +
+                    '<label class="ws-notify-enable"><input type="checkbox" class="ws-notify-enabled"' + (enabled ? ' checked' : '') + '> 启用推送</label>' +
+                    '<div class="ws-notify-actions">' +
+                        '<button type="button" class="ws-notify-save">保存</button>' +
+                        '<button type="button" class="ws-notify-test">测试发送</button>' +
+                        (bound ? '<button type="button" class="ws-notify-unbind">解绑</button>' : '') +
+                    '</div>' +
+                    '<div class="ws-notify-msg" style="display:none;"></div>' +
+                '</div>';
+            }
+
+            function refresh() {
+                fetch('/api/user/notify/bindings', { method: 'GET', headers: { 'Authorization': 'Bearer ' + token } })
+                .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+                .then(function (d) {
+                    var binds = {};
+                    (d.bindings || []).forEach(function (b) { binds[b.platform] = b; });
+                    var body = pop.querySelector('#ws-notify-body');
+                    body.innerHTML = cardHtml('feishu', '飞书', binds.feishu) + cardHtml('dingtalk', '钉钉', binds.dingtalk);
+                    wireCards();
+                }).catch(function () {
+                    pop.querySelector('#ws-notify-body').innerHTML = '<div class="ws-notify-loading">加载失败，请重试</div>';
+                });
+            }
+
+            function setMsg(card, text, ok) {
+                var m = card.querySelector('.ws-notify-msg');
+                if (!m) return;
+                m.style.display = 'block';
+                m.className = 'ws-notify-msg ' + (ok ? 'ok' : 'err');
+                m.textContent = text;
+            }
+
+            function wireCards() {
+                pop.querySelectorAll('.ws-notify-card').forEach(function (card) {
+                    var platform = card.getAttribute('data-platform');
+                    var saveBtn = card.querySelector('.ws-notify-save');
+                    var testBtn = card.querySelector('.ws-notify-test');
+                    var unbindBtn = card.querySelector('.ws-notify-unbind');
+                    saveBtn.addEventListener('click', function () {
+                        var webhook = (card.querySelector('.ws-notify-webhook').value || '').trim();
+                        var secret = card.querySelector('.ws-notify-secret').value || '';
+                        var enabled = card.querySelector('.ws-notify-enabled').checked ? 1 : 0;
+                        if (!webhook) { setMsg(card, 'Webhook 不能为空', false); return; }
+                        saveBtn.disabled = true;
+                        fetch('/api/user/notify/bind', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                            body: JSON.stringify({ platform: platform, webhook: webhook, secret: secret, enabled: enabled })
+                        }).then(function (r) { return r.json(); }).then(function (d) {
+                            if (d.success) { setMsg(card, '已保存', true); refresh(); }
+                            else { setMsg(card, d.error || '保存失败', false); }
+                        }).catch(function () { setMsg(card, '保存失败', false); })
+                        .then(function () { saveBtn.disabled = false; });
+                    });
+                    testBtn.addEventListener('click', function () {
+                        testBtn.disabled = true;
+                        fetch('/api/user/notify/test', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                            body: JSON.stringify({ platform: platform })
+                        }).then(function (r) { return r.json(); }).then(function (d) {
+                            setMsg(card, d.success ? '测试消息已发送，请查收群消息' : ('测试失败：' + (d.error || '')), d.success);
+                        }).catch(function () { setMsg(card, '测试失败', false); })
+                        .then(function () { testBtn.disabled = false; });
+                    });
+                    if (unbindBtn) {
+                        unbindBtn.addEventListener('click', function () {
+                            unbindBtn.disabled = true;
+                            fetch('/api/user/notify/unbind', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                                body: JSON.stringify({ platform: platform })
+                            }).then(function (r) { return r.json(); }).then(function (d) {
+                                if (d.success) { setMsg(card, '已解绑', true); refresh(); }
+                                else { setMsg(card, d.error || '解绑失败', false); }
+                            }).catch(function () { setMsg(card, '解绑失败', false); })
+                            .then(function () { unbindBtn.disabled = false; });
+                        });
+                    }
+                });
+            }
+
+            refresh();
+
+            setTimeout(function () {
+                var close = function (ev) {
+                    if (pop.contains(ev.target)) return;
+                    pop.remove();
+                    document.removeEventListener('click', close, true);
+                };
+                document.addEventListener('click', close, true);
+            }, 0);
+        },
         _openPermissionModal: function (ev) {
             if (this._permModalOpen) return;
             this._permModalOpen = true;

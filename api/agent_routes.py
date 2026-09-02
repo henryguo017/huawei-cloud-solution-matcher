@@ -142,13 +142,13 @@ async def agent_chat(
                 "reflexion_success": result.get("reflexion_success", False),  # P1-3：反思是否成功注入
             })
 
-            # P1-A 飞书/钉钉群机器人通知（默认关；仅 success 时触发；失败吞掉，不阻塞主链路）
+            # P1 飞书/钉钉群机器人通知（按用户推送，默认关；仅 success 时触发；失败吞掉，不阻塞主链路）
             if result.get("success"):
                 try:
-                    from app.services.notify import notify_agent_result
-                    notify_agent_result(
-                        message=message,
-                        answer=result.get("answer", ""),
+                    from app.services.notify import notify_for_user
+                    notify_for_user(
+                        user_id,
+                        demand=message,
                         url="https://cloudsol.cn",
                     )
                 except Exception as _nerr:

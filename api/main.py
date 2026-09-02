@@ -16,6 +16,7 @@ from api.auth_routes import router as auth_router
 from api.achievement_routes import router as achievement_router
 from api.share_routes import router as share_router
 from api.agent_routes import router as agent_router
+from api.user_notify_routes import router as user_notify_router
 from app.config import APP_NAME, APP_VERSION
 from app.core.errors import AppError, app_error_handler
 import logging
@@ -138,6 +139,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(achievement_router, prefix="/api")
 app.include_router(share_router, prefix="/api")
 app.include_router(agent_router, prefix="/api")
+app.include_router(user_notify_router, prefix="/api")
 
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 js_root = (Path(frontend_path) / "js").resolve()

@@ -114,6 +114,24 @@ def init_database():
     
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences(user_id)")
 
+    # ===== 用户级 IM 通知绑定（飞书/钉钉，按账号隔离） =====
+    # secret 明文存储（API 不回传原文，仅返启用态+脱敏）；DB 在自托管服务器，风险可控。
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_notify_bindings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            platform TEXT NOT NULL CHECK(platform IN ('feishu', 'dingtalk')),
+            webhook TEXT NOT NULL,
+            secret TEXT NOT NULL DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+            updated_at DATETIME DEFAULT (datetime('now', 'localtime')),
+            UNIQUE(user_id, platform),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notify_user_platform ON user_notify_bindings(user_id, platform)")
+
     # ===== 客户档案（方案B：Agent 记忆按客户维度隔离） =====
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS clients (
