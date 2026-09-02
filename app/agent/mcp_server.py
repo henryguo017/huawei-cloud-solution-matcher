@@ -15,6 +15,7 @@ P2-3：最小 MCP（Model Context Protocol）Server — 零新依赖（Python st
 import json
 import logging
 import sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 logger = logging.getLogger(__name__)
 
@@ -124,10 +125,59 @@ async def serve_stdio(registry=None) -> None:
                 break
 
 
+def serve_http(registry=None, host: str = "127.0.0.1", port: int = 8001) -> None:
+    """MCP Streamable HTTP 传输（P1-B 测试靶机 + P3 双向暴露铺路）。
+
+    纯标准库 http.server：POST /mcp 接收 JSON-RPC，_handle_request 处理后以
+    text/event-stream（SSE）返回 data: {...}，客户端据此按 id 解析。零新依赖。
+    启动：python -m app.agent.mcp_server --http --port 8001
+    """
+    import asyncio
+    if registry is None:
+        from app.agent.tools import create_default_tools
+        registry = create_default_tools()
+
+    class _Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            raw = self.rfile.read(n) if n else b""
+            try:
+                req = json.loads(raw.decode("utf-8", "replace")) if raw else {}
+            except json.JSONDecodeError:
+                req = {"jsonrpc": JSONRPC_VERSION, "id": None, "method": "invalid"}
+            resp = None
+            if isinstance(req, dict):
+                # 每个请求独立事件循环（测试靶机足够；生产可换 uvloop/单循环）
+                resp = asyncio.run(_handle_request(req, registry))
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Mcp-Session-Id", "http-session-demo")
+            self.end_headers()
+            if resp is not None:
+                self.wfile.write(f"data: {json.dumps(resp, ensure_ascii=False)}\n\n".encode("utf-8"))
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer((host, port), _Handler)
+    logger.info(f"[MCP] HTTP server 启动: http://{host}:{port}/mcp ，工具数={len(registry.get_tool_names())}")
+    srv.serve_forever()
+
+
 def main():
     import asyncio
+    import argparse
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(serve_stdio())
+    p = argparse.ArgumentParser(description="Huawei Cloud MCP Server（stdio / HTTP+SSE）")
+    p.add_argument("--http", action="store_true", help="以 HTTP+SSE 模式启动（默认 stdio）")
+    p.add_argument("--host", default="127.0.0.1", help="HTTP 模式监听地址")
+    p.add_argument("--port", type=int, default=8001, help="HTTP 模式监听端口")
+    args = p.parse_args()
+    if args.http:
+        serve_http(host=args.host, port=args.port)
+    else:
+        asyncio.run(serve_stdio())
 
 
 if __name__ == "__main__":

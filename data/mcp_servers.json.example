@@ -1,0 +1,12 @@
+[
+  {
+    "url": "https://your-mcp-host.example.com/mcp",
+    "label": "remote",
+    "comment": "P1-B HTTP+SSE 远端托管工具服务（MCP_SERVERS 的 url 形态）；启用需 AGENT_MCP_CLIENT=1"
+  },
+  {
+    "command": ["python", "-m", "app.agent.mcp_server_cost_calc"],
+    "label": "cost",
+    "comment": "P0 自带成本测算 Server（stdio 形态）"
+  }
+]

@@ -78,9 +78,10 @@ class SolutionAgent:
             return
         try:
             from app.agent import mcp_client as mcp_mod
-            servers = mcp_mod._load_servers_from_config(_app_config.MCP_SERVERS)
+            # P1-C：合并 MCP_SERVERS 环境变量 + data/mcp_servers.json manifest（env 优先）
+            servers = mcp_mod.load_mcp_servers()
             if not servers:
-                logger.info("[MCP] AGENT_MCP_CLIENT=1 但未配置 MCP_SERVERS，跳过")
+                logger.info("[MCP] AGENT_MCP_CLIENT=1 但未配置 MCP_SERVERS/manifest，跳过")
                 return
             names = await mcp_mod.register_remote_tools(self.tools, servers)
             self.harness.set_remote_tool_names(names)

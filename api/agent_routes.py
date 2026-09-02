@@ -19,6 +19,7 @@ tool_end / final / final_answer / clarify）桥接为 SSE 流式推送，供前�
   本文件单向 import（routes 不 import agent_routes，无循环）。
 """
 import json
+import os
 import asyncio
 import logging
 import time
@@ -41,6 +42,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# 本地工具名缓存（首次枚举后复用，避免每次请求重建 ToolRegistry）
+_LOCAL_TOOL_NAMES = None
+
+
+def _local_tool_names():
+    global _LOCAL_TOOL_NAMES
+    if _LOCAL_TOOL_NAMES is None:
+        try:
+            from app.agent.tools import create_default_tools
+            _LOCAL_TOOL_NAMES = create_default_tools().get_tool_names()
+        except Exception as e:  # pragma: no cover - 防御性
+            logger.warning("[agent/tools] 本地工具枚举失败（已忽略）: %s", e)
+            _LOCAL_TOOL_NAMES = []
+    return _LOCAL_TOOL_NAMES
+
 
 class AgentChatRequest(BaseModel):
     message: str
@@ -51,6 +67,26 @@ class AgentChatRequest(BaseModel):
     rerun_plan_index: Optional[int] = None  # P2-D5：Plan 单步重跑（后端从 _step_results 取原参数重跑该步并重新汇总）
     tool_permissions: Optional[dict] = None  # #3 工具权限策略 {tool: "allow"|"ask"|"deny"}，None 走 harness 默认
     disable_web_search: bool = False         # #6 联网搜索开关：True 时 Agent 不调用 web_search
+
+
+@router.get("/agent/tools", tags=["Agent 工具发现"])
+async def agent_tools(user: dict = Depends(get_current_user)):
+    """P1-C 工具发现/调试只读端点（需登录）：返回本地工具数与已注册远端工具名。
+
+    不暴露任何密钥（webhook/secret 等）；远端工具仅在 AGENT_MCP_CLIENT=1 且配置后才有列表。
+    """
+    remote = []
+    try:
+        from app.agent import mcp_client
+        remote = mcp_client.get_registered_names()
+    except Exception as e:  # pragma: no cover - 防御性
+        logger.warning("[agent/tools] 远端工具枚举失败（已忽略）: %s", e)
+    return {
+        "local_tool_count": len(_local_tool_names()),
+        "local_tool_names": _local_tool_names(),
+        "remote_tool_names": remote,
+        "mcp_enabled": (os.getenv("AGENT_MCP_CLIENT", "0") or "0").strip() == "1",
+    }
 
 
 @router.post("/agent/chat", tags=["Agent 对话"])

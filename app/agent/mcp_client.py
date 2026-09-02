@@ -19,8 +19,11 @@
 """
 import json
 import logging
+import os
 import subprocess
 import asyncio
+import urllib.request
+import urllib.error
 from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -170,6 +173,129 @@ class MCPClient:
             self._proc = None
 
 
+class MCPHttpClient:
+    """单个 HTTP(S) MCP Server 的 Streamable HTTP 客户端（纯标准库，长期存活）。
+
+    传输：POST {url}，Accept: application/json, text/event-stream；维护 Mcp-Session-Id；
+    响应可能是 JSON 或 SSE（data: 行），统一解析按 id 匹配。
+    与 MCPClient（stdio）暴露相同接口：connect() / list_tools() / call_tool() / close() / _tools，
+    因此 register_remote_tools 对两种传输一视同仁（仅构造不同 client）。
+    """
+
+    def __init__(self, url: str, timeout: float = 30.0, label: str = ""):
+        self.url = url.rstrip("/")
+        self.timeout = timeout
+        self.label = label or "mcp"
+        self._req_id = 0
+        self._session_id = None
+        self._tools: List[Dict[str, Any]] = []
+        self._lock = None  # 延迟到 async 上下文创建（避免同步构造时新建循环）
+
+    async def connect(self) -> None:
+        self._lock = asyncio.Lock()
+        init_result = await self._rpc("initialize", {
+            "protocolVersion": PROTOCOL_VERSION,
+            "capabilities": {},
+            "clientInfo": CLIENT_INFO,
+        })
+        if not init_result:
+            raise RuntimeError("MCP HTTP initialize 无响应")
+        await self._rpc("notifications/initialized", {}, notify=True)
+        self._tools = await self.list_tools()
+        if not self._tools:
+            logger.warning(f"[MCP] HTTP Server「{self.label}」未暴露任何工具")
+
+    async def _rpc(self, method: str, params: Dict[str, Any], notify: bool = False) -> Dict[str, Any]:
+        async with self._lock:
+            self._req_id += 1
+            req_id = self._req_id
+            payload = {"jsonrpc": "2.0", "method": method, "params": params}
+            if not notify:
+                payload["id"] = req_id
+            body = await asyncio.to_thread(self._http_post, payload)
+            if notify:
+                return {}
+            return self._parse_response(body, req_id)
+
+    def _http_post(self, payload: Dict[str, Any]) -> str:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            self.url,
+            data=data,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            },
+        )
+        if self._session_id:
+            req.add_header("Mcp-Session-Id", self._session_id)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                sid = resp.headers.get("Mcp-Session-Id")
+                if sid:
+                    self._session_id = sid
+                return resp.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            try:
+                return e.read().decode("utf-8", "replace")
+            except Exception:
+                raise RuntimeError(f"MCP HTTP 错误: {e.code} {e.reason}")
+
+    @staticmethod
+    def _parse_response(body: str, expected_id: int) -> Dict[str, Any]:
+        """解析 JSON 或 SSE（data: 行）响应，返回匹配 expected_id 的 result。"""
+        body = (body or "").strip()
+        if not body:
+            return {}
+        try:
+            msg = json.loads(body)
+            if isinstance(msg, dict):
+                if "error" in msg:
+                    raise RuntimeError(f"MCP 错误响应: {msg['error']}")
+                if msg.get("id") == expected_id:
+                    return msg.get("result", {})
+                return {}
+        except json.JSONDecodeError:
+            pass
+        result: Dict[str, Any] = {}
+        for line in body.splitlines():
+            line = line.strip()
+            if not line.startswith("data:"):
+                continue
+            chunk = line[len("data:"):].strip()
+            if not chunk:
+                continue
+            try:
+                msg = json.loads(chunk)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(msg, dict) and msg.get("id") == expected_id:
+                if "error" in msg:
+                    raise RuntimeError(f"MCP 错误响应: {msg['error']}")
+                result = msg.get("result", {})
+        return result
+
+    async def list_tools(self) -> List[Dict[str, Any]]:
+        resp = await self._rpc("tools/list", {})
+        return resp.get("tools", []) if resp else []
+
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
+        resp = await self._rpc("tools/call", {"name": name, "arguments": arguments or {}})
+        if not resp:
+            return "(工具调用无响应)"
+        return resp
+
+    async def close(self) -> None:
+        if not self._session_id:
+            return
+        try:
+            await self._rpc("notifications/exit", {}, notify=True)
+        except Exception:
+            pass
+        self._session_id = None
+
+
 def _sanitize_label(label: str) -> str:
     """命名空间只允许安全字符，避免注入到工具名。"""
     cleaned = "".join(ch if (ch.isalnum() or ch in "-_") else "_" for ch in (label or ""))
@@ -193,10 +319,14 @@ def _load_servers_from_config(config_value: Optional[str]) -> List[Dict[str, Any
         if not isinstance(item, dict):
             continue
         cmd = item.get("command")
-        if not isinstance(cmd, list) or not cmd:
-            logger.warning(f"[MCP] 跳过无效 server 配置（缺少 command）: {item}")
-            continue
-        servers.append({"command": cmd, "label": item.get("label", "")})
+        url = item.get("url")
+        if isinstance(cmd, list) and cmd:
+            servers.append({"command": cmd, "label": item.get("label", "")})
+        elif isinstance(url, str) and url:
+            # P1-B：HTTP+SSE 传输（远端托管工具服务，不占本地子进程）
+            servers.append({"url": url, "label": item.get("label", "")})
+        else:
+            logger.warning(f"[MCP] 跳过无效 server 配置（需 command 或 url）: {item}")
     return servers
 
 
@@ -230,6 +360,45 @@ def _create_remote_tool(client: "MCPClient", original_name: str, full_name: str,
     return RemoteTool()
 
 
+def _project_root() -> str:
+    """app/agent/mcp_client.py → 上溯三级到仓库根（用于定位 data/mcp_servers.json）。"""
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _server_key(srv: Dict[str, Any]) -> tuple:
+    """去重键：url 形态用 url，stdio 形态用 command 元组。"""
+    if srv.get("url"):
+        return ("url", srv["url"])
+    return ("cmd", tuple(srv.get("command") or []))
+
+
+def load_mcp_servers() -> List[Dict[str, Any]]:
+    """合并 MCP_SERVERS 环境变量与 data/mcp_servers.json manifest（env 优先，manifest 补漏）。
+
+    - 环境变量非空时仍生效；manifest 中不与 env 重复的条目追加（丢文件即接入，免改环境变量）。
+    - manifest 不存在/非法则忽略（优雅降级）。
+    """
+    env_list = _load_servers_from_config(os.getenv("MCP_SERVERS", ""))
+    merged: List[Dict[str, Any]] = list(env_list)
+    seen = {_server_key(s) for s in env_list}
+    manifest_path = os.path.join(_project_root(), "data", "mcp_servers.json")
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                for srv in _load_servers_from_config(json.dumps(data)):
+                    k = _server_key(srv)
+                    if k not in seen:
+                        merged.append(srv)
+                        seen.add(k)
+            else:
+                logger.warning("[MCP] mcp_servers.json 不是数组，已忽略")
+        except Exception as e:
+            logger.warning("[MCP] 读取 mcp_servers.json 失败（已忽略）: %s", e)
+    return merged
+
+
 async def register_remote_tools(tool_registry, servers: Optional[List[Dict[str, Any]]] = None) -> List[str]:
     """把若干 MCP Server 暴露的工具注册进本地 ToolRegistry。
 
@@ -241,8 +410,12 @@ async def register_remote_tools(tool_registry, servers: Optional[List[Dict[str, 
     registered: List[str] = []
     for srv in servers:
         command = srv.get("command") or []
-        label = _sanitize_label(srv.get("label") or (command[0] if command else "mcp"))
-        client = MCPClient(command=command, label=label)
+        label = _sanitize_label(srv.get("label") or (command[0] if command else (srv.get("url") or "mcp")))
+        # P1-B：url → HTTP+SSE 传输；command → stdio 传输。接口一致，register 逻辑共用。
+        if srv.get("url"):
+            client = MCPHttpClient(url=srv["url"], label=label)
+        else:
+            client = MCPClient(command=command, label=label)
         try:
             logger.info(f"[MCP] 正在连接 Server「{label}」: {command}")
             await asyncio.wait_for(client.connect(), timeout=client.timeout + 5)
