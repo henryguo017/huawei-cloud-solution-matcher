@@ -12878,3 +12878,14 @@ table tbody tr:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
+/* 移动端锁定经典模式（2026-09-02 范式）：仅 PC 端显示 Agent/经典 切换胶囊。
+   移动端（UA 命中手机关键词 或 视口 ≤820px）一律隐藏胶囊、锁定经典。
+   - .mobile-lock-classic：由 ViewManager.isMobile() 在 JS 初始化时加在 body 上，
+     覆盖「UA 命中手机但视口较宽」的场景（双保险）。
+   - @media (max-width: 820px)：在 JS 执行前就隐藏胶囊，杜绝首屏闪烁（FOUC）。
+   注意：阈值 820px 必须与 ViewManager.isMobile() 的窄屏判定保持一致。 */
+.mobile-lock-classic #view-toggle { display: none !important; }
+@media (max-width: 820px) {
+    #view-toggle { display: none !important; }
+}
+
