@@ -329,8 +329,15 @@ def safe_fire(coro):
 # ----------------------------------------------------------------------------
 # 公开入口
 # ----------------------------------------------------------------------------
-def notify_for_user(user_id, demand: str = "", industry: str = "", title: str = "", url: str = "") -> None:
-    """按用户推送：个人绑定优先；该用户未绑定的平台才补全局兜底（避免运营者重复收）。"""
+def notify_for_user(user_id, demand: str = "", industry: str = "", title: str = "",
+                    share_payload: dict = None, url: str = "") -> None:
+    """按用户推送：个人绑定优先；该用户未绑定的平台才补全局兜底（避免运营者重复收）。
+
+    链接策略（用户决策）：传了 share_payload 就生成「临时分享页」链接
+    （/share.html?id=...，匿名可读、不暴露账号），点开即看方案全文；
+    否则用 url 或站点首页兜底。这样钉钉/飞书卡片点开是一个可临时打开的
+    只读页面，而非登录墙后的工作台首页。
+    """
     if user_id:
         personal = get_user_bindings(user_id)
         personal_platforms = {b["platform"] for b in personal}
@@ -342,7 +349,18 @@ def notify_for_user(user_id, demand: str = "", industry: str = "", title: str = 
         targets = _global_targets()
     if not targets:
         return
-    text = _build_markdown(demand, industry, title, url or SITE_URL)
+    link = url or SITE_URL
+    if share_payload:
+        try:
+            from app.services.share_service import ShareService
+            sid = ShareService().create_share(
+                title or (demand or "cloudsol 方案")[:60], share_payload
+            )
+            if sid:
+                link = SITE_URL + "/share.html?id=" + sid
+        except Exception as e:
+            logger.warning("[notify] 生成分享链接失败，回退站点首页: %s", e)
+    text = _build_markdown(demand, industry, title, link)
     safe_fire(_push_targets(targets, "cloudsol 方案完成", text))
 
 

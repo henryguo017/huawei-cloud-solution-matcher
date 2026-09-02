@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import logging
+from datetime import datetime
 from typing import Optional, Dict, Any, List, Callable, Awaitable
 
 from app.models.llm import get_llm_response, get_llm_response_stream
@@ -398,7 +399,15 @@ class SolutionMatcherService:
                 user_id,
                 demand=customer_demand,
                 industry=industry or "",
-                url="https://cloudsol.cn",
+                share_payload={
+                    "kind": "match",
+                    "title": (customer_demand or "方案匹配结果")[:60],
+                    "demand": customer_demand,
+                    "solution": answer_result,
+                    "industry": industry or "",
+                    "sources": prep["docs"] or [],
+                    "created_at": datetime.now().isoformat(),
+                },
             )
         except Exception as _nerr:
             logger.warning("[match_stream] 通知发送失败（已忽略）: %s", _nerr)

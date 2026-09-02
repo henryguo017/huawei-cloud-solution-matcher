@@ -23,6 +23,7 @@ import os
 import asyncio
 import logging
 import time
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status, BackgroundTasks
@@ -149,7 +150,15 @@ async def agent_chat(
                     notify_for_user(
                         user_id,
                         demand=message,
-                        url="https://cloudsol.cn",
+                        share_payload={
+                            "kind": "agent",
+                            "title": (message or "Agent 方案")[:60],
+                            "demand": message,
+                            "solution": result.get("answer", ""),
+                            "industry": "",
+                            "sources": [],
+                            "created_at": datetime.now().isoformat(),
+                        },
                     )
                 except Exception as _nerr:
                     logger.warning("[agent/chat] 通知发送失败（已忽略）: %s", _nerr)
