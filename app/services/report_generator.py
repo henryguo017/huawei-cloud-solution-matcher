@@ -1,5 +1,6 @@
 import time
 import re
+import logging
 from datetime import datetime
 from typing import Dict, Any, List
 from pathlib import Path
@@ -9,6 +10,8 @@ from app.models.export_models import (
     ExportTask
 )
 from app.utils.word_generator import WordGenerator
+
+logger = logging.getLogger(__name__)
 
 
 # 模块级单例：保证 Agent 的 generate_doc 工具与 /api/export/download 共用同一任务表，
@@ -414,9 +417,14 @@ class ReportGeneratorService:
     _pdf_cjk_font_cache = None
 
     def _resolve_pdf_cjk_font(self) -> str:
-        """返回 reportlab 可用的中文字体名；结果按实例缓存，避免重复注册。"""
+        """返回 reportlab 可用的中文字体名；结果按实例缓存，避免重复注册。
+
+        注意：函数内直接 logging.getLogger(__name__)，不依赖模块级 logger 符号，
+        避免个别部署环境下模块级 logger 未就绪时抛 NameError。
+        """
         if self._pdf_cjk_font_cache:
             return self._pdf_cjk_font_cache
+        _log = logging.getLogger(__name__)
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
 
@@ -424,7 +432,7 @@ class ReportGeneratorService:
             try:
                 pdfmetrics.registerFont(TTFont('PDFCJK', path))
                 self._pdf_cjk_font_cache = 'PDFCJK'
-                logger.info('[PDF] 使用中文字体: %s', path)
+                _log.info('[PDF] 使用中文字体: %s', path)
                 return self._pdf_cjk_font_cache
             except Exception:
                 continue
@@ -434,8 +442,8 @@ class ReportGeneratorService:
         from reportlab.pdfbase.cidfonts import UnicodeCIDFont
         pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
         self._pdf_cjk_font_cache = 'STSong-Light'
-        logger.warning('[PDF] 未找到任何本地中文字体，回退内置 CID 字体 STSong-Light'
-                       '（建议安装 fonts-wqy-zenhei 以获得内嵌字体的 PDF）')
+        _log.warning('[PDF] 未找到任何本地中文字体，回退内置 CID 字体 STSong-Light'
+                     '（建议安装 fonts-wqy-zenhei 以获得内嵌字体的 PDF）')
         return self._pdf_cjk_font_cache
 
     def _generate_pdf(self, report_data: Dict[str, Any], file_path: str,
