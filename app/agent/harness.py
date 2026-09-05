@@ -410,21 +410,13 @@ class AgentHarness:
                 })
 
             # ── 强制成本测算步（P0 修复 cost_calc 不被调用）──
-            # 多步编排中模型常选完 SKU 后跑去 KB 检索、漏掉定价工具；此处检测「定价意图 +
-            # 整轮未调 cost_calc」，补一个工具集仅含成本工具的专用步，从根上逼其真正调用
-            # mcp__cost__cost_calc，确保「项目能力 → MCP → Agent 可调用」闭环成立。
+            # 模型在多步编排中稳定漏掉定价工具（只调 reference_list、不链 cost_calc，
+            # 即便工具集仅限成本工具也停住）。改为由 harness 确定性驱动：
+            # 取 SKU 目录 → 结构化抽取 items → 直接调用 cost_calc，确保「项目能力 → MCP → Agent 可调用」闭环。
             if self._remote_tool_names and self._PRICING_RE.search(self._plan_original_input or user_input or ""):
                 if not any(t.get("tool") == "mcp__cost__cost_calc" for t in tool_calls_log):
-                    self._log("system", "[强制成本步] 定价意图命中且 cost_calc 未调用，补专用成本步")
-                    forced_obs = await self._execute_step(
-                        len(plan),
-                        "用户需求含云资源成本/TCO/报价测算。必须先调用 mcp__cost__cost_reference_list "
-                        "获取 SKU 编码，再调用 mcp__cost__cost_calc 完成月度 TCO 测算；"
-                        "严格按用户需求的数量与月数构造 items（每项 {sku, qty, months}），"
-                        "禁止自行估算、禁止输出占位符、禁止用知识库检索替代。",
-                        ["mcp__cost__cost_reference_list", "mcp__cost__cost_calc"],
-                        event_callback, session_id, tool_calls_log,
-                    )
+                    self._log("system", "[强制成本步] 定价意图命中且 cost_calc 未调用，确定性补专用成本步")
+                    forced_obs = await self._force_cost_step(event_callback, session_id, tool_calls_log, user_input)
                     if forced_obs:
                         step_outputs.append(forced_obs)
 
@@ -1382,6 +1374,69 @@ Final Answer: [完整方案]）"""
             "tool": tool_name, "summary": summary, "plan_index": idx,
         })
         return observation
+
+    # ── 强制成本测算步：harness 确定性驱动 cost_calc（绕过模型不稳定的工具链）──
+    async def _force_cost_step(self, event_callback, session_id, tool_calls_log, user_input) -> str:
+        """定价意图下若整轮未调 cost_calc，由 harness 确定性完成测算：
+        1) 取 cost_reference_list 的 SKU 目录（复用本轮已调结果，否则现调）；
+        2) 一次结构化抽取把用户需求转成 items；
+        3) 直接调用 cost_calc（harness 驱动，不依赖模型自发 emit）。
+        返回该步的 Observation 文本（含 TCO 结果）。"""
+        # 1) SKU 目录（复用本轮 reference_list 的 observation）
+        ref_obs = ""
+        for t in tool_calls_log:
+            if t.get("tool") == "mcp__cost__cost_reference_list" and t.get("result"):
+                ref_obs = t["result"]
+                break
+        if not ref_obs:
+            ref_obs = await self._exec_one_action(
+                len(self._plan), "mcp__cost__cost_reference_list", {},
+                event_callback, session_id, tool_calls_log,
+            )
+        skus = re.findall(r"^- ([A-Za-z0-9.]+):", ref_obs, re.MULTILINE)
+        sku_hint = "\n".join(f"- {s}" for s in skus) if skus else "(见上方目录)"
+        # 2) 结构化抽取 items
+        extract_prompt = (
+            "你是云资源成本结构化抽取器。根据用户需求与可用 SKU 目录，抽取成本测算资源清单。\n\n"
+            f"【可用 SKU 编码（items[].sku 只能从这些里选）】\n{sku_hint}\n\n"
+            f"【用户需求】{user_input}\n\n"
+            "只输出一个 JSON 数组，每项 {\"sku\": \"<编码>\", \"qty\": <数量数字>, \"months\": <月数,默认1>}，"
+            "不要任何解释。目录中无对应 SKU 的资源直接忽略。\n"
+            '示例：[{"sku":"ecs.s6.large.2","qty":50,"months":1}]'
+        )
+        raw = await self._call_llm(extract_prompt)
+        items = self._extract_json_array(raw)
+        if isinstance(items, dict):
+            items = items.get("items") or []
+        if not isinstance(items, list) or not items:
+            return "（强制成本步：无法从需求中抽取结构化资源清单，跳过成本测算）"
+        if skus:
+            items = [it for it in items if isinstance(it, dict) and str(it.get("sku")) in skus]
+        if not items:
+            return "（强制成本步：抽取到的 SKU 均不在目录内，跳过成本测算）"
+        # 3) 确定性调用 cost_calc
+        obs = await self._exec_one_action(
+            len(self._plan) + 1, "mcp__cost__cost_calc", {"items": items},
+            event_callback, session_id, tool_calls_log,
+        )
+        return f"（强制成本测算步结果）\n{obs}"
+
+    @staticmethod
+    def _extract_json_array(text):
+        if not text:
+            return None
+        cleaned = re.sub(r"```(?:json)?", "", text).strip()
+        try:
+            return json.loads(cleaned)
+        except Exception:
+            pass
+        m = re.search(r"\[.*\]", cleaned, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                return None
+        return None
 
     # ---- 工具权限闸门（#3 human-in-the-loop）/ 联网搜索开关（#6）----
     # 默认策略：高风险工具在 Agent 自主决策执行时先征求确认；显式「导出」意图不走此闸门。
