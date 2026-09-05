@@ -117,9 +117,23 @@ async def agent_chat(
             # 工具栏选择的模型/思考开关：透传到 harness（None 时走 config 默认）
             model_override = body.model if body.model else None
             thinking_override = body.thinking if body.thinking in ("enabled", "disabled") else None
+            # Plan A 收尾：对话模式同样注入客户上下文（此前 client_id 仅接收未消费；
+            # 与 /agent/match 同一构建逻辑，背景+top-5 相关历史方案注入提示词）
+            extra_context = ""
+            if body.client_id and isinstance(user_id, int) and user_id > 0:
+                try:
+                    client_block, _client_meta = await _build_client_context_block(
+                        body.client_id, user_id, message
+                    )
+                    if client_block:
+                        extra_context = client_block
+                        logger.info(f"[Agent/chat] 已注入客户上下文 client_id={body.client_id}")
+                except Exception as e:
+                    logger.warning(f"[Agent/chat] 客户上下文构建失败（忽略，不影响对话）: {e}")
             result = await get_agent().run(
                 message,
                 session_id=session_id,
+                extra_context=extra_context,
                 event_callback=emit,
                 user_id=user_id,
                 user_info=user,
