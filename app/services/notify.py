@@ -374,24 +374,6 @@ def notify_for_user(user_id, demand: str = "", industry: str = "", title: str = 
     safe_fire(_push_targets(targets, "cloudsol 方案完成", text))
 
 
-def notify_match_complete(demand: str, industry: str = "", title: str = "", url: str = "") -> None:
-    """向后兼容：仅全局兜底（无 user_id 上下文时）。"""
-    targets = _global_targets()
-    if not targets:
-        return
-    text = _build_markdown(demand, industry, title, url or SITE_URL)
-    safe_fire(_push_targets(targets, "cloudsol 方案匹配完成", text))
-
-
-def notify_agent_result(message: str, answer: str = "", url: str = "") -> None:
-    """向后兼容：仅全局兜底（无 user_id 上下文时）。"""
-    targets = _global_targets()
-    if not targets:
-        return
-    text = _build_markdown(message, title="", url=url or SITE_URL)
-    safe_fire(_push_targets(targets, "cloudsol Agent 方案完成", text))
-
-
 def test_user_binding(user_id, platform: str):
     """向该用户指定平台绑定发一条测试消息并返回 (ok, error)。
 

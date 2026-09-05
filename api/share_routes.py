@@ -28,7 +28,6 @@ class ShareResponse(BaseModel):
     share_id: str
     url: str  # 相对路径，前端用 location.origin 拼接成完整链接
     newly_unlocked: List[Dict[str, Any]] = []  # 分享解锁的成就（如"分享达人"），匿名用户为空
-    debug_info: Optional[Dict[str, Any]] = None  # 临时诊断字段，确认成就问题后可删
 
 
 @router.post("/share", response_model=ShareResponse)
@@ -64,7 +63,6 @@ async def create_share(
         share_id=share_id,
         url=f"/share.html?id={share_id}",
         newly_unlocked=newly_unlocked,
-        debug_info=debug_info,
     )
 
 

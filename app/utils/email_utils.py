@@ -14,6 +14,14 @@ def send_reset_email(email: str, token: str) -> bool:
     :return: 是否发送成功
     """
     try:
+        # SMTP 未配置时显式告警（.env 需配 SMTP_USER/SMTP_PASS）；
+        # 返回 False 仍会被上层按"防账号枚举"语义处理，但服务端日志可定位配置缺失。
+        if not SMTP_USER or not SMTP_PASS:
+            logger.error(
+                "[reset] SMTP 未配置（SMTP_USER/SMTP_PASS 为空），密码重置邮件无法发送！"
+                "请在服务器 .env 配置 SMTP_USER/SMTP_PASS 后重启服务。"
+            )
+            return False
         # 构造重置链接
         reset_url = f"{FRONTEND_URL}/reset-password?token={token}"
         
