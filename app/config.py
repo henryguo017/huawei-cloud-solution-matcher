@@ -137,6 +137,12 @@ REFLEXION_MAX_REPLANS = int(os.getenv("REFLEXION_MAX_REPLANS", "2"))
 AGENT_PARALLEL_TOOLS = os.getenv("AGENT_PARALLEL_TOOLS", "1")
 MAX_PARALLEL = int(os.getenv("MAX_PARALLEL", "3"))
 
+# ==================== P2 Skills 行业技能包开关 ====================
+# AGENT_SKILL_PACKS=1：方案/竞品意图命中行业时，自动挂载 data/skill_packs/<slug>.json
+# （行业专属提示词注入三角色 + 终稿口径，不改工具集）；=0 完全关闭（零副作用）。
+# 生态特性默认关：上线需 .env 显式开启；加载/匹配异常一律静默降级，不阻断主链路。
+AGENT_SKILL_PACKS = os.getenv("AGENT_SKILL_PACKS", "0")
+
 # ==================== P2-3 MCP 远程工具客户端开关 ====================
 # AGENT_MCP_CLIENT=1：启动时（首次 Agent 运行）按 MCP_SERVERS 配置连接外部 MCP Server，
 # 把远端工具注册进本地 ToolRegistry，Agent 即可调用远端标准化工具。

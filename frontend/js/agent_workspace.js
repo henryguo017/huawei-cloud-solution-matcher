@@ -1488,6 +1488,9 @@
                     if (t === 'agent_phase') {
                         // P2-1-B：当前执行阶段徽标
                         self._appendThinkingStep('进入阶段：' + (ev.label || '') , 'phase');
+                    } else if (t === 'skill_pack') {
+                        // P2-Skills：行业技能包挂载提示（单步重跑路径同样可见）
+                        self._appendThinkingStep('已挂载行业技能包：' + (ev.industry || '') + (ev.version ? '（v' + ev.version + '）' : ''), 'phase');
                     } else if (t === 'tool_start') {
                         if (typeof ev.plan_index === 'number' && ev.plan_index >= 0) {
                             self._updatePlanStatus(shell, ev.plan_index, 'running');
@@ -1629,6 +1632,9 @@
                 } else if (t === 'agent_phase') {
                     // P2-1-B：多智能体阶段徽标（需求分析师→方案架构师→质量校验官）
                     self._appendThinkingStep('进入阶段：' + (ev.label || ev.phase || '执行'), 'phase');
+                } else if (t === 'skill_pack') {
+                    // P2-Skills：行业技能包挂载提示（思考流可见；不污染方案正文）
+                    self._appendThinkingStep('已挂载行业技能包：' + (ev.industry || '') + (ev.version ? '（v' + ev.version + '）' : ''), 'phase');
                 } else if (t === 'thought') {
                     self._appendThinkingStep(ev.text || ev.message || '正在分析需求...', 'thought');
                 } else if (t === 'tool_start') {

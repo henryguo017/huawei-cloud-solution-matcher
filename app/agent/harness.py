@@ -40,6 +40,7 @@ from app.config import (
     MATCH_LLM_MODEL, SUPPORTED_COMPETITORS, AGENT_TWO_PHASE, AGENT_MULTI_AGENT, AGENT_CONTEXT_WINDOW,
     AGENT_SELF_CHECK, SELF_CHECK_PASS, SELF_CHECK_MAX_ITERS,
     AGENT_REFLEXION_REPLAN, REFLEXION_MAX_REPLANS, AGENT_PARALLEL_TOOLS, MAX_PARALLEL,
+    AGENT_SKILL_PACKS,
 )
 
 logger = logging.getLogger(__name__)
@@ -378,7 +379,7 @@ class AgentHarness:
                 # P2-1-B：多智能体角色（solution/competitor 启用；knowledge_q/file_ops 保持单角色）
                 role = None
                 if self._multi_agent_enabled and self._intent in ("solution", "competitor"):
-                    from app.agent.agents import get_role
+                    from app.agent.agents import get_role, role_for_step
                     role = get_role(idx)
                     await self._emit(event_callback, {
                         "type": "agent_phase",
@@ -395,8 +396,16 @@ class AgentHarness:
                 # P2-3：远端 MCP 工具作为每步的「逃生舱」，LLM 可随时按需调用
                 if self._remote_tool_names:
                     toolset = toolset + self._remote_tool_names
+                # P2-Skills：角色提示词追加行业技能包块（仅提示词注入，不动工具集；无包/异常为空串）
+                role_prompt = role["prompt"] if role else None
+                if role_prompt and getattr(self, "_active_pack", None):
+                    try:
+                        from app.agent.skill_packs import pack_prompt_block
+                        role_prompt += pack_prompt_block(self._active_pack, role_for_step(idx))
+                    except Exception as _pe:
+                        self._log("warn", f"技能包角色块注入失败（忽略）: {_pe}")
                 obs = await self._execute_step(idx, step, toolset, event_callback, session_id, tool_calls_log,
-                                               role_prompt=role["prompt"] if role else None)
+                                               role_prompt=role_prompt)
                 if obs is None:
                     return None  # 第一步要求澄清 → 降级
                 self._step_results[idx] = obs
@@ -627,11 +636,20 @@ class AgentHarness:
         steps_txt = "\n".join(
             f"- 第{i + 1}步（{step}）：\n{_trunc(out, 600)}" for i, (step, out) in enumerate(_pairs)
         ) or "（无执行结果）"
+        # P2-Skills：终稿追加行业口径块（话术/价值主张/playbook 要点；无包为空串）
+        pack_block = ""
+        if getattr(self, "_active_pack", None):
+            try:
+                from app.agent.skill_packs import pack_synthesize_block
+                pack_block = pack_synthesize_block(self._active_pack)
+            except Exception as _pe:
+                self._log("warn", f"技能包终稿块注入失败（忽略）: {_pe}")
         prompt = (
             "你是华为云售前方案撰写官。你已按计划执行了各步骤，请基于各步收集到的信息，"
             "为用户撰写完整、可落地的最终方案。\n\n"
             f"【用户需求】{user_input}\n\n"
-            f"【执行计划与各步结果】\n{steps_txt}\n\n"
+            f"【执行计划与各步结果】\n{steps_txt}\n"
+            f"{pack_block}\n\n"
             "请直接输出：\n"
             "Final Answer: [完整方案]\n"
             "（方案须覆盖：客户痛点分析、华为云产品与技术方案、实施路径、价值与预期收益）"
@@ -807,6 +825,8 @@ class AgentHarness:
         # #3 工具权限策略（allow/ask/deny）与 #6 联网搜索开关（前端工具栏透传，None 走默认）
         self._tool_permissions = tool_permissions or {}
         self._disable_web_search = bool(disable_web_search)
+        # P2-Skills：行业技能包复位（单例复用防跨请求残留；仅在首轮意图路由时重新匹配）
+        self._active_pack = None
 
         # P2-D5：Plan 单步重跑 —— 复用上一次的 plan / 各步原参数，重跑指定步并重新汇总
         if rerun_plan_index is not None:
@@ -883,6 +903,23 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             self._format_mode = "competitor" if self._intent == "competitor" else "solution"
             competitors = intent.get("competitors", []) or []
             self._log("system", f"[INTENT] {intent}")
+
+            # P2-Skills：行业技能包挂载（默认关；仅 solution/competitor；异常静默降级）。
+            # 只注入提示词（三角色 + 终稿口径），不改工具集——工具集决策仍归角色/映射表。
+            if self._intent in ("solution", "competitor") and (AGENT_SKILL_PACKS or "0").strip() == "1":
+                try:
+                    from app.agent.skill_packs import match_pack
+                    _pack = match_pack(intent.get("industries") or [])
+                    if _pack:
+                        self._active_pack = _pack
+                        await self._emit(event_callback, {
+                            "type": "skill_pack",
+                            "industry": _pack.get("industry", ""),
+                            "version": _pack.get("version", ""),
+                        })
+                        self._log("system", f"[SKILL_PACK] 已挂载行业技能包: {_pack.get('industry')} (v{_pack.get('version', 'n/a')})")
+                except Exception as e:
+                    self._log("warn", f"行业技能包挂载失败（忽略）: {e}")
 
             # P2 修复：方案/竞品意图但需求过短、缺行业/场景 → 直接澄清，避免凭空生成方案
             if self._intent in ("solution", "competitor") and self._need_clarify(
