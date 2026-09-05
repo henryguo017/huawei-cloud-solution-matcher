@@ -102,9 +102,11 @@ def _build_cost_calc_text(items: list) -> str:
 
 
 def _build_reference_text() -> str:
-    lines = ["可用 SKU 参考（cost_calc 的 items[].sku 取值；价格为 CNY / 单位·月，估算值）：", "─" * 48]
+    # 仅暴露 SKU 名称/规格/单位，不泄露单价 —— 单价只在 cost_calc 内部计算返回，
+    # 强制 Agent 必须调用 cost_calc 才能得到报价，避免 LLM 用目录里的价格自行估算绕过工具。
+    lines = ["可用 SKU 参考（cost_calc 的 items[].sku 取值；单价由 cost_calc 计算返回，此处不泄露）：", "─" * 48]
     for sku, spec in SKU_CATALOG.items():
-        lines.append(f"- {sku}: {spec['name']}（{spec['unit']}） {_fmt_cny(spec['unit_price'])}/{spec['unit']}·月")
+        lines.append(f"- {sku}: {spec['name']}（{spec['unit']}）")
     lines.append("─" * 48)
     lines.append("调用示例：cost_calc(items=[{\"sku\":\"ecs.s6.large.2\",\"qty\":2,\"months\":1},{\"sku\":\"obs.standard\",\"qty\":500}])")
     return "\n".join(lines)
