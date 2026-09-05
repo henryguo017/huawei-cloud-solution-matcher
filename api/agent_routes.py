@@ -212,6 +212,91 @@ async def agent_chat(
     )
 # ========== Agent 智能匹配（单 Agent + Tool Calling） ==========
 
+# ========== P2 生态交互：IM 机器人内部端点（钉钉/飞书 bot 经 127.0.0.1 环回调用） ==========
+
+class InternalChatRequest(BaseModel):
+    message: str
+    session_id: str = ""
+
+
+@router.post("/agent/chat-internal", tags=["Agent 内部接口"])
+async def agent_chat_internal(request: Request, body: InternalChatRequest):
+    """IM 机器人专用内部端点（非 SSE、同步返回终稿）。
+
+    安全模型：
+      - 仅 INTERNAL_API_TOKEN 非空且请求头 X-Internal-Token 精确匹配时放行；
+        令牌未配置 = 端点整体禁用（403），默认关闭。
+      - 生产 uvicorn 监听 127.0.0.1:8000，公网无法直达；双重防线。
+      - 绕过验证码登录与用户权限闸门（无头环境无人点确认）：
+        高风险工具在此显式 allow（generate_doc/read_customer_file/mcp__ 成本工具）。
+      - v1 单账号绑定：以 IM_BOT_USER_ID 身份执行（KB 上下文/成就/通知归属），
+        未配置则匿名（无个人知识库上下文）。
+    成功时顺带生成临时分享页（匿名可读 30 天），返回 share_id 供 bot 拼卡片链接。
+    """
+    from app.config import INTERNAL_API_TOKEN, IM_BOT_USER_ID
+    token = request.headers.get("X-Internal-Token", "")
+    if not INTERNAL_API_TOKEN or not token or token != INTERNAL_API_TOKEN:
+        raise HTTPException(status_code=403, detail="内部接口未启用或令牌不匹配")
+
+    message = (body.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="message 不能为空")
+    session_id = body.session_id or f"imbot_{int(time.time())}"
+
+    uid = 0
+    try:
+        uid = int(IM_BOT_USER_ID)
+    except (TypeError, ValueError):
+        uid = 0
+    if uid > 0:
+        set_kb_user_context(uid)
+
+    # 无头放行：IM 场景无人点权限确认，mcp 成本工具/文档生成/客户资料读取显式 allow
+    headless_permissions = {
+        "generate_doc": "allow",
+        "read_customer_file": "allow",
+        "mcp__cost__cost_calc": "allow",
+        "mcp__cost__cost_reference_list": "allow",
+    }
+    result = await get_agent().run(
+        message,
+        session_id=session_id,
+        extra_context="",
+        event_callback=None,
+        user_id=(uid if uid > 0 else None),
+        tool_permissions=headless_permissions,
+    )
+    answer = result.get("answer", "")
+    success = bool(result.get("success"))
+
+    share_id = None
+    if success and answer:
+        try:
+            from app.services.share_service import ShareService
+            share_id = ShareService().create_share(
+                (message or "IM 方案")[:60],
+                {
+                    "kind": "agent",
+                    "title": (message or "IM 方案")[:60],
+                    "demand": message,
+                    "solution": answer,
+                    "industry": "",
+                    "sources": [],
+                    "created_at": datetime.now().isoformat(),
+                },
+            )
+        except Exception as e:
+            logger.warning("[agent/chat-internal] 分享页生成失败（忽略）: %s", e)
+
+    return {
+        "success": success,
+        "answer": answer,
+        "share_id": share_id,
+        "elapsed": result.get("elapsed"),
+        "tool_calls": result.get("tool_calls", []),
+    }
+
+
 @router.delete("/agent/memory", tags=["Agent 记忆"])
 async def clear_agent_memory(user: dict = Depends(get_current_user)):
     """P2-2：清空当前用户的长程情景记忆（agent_episodes）。"""

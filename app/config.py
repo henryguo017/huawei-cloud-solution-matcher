@@ -143,6 +143,24 @@ MAX_PARALLEL = int(os.getenv("MAX_PARALLEL", "3"))
 # 生态特性默认关：上线需 .env 显式开启；加载/匹配异常一律静默降级，不阻断主链路。
 AGENT_SKILL_PACKS = os.getenv("AGENT_SKILL_PACKS", "0")
 
+# ==================== P2 生态交互：钉钉/飞书 IM 机器人 ====================
+# INTERNAL_API_TOKEN：内部环回接口令牌（IM bot 服务 → API 自调用鉴权，X-Internal-Token 头）。
+# 空 = 内部端点整体禁用（403），默认空。
+INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN", "")
+# IM_BOT_API_BASE：bot 调用的 API 内部地址（生产 uvicorn 监听 127.0.0.1:8000，仅环回）。
+IM_BOT_API_BASE = os.getenv("IM_BOT_API_BASE", "http://127.0.0.1:8000")
+# DINGTALK_BOT_CLIENT_ID/SECRET：钉钉开放平台企业内部应用凭证（Stream 模式）。
+# 两者任一为空 = 钉钉 bot 不启动（独立 systemd 服务，退出不影响主 API）。
+DINGTALK_BOT_CLIENT_ID = os.getenv("DINGTALK_BOT_CLIENT_ID", "")
+DINGTALK_BOT_CLIENT_SECRET = os.getenv("DINGTALK_BOT_CLIENT_SECRET", "")
+# IM_BOT_USER_ID：v1 单账号绑定——群里 @机器人 的请求以此 cloudsol user_id 执行（KB 上下文/通知归属）。
+# 空 = 匿名执行（无个人知识库上下文）。生产建议配为运营者账号 id。
+IM_BOT_USER_ID = os.getenv("IM_BOT_USER_ID", "")
+# IM_BOT_WHITELIST：senderStaffId 白名单（逗号分隔）。空 = 不限制（允许群里所有人，初期调试用）。
+IM_BOT_WHITELIST = os.getenv("IM_BOT_WHITELIST", "")
+# IM_BOT_DAILY_LIMIT：每个发送者每日可触发的 Agent 生成次数上限（防滥用，Agent 单次消耗 LLM token）。
+IM_BOT_DAILY_LIMIT = int(os.getenv("IM_BOT_DAILY_LIMIT", "5"))
+
 # ==================== P2-3 MCP 远程工具客户端开关 ====================
 # AGENT_MCP_CLIENT=1：启动时（首次 Agent 运行）按 MCP_SERVERS 配置连接外部 MCP Server，
 # 把远端工具注册进本地 ToolRegistry，Agent 即可调用远端标准化工具。
