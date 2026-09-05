@@ -820,7 +820,7 @@ class AgentHarness:
                 self._log("error", "澄清会话不存在或已过期")
                 return self._make_result(
                     "（澄清会话已过期或不存在，请重新发起匹配）", tool_calls_log,
-                    success=False, expired=True,
+                    success=False, expired=True, plan=[], plan_status=[],
                 )
             session_id = state.get("session_id", session_id)
             user_input = state.get("user_input", user_input)
@@ -908,6 +908,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 return self._make_result(
                     "", tool_calls_log, success=False,
                     paused=True, clarify_id=new_clarify_id, questions=questions,
+                    plan=[], plan_status=[],
                 )
 
             if self._intent == "account":
@@ -924,7 +925,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "elapsed": round(time.time() - self._start_time, 2),
                 })
-                return self._make_result(light, [], success=True)
+                return self._make_result(light, [], success=True, plan=[], plan_status=[])
 
             if self._intent == "greeting":
                 # 纯礼节性问候/致谢/再见：极短固定模板
@@ -940,7 +941,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "elapsed": round(time.time() - self._start_time, 2),
                 })
-                return self._make_result(light, [], success=True)
+                return self._make_result(light, [], success=True, plan=[], plan_status=[])
 
             if self._intent == "general":
                 # 通用问答（算数/常识/自我介绍/"你能做什么"等）：调 LLM 直答，
@@ -957,7 +958,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "elapsed": round(time.time() - self._start_time, 2),
                 })
-                return self._make_result(general, [], success=True)
+                return self._make_result(general, [], success=True, plan=[], plan_status=[])
 
             if self._intent == "export":
                 # P1-2：导出文档意图（用户说"导出成 Word/PDF"），直接生成可下载文件，不进 ReAct
@@ -987,7 +988,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "elapsed": round(time.time() - self._start_time, 2),
                 })
-                return self._make_result(answer, [], success=True)
+                return self._make_result(answer, [], success=True, plan=[], plan_status=[])
 
             # 方案 / 竞品意图：选对应 Final Answer 结构指南（B 方案自适应）
             if self._intent == "file_ops":
@@ -2650,6 +2651,8 @@ Final Answer: [完整方案]）"""
         clarify_id: Optional[str] = None,
         questions: Optional[list] = None,
         expired: bool = False,
+        plan: Optional[list] = None,
+        plan_status: Optional[list] = None,
     ) -> Dict[str, Any]:
         elapsed = time.time() - self._start_time
         # P1-2：集中缓存终稿，供后续 export 意图 / generate_doc 拦截导出（跨轮保留）。
@@ -2672,8 +2675,11 @@ Final Answer: [完整方案]）"""
             "clarify_id": clarify_id,
             "questions": questions or [],
             "expired": expired,
-            "plan": self._plan,   # P0：执行计划透传（前端可在 result 后收起/保留 Plan 面板）
-            "plan_status": list(self._plan_status),  # P1-1：plan 每步状态，前端 result 后保留面板点亮
+            # P0：执行计划透传（前端可在 result 后收起/保留 Plan 面板）。
+            # 轻量路径（account/greeting/general/export 等）显式传 plan=[]，避免单例 agent
+            # 把上一轮 plan-driven 运行的旧计划残留进本轮 result。
+            "plan": list(self._plan) if plan is None else plan,
+            "plan_status": list(self._plan_status if plan_status is None else plan_status),  # P1-1：plan 每步状态
             "format_mode": getattr(self, "_format_mode", "solution"),  # P0：导出时决定 report_type（solution/competitor）
             "reflexion_used": self._reflexion_count > 0,   # P1-3：是否触发过反思
             "reflexion_success": self._reflexion_success,  # P1-3：反思是否成功注入

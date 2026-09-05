@@ -74,6 +74,28 @@ _SCALE_RE = re.compile(
 # 概念提问（"什么是 AWS 的 S3" 之类 → general，不算竞品对比）
 _CONCEPT_RE = re.compile(r"^(什么是|什么叫|怎么理解|解释一下|什么是|说说)")
 
+# 导出文档意图（P1-2 harness export 分支依赖此分类）：明确的导出/下载动作 + 文档格式词
+_EXPORT_RE = re.compile(
+    r"(导出|下载|另存)[^。]{0,12}(word|pdf|pptx?|文档|方案书|报告)|(导出成|导出为)",
+    re.I,
+)
+
+# 文件操作意图（harness file_ops 分支依赖此分类）：列出/读取/查看/解析 用户上传的资料文件
+_FILE_OPS_RE = re.compile(
+    r"(列出|读取|打开|解析|总结|归纳|看看|查看)[^。]{0,8}(我上传|上传的|客户资料|客户文件|资料文件|文件列表|文件)"
+)
+
+# 产品知识问答意图（harness knowledge_q 分支依赖此分类）：华为云产品/服务概念提问，走 search_kb 结构化作答
+_PRODUCT_WORDS = (
+    "OBS", "ECS", "EVS", "SFS", "RDS", "GaussDB", "DDS", "CDN", "WAF", "ELB", "VPC",
+    "IAM", "DWS", "ModelArts", "盘古", "昇腾", "CCE", "SWR", "CES", "DMS", "Kafka",
+    "云桌面", "HSS", "CBR", "SMS", "FunctionGraph", "DataArts", "MetaStudio",
+)
+_KNOWLEDGE_Q_RE = re.compile(
+    r"(" + "|".join(_PRODUCT_WORDS) + r")|(华为云)[^。]{0,6}(产品|服务|能力|架构|优势)",
+    re.I,
+)
+
 # 任务词（用于抑制 greeting 误判）
 _TASK_WORDS = re.compile(
     r"(方案|对比|竞品|行业|平台|帮我|做|生成|查|看|怎么|如何|上传|邮箱|密码|成就|收藏|历史|写|规划|设计|建设|搭建)"
@@ -107,7 +129,10 @@ def _mk(intent: str, competitors: List[str], industries: List[str], confidence: 
 def classify_intent(text: str) -> Dict[str, Any]:
     """意图分类主入口。
 
-    规则优先级：greeting(纯礼节) → account → competitor → solution → general。
+    规则优先级：greeting(纯礼节) → account → export → competitor → solution
+    → knowledge_q → file_ops → general。
+    export/file_ops/knowledge_q 三个分支的 harness 侧消费逻辑一直在
+    （harness.py L962/L993/L995），本文件 git 损坏重建时曾丢失这三类规则，此处恢复。
     """
     t = (text or "").strip()
     if not t:
@@ -127,6 +152,10 @@ def classify_intent(text: str) -> Dict[str, Any]:
     if _ACCOUNT_RE.search(t):
         return _mk("account", competitors, industries, 0.9)
 
+    # 2.5) 导出文档（明确导出/下载动作 + 格式词；账户类已先行，避免误吃"下载我的方案"）
+    if _EXPORT_RE.search(t):
+        return _mk("export", competitors, industries, 0.9)
+
     # 3) 竞品对比（必须出现具体外部竞品名，避免把"怎么对比华为云和其他竞品厂商"误判为对比）
     if competitors and _HAS_COMPARE_VERB.search(t):
         # 方法论咨询（怎么对比/如何比较）且无具体成对竞品 → general
@@ -142,6 +171,14 @@ def classify_intent(text: str) -> Dict[str, Any]:
         if _CONCEPT_RE.match(t) and not re.search(r"(方案|对比|竞品|做一个|帮我|生成|上云|建设|搭建)", t):
             return _mk("general", competitors, industries, 0.6)
         return _mk("solution", competitors, industries, 0.85)
+
+    # 4.5) 产品知识问答（方案类已先行，带行业/规模/方案动作的不会走到这）
+    if _KNOWLEDGE_Q_RE.search(t):
+        return _mk("knowledge_q", competitors, industries, 0.85)
+
+    # 4.6) 文件操作（咨询句式"怎么上传/如何查看"仍归 general，不抢）
+    if _FILE_OPS_RE.search(t) and not _FILE_CONSULT_RE.search(t):
+        return _mk("file_ops", competitors, industries, 0.85)
 
     # 5) 通用兜底
     return _mk("general", competitors, industries, 0.5)
