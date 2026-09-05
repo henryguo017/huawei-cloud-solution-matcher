@@ -1,0 +1,17 @@
+[Unit]
+Description=cloudsol Feishu IM bot (lark-oapi long connection)
+After=network.target huawei-cloud-api.service
+Wants=huawei-cloud-api.service
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/huawei-cloud-solution-matcher
+ExecStart=/var/www/huawei-cloud-solution-matcher/venv/bin/python -m app.services.feishu_bot
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=0
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
