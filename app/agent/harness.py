@@ -350,6 +350,12 @@ class AgentHarness:
 
     # ───────────────────────── P2-1-A：真·两阶段执行（plan 驱动） ─────────────────────────
 
+    # 定价意图关键词（用于「强制成本测算步」守卫）：命中且整轮未调 cost_calc 时补专用步，
+    # 确保售前 TCO 测算真正走 MCP 工具而非被模型在编排中漏掉。
+    _PRICING_RE = re.compile(
+        r"成本|TCO|报价|预算|月租|月费|总价|多少钱|测算|费用", re.IGNORECASE
+    )
+
     # 每步子循环内最多允许的 LLM 迭代次数（防单步无限循环）
     _STEP_MAX_ITER = 3
 
@@ -402,6 +408,25 @@ class AgentHarness:
                     "step_index": idx,
                     "summary": "本步完成",
                 })
+
+            # ── 强制成本测算步（P0 修复 cost_calc 不被调用）──
+            # 多步编排中模型常选完 SKU 后跑去 KB 检索、漏掉定价工具；此处检测「定价意图 +
+            # 整轮未调 cost_calc」，补一个工具集仅含成本工具的专用步，从根上逼其真正调用
+            # mcp__cost__cost_calc，确保「项目能力 → MCP → Agent 可调用」闭环成立。
+            if self._remote_tool_names and self._PRICING_RE.search(self._plan_original_input or user_input or ""):
+                if not any(t.get("tool") == "mcp__cost__cost_calc" for t in tool_calls_log):
+                    self._log("system", "[强制成本步] 定价意图命中且 cost_calc 未调用，补专用成本步")
+                    forced_obs = await self._execute_step(
+                        len(plan),
+                        "用户需求含云资源成本/TCO/报价测算。必须先调用 mcp__cost__cost_reference_list "
+                        "获取 SKU 编码，再调用 mcp__cost__cost_calc 完成月度 TCO 测算；"
+                        "严格按用户需求的数量与月数构造 items（每项 {sku, qty, months}），"
+                        "禁止自行估算、禁止输出占位符、禁止用知识库检索替代。",
+                        ["mcp__cost__cost_reference_list", "mcp__cost__cost_calc"],
+                        event_callback, session_id, tool_calls_log,
+                    )
+                    if forced_obs:
+                        step_outputs.append(forced_obs)
 
             # P3-1 真反思-重规划：若任一执行步含 Error:（失败步），且开关开启、预算未超，
             # 则读失败步 → planner 产修订计划 → 重跑失败步 → 重新汇总；否则走常规汇总。
@@ -604,8 +629,11 @@ class AgentHarness:
         self, user_input: str, plan: list, step_outputs: list, event_callback=None,
     ) -> str:
         """P2-1-A：汇总各步结果，调 LLM 生成终稿（随后走统一增强管线）。"""
+        _pairs = list(zip(plan, step_outputs)) + [
+            ("补充执行结果", out) for out in step_outputs[len(plan):]
+        ]
         steps_txt = "\n".join(
-            f"- 第{i + 1}步（{step}）：\n{_trunc(out, 600)}" for i, (step, out) in enumerate(zip(plan, step_outputs))
+            f"- 第{i + 1}步（{step}）：\n{_trunc(out, 600)}" for i, (step, out) in enumerate(_pairs)
         ) or "（无执行结果）"
         prompt = (
             "你是华为云售前方案撰写官。你已按计划执行了各步骤，请基于各步收集到的信息，"
