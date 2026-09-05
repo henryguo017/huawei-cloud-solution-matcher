@@ -127,8 +127,10 @@ async def _h_cost_reference_list(**arguments) -> str:
 _REGISTRY = [
     {
         "name": "cost_calc",
-        "description": "华为云方案成本测算：传入资源清单 items（每项含 sku/qty/months），"
-                       "返回按月/按年的 TCO 估算（CNY）。价格为公开官网列表价估算，非实时报价。",
+        "description": "华为云方案成本测算（成本/TCO/报价/预算/月租的唯一权威价源）：传入资源清单 items"
+                       "（每项含 sku/qty/months），返回按月/按年的 TCO 估算（CNY）。"
+                       "价格为公开官网列表价估算，非实时报价；返回的合计金额必须直接写入方案预算，"
+                       "禁止自行估算单价或用知识库检索替代本工具。",
         "parameters": {
             "type": "object",
             "properties": {
@@ -152,7 +154,10 @@ _REGISTRY = [
     },
     {
         "name": "cost_reference_list",
-        "description": "列出成本测算可用的 SKU 目录与示例调用，供 Agent/用户选择资源规格。",
+        "description": "列出成本测算可用的 SKU 目录与示例调用，供 Agent/用户选择资源规格。"
+                       "注意：本工具只暴露 SKU 名称/规格/单位，不含单价；"
+                       "拿到目录后必须紧接着调用 cost_calc 才能完成报价，"
+                       "切勿用知识库检索或自行估算替代 cost_calc。",
         "parameters": {"type": "object", "properties": {}},
         "handler": _h_cost_reference_list,
     },
