@@ -434,7 +434,7 @@ class AgentHarness:
                 final = await self._synthesize_final(user_input, plan, step_outputs, event_callback)
             # P3-3 自检 Gate：终稿交付前过质量闸门（不过则二次合成），在增强管线前完成，
             # 保证前端流式内容即闸门后的终稿。
-            final, _ = await self._self_check_gate(final, user_input, event_callback)
+            final, _ = await self._self_check_gate(final, user_input, event_callback, tool_calls_log)
             final = await self._finalize_answer(user_input, final, tool_calls_log, event_callback=event_callback)
             self._last_draft = final
             self.memory.add_agent_response(session_id, final)
@@ -744,7 +744,8 @@ class AgentHarness:
         # 重新汇总（其余步沿用上次结果）
         step_outputs = [self._step_results.get(i, "") for i in range(len(plan))]
         final = await self._synthesize_final(self._plan_original_input or "", plan, step_outputs, event_callback)
-        final, self._quality_warn = await self._self_check_gate(self._plan_original_input or "", final, event_callback)
+        # 注意实参顺序：(answer, user_input)；此处曾误传成 (user_input文本, 终稿)，导致 critic 拿错数据评审
+        final, self._quality_warn = await self._self_check_gate(final, self._plan_original_input or "", event_callback, tool_calls_log)
         final = await self._finalize_answer(self._plan_original_input or "", final, tool_calls_log, event_callback=event_callback)
         self._last_draft = final
         self.memory.add_agent_response(session_id, final)
@@ -1974,9 +1975,13 @@ Final Answer: [完整方案]）"""
 
     # ─────────────────── P3-3：自检 Gate（质量闸门） ───────────────────
     async def _self_check_gate(
-        self, answer: str, user_input: str, event_callback=None,
+        self, answer: str, user_input: str, event_callback=None, tool_calls: list = None,
     ) -> tuple:
-        """P3-3 硬质量闸门：critic LLM 按 5 维 rubric 验收终稿（draft 阶段，finalize 之前）。
+        """P3-3 硬质量闸门：critic LLM 按 rubric 验收终稿（draft 阶段，finalize 之前）。
+
+        tool_calls：本次真实工具调用记录（[{tool, input, result}, ...]）。注入 critic 提示词后，
+        「是否调用过某工具/数据是否有据可查」按真实记录判定，消除"工具已调用但正文没提工具名
+        就被判未调用"的误判。
 
         返回 (answer, quality_warn)：
           - 通过 → 原 answer，quality_warn=False；
@@ -1998,6 +2003,21 @@ Final Answer: [完整方案]）"""
                 + ("\n4. 竞品对比（用户提到了友商，必须含华为云 vs 友商对比）" if mention_competitor else "")
                 + "\n5. 无幻觉/有据可查\n6. 结构完整可执行"
             )
+            # 真实工具调用记录：让 critic 按系统记录核对，而非凭正文里有没有工具名瞎猜
+            tool_block = ""
+            if tool_calls:
+                lines = []
+                for t in tool_calls[-12:]:
+                    name = str(t.get("tool", "") or "")
+                    res = str(t.get("result", "") or "").replace("\n", " ")[:120]
+                    lines.append(f"- {name}：{res}")
+                tool_block = (
+                    "【本次实际调用过的工具（系统真实记录）】\n" + "\n".join(lines)
+                    + "\n\n判定规则（重要）：上表是工具调用的真实记录。判断『是否调用过某工具』"
+                    "『数据是否有据可查』必须以本记录为准，不得仅因方案正文未出现工具名、"
+                    "或未声明『工具返回』就判定未调用。若记录显示工具确已调用并返回了结果，"
+                    "则该维度视为达标，不得据此判 fail。"
+                )
             current = answer
             for it in range(1, SELF_CHECK_MAX_ITERS + 1):
                 critic_prompt = (
@@ -2013,6 +2033,7 @@ Final Answer: [完整方案]）"""
                     '"patch_hint": "如何补强的简要指引"}\n\n'
                     f"用户需求：{user_input}\n\n"
                     f"待审查方案：\n{current[:6000]}\n\n"
+                    f"{tool_block}\n\n"
                     "审查结果 JSON："
                 )
                 raw = await get_llm_response(critic_prompt, model=MATCH_LLM_MODEL)
