@@ -21,6 +21,20 @@
   "playbook": ["要点1", "要点2", ...]    # 终稿必备行业要点（随 synthesize 注入）
 }
 
+能力包格式（v2，P1-B：按"动作"维度挂载，与行业包正交、可同时生效）：
+{
+  "slug": "capability_ppt",
+  "kind": "capability",                 # 关键：标明是能力包（缺省即行业包，向后兼容 11 个行业包）
+  "industry": "PPT生成",                 # 展示名（行业包这里是规范行业名）
+  "triggers": {                          # 声明式触发条件，纯数据驱动，新增能力包无需改代码
+    "intents": ["export"],               # 可选：意图名命中其一（空=不限意图）
+    "keywords": ["PPT", "幻灯片"]         # 可选：原文出现其一（空=不限关键词，大小写不敏感）
+  },                                     # 语义 = AND（声明了的维度必须命中）；两者都空则该包永不生效
+  "version": "2026-09-06",
+  "prompt_template": { ... 同上四段 ... },
+  "playbook": ["要点1", ...]
+}
+
 设计铁律：
   - 默认关：AGENT_SKILL_PACKS=0 时 harness 根本不调用本模块；
   - 失败吞掉：读文件/解析/校验失败仅记 warning 并返回 None；
@@ -42,6 +56,10 @@ _PACK_DIR = os.path.join(
 
 # 进程内缓存：slug → pack dict（含加载失败标记，避免反复读坏文件）
 _cache: Dict[str, Optional[dict]] = {}
+
+# 包类型标记：值为 capability 表示「能力包」（按动作维度挂载）；缺省/其他值均视为行业包。
+# 行业包 11 个无此字段 → 天然向后兼容。
+CAPABILITY_KIND = "capability"
 
 
 def list_packs() -> List[str]:
@@ -93,6 +111,9 @@ def match_pack(industries: List[str]) -> Optional[dict]:
 
     匹配规则：行业词 == pack.industry 或行业词 ∈ pack.aliases。
     顺序跟随意图分类器的 industries 列表（靠前的行业优先）。
+
+    注意：只匹配「行业包」——kind=capability 的能力包由 match_capability 挂载，
+    两者维度正交（可同时生效），此处必须跳过，否则能力包会被当行业包误挂。
     """
     if not industries:
         return None
@@ -100,10 +121,49 @@ def match_pack(industries: List[str]) -> Optional[dict]:
         pack = load_pack(slug)
         if not pack:
             continue
+        if (pack.get("kind") or "").strip() == CAPABILITY_KIND:
+            continue
         names = {pack.get("industry")} | set(pack.get("aliases") or [])
         for ind in industries:
             if ind in names:
                 return pack
+    return None
+
+
+def match_capability(intent_name: str, text: str = "") -> Optional[dict]:
+    """按「动作」维度匹配能力包（P1-B）。
+
+    与 match_pack（行业维度）正交：能力包按"用户想做什么"挂载，触发条件写在包内
+    `triggers` 字段，纯数据驱动——新增能力包只需加 JSON，无需改本文件：
+
+        "triggers": {"intents": ["export"], "keywords": ["PPT", "幻灯片"]}
+
+    匹配语义（AND）：
+      - intents 非空 → intent_name 必须命中其一；为空则不限意图；
+      - keywords 非空 → text（大小写不敏感）中必须出现其一；为空则不限关键词；
+      - 两者都为空 → 该包永不生效（防止空 triggers 误挂全部会话），直接跳过。
+
+    首个命中即返回（按 slug 排序），无命中返回 None。任何异常静默降级。
+    """
+    if not intent_name and not text:
+        return None
+    low = (text or "").lower()
+    for slug in list_packs():
+        pack = load_pack(slug)
+        if not pack or (pack.get("kind") or "").strip() != CAPABILITY_KIND:
+            continue
+        trig = pack.get("triggers") or {}
+        intents = [x for x in (trig.get("intents") or []) if isinstance(x, str) and x.strip()]
+        keywords = [x for x in (trig.get("keywords") or []) if isinstance(x, str) and x.strip()]
+        # 两个维度都未声明 → 不生效，避免误挂
+        if not intents and not keywords:
+            continue
+        # AND 语义：声明了的维度必须命中，未声明的维度不限制
+        if intents and (intent_name or "") not in intents:
+            continue
+        if keywords and not any(k.lower() in low for k in keywords):
+            continue
+        return pack
     return None
 
 
@@ -116,7 +176,9 @@ def pack_prompt_block(pack: Optional[dict], key: str) -> str:
     if not text:
         return ""
     industry = pack.get("industry") or ""
-    header = f"\n\n【行业技能包 · {industry}】（挂载版本 {pack.get('version') or 'n/a'}）"
+    # 行业包 vs 能力包：提示词头区分，便于日志/排障时一眼看出挂的是哪一类
+    label = "能力技能包" if (pack.get("kind") or "").strip() == CAPABILITY_KIND else "行业技能包"
+    header = f"\n\n【{label} · {industry}】（挂载版本 {pack.get('version') or 'n/a'}）"
     return header + "\n" + text
 
 

@@ -9,7 +9,7 @@
 
 MCP 与 Skills 两套机制的**代码骨架已全部就绪、且工程质量很高**（零新依赖、优雅降级、权限网关、命名空间隔离都做了），但**此前生产处于"休眠态"**——因为 `AGENT_MCP_CLIENT` 与 `AGENT_SKILL_PACKS` 两个开关在 `.env` 与 systemd 里均未置 1，按 `config.py` 默认值走 0。
 
-**第一步不是"加新东西"，而是先激活 + 验证已有的 cost_calc MCP 与行业技能包，再谈扩展。**（原 5 个行业包 + P1-A 新增 6 个 = 11 个，纯 JSON 已就绪、未部署生产。）
+**第一步不是"加新东西"，而是先激活 + 验证已有的 cost_calc MCP 与行业技能包，再谈扩展。**（现共 15 包：原 5 + P1-A 新增 6 行业 + P1-B 新增 4 能力；已就绪、未部署生产。）
 
 > **【P0 状态 · 2026-09-06 22:58 已闭环 ✅】** 生产验证通过：
 >
@@ -22,7 +22,14 @@ MCP 与 Skills 两套机制的**代码骨架已全部就绪、且工程质量很
 > - `data/skill_packs/` 新增 `energy`(能源/电力) / `transportation`(交通/智慧物流) / `education`(教育) / `tourism`(文旅) / `agriculture`(农业) / `park`(园区/地产) 共 6 个，格式同 `manufacturing.json`（4 段 + 7 条 playbook）。
 > - 本地加载器冒烟全绿：`list_packs`=11（5 原 + 6 新）；`match_pack` 按行业关键词精准挂载（能源/交通/教育/文旅/农业/园区均命中）；6 包 JSON 结构校验通过（industry 非空、4 段、7 条）。
 > - **未部署生产**：纯 JSON 随下次 wget 部署即生效（`AGENT_SKILL_PACKS=1` 已在 P0 打开）。详见 §7.6。
-> - **能力包（ppt/tco/battlecard/execsum）暂未做**：当前 `match_pack` 仅按行业关键词挂载，能力包是"动作"维度、无法命中——需先扩挂载钩子（§5.2 机制缺口），待你确认方案后再做（见正文末尾提问）。
+> - **能力包（ppt/tco/battlecard/execsum）P1-B 已完成**：已扩挂载钩子（§5.2），现共 15 包（11 行业 + 4 能力），本地全绿、待部署。详见 §7.7。
+
+**【P1-B 状态 · 2026-09-06 已完成（本地，待部署） ✅】** 挂载钩子 + 4 个能力包 + 行业别名覆盖：
+> - `skill_packs.py`：新增 `kind` / `CAPABILITY_KIND`；`match_pack` 显式跳过能力包（两维度正交）；新增 `match_capability(intent, text)` 按包内 `triggers`（`intents` + `keywords`，AND 语义）匹配；提示词头区分「行业技能包 / 能力技能包」。
+> - `harness.py`：新增 `_active_capability` 槽位（与行业包**可同时挂载**），挂载 + 角色块 + 终稿块三处注入；门控排除 `greeting`/`account`。
+> - `agent_workspace.js`：思考流提示区分「已挂载能力包 / 已挂载行业技能包」（两处），版本号升 `v=20260906c`。
+> - `intent.py`：`_INDUSTRY_KEYWORDS` 追加 14 个高频二级别名（电力/电网/地产/高校/港口/养殖等）；**50 题路由回归 0 变化**。
+> - 新增 4 个能力包：`capability_ppt`（export + PPT 词）/ `capability_tco`（成本词，不限意图）/ `capability_battlecard`（competitor 意图）/ `capability_execsum`（solution/competitor + 摘要词）。
 
 ---
 
@@ -79,7 +86,7 @@ MCP_SERVERS       = os.getenv("MCP_SERVERS", "")         # 空
 - **设计铁律**：① 默认关（`AGENT_SKILL_PACKS=0` 时 harness 不调用）；② 失败吞掉（返回 None，不阻断主链路）；③ **只注入提示词，不碰工具集**。
 - 注入点（`harness.py`）：角色提示词追加 `pack_prompt_block`（demand_analyst/solution_architect/quality_reviewer 三段）+ 终稿 `pack_synthesize_block`（含 playbook 要点清单）。
 
-### 2.2 已有 11 个行业包（`data/skill_packs/`，5 原 + P1-A 新增 6）
+### 2.2 已有 15 个包（`data/skill_packs/`）：11 个行业包（5 原 + P1-A 新增 6）+ 4 个能力包（P1-B）
 
 | slug            | industry | 内容规模                                                   |
 | --------------- | -------- | ------------------------------------------------------ |
@@ -96,6 +103,15 @@ MCP_SERVERS       = os.getenv("MCP_SERVERS", "")         # 空
 | `park`          | 园区       | P1-A 新增：产业/商业/住宅/工业园，IOC一图统管 + 能耗节能 + 安全生产AI |
 
 包格式 v1：只含 `prompt_template`（4 段角色提示）+ `playbook`（终稿要点）。**无工具扩展、无示例库、无检索增强**。
+
+**另有 4 个能力包（P1-B，按「动作」维度挂载，与行业包正交、可同时生效）**
+
+| slug | kind | industry | triggers（intents + keywords，AND） | 内容要点 |
+|---|---|---|---|---|
+| `capability_ppt` | capability | PPT生成 | `export` + PPT/pptx/幻灯片/演示文稿 | 12 页序列、每页结论句、金额去重、华为红规范 |
+| `capability_tco` | capability | 成本测算 | 不限意图 + TCO/成本/报价/预算/多少钱/ROI 等 11 词 | 金额必须 cost_calc 实算、三层数字、隐性成本、有效期口径 |
+| `capability_battlecard` | capability | 竞品对比 | `competitor` | 矩阵打分、优势给证据、劣势给对策、四阶段迁移+回退 |
+| `capability_execsum` | capability | 执行摘要 | `solution`/`competitor` + 摘要/一页纸/老板/高层 等 9 词 | 一页纸、结论含金额工期、三价值主张、风险带对策 |
 
 ### 2.3 配置开关
 
@@ -183,18 +199,26 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 | `agriculture`   | 农业               | 农场/智慧农业/养殖/种植/高标准农田/农业农村局    |
 | `park`          | 园区               | 工业园区/地产/房地产/写字楼/商业综合体/物业      |
 
-> **挂载覆盖度提示（后续可优化）**：`match_pack` 仅匹配 `intent._INDUSTRY_KEYWORDS` 命中的词。6 个包的 `industry` 字段均已是关键词（能源/交通/教育/文旅/农业/园区），故主词必然挂载；但包内 aliases 中的"二级别名"（电力/电网/电厂/地产/房地产/高校/学校）若不在 `_INDUSTRY_KEYWORDS` 中，用户只说这些词而不带主词时不会挂载。建议后续在 `intent.py` 的 `_INDUSTRY_KEYWORDS` 追加 ~10 个高频二级别名（低危纯列表改动），把"方案覆盖度"拉满。该改动属代码变更，待你确认后再做。
+> **挂载覆盖度（P1-B 已解决 ✅）**：`match_pack` 只匹配 `intent._INDUSTRY_KEYWORDS` 命中的词，二级别名（电力/电网/地产/高校）原先不在表里、用户不带主词时挂不上。P1-B 已在 `intent.py` 的 `_INDUSTRY_KEYWORDS` 追加 14 个高频二级别名：**电力、电网、电厂、风电、储能、地产、房地产、高校、学校、旅游、智慧交通、港口、养殖、种植**。实测 10 条别名查询全部正确挂载（电网/电力/风电/储能→energy，地产/房地产→park，高校/学校→education，港口→transportation，养殖→agriculture），**50 题路由回归 0 变化**（该表影响意图分类，故必须跑全量路由回归）。
 
 **剩余缺口**：KB 标称 25 行业，现 11 包覆盖 11 个主行业；其余如游戏/出海/汽车/矿山/钢铁/化工/冶金/生物医药等已有别名兜底（挂在制造/金融/医疗等包），是否单独立包视价值再定。
 
-### 5.2 垂直能力包（不按行业，按"动作"）
+### 5.2 垂直能力包（不按行业，按"动作"）✅ P1-B 已完成
 
-现有机制只按 intent 行业挂载，**应扩展为"能力包"维度**：
+原机制只按 intent 行业挂载，能力包是"动作"维度、根本挂不上——**P1-B 已扩展为「能力包」维度**，与行业包正交、可同时生效：
 
-- `skill_ppt`：PPT 12 页生成专属提示词（封面话术/成本页口径/竞品页结构）——让 Agent 口语"做个PPT"时质量更稳。
-- `skill_tco`：成本测算报告专属话术（锚定 ROI、折扣口径、量级区间）。
-- `skill_battlecard`：竞品对比专属结构（优劣势矩阵、迁移路径、避坑）。
-- `skill_execsum`：给老板看的 1 页执行摘要子结构（现 14 章偏全，缺"极简版"）。
+| 能力包 | 用途 | 触发条件（写死在包内 `triggers`） |
+|---|---|---|
+| `capability_ppt` | PPT 12 页生成专属提示词（每页结论句/成本页口径/竞品页结构）——Agent 口语"做个PPT"时质量更稳 | intent=`export` + 原文含 PPT/幻灯片 |
+| `capability_tco` | 成本测算报告专属话术（金额必须 cost_calc 实算、ROI、折扣口径、量级区间） | 不限意图 + 原文含 TCO/成本/报价/ROI 等 11 词 |
+| `capability_battlecard` | 竞品对比专属结构（优劣势矩阵、迁移路径、避坑清单） | intent=`competitor` |
+| `capability_execsum` | 给老板看的 1 页执行摘要子结构（现 14 章偏全，缺"极简版"） | intent=`solution`/`competitor` + 含摘要/一页纸/老板 等 9 词 |
+
+**挂载钩子设计（关键）**：
+- 包内新增 `"kind": "capability"`（缺省即行业包 → 11 个老包零改动向后兼容）与 `"triggers": {"intents": [...], "keywords": [...]}`。
+- `match_capability(intent, text)`：AND 语义——**声明了的维度必须命中，未声明的维度不限制**；两者都空则该包永不生效（防空 triggers 误挂全部会话）。**纯数据驱动，以后新增能力包只写 JSON、不改代码**。
+- `match_pack` 显式跳过 `kind=capability`，两维度互不干扰。
+- 单槽位：一次只挂 1 个能力包（按 slug 排序取首个命中）；与主行业包**可叠加**。重叠场景罕见（对比+cost 时取 battlecard），已是可接受取舍。
 
 ### 5.3 把 WorkBuddy 用户级 skills 平移成项目 Skills（强相关）
 
@@ -216,7 +240,7 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 ## 6. 优先级建议（先激活，再横扩，后纵深）
 
 1. **P0 激活验证**（1 小时内可上线，零新代码）：开 `AGENT_MCP_CLIENT=1` + `AGENT_SKILL_PACKS=1`，生产跑 50 题核对成本步与行业包是否真生效；若 ECS `.env` 本就缺这俩 flag，则这是"被遗忘的已完工功能"。
-2. **P1 横向补包**：行业包已补 6 个（能源/交通/教育/文旅/农业/园区，纯 JSON，本地绿，待部署）；**能力包（ppt/tco/battlecard/execsum）机制缺口未补**——见 §5.2，需先扩挂载钩子，待确认方案。
+2. **P1 横向补包** ✅ 已完成（本地绿，待部署）：行业包 +6、能力包 +4（挂载钩子已扩，`kind`/`triggers` 纯数据驱动）、行业别名 +14（50 题路由 0 变化）。现共 15 包（11 行业 + 4 能力）。
 3. **P2 新 Server**：`mcp_server_kb` / `mcp_server_crm` / `mcp_server_notify`（售前最高频动作工具化）。
 4. **P3 机制纵深**：热重载、用户级权限持久化、能力包可挂工具、双向暴露给外部 client（生态卖点）。
 
@@ -335,3 +359,38 @@ Registered tool: mcp__cost__cost_calc
 **④ 下一步（待确认）**
 - 能力包（ppt/tco/battlecard/execsum）：当前挂载机制不支持"动作"维度，需扩 `skill_packs.py` + `harness.py` 的挂载钩子（小代码改动）。方案待你拍板（见正文提问）。
 - 二级别名覆盖：在 `intent.py` `_INDUSTRY_KEYWORDS` 追加高频别名（低危），待你确认。
+
+### 7.7 P1-B 执行记录（2026-09-06 · 能力包挂载钩子 + 4 能力包 + 行业别名）
+
+**① 代码改动（4 文件）**
+| 文件 | 改动 | 作用 |
+|---|---|---|
+| `app/agent/skill_packs.py` | 新增 `CAPABILITY_KIND`；`match_pack` 显式跳过能力包；新增 `match_capability(intent, text)`；`pack_prompt_block` 头按 kind 区分 | 挂载机制从"只有行业维度"扩为"行业 + 动作"两维度正交；能力包触发条件数据驱动，加包不改代码 |
+| `app/agent/harness.py` | 新增 `_active_capability` 槽位（复位/挂载/角色块/终稿块四处）；挂载门控排除 `greeting`/`account` | 能力包与行业包**可同时挂载**；角色提示与终稿口径均叠加注入 |
+| `frontend/js/agent_workspace.js` | 思考流 `skill_pack` 事件按 `ev.kind` 显示「已挂载能力包 / 已挂载行业技能包」（两处） | 前端不把能力包误显示成行业包 |
+| `app/agent/intent.py` | `_INDUSTRY_KEYWORDS` +14 二级别名（电力/电网/电厂/风电/储能/地产/房地产/高校/学校/旅游/智慧交通/港口/养殖/种植） | 用户只说别名不带主词时也能挂载，方案覆盖度拉满 |
+
+**② 新增 4 个能力包（`data/skill_packs/capability_*.json`）**
+| 包 | triggers（AND 语义） | 关键口径 |
+|---|---|---|
+| `capability_ppt` | `export` + PPT/pptx/幻灯片/演示文稿 | 12 页序列、每页结论句、成本页金额去重、缺项标占位禁编造 |
+| `capability_tco` | 不限意图 + TCO/成本/报价/预算/多少钱/ROI 等 11 词 | 金额必须 cost_calc 实算、月度/年度/三年三层、隐性成本、有效期口径 |
+| `capability_battlecard` | `competitor` | 矩阵逐维打分、优势给证据、劣势给对策、四阶段迁移带回退 |
+| `capability_execsum` | `solution`/`competitor` + 摘要/一页纸/老板/高层 等 9 词 | 一页纸、结论含金额工期、三价值主张、风险带对策 |
+
+**③ 本地验证（全绿）**
+- `list_packs`=15（11 行业 + 4 能力）；`match_pack` 11 个主行业精准命中，且**直接拿能力包 industry 当行业词查询全部返回 None**（隔离生效，无串挂）。
+- `match_capability` 8 条用例全对：`(export,"给我生成一个PPT")`→ppt、`(export,"做个ppt")`→ppt（大小写不敏感）、`(export,"导出为word文档")`→None、`(solution,"这套方案成本多少钱")`→tco、`(competitor,"对比一下阿里云和华为云")`→battlecard、`(solution,"给老板看的执行摘要")`→execsum、`(solution,"普通的园区上云方案")`→None、`(export,"导出PPT")`→ppt。
+- 4 包结构校验：`kind=capability`、`industry` 非空、triggers 非空、4 段、7 条 playbook 全通过。
+- 提示词头正确区分：`【行业技能包 · 能源】` vs `【能力技能包 · PPT生成】`。
+- 别名端到端 10 条全对：电网/电力/风电/储能→energy，地产/房地产→park，高校/学校→education，港口→transportation，养殖→agriculture。
+- **回归**：50 题路由 0 变化（`tests/agent_50q.py` 全量 `classify_intent` 比对）；`py_compile` 三个 py 文件 OK；`node --check` agent_workspace.js OK。
+
+**④ 部署说明**
+- 本次**含 Python 改动**（skill_packs/harness/intent），必须 `restart` 生效，不能只热更前端；前端 `agent_workspace.js` 版本已升 `v=20260906c`。
+- 按铁律：非 KB 文档/DB schema 变更，走标准 `wget main zip → cp -r → restart`；restart 前 `chown -R www-data:www-data data api.log*`（铁律⑥）。
+- 部署后建议抽查：Agent 说「给我生成一个PPT」→ 思考流出现「已挂载能力包：PPT生成」；说「电网公司上云」→ 「已挂载行业技能包：能源」。
+
+**⑤ 已知取舍**
+- 能力包**单槽位**：一次只挂 1 个（按 slug 排序取首个命中）。重叠场景（如竞品对比+成本）取 `capability_battlecard`。真实重叠罕见，若后续需要多能力叠加，把 `_active_capability` 改成列表即可。
+- 能力包只注入提示词（与行业包同铁律），不改工具集；`capability_tco` 里"金额必须 cost_calc 实算"是**口径约束**，真正强制调工具仍靠 harness 既有的 `_force_cost_step` 确定性逻辑（提示词无法保证工具调用，这点已在 §3 记录）。

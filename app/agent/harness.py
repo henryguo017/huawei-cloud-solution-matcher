@@ -404,6 +404,13 @@ class AgentHarness:
                         role_prompt += pack_prompt_block(self._active_pack, role_for_step(idx))
                     except Exception as _pe:
                         self._log("warn", f"技能包角色块注入失败（忽略）: {_pe}")
+                # P1-B：能力包（动作维度）角色块追加——与行业包正交共存，顺序排在行业包之后
+                if role_prompt and getattr(self, "_active_capability", None):
+                    try:
+                        from app.agent.skill_packs import pack_prompt_block
+                        role_prompt += pack_prompt_block(self._active_capability, role_for_step(idx))
+                    except Exception as _ce:
+                        self._log("warn", f"能力包角色块注入失败（忽略）: {_ce}")
                 obs = await self._execute_step(idx, step, toolset, event_callback, session_id, tool_calls_log,
                                                role_prompt=role_prompt)
                 if obs is None:
@@ -644,6 +651,13 @@ class AgentHarness:
                 pack_block = pack_synthesize_block(self._active_pack)
             except Exception as _pe:
                 self._log("warn", f"技能包终稿块注入失败（忽略）: {_pe}")
+        # P1-B：能力包终稿块追加（动作维度口径 + playbook 要点），排在行业包之后
+        if getattr(self, "_active_capability", None):
+            try:
+                from app.agent.skill_packs import pack_synthesize_block
+                pack_block += pack_synthesize_block(self._active_capability)
+            except Exception as _ce:
+                self._log("warn", f"能力包终稿块注入失败（忽略）: {_ce}")
         prompt = (
             "你是华为云售前方案撰写官。你已按计划执行了各步骤，请基于各步收集到的信息，"
             "为用户撰写完整、可落地的最终方案。\n\n"
@@ -827,6 +841,8 @@ class AgentHarness:
         self._disable_web_search = bool(disable_web_search)
         # P2-Skills：行业技能包复位（单例复用防跨请求残留；仅在首轮意图路由时重新匹配）
         self._active_pack = None
+        # P1-B：能力包复位（按"动作"维度挂载，与行业包正交、可同时生效）
+        self._active_capability = None
 
         # P2-D5：Plan 单步重跑 —— 复用上一次的 plan / 各步原参数，重跑指定步并重新汇总
         if rerun_plan_index is not None:
@@ -920,6 +936,25 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                         self._log("system", f"[SKILL_PACK] 已挂载行业技能包: {_pack.get('industry')} (v{_pack.get('version', 'n/a')})")
                 except Exception as e:
                     self._log("warn", f"行业技能包挂载失败（忽略）: {e}")
+
+            # P1-B：能力包挂载（按"动作"维度；与行业包正交，可同时生效）。
+            # 触发条件写在包内 triggers（intents/keywords），纯数据驱动、加包不改代码。
+            # 这里不限制意图类型——PPT 生成是 export、竞品对比是 competitor，都可能需要能力包。
+            if self._intent not in ("greeting", "account") and (AGENT_SKILL_PACKS or "0").strip() == "1":
+                try:
+                    from app.agent.skill_packs import match_capability
+                    _cap = match_capability(self._intent, user_input)
+                    if _cap:
+                        self._active_capability = _cap
+                        await self._emit(event_callback, {
+                            "type": "skill_pack",
+                            "kind": "capability",
+                            "industry": _cap.get("industry", ""),
+                            "version": _cap.get("version", ""),
+                        })
+                        self._log("system", f"[SKILL_PACK] 已挂载能力包: {_cap.get('industry')} (v{_cap.get('version', 'n/a')})")
+                except Exception as _ce:
+                    self._log("warn", f"能力包挂载失败（忽略）: {_ce}")
 
             # P2 修复：方案/竞品意图但需求过短、缺行业/场景 → 直接澄清，避免凭空生成方案
             if self._intent in ("solution", "competitor") and self._need_clarify(
