@@ -9,17 +9,25 @@
 
 MCP 与 Skills 两套机制的**代码骨架已全部就绪、且工程质量很高**（零新依赖、优雅降级、权限网关、命名空间隔离都做了），但**此前生产处于"休眠态"**——因为 `AGENT_MCP_CLIENT` 与 `AGENT_SKILL_PACKS` 两个开关在 `.env` 与 systemd 里均未置 1，按 `config.py` 默认值走 0。
 
-**第一步不是"加新东西"，而是先激活 + 验证已有的 cost_calc MCP 与 5 个行业技能包，再谈扩展。**
+**第一步不是"加新东西"，而是先激活 + 验证已有的 cost_calc MCP 与行业技能包，再谈扩展。**（原 5 个行业包 + P1-A 新增 6 个 = 11 个，纯 JSON 已就绪、未部署生产。）
 
 > **【P0 状态 · 2026-09-06 22:58 已闭环 ✅】** 生产验证通过：
+>
 > - `.env` 三行写入 ECS 并 restart；`venv/bin/python -c "import app.config"` 实测 `AGENT_MCP_CLIENT=1` / `AGENT_SKILL_PACKS=1` / `MCP_SERVERS=[{cost}]` 全 live。
 > - 生产 Agent 首调触发 MCP 懒加载，日志确认：`[MCP] 已加载 2 个远端工具：['mcp__cost__cost_calc', 'mcp__cost__cost_reference_list']`。
 > - 本地三项冒烟此前已全绿（cost Server 出 TCO / mcp_client 握手闭环 / skill_packs 命中制造金融）。
 > - **历史纠错**：此前提到的"cost_calc 已激活"记忆不准——实际此前因开关默认 0 而休眠；本次才是真激活。详见 §7.5。
 
+**【P1-A 状态 · 2026-09-06 已完成（本地，待部署） ✅】** 横向补 6 个行业包：
+> - `data/skill_packs/` 新增 `energy`(能源/电力) / `transportation`(交通/智慧物流) / `education`(教育) / `tourism`(文旅) / `agriculture`(农业) / `park`(园区/地产) 共 6 个，格式同 `manufacturing.json`（4 段 + 7 条 playbook）。
+> - 本地加载器冒烟全绿：`list_packs`=11（5 原 + 6 新）；`match_pack` 按行业关键词精准挂载（能源/交通/教育/文旅/农业/园区均命中）；6 包 JSON 结构校验通过（industry 非空、4 段、7 条）。
+> - **未部署生产**：纯 JSON 随下次 wget 部署即生效（`AGENT_SKILL_PACKS=1` 已在 P0 打开）。详见 §7.6。
+> - **能力包（ppt/tco/battlecard/execsum）暂未做**：当前 `match_pack` 仅按行业关键词挂载，能力包是"动作"维度、无法命中——需先扩挂载钩子（§5.2 机制缺口），待你确认方案后再做（见正文末尾提问）。
+
 ---
 
 ## 1. MCP 子系统现状
+
 
 ### 1.1 三个文件，各司其职
 
@@ -71,7 +79,7 @@ MCP_SERVERS       = os.getenv("MCP_SERVERS", "")         # 空
 - **设计铁律**：① 默认关（`AGENT_SKILL_PACKS=0` 时 harness 不调用）；② 失败吞掉（返回 None，不阻断主链路）；③ **只注入提示词，不碰工具集**。
 - 注入点（`harness.py`）：角色提示词追加 `pack_prompt_block`（demand_analyst/solution_architect/quality_reviewer 三段）+ 终稿 `pack_synthesize_block`（含 playbook 要点清单）。
 
-### 2.2 已有 5 个行业包（`data/skill_packs/`）
+### 2.2 已有 11 个行业包（`data/skill_packs/`，5 原 + P1-A 新增 6）
 
 | slug            | industry | 内容规模                                                   |
 | --------------- | -------- | ------------------------------------------------------ |
@@ -80,6 +88,12 @@ MCP_SERVERS       = os.getenv("MCP_SERVERS", "")         # 空
 | `government`    | 政务       | 同上结构                                                   |
 | `healthcare`    | 医疗       | 同上结构                                                   |
 | `retail`        | 零售       | 同上结构                                                   |
+| `energy`        | 能源       | P1-A 新增：发电/电网/综合能源，生产控制大区物理隔离 + 新能源功率预测 + 集团驾驶舱 |
+| `transportation`| 交通       | P1-A 新增：智慧交通/物流/港口，视频AI + 车路协同 + WMS弹性 + 断网闭环 |
+| `education`     | 教育       | P1-A 新增：高校/K12/职校，科研算力(昇腾/HPC) + 智慧校园 + 信创四层 |
+| `tourism`       | 文旅       | P1-A 新增：景区/文博/文旅局，客流热力图 + 智慧导览 + 闸机集成 + 黄金周弹性 |
+| `agriculture`   | 农业       | P1-A 新增：种植/养殖/监管，遥感病虫害 + 边缘环控 + BCS溯源 |
+| `park`          | 园区       | P1-A 新增：产业/商业/住宅/工业园，IOC一图统管 + 能耗节能 + 安全生产AI |
 
 包格式 v1：只含 `prompt_template`（4 段角色提示）+ `playbook`（终稿要点）。**无工具扩展、无示例库、无检索增强**。
 
@@ -138,6 +152,7 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 - 接一个联网搜索 MCP（Tavily/Exa）替代现 `web_search` 工具里的自写 provider，统一走 MCP 协议。
 - 接一个表格/Excel MCP（如本地部署），让"成本表数量列"等导出类操作更稳。
 
+
 ### 4.5 对照 roadmap 的 8 点增强（逐项对齐现状）
 
 | roadmap 点      | 现状                            | 建议                                                                   |
@@ -151,15 +166,26 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 | 限流             | ⚠️ 仅 web_search 有 per-session | 加全局 per-server 调用配额 + 超时保护（已有 30s+5s）                                |
 | 流式进度           | ❌ 未做                          | tools/call 长任务（如 reindex）改 SSE 进度回报                                  |
 
-
-
 ---
 
 ## 5. 还能加什么 Skills（具体清单）
 
-### 5.1 补行业包（KB 标称 25 行业，仅 5 包）
+### 5.1 补行业包（KB 标称 25 行业，P1-A 补 6 个 → 共 11 包）✅
 
-优先补高价值、方案差异大的：**能源/电力、交通/智慧物流、教育、文旅、农业、园区/地产、医疗已做**。每个包照 `manufacturing.json` 四段 + playbook 格式即可。
+**【P1-A 已完成 · 2026-09-06，纯 JSON，本地验证通过】** 新增 6 个高价值、方案差异大的行业包，格式严格照 `manufacturing.json`（四段角色提示 + 7 条 playbook）：
+
+| slug            | industry（=关键词） | 覆盖别名（部分）                          |
+| --------------- | ---------------- | ------------------------------------- |
+| `energy`        | 能源               | 电力/电网/电厂/光伏/风电/储能/新能源          |
+| `transportation`| 交通               | 交投/物流/仓储/智慧物流/港口/车路协同          |
+| `education`     | 教育               | 智慧校园/高校/学校/K12/教育局/科研            |
+| `tourism`       | 文旅               | 景区/旅游/博物馆/文旅局/乐园                  |
+| `agriculture`   | 农业               | 农场/智慧农业/养殖/种植/高标准农田/农业农村局    |
+| `park`          | 园区               | 工业园区/地产/房地产/写字楼/商业综合体/物业      |
+
+> **挂载覆盖度提示（后续可优化）**：`match_pack` 仅匹配 `intent._INDUSTRY_KEYWORDS` 命中的词。6 个包的 `industry` 字段均已是关键词（能源/交通/教育/文旅/农业/园区），故主词必然挂载；但包内 aliases 中的"二级别名"（电力/电网/电厂/地产/房地产/高校/学校）若不在 `_INDUSTRY_KEYWORDS` 中，用户只说这些词而不带主词时不会挂载。建议后续在 `intent.py` 的 `_INDUSTRY_KEYWORDS` 追加 ~10 个高频二级别名（低危纯列表改动），把"方案覆盖度"拉满。该改动属代码变更，待你确认后再做。
+
+**剩余缺口**：KB 标称 25 行业，现 11 包覆盖 11 个主行业；其余如游戏/出海/汽车/矿山/钢铁/化工/冶金/生物医药等已有别名兜底（挂在制造/金融/医疗等包），是否单独立包视价值再定。
 
 ### 5.2 垂直能力包（不按行业，按"动作"）
 
@@ -190,7 +216,7 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 ## 6. 优先级建议（先激活，再横扩，后纵深）
 
 1. **P0 激活验证**（1 小时内可上线，零新代码）：开 `AGENT_MCP_CLIENT=1` + `AGENT_SKILL_PACKS=1`，生产跑 50 题核对成本步与行业包是否真生效；若 ECS `.env` 本就缺这俩 flag，则这是"被遗忘的已完工功能"。
-2. **P1 横向补包**：补 5~8 个行业包 + 3 个能力包（ppt/tco/battlecard），纯 JSON 工作量。
+2. **P1 横向补包**：行业包已补 6 个（能源/交通/教育/文旅/农业/园区，纯 JSON，本地绿，待部署）；**能力包（ppt/tco/battlecard/execsum）机制缺口未补**——见 §5.2，需先扩挂载钩子，待确认方案。
 3. **P2 新 Server**：`mcp_server_kb` / `mcp_server_crm` / `mcp_server_notify`（售前最高频动作工具化）。
 4. **P3 机制纵深**：热重载、用户级权限持久化、能力包可挂工具、双向暴露给外部 client（生态卖点）。
 
@@ -206,18 +232,21 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 ## 7. 执行记录（P0 激活 · 2026-09-06 22:50）
 
 ### 7.1 已完成的代码/配置改动
-| 文件 | 改动 | 作用 |
-|---|---|---|
+
+| 文件             | 改动                                                                                                                                                | 作用                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | `.env.example` | `AGENT_MCP_CLIENT=0→1`；新增 `AGENT_SKILL_PACKS=1`；`MCP_SERVERS=` 填为 `[{"command":["python","-m","app.agent.mcp_server_cost_calc"],"label":"cost"}]` | 可入库的运行时配置模板翻为激活态，随 wget 部署即生效（覆盖默认 0） |
 
 > 注：本地 `.env`（含密钥）未动、也不入库；ECS `.env` 需用户手动追加同样三行（见 7.3）。
 
 ### 7.2 本地冒烟测试（全绿，无需 ECS/ChromaDB）
+
 1. **cost_calc Server（stdio）**：`initialize`→`tools/list` 暴露 `cost_calc`+`cost_reference_list`；`tools/call cost_calc items=[ecs.s6.large.2×2, obs.standard×500]` 返回 TCO ¥369.50/月、¥4,434/年。
 2. **mcp_client ↔ cost Server 握手闭环**：`MCPClient.connect()` 拉起子进程、`list_tools` 得 2 工具、`call_tool("cost_calc", ecs.c6.2xlarge.2×1×12)` 返回 ¥7,680/月、¥92,160/年，`isError=false`。
 3. **skill_packs 加载器**：`list_packs`=[finance,government,healthcare,manufacturing,retail]；`match_pack(["制造"])`→manufacturing、`match_pack(["金融"])`→finance、`match_pack(["能源"])`→None（优雅降级）。
 
 > 结论：MCP 协议闭环与技能包匹配逻辑在代码层完全正确；生产未生效纯属开关未开，非代码缺陷。
+
 
 ### 7.3 待用户执行 · ECS 实跑命令（激活 + 验证）
 
@@ -241,23 +270,29 @@ sleep 12
 curl -sf http://127.0.0.1:8000/api/health | head -c 200; echo
 journalctl -u huawei-cloud-api --since "2 min ago" | grep -E "MCP|远端工具" | tail -20
 ```
+
 验证点：日志出现 `[MCP] 已加载 2 个远端工具：['mcp__cost__cost_calc', 'mcp__cost__cost_reference_list']` 即激活成功；随后在 Agent 工作台用制造/金融类需求跑一题，终稿应含 TCO 测算且行业话术更准。
 
 ### 7.4 下一步（待 P0 生产确认后）
+
 - 若生产验证通过 → 进入 **P1 横向补包**（§5.1/§5.2，纯 JSON，本地可全做后随 wget 部署）。
 - 若生产成本步未触发 → 查 `harness._PRICING_RE` 是否命中该需求文案 + journalctl 有无 `MCP 连接失败` 告警。
+
 
 ### 7.5 P0 验证结果（2026-09-06 22:58 · 已闭环 ✅）
 
 **① 配置实测（ECS 进程解析值）**
+
 ```
 AGENT_MCP_CLIENT = 1
 AGENT_SKILL_PACKS = 1
 MCP_SERVERS = [{"command":["python","-m","app.agent.mcp_server_cost_calc"],"label":"cost"}]
 ```
+
 > 注：早期用 `cat /proc/$PID/environ` 查为空是**假阴性**——Linux 的 `/proc/PID/environ` 只保留 exec 启动时的环境快照，不反映 Python `os.environ` 运行期改动（load_dotenv 走的后者）。改用 `venv/bin/python -c "import app.config"` 才是正确的实测方式。
 
 **② 功能实测（Agent 工作台发制造类需求后 journalctl）**
+
 ```
 [MCP] 正在连接 Server「cost」: ['python', '-m', 'app.agent.mcp_server_cost_calc']
 Registered tool: mcp__cost__cost_calc
@@ -266,9 +301,37 @@ Registered tool: mcp__cost__cost_calc
 [MCP] 共注册 2 个远端工具
 [MCP] 已加载 2 个远端工具：['mcp__cost__cost_calc', 'mcp__cost__cost_reference_list']
 ```
+
 **结论**：cost_calc MCP 已正式接入生产 Agent 工具集（且 `api/agent_routes.py` 中本就是 `allow` 免确认）。P0 完成。
 
 **③ 实跑踩坑备忘（给未来参考）**
+
 - 那三行配置**必须写进 `.env` 文件**（grep+sed/echo >>），绝不能当 shell 命令裸跑（裸跑只是给当前 shell 设临时变量，退出即失效，且 `MCP_SERVERS=[...]` 会被 bash 当 `[` 测试命令解析报错）。
 - 重启后 health 偶发空响应是模型加载窗口（~16s）竞态，多等几秒再探即 HTTP 200；`systemctl status` 看 `active (running)` + `Application startup complete` 才是真起稳。
 - 验证 MCP 是否加载**不能看服务启动日志**，要看**首次 Agent 调用后**的 journalctl（MCP 是懒加载，不在 startup）。
+
+### 7.6 P1-A 执行记录（2026-09-06 · 行业包补 6 个）
+
+**① 新增文件（均 `data/skill_packs/`）**
+| 文件 | industry | 作用 |
+|---|---|---|
+| `energy.json` | 能源 | 发电/电网/综合能源；生产控制大区物理隔离 + 新能源功率预测（盘古气象大模型）+ 集团驾驶舱跨站对标 |
+| `transportation.json` | 交通 | 智慧交通/智慧物流/港口；视频AI + 车路协同 + WMS 弹性 + 断网闭环 |
+| `education.json` | 教育 | 高校/K12/职校；科研算力(昇腾/HPC) + 智慧校园 + 信创四层 + 平安校园 |
+| `tourism.json` | 文旅 | 景区/文博/文旅局；客流热力图 + 智慧导览 + 闸机集成 + 黄金周弹性 |
+| `agriculture.json` | 农业 | 种植/养殖/监管；遥感病虫害 + 边缘环控断网续传 + BCS 溯源 |
+| `park.json` | 园区 | 产业/商业/住宅/工业园；IOC 一图统管 + 能耗节能 + 安全生产视频AI + 招商 CDP |
+
+**② 本地加载器冒烟（全绿，无需 ECS/ChromaDB）**
+- `list_packs()` → 11 个（原 5 + 新 6）：agriculture / education / energy / finance / government / healthcare / manufacturing / park / retail / tourism / transportation。
+- `match_pack(["能源"])`→energy、`["交通"]`→transportation、`["教育"]`→education、`["文旅"]`→tourism、`["农业"]`→agriculture、`["园区"]`→park；原 5 包仍精准挂载。
+- 6 包 JSON 结构校验：industry 非空 + 4 段（demand/architect/reviewer/synthesize）均有内容 + playbook 7 条，全部通过。
+- alias 级匹配在加载器层验证正确（电力/电网→energy，地产/房地产→park，高校→education）；**生产实际挂载依赖 `intent._INDUSTRY_KEYWORDS` 是否含该词**（见 §5.1 提示）。
+
+**③ 部署说明**
+- 纯 JSON，随下次 `wget main zip → cp → restart` 即生效（`AGENT_SKILL_PACKS=1` 已在 P0 打开，无需改 `.env`）。
+- 按铁律，本次仅新增 JSON 资源文件、KB 文档/DB schema 无变更，可随常规部署；建议生产跑 50 题时顺带核对 6 个新行业包是否命中。
+
+**④ 下一步（待确认）**
+- 能力包（ppt/tco/battlecard/execsum）：当前挂载机制不支持"动作"维度，需扩 `skill_packs.py` + `harness.py` 的挂载钩子（小代码改动）。方案待你拍板（见正文提问）。
+- 二级别名覆盖：在 `intent.py` `_INDUSTRY_KEYWORDS` 追加高频别名（低危），待你确认。
