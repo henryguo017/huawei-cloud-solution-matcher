@@ -303,6 +303,14 @@ const DemoManager = {
             return;
         }
 
+        // 2026-09-06：Agent 视图下顶部「体验」按钮现在也能弹出案例选择器（css 修订），
+        // 但 demo 填的是经典模式输入框、跑的是匿名可用的经典标准匹配——
+        // 若用户正处在 Agent 视图，先切回经典视图，避免"点了没反应/结果看不到"。
+        if (document.body.classList.contains('view-agent')
+                && typeof ViewManager !== 'undefined' && ViewManager.setView) {
+            ViewManager.setView('classic');
+        }
+
         // 快速体验固定走标准模式（匿名可用），确保体验不依赖登录态、能直接出结果
         // 注意：默认 matchMode 是 'agent'，若不强制切回 'normal'，体验会走到
         // /agent/match/stream（强制登录）而被 401。这里无论当前是 agent 还是 wizard 都切到 normal。

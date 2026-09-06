@@ -2031,14 +2031,17 @@ body.view-agent .theme-label { margin-bottom: 8px; }
 
 /* 方案预览浮层：宽屏/窄屏统一从右侧滑出覆盖；抽屉始终 fixed 不推挤主区 */
 
-/* ==================== BUG-1 修复 ====================
-   切到 Agent 视图时隐藏经典欢迎/引导浮层。
-   .welcome-page 与 #demo-selector-modal 都直接挂在 <body> 下、不在
-   #classic-solution 内，原 "#classic-solution{display:none}" 无法隐藏它们；
-   且其显隐由 welcome-script.js 用内联 style.display 控制，故必须用 !important
-   覆盖内联样式。仅在 body.view-agent 下生效，classic 视图完全不受影响。 */
-body.view-agent .welcome-page,
-body.view-agent #demo-selector-modal {
+/* ==================== BUG-1 修复（2026-09-06 修订） ====================
+   切到 Agent 视图时隐藏经典欢迎页浮层。
+   .welcome-page 直接挂在 <body> 下、不在 #classic-solution 内，原
+   "#classic-solution{display:none}" 无法隐藏它；且其显隐由 welcome-script.js
+   用内联 style.display 控制，故必须用 !important 覆盖内联样式。仅在
+   body.view-agent 下生效，classic 视图完全不受影响。
+   修订：#demo-selector-modal 从本规则移除——它是右上角「体验」按钮的弹窗，
+   原规则会把按钮点击设置的内联 display:flex 一并压掉，导致 Agent 视图下
+   顶部「体验」完全无响应；现允许其在 Agent 视图正常弹出（案例点击后由
+   welcome-script.js runDemo 切回经典视图再跑标准匹配）。 */
+body.view-agent .welcome-page {
     display: none !important;
 }
 
