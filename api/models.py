@@ -245,7 +245,7 @@ class DashboardStatsResponse(BaseModel):
     accuracy: int = Field(default=87, description="方案覆盖度（百分比）")
     system_uptime: str = Field(default="--", description="系统运行时间")
     last_update: str = Field(default="--", description="最后更新时间")
-    version: str = Field(default="v2.4.0", description="系统版本号")
+    version: str = Field(default="v3.0.0", description="系统版本号")
 
 
 class ExportRequest(BaseModel):
