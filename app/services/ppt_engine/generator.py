@@ -447,10 +447,21 @@ def generate_deck(solution_markdown: str = '',
                   cost_reference: Optional[Dict[str, Any]] = None,
                   title: str = '', customer: str = '',
                   date_str: str = '') -> Dict[str, Any]:
-    """同步入口（内部处理事件循环），返回过门禁的 deck dict"""
-    return _run_async(generate_deck_async(
-        solution_markdown, solution_chapters, cost_reference,
-        title, customer, date_str))
+    """同步入口（内部处理事件循环），返回过门禁的 deck dict
+
+    韧性（2026-09-06 生产实测）：单批 LLM 偶发抖动可在 3 轮批内重试后仍耗尽
+    → DeckGenerateError → 调用方降级 legacy 毛坯（破坏模板承诺）。
+    这里整单重试一次，把降级概率从 p 压到 p²（重试只发生在失败路径，无常态开销）。
+    """
+    kwargs = dict(solution_markdown=solution_markdown,
+                  solution_chapters=solution_chapters,
+                  cost_reference=cost_reference,
+                  title=title, customer=customer, date_str=date_str)
+    try:
+        return _run_async(generate_deck_async(**kwargs))
+    except DeckGenerateError as e:
+        logger.warning('[PPT引擎] 生成失败（%s），整单重试一次', str(e)[:120])
+        return _run_async(generate_deck_async(**kwargs))
 
 
 async def generate_deck_async(solution_markdown: str = '',
