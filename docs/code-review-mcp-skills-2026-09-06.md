@@ -11,10 +11,11 @@ MCP 与 Skills 两套机制的**代码骨架已全部就绪、且工程质量很
 
 **第一步不是"加新东西"，而是先激活 + 验证已有的 cost_calc MCP 与 5 个行业技能包，再谈扩展。**
 
-> **【P0 进展 · 2026-09-06 22:50】** 激活所需的代码/配置改动已完成、本地冒烟全绿：
-> - `.env.example` 已翻为激活态（`AGENT_MCP_CLIENT=1` + `AGENT_SKILL_PACKS=1` + `MCP_SERVERS` 指向 cost_calc）。
-> - 本地三项冒烟全通过：cost_calc Server stdio 出 TCO；mcp_client 与 cost Server 握手+调用闭环；skill_packs 命中制造/金融、未覆盖行业优雅返回 None。
-> - **待用户执行 ECS 实跑**：把同样三行写入 `/var/www/huawei-cloud-solution-matcher/.env` 并 `systemctl restart huawei-cloud-api`，再把生产 Agent 跑一题确认成本步与行业包生效（命令见 §7）。
+> **【P0 状态 · 2026-09-06 22:58 已闭环 ✅】** 生产验证通过：
+> - `.env` 三行写入 ECS 并 restart；`venv/bin/python -c "import app.config"` 实测 `AGENT_MCP_CLIENT=1` / `AGENT_SKILL_PACKS=1` / `MCP_SERVERS=[{cost}]` 全 live。
+> - 生产 Agent 首调触发 MCP 懒加载，日志确认：`[MCP] 已加载 2 个远端工具：['mcp__cost__cost_calc', 'mcp__cost__cost_reference_list']`。
+> - 本地三项冒烟此前已全绿（cost Server 出 TCO / mcp_client 握手闭环 / skill_packs 命中制造金融）。
+> - **历史纠错**：此前提到的"cost_calc 已激活"记忆不准——实际此前因开关默认 0 而休眠；本次才是真激活。详见 §7.5。
 
 ---
 
@@ -245,3 +246,29 @@ journalctl -u huawei-cloud-api --since "2 min ago" | grep -E "MCP|远端工具" 
 ### 7.4 下一步（待 P0 生产确认后）
 - 若生产验证通过 → 进入 **P1 横向补包**（§5.1/§5.2，纯 JSON，本地可全做后随 wget 部署）。
 - 若生产成本步未触发 → 查 `harness._PRICING_RE` 是否命中该需求文案 + journalctl 有无 `MCP 连接失败` 告警。
+
+### 7.5 P0 验证结果（2026-09-06 22:58 · 已闭环 ✅）
+
+**① 配置实测（ECS 进程解析值）**
+```
+AGENT_MCP_CLIENT = 1
+AGENT_SKILL_PACKS = 1
+MCP_SERVERS = [{"command":["python","-m","app.agent.mcp_server_cost_calc"],"label":"cost"}]
+```
+> 注：早期用 `cat /proc/$PID/environ` 查为空是**假阴性**——Linux 的 `/proc/PID/environ` 只保留 exec 启动时的环境快照，不反映 Python `os.environ` 运行期改动（load_dotenv 走的后者）。改用 `venv/bin/python -c "import app.config"` 才是正确的实测方式。
+
+**② 功能实测（Agent 工作台发制造类需求后 journalctl）**
+```
+[MCP] 正在连接 Server「cost」: ['python', '-m', 'app.agent.mcp_server_cost_calc']
+Registered tool: mcp__cost__cost_calc
+[MCP] 已注册远端工具: mcp__cost__cost_calc
+[MCP] 已注册远端工具: mcp__cost__cost_reference_list
+[MCP] 共注册 2 个远端工具
+[MCP] 已加载 2 个远端工具：['mcp__cost__cost_calc', 'mcp__cost__cost_reference_list']
+```
+**结论**：cost_calc MCP 已正式接入生产 Agent 工具集（且 `api/agent_routes.py` 中本就是 `allow` 免确认）。P0 完成。
+
+**③ 实跑踩坑备忘（给未来参考）**
+- 那三行配置**必须写进 `.env` 文件**（grep+sed/echo >>），绝不能当 shell 命令裸跑（裸跑只是给当前 shell 设临时变量，退出即失效，且 `MCP_SERVERS=[...]` 会被 bash 当 `[` 测试命令解析报错）。
+- 重启后 health 偶发空响应是模型加载窗口（~16s）竞态，多等几秒再探即 HTTP 200；`systemctl status` 看 `active (running)` + `Application startup complete` 才是真起稳。
+- 验证 MCP 是否加载**不能看服务启动日志**，要看**首次 Agent 调用后**的 journalctl（MCP 是懒加载，不在 startup）。
