@@ -219,20 +219,26 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 > 结论：MCP 协议闭环与技能包匹配逻辑在代码层完全正确；生产未生效纯属开关未开，非代码缺陷。
 
 ### 7.3 待用户执行 · ECS 实跑命令（激活 + 验证）
+
+> ⚠️ **易错点（2026-09-06 实测踩坑）**：`AGENT_MCP_CLIENT=1` 这类单独成行的写法在 bash 里只是给**当前 shell 设临时变量**，退出即失效，**不会写进 `.env`**；`MCP_SERVERS=[...]` 那行还会被 bash 当 `[` 测试命令解析报错。务必用下面的 `grep+sed/echo >>` 命令把三行**写进文件**，不要直接粘贴那三行当命令跑。
+
 ```bash
-# ① 在 ECS 上把三行写入生产 .env（用真实 editor 或 tee 追加）
+# ① 在 ECS 上把三行写入生产 .env（grep 命中则 sed 替换，未命中则 echo 追加）
 cd /var/www/huawei-cloud-solution-matcher
 grep -q '^AGENT_MCP_CLIENT=' .env && sed -i 's/^AGENT_MCP_CLIENT=.*/AGENT_MCP_CLIENT=1/' .env || echo 'AGENT_MCP_CLIENT=1' >> .env
 grep -q '^AGENT_SKILL_PACKS=' .env && sed -i 's/^AGENT_SKILL_PACKS=.*/AGENT_SKILL_PACKS=1/' .env || echo 'AGENT_SKILL_PACKS=1' >> .env
 grep -q '^MCP_SERVERS=' .env && sed -i 's#^MCP_SERVERS=.*#MCP_SERVERS=[{"command":["python","-m","app.agent.mcp_server_cost_calc"],"label":"cost"}]#' .env || echo 'MCP_SERVERS=[{"command":["python","-m","app.agent.mcp_server_cost_calc"],"label":"cost"}]' >> .env
 
-# ② 重启服务（ExecStartPost 会等 health 200，最多 60s；按铁律⑥先 chown 防 root 属主）
+# ② 确认已写入（应输出三行非注释值）
+grep -E '^(AGENT_MCP_CLIENT|AGENT_SKILL_PACKS|MCP_SERVERS)=' .env
+
+# ③ 重启服务（ExecStartPost 会等 health 200，最多 60s；按铁律⑥先 chown 防 root 属主）
 systemctl restart huawei-cloud-api
 
-# ③ 核验激活（health 应返回 v3.0.0 且进程已加载远端工具）
+# ④ 核验激活（health 应返回 v3.0.0 且进程已加载远端工具）
 sleep 12
 curl -sf http://127.0.0.1:8000/api/health | head -c 200; echo
-journalctl -u huawei-cloud-api --since "2 min ago" | grep -E "MCP|skill|远端工具" | tail -20
+journalctl -u huawei-cloud-api --since "2 min ago" | grep -E "MCP|远端工具" | tail -20
 ```
 验证点：日志出现 `[MCP] 已加载 2 个远端工具：['mcp__cost__cost_calc', 'mcp__cost__cost_reference_list']` 即激活成功；随后在 Agent 工作台用制造/金融类需求跑一题，终稿应含 TCO 测算且行业话术更准。
 
