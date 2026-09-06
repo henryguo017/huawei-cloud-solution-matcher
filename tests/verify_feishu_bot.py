@@ -20,7 +20,7 @@ os.environ.setdefault("INTERNAL_API_TOKEN", "tok")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from app.services.feishu_bot import CloudsolFeishuHandler
+from app.services.feishu_bot import CloudsolFeishuHandler, _clean_digest
 
 PASS = 0
 FAIL = 0
@@ -103,6 +103,26 @@ def run():
     h6 = CloudsolFeishuHandler(client=None)
     check("_allow 两次通过", h6._allow("x") and h6._allow("x"))
     check("_allow 第三次拒绝", not h6._allow("x"))
+
+    # 7) 摘要清洗（生产反馈：卡片里 **、##、|---| 原样露出，AI 味重）
+    sample = (
+        "# 500人制造企业上云方案建议书\n"
+        "**致：** 某制造企业决策层\n"
+        "## 1. 客户需求与痛点分析\n"
+        "| 痛点领域 | 具体表现 |\n"
+        "|--------|--------|\n"
+        "| **IT 基础设施老旧** | 现有服务器超期服役 |\n"
+        "- 弹性不足\n"
+        "> 引用文字\n"
+    )
+    clean = _clean_digest(sample)
+    check("摘要无井号", "#" not in clean, repr(clean[:80]))
+    check("摘要无星号", "*" not in clean, repr(clean[:80]))
+    check("摘要无表格分隔线", "---" not in clean)
+    check("摘要无半角竖线", "|" not in clean)
+    check("粗体内文保留", ("致：" in clean) and ("IT 基础设施老旧" in clean))
+    check("超长按行截断加省略号",
+          _clean_digest("标题行\n" + ("段落文字。\n" * 300)).endswith("…"))
 
 
 def main():

@@ -17,6 +17,7 @@
 
 import os
 import sys
+import re
 import json
 import time
 import logging
@@ -49,6 +50,39 @@ DAILY_LIMIT = int(os.getenv("IM_BOT_DAILY_LIMIT", "5"))
 SITE_URL = os.getenv("SITE_URL", "https://cloudsol.cn").rstrip("/")
 
 _API_TIMEOUT = 900
+
+# 摘要清洗：飞书 post 富文本不渲染 Markdown，**、##、|---| 会原样露出（AI 味重），
+# 发送前剥成干净纯文本。顺序敏感：表格分隔行要在竖线转全角之前删。
+_MD_RULES = [
+    (re.compile(r"^#{1,6}\s*", re.M), ""),               # 标题井号
+    (re.compile(r"\*{1,3}([^*\n]+?)\*{1,3}"), r"\1"),    # 粗体/斜体包裹（保留内文）
+    (re.compile(r"__(.+?)__"), r"\1"),                   # 下划线粗体
+    (re.compile(r"`{1,3}[^`\n]*`{1,3}"), ""),            # 行内代码/代码块标记
+    (re.compile(r"^\s*\|?[\s:\-|]+\|?\s*$", re.M), ""),  # 表格分隔行 |---|---|
+    (re.compile(r"^\s*>\s?", re.M), ""),                 # 引用符
+    (re.compile(r"^\s*[-*+]\s+", re.M), "· "),           # 无序列表符号
+    (re.compile(r"\n{3,}"), "\n\n"),                     # 压缩连续空行
+]
+
+
+def _clean_digest(md: str, limit: int = 400) -> str:
+    """把 Agent 终稿（Markdown）压成飞书 post 可读的纯文本摘要。
+
+    超长时优先回退到行边界截断（避免切在表格行/半句话中间），加省略号。
+    """
+    text = (md or "").replace("\r\n", "\n")
+    for pat, rep in _MD_RULES:
+        text = pat.sub(rep, text)
+    text = text.replace("|", "｜")                        # 残留表格列分隔转全角
+    text = re.sub(r"^[ \t]*｜", "", text, flags=re.M)     # 去行首/行尾残留竖线
+    text = re.sub(r"｜[ \t]*$", "", text, flags=re.M)
+    text = re.sub(r"^[ \t]+", "", text, flags=re.M)       # 去行首残留空白（表格行首空格等）
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = text.strip()
+    if len(text) > limit:
+        cut = text.rfind("\n", 0, limit)
+        text = text[: cut if cut >= 120 else limit].rstrip() + "…"
+    return text
 
 # SDK 依赖：仅本服务运行环境需要；缺失时 main() 给指引
 import lark_oapi as lark
@@ -146,7 +180,7 @@ class CloudsolFeishuHandler:
         answer = result.get("answer", "") or ""
         share_id = result.get("share_id")
         link = f"{SITE_URL}/share.html?id={share_id}" if share_id else SITE_URL
-        digest = answer[:400].strip() + ("…" if len(answer) > 400 else "")
+        digest = _clean_digest(answer)
         # 富文本 post：标题 + 导读段落 + 蓝色链接
         content = {
             "post": {
