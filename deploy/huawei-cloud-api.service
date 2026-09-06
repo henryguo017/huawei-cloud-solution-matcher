@@ -12,6 +12,9 @@ Environment="PATH=/var/www/huawei-cloud-solution-matcher/venv/bin"
 # 多 worker 会导致轮询任务 404、锁失效、SQLite 并发写 "database is locked"。切勿添加 --workers。
 ExecStart=/var/www/huawei-cloud-solution-matcher/venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 8000
 ExecReload=/bin/kill -s HUP $MAINPID
+# 就绪等待：嵌入模型加载需 6-10s，此前 systemctl restart 后立即 curl 会 502。
+# 此处阻塞到 /api/health 200（最多等 60s）；超时也不判定启动失败（exit 0），只消除窗口。
+ExecStartPost=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do curl -sf http://127.0.0.1:8000/api/health >/dev/null 2>&1 && exit 0; i=$((i+1)); sleep 1; done; exit 0'
 Restart=always
 RestartSec=10
 
