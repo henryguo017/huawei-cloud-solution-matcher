@@ -1104,7 +1104,8 @@ body.view-agent .theme-label { margin-bottom: 8px; }
     padding-top: 10px;
     border-top: 1px dashed var(--border-color, #E5E7EB);
 }
-.ws-export-btn {
+.ws-export-btn,
+.ws-export-ppt-btn {
     display: inline-flex; align-items: center; gap: 6px;
     height: 32px; padding: 0 14px;
     background: linear-gradient(135deg, #C7000B, #E01E2A);
@@ -1115,9 +1116,9 @@ body.view-agent .theme-label { margin-bottom: 8px; }
     transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
     box-shadow: 0 2px 8px rgba(199, 0, 11, 0.18);
 }
-.ws-export-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(199, 0, 11, 0.26); }
-.ws-export-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-.ws-export-btn .icon { width: 15px; height: 15px; stroke-width: 2.2; }
+.ws-export-btn:hover, .ws-export-ppt-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(199, 0, 11, 0.26); }
+.ws-export-btn:disabled, .ws-export-ppt-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.ws-export-btn .icon, .ws-export-ppt-btn .icon { width: 15px; height: 15px; stroke-width: 2.2; }
 /* #5 重新生成按钮：白底描边胶囊 + hover 上浮红边 */
 .ws-regen-btn {
     display: inline-flex; align-items: center; gap: 6px;
