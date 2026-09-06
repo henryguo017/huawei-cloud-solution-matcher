@@ -173,9 +173,13 @@ class WordGenerator:
     def _add_table(self, rows: List[str]):
         if len(rows) < 1:
             return
+        # 2026-09-06 修：调用方 _render_markdown 收集 block 时从分隔行之后开始
+        # （不含分隔行），因此数据从 rows[1] 起。旧逻辑误以为 rows[1] 是分隔行、
+        # 从 rows[2] 取数据 → 每张表格的第一行数据被静默丢弃（成本附表首行 SKU 消失）。
+        # 防御：过滤任何形如 | :--- | 的分隔行。
         header = self._split_row(rows[0])
-        # rows[1] 为分隔行（| :--- |），数据从 rows[2] 起
-        data = [self._split_row(r) for r in rows[2:]] if len(rows) > 2 else []
+        is_sep = lambda r: bool(re.match(r'^\|[\s\-:|]+\|$', r.strip()))
+        data = [self._split_row(r) for r in rows[1:] if not is_sep(r)]
         ncol = max(len(header), 1)
         table = self.doc.add_table(rows=1, cols=ncol)
         try:
