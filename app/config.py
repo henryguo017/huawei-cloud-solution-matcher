@@ -159,7 +159,7 @@ IM_BOT_USER_ID = os.getenv("IM_BOT_USER_ID", "")
 # IM_BOT_WHITELIST：senderStaffId 白名单（逗号分隔）。空 = 不限制（允许群里所有人，初期调试用）。
 IM_BOT_WHITELIST = os.getenv("IM_BOT_WHITELIST", "")
 # IM_BOT_DAILY_LIMIT：每个发送者每日可触发的 Agent 生成次数上限（防滥用，Agent 单次消耗 LLM token）。
-IM_BOT_DAILY_LIMIT = int(os.getenv("IM_BOT_DAILY_LIMIT", "5"))
+IM_BOT_DAILY_LIMIT = int(os.getenv("IM_BOT_DAILY_LIMIT", "50"))
 
 # ==================== P2-3 MCP 远程工具客户端开关 ====================
 # AGENT_MCP_CLIENT=1：启动时（首次 Agent 运行）按 MCP_SERVERS 配置连接外部 MCP Server，

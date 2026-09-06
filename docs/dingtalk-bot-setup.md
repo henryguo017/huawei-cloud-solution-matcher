@@ -23,7 +23,7 @@ DINGTALK_BOT_CLIENT_ID=<第一步的 Client ID>
 DINGTALK_BOT_CLIENT_SECRET=<第一步的 Client Secret>
 IM_BOT_USER_ID=3                      # 群里请求以此账号身份执行（KB上下文/成就归属）
 IM_BOT_WHITELIST=                     # senderStaffId 白名单，逗号分隔；空=群里所有人可用
-IM_BOT_DAILY_LIMIT=5                  # 每人每天最多触发 5 次 Agent 生成
+IM_BOT_DAILY_LIMIT=50                 # 每人每天最多触发 50 次 Agent 生成
 ```
 
 > `IM_BOT_USER_ID` 填运营者账号 id（可查 users 表或登录后看接口返回）。  

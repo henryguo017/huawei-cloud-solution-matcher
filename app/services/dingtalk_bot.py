@@ -52,7 +52,7 @@ API_BASE = os.getenv("IM_BOT_API_BASE", "http://127.0.0.1:8000").rstrip("/")
 INTERNAL_TOKEN = os.getenv("INTERNAL_API_TOKEN", "")
 BOT_USER_ID = os.getenv("IM_BOT_USER_ID", "")
 WHITELIST = {s.strip() for s in (os.getenv("IM_BOT_WHITELIST", "") or "").split(",") if s.strip()}
-DAILY_LIMIT = int(os.getenv("IM_BOT_DAILY_LIMIT", "5"))
+DAILY_LIMIT = int(os.getenv("IM_BOT_DAILY_LIMIT", "50"))
 SITE_URL = os.getenv("SITE_URL", "https://cloudsol.cn").rstrip("/")
 
 # 环回调用超时：Agent 单次 2-5 分钟，放宽到 15 分钟（含排队/重规划）

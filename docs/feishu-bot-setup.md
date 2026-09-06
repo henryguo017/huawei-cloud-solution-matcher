@@ -29,7 +29,7 @@ FEISHU_BOT_APP_SECRET=<App Secret>
 # INTERNAL_API_TOKEN=<openssl rand -hex 24>
 # IM_BOT_USER_ID=2
 # IM_BOT_WHITELIST=          # 飞书按 sender open_id 过滤（与钉钉 staffId 共用此 env，逗号分隔）
-# IM_BOT_DAILY_LIMIT=5
+# IM_BOT_DAILY_LIMIT=50
 ```
 
 ## 三、安装与启动
