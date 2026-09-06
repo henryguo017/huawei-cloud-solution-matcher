@@ -203,9 +203,10 @@ def main():
         .build()
 
     import lark_oapi.ws as ws
+    # ⚠️ log_level 必须传 SDK 枚举 lark_oapi.core.enum.LogLevel（内部取 .value），
+    # 传标准 logging 的 int 会 AttributeError 崩溃。默认值即 LogLevel.INFO，直接省略最稳。
     ws_client = ws.Client(APP_ID, APP_SECRET,
-                          event_handler=event_handler,
-                          log_level=logging.INFO)
+                          event_handler=event_handler)
     logger.info("[boot] 飞书长连接机器人启动（白名单=%s 限次=%s/天 API=%s）",
                 "开启" if WHITELIST else "未配置(不限)", DAILY_LIMIT, API_BASE)
     ws_client.start()
