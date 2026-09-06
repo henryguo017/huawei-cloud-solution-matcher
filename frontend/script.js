@@ -7330,15 +7330,19 @@ function initEventListeners() {
         State.resultCache.solution = null;
     });
     
-    // 导出方案书（Word）：优先用结构化 solution_json，后端自动回退 Markdown
-    async function triggerExportSolutionBook() {
+    // 导出方案书（Word / PPT）：优先用结构化 solution_json，后端自动回退 Markdown。
+    // PPTX 走后端华为红 12 页引擎管线（DeepSeek 两段式 + 门禁 + 降级 legacy）。
+    async function triggerExportSolutionBook(format = 'word') {
+        const isPptx = format === 'pptx';
         const cached = State.resultCache.solution;
         if (!cached || !cached.answer) {
             UI.showToast('请先生成方案再导出', 'warning');
             return;
         }
-        const btn = document.getElementById('export-docx-btn');
-        const origHtml = btn ? btn.innerHTML : '<svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg> 导出方案书';
+        const btn = document.getElementById(isPptx ? 'export-pptx-btn' : 'export-docx-btn');
+        const origHtml = btn ? btn.innerHTML : (isPptx
+            ? '<svg class="icon" aria-hidden="true"><use href="#i-presentation"></use></svg> 导出 PPT'
+            : '<svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg> 导出方案书');
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-loader"></use></svg> 生成中...';
@@ -7376,7 +7380,7 @@ function initEventListeners() {
             }
             const resp = await API.exportReport({
                 report_type: 'solution',
-                format: 'word',
+                format: isPptx ? 'pptx' : 'word',
                 title: '华为云解决方案建议书',
                 content: cached.answer,
                 solution_json: cached.solution_json || null,
@@ -7397,12 +7401,12 @@ function initEventListeners() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = resp.file_name || 'solution_report.docx';
+            a.download = resp.file_name || (isPptx ? 'solution_report.pptx' : 'solution_report.docx');
             document.body.appendChild(a);
             a.click();
             a.remove();
             URL.revokeObjectURL(url);
-            UI.showToast('方案书已生成并下载', 'success');
+            UI.showToast(isPptx ? 'PPT 已生成并下载' : '方案书已生成并下载', 'success');
         } catch (e) {
             console.error('[导出方案书] 失败:', e);
             UI.showToast(e.message || '导出失败，请重试', 'error');
@@ -7453,7 +7457,8 @@ function initEventListeners() {
         }
     });
 
-    document.getElementById('export-docx-btn')?.addEventListener('click', triggerExportSolutionBook);
+    document.getElementById('export-docx-btn')?.addEventListener('click', () => triggerExportSolutionBook('word'));
+    document.getElementById('export-pptx-btn')?.addEventListener('click', () => triggerExportSolutionBook('pptx'));
 
     document.getElementById('share-solution-btn')?.addEventListener('click', () => {
         const c = State.resultCache.solution;

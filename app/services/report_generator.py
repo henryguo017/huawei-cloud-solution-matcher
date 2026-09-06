@@ -150,7 +150,8 @@ class ReportGeneratorService:
             elif format == ExportFormat.PPTX:
                 file_name = f"{file_prefix}_{timestamp}.pptx"
                 file_path = self.export_dir / file_name
-                self._generate_pptx(report_data, str(file_path))
+                self._generate_pptx(report_data, str(file_path),
+                                    cost_reference=cost_reference)
             else:
                 file_name = f"{file_prefix}_{timestamp}.pdf"
                 file_path = self.export_dir / file_name
@@ -285,8 +286,47 @@ class ReportGeneratorService:
             lines.append(f'免责声明：{disclaimer}')
         return '\n'.join(lines)
     
-    def _generate_pptx(self, report_data: Dict[str, Any], file_path: str):
-        """生成 PPTX 演示稿（python-pptx）。
+    def _generate_pptx(self, report_data: Dict[str, Any], file_path: str,
+                       cost_reference: Dict[str, Any] = None):
+        """生成 PPTX — 引擎管线优先（华为红 12 页满版模板，唯一出稿出口）。
+
+        管线：report_data.chapters → DeepSeek 两段式 generate_deck（大纲+填槽，
+        成本表程序化）→ 出稿门禁 validate_deck → render_deck 引擎渲染。
+        引擎路径任何失败（LLM 异常/门禁拒绝/素材过短）→ 记 warning 并降级
+        _generate_pptx_legacy 毛坯渲染，保证导出功能可用性。
+        """
+        try:
+            self._generate_pptx_engine(report_data, file_path, cost_reference)
+        except Exception as e:  # noqa: BLE001
+            logger.warning('[PPTX导出] 引擎管线失败，降级 legacy 渲染: %s: %s',
+                           type(e).__name__, e)
+            self._generate_pptx_legacy(report_data, file_path)
+
+    def _generate_pptx_engine(self, report_data: Dict[str, Any],
+                              file_path: str,
+                              cost_reference: Dict[str, Any] = None):
+        """引擎管线：两段式生成 deck → 门禁 → 渲染保存（失败抛异常由上层降级）"""
+        from pptx import Presentation
+        from app.services.ppt_engine import render_deck, tokens
+        from app.services.ppt_engine.generator import generate_deck
+
+        chapters = report_data.get('chapters', []) or []
+        deck = generate_deck(
+            solution_chapters=chapters,
+            cost_reference=cost_reference,
+            title=report_data.get('title', '') or '华为云解决方案建议书',
+            customer=report_data.get('customer_name', '') or '',
+            date_str=report_data.get('create_date', '') or '',
+        )
+        prs = Presentation()
+        prs.slide_width = tokens.SLIDE_W
+        prs.slide_height = tokens.SLIDE_H
+        n = render_deck(prs, deck)
+        prs.save(file_path)
+        logger.info('[PPTX导出] 引擎管线出稿成功：%d 页 %s', n, file_path)
+
+    def _generate_pptx_legacy(self, report_data: Dict[str, Any], file_path: str):
+        """生成 PPTX 演示稿（python-pptx 毛坯渲染，引擎失败时的降级兜底）。
 
         版式：
         - 封面页：标题 / 副标题 / 客户 / 日期
