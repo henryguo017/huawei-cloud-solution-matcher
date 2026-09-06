@@ -80,6 +80,16 @@ _EXPORT_RE = re.compile(
     re.I,
 )
 
+# 生成 PPT 意图（2026-09-06）：客户口语"给我生成PPT/做个PPT/输出一份PPT"——
+# 生成类动词 + PPT 格式词组合（仅 PPT 系；"生成方案/报告"是内容生产不在此列）
+_PPT_GEN_RE = re.compile(
+    r"(生成|做一个?|做份?|做个|输出|来一份?|帮我做|帮我生成)[^。]{0,8}pptx?"
+    r"|(生成|做|输出|来一份?)[^。]{0,8}(幻灯片|演示文稿)",
+    re.I,
+)
+# 疑问句排除："PPT怎么做/如何生成PPT/什么是PPT" 是方法论咨询，不是导出
+_PPT_QUESTION_RE = re.compile(r"(怎么做|如何做|怎么写|如何写|怎么用|怎么生成|如何生成|什么是|哪些|有什么区别)")
+
 # 文件操作意图（harness file_ops 分支依赖此分类）：列出/读取/查看/解析 用户上传的资料文件
 _FILE_OPS_RE = re.compile(
     r"(列出|读取|打开|解析|总结|归纳|看看|查看)[^。]{0,8}(我上传|上传的|客户资料|客户文件|资料文件|文件列表|文件)"
@@ -153,7 +163,9 @@ def classify_intent(text: str) -> Dict[str, Any]:
         return _mk("account", competitors, industries, 0.9)
 
     # 2.5) 导出文档（明确导出/下载动作 + 格式词；账户类已先行，避免误吃"下载我的方案"）
-    if _EXPORT_RE.search(t):
+    #      补：生成类动词+PPT 组合（"给我生成PPT"），疑问句（"PPT怎么做"）排除
+    if _EXPORT_RE.search(t) or (_PPT_GEN_RE.search(t)
+                                and not _PPT_QUESTION_RE.search(t)):
         return _mk("export", competitors, industries, 0.9)
 
     # 3) 竞品对比（必须出现具体外部竞品名，避免把"怎么对比华为云和其他竞品厂商"误判为对比）

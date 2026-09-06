@@ -295,6 +295,53 @@ def _program_cost_table(cost_reference: Dict[str, Any]) -> List[List[str]]:
     return table_rows
 
 
+def _synth_cost_table(cost_page: Dict[str, Any]):
+    """无成本卡片时的成本页明细表合成（保住满版几何）。
+
+    数据源：LLM 成本页 chart 的费用结构（cats=费用项, vals=月费用概算）——
+    金额来自方案素材口径而非凭空编造，此处仅做格式化与占比计算。
+    返回 (rows, headers, widths, accent_cols)；无可用数据时返回单行占位表。
+    行数上限 7（6 明细 + 合计），对齐 SLOT_SPEC cost.table _t(7)。
+    """
+    headers = ['产品', '规格', '计费方式', '数量',
+               '单价(元/月)', '月小计(元)', '年付(85折)', '占比']
+    widths = [1.5, 2.0, 1.1, 0.95, 1.45, 1.45, 1.45, 0.853]
+    accent = [5]
+
+    def fmt(v) -> str:
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            return ''
+        return f'{fv:,.2f}' if fv != int(fv) else f'{int(fv):,}'
+
+    chart = cost_page.get('chart') or {}
+    cats = chart.get('cats') or []
+    vals = chart.get('vals') or []
+    items = []
+    for cat, val in zip(cats, vals):
+        try:
+            fv = float(val)
+        except (TypeError, ValueError):
+            continue
+        if str(cat or '').strip():
+            items.append((str(cat).strip(), fv))
+    items = items[:6]
+
+    if not items:
+        # 极端兜底：LLM 未给出费用结构 → 单行占位（不编造数字）
+        return ([['成本明细', '按最终配置与商务报价为准', '—', '—',
+                  '—', '—', '—', '100%']],
+                headers, widths, accent)
+
+    total = sum(v for _, v in items)
+    rows = [[cat, '按方案口径', '概算', '—', '—', fmt(v), '—',
+             ('%.1f%%' % (v / total * 100)) if total else '—']
+            for cat, v in items]
+    rows.append(['合计', '—', '—', '—', '—', fmt(total), '—', '100%'])
+    return rows, headers, widths, accent
+
+
 async def _plan_outline(source: str, cost_ref: Optional[Dict[str, Any]],
                         title: str, customer: str) -> Dict[str, Any]:
     """段1：大纲。输出 {layout: {headline, points[], numbers[]}}"""
@@ -462,18 +509,27 @@ async def generate_deck_async(solution_markdown: str = '',
         for ly in batch:
             pages[ly] = got.get(ly) or {}
 
-    # 成本页程序化表格（LLM 不碰金额）
+    # 成本页明细表：有成本卡片→程序化生成（LLM 不碰金额）；
+    # 无成本卡片（Agent/未编辑成本卡场景）→用 LLM 成本页 chart 的费用结构
+    # 程序化合成（名称+月小计+占比，金额来自素材口径非编造），保住满版几何。
+    cost_table_rows = None
     if cost_reference and cost_reference.get('rows'):
-        table_rows = _program_cost_table(cost_reference)
-        if table_rows:
-            pages['cost']['table'] = {
-                'headers': ['产品', '规格', '计费方式', '数量',
-                            '单价(元/月)', '月小计(元)', '年付(85折)', '占比'],
-                'rows': table_rows,
-                'widths': [1.5, 2.0, 1.1, 0.95, 1.45, 1.45, 1.45, 0.853],
-                'total_row_idx': len(table_rows) - 1,
-                'accent_cols': [5, 6],
-            }
+        cost_table_rows = _program_cost_table(cost_reference)
+        cost_headers = ['产品', '规格', '计费方式', '数量',
+                        '单价(元/月)', '月小计(元)', '年付(85折)', '占比']
+        cost_widths = [1.5, 2.0, 1.1, 0.95, 1.45, 1.45, 1.45, 0.853]
+        cost_accent = [5, 6]
+    if not cost_table_rows:
+        cost_table_rows, cost_headers, cost_widths, cost_accent = \
+            _synth_cost_table(pages.get('cost') or {})
+    if cost_table_rows:
+        pages['cost']['table'] = {
+            'headers': cost_headers,
+            'rows': cost_table_rows,
+            'widths': cost_widths,
+            'total_row_idx': len(cost_table_rows) - 1,
+            'accent_cols': cost_accent,
+        }
 
     deck = {'pages': [{'layout': ly, 'data': pages.get(ly) or {}}
                       for ly in FIXED_LAYOUTS]}

@@ -426,24 +426,26 @@ def render_cost(prs, d):
     h = d['header']
     page_header(s, h['sec'], h['sec_name'], h['headline'], h['page_no'],
                 stats=h.get('stats'), note=h.get('note'))
-    tb = d['table']
-    add_table(s, T.MX, Inches(1.32), T.CW, tb['headers'], tb['rows'],
-              tb.get('widths'), row_h=0.32, header_h=0.34,
-              col_aligns=[PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.CENTER,
-                          PP_ALIGN.CENTER, PP_ALIGN.RIGHT, PP_ALIGN.RIGHT,
-                          PP_ALIGN.RIGHT, PP_ALIGN.CENTER],
-              font_size=8.5)
-    # 合计行强调
-    tbl = [sh for sh in s.shapes if sh.has_table][0].table
-    tri = tb.get('total_row_idx', len(tb['rows']))
-    accent = tuple(tb.get('accent_cols', []))
-    aligns = [PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.CENTER,
-              PP_ALIGN.CENTER, PP_ALIGN.RIGHT, PP_ALIGN.RIGHT,
-              PP_ALIGN.RIGHT, PP_ALIGN.CENTER]
-    for j in range(len(tb['headers'])):
-        set_cell(tbl.cell(tri + 1, j), tb['rows'][tri][j], size=8.5, bold=True,
-                 color=T.RED if j in accent else T.INK, fill=T.RED_SOFT,
-                 align=aligns[j])
+    tb = d.get('table')
+    if tb:
+        add_table(s, T.MX, Inches(1.32), T.CW, tb['headers'], tb['rows'],
+                  tb.get('widths'), row_h=0.32, header_h=0.34,
+                  col_aligns=[PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.CENTER,
+                              PP_ALIGN.CENTER, PP_ALIGN.RIGHT, PP_ALIGN.RIGHT,
+                              PP_ALIGN.RIGHT, PP_ALIGN.CENTER],
+                  font_size=8.5)
+        # 合计行强调
+        tbl = [sh for sh in s.shapes if sh.has_table][0].table
+        tri = tb.get('total_row_idx', len(tb['rows']))
+        accent = tuple(tb.get('accent_cols', []))
+        aligns = [PP_ALIGN.LEFT, PP_ALIGN.LEFT, PP_ALIGN.CENTER,
+                  PP_ALIGN.CENTER, PP_ALIGN.RIGHT, PP_ALIGN.RIGHT,
+                  PP_ALIGN.RIGHT, PP_ALIGN.CENTER]
+        for j in range(len(tb['headers'])):
+            set_cell(tbl.cell(tri + 1, j), tb['rows'][tri][j], size=8.5,
+                     bold=True,
+                     color=T.RED if j in accent else T.INK, fill=T.RED_SOFT,
+                     align=aligns[j])
     # 下左：柱图（WAF 标红）
     c = d['chart']
     section_head(s, T.MX, Inches(3.86), Inches(5.9), c['title'])

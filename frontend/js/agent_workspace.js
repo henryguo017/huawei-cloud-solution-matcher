@@ -1944,8 +1944,21 @@
             // 用 appendChild 而非 innerHTML 替换：避免覆盖已存在的 doc_generated 下载 chip
             actions.appendChild(btn);
             btn.addEventListener('click', function () {
-                self._exportAnswer(shell, answer, btn.getAttribute('data-format'));
+                self._exportAnswer(shell, answer, btn.getAttribute('data-format'), 'word');
             });
+            // 2026-09-06：导出 PPT 按钮（与 Word 并排；走 /api/export/report format=pptx
+            // → 后端华为红 12 页引擎管线，失败自动降级毛坯渲染）
+            if (!actions.querySelector('.ws-export-ppt-btn')) {
+                var pb = document.createElement('button');
+                pb.type = 'button';
+                pb.className = 'ws-export-ppt-btn';
+                pb.setAttribute('data-format', isComp ? 'competitor' : 'solution');
+                pb.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-presentation"></use></svg>导出 PPT';
+                actions.appendChild(pb);
+                pb.addEventListener('click', function () {
+                    self._exportAnswer(shell, answer, pb.getAttribute('data-format'), 'pptx');
+                });
+            }
             // #5 重新生成：答案就绪后附 ↻ 按钮（幂等，仅在尚无时追加）
             if (!actions.querySelector('.ws-regen-btn')) {
                 var rb = document.createElement('button');
@@ -2454,10 +2467,15 @@
             this._scrollBottom();
         },
 
-        /* P0：调 /api/export/report 生成 Word 并下载（模板在导出端应用） */
-        _exportAnswer: function (shell, answer, reportType) {
+        /* P0：调 /api/export/report 生成文档并下载（模板在导出端应用）。
+           2026-09-06：fileFormat 参数化 word/pptx——pptx 走后端华为红 12 页引擎管线 */
+        _exportAnswer: function (shell, answer, reportType, fileFormat) {
             var self = this;
-            var btn = shell.actions ? shell.actions.querySelector('.ws-export-btn') : null;
+            fileFormat = fileFormat || 'word';
+            var isPptx = fileFormat === 'pptx';
+            var btn = shell.actions
+                ? shell.actions.querySelector(isPptx ? '.ws-export-ppt-btn' : '.ws-export-btn')
+                : null;
             var orig = btn ? btn.innerHTML : '';
             if (btn) {
                 btn.disabled = true;
@@ -2472,7 +2490,7 @@
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({
                     report_type: reportType,
-                    format: 'word',
+                    format: fileFormat,
                     content: String(answer || ''),
                     title: reportType === 'competitor' ? '华为云竞品对比分析' : '华为云解决方案建议书',
                     metadata: { title: reportType === 'competitor' ? '华为云竞品对比分析' : '华为云解决方案建议书' },
@@ -2493,12 +2511,14 @@
                         var url = URL.createObjectURL(blob);
                         var a = document.createElement('a');
                         a.href = url;
-                        a.download = data.file_name || (reportType === 'competitor' ? 'competitor_report.docx' : 'solution_report.docx');
+                        a.download = data.file_name || (reportType === 'competitor'
+                            ? (isPptx ? 'competitor_report.pptx' : 'competitor_report.docx')
+                            : (isPptx ? 'solution_report.pptx' : 'solution_report.docx'));
                         document.body.appendChild(a);
                         a.click();
                         a.remove();
                         URL.revokeObjectURL(url);
-                        self._toast('文档已生成并下载', 'success');
+                        self._toast(isPptx ? 'PPT 已生成并下载' : '文档已生成并下载', 'success');
                     });
                 });
             }).catch(function (e) {
