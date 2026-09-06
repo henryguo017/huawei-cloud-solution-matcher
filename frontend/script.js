@@ -5264,9 +5264,15 @@ function initEventListeners() {
             const data = await resp.json();
             btn.querySelector('.btn-text').style.display = '';
             btn.querySelector('.btn-spinner').style.display = 'none';
-            document.getElementById('forgot-password-error').style.display = 'none';
-            document.getElementById('forgot-password-success').textContent = '重置链接已发送到邮箱，请查收（有效期30分钟）';
-            document.getElementById('forgot-password-success').style.display = '';
+            if (data.success === false) {
+                // 服务端显式失败（SMTP 未配置/发送失败/服务异常）——如实提示，不再空等
+                document.getElementById('forgot-password-error').textContent = data.message || '发送失败，请稍后重试';
+                document.getElementById('forgot-password-error').style.display = '';
+            } else {
+                document.getElementById('forgot-password-error').style.display = 'none';
+                document.getElementById('forgot-password-success').textContent = '重置链接已发送到邮箱，请查收（有效期30分钟）';
+                document.getElementById('forgot-password-success').style.display = '';
+            }
         } catch (err) {
             btn.querySelector('.btn-text').style.display = '';
             btn.querySelector('.btn-spinner').style.display = 'none';
@@ -5470,29 +5476,115 @@ function initEventListeners() {
             alert('请输入邮箱地址');
             return;
         }
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+            alert('邮箱格式不正确');
+            return;
+        }
 
         const token = AuthManager.getToken();
         try {
-            const resp = await fetch('/api/auth/profile', {
-                method: 'PATCH',
+            const resp = await fetch('/api/auth/email/change-request', {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ new_email: email })
             });
             const data = await resp.json();
             if (resp.ok) {
-                document.getElementById('info-email').textContent = email;
+                // 进入第二步：输码确认
+                window._pendingEmail = email;
                 document.getElementById('email-edit-row').style.display = 'none';
-                // 保存成功后显示邮箱行
-                document.getElementById('email-display-row').style.display = '';
-                alert('邮箱更新成功');
+                document.getElementById('email-code-row').style.display = '';
+                document.getElementById('email-code-hint-row').style.display = '';
+                document.getElementById('email-code-hint').textContent = data.message || `验证码已发送至 ${email}`;
+                document.getElementById('input-email-code').value = '';
+                document.getElementById('input-email-code').focus();
             } else {
-                alert(data.detail || '更新失败');
+                alert(data.detail || '验证码发送失败，请稍后重试');
             }
         } catch (e) {
             alert('网络错误，请重试');
+        }
+    });
+
+    // 第二步：输码确认改绑
+    document.getElementById('btn-confirm-email')?.addEventListener('click', async () => {
+        const code = document.getElementById('input-email-code').value.trim();
+        const email = window._pendingEmail || '';
+        if (!email) {
+            alert('请先填写新邮箱并发送验证码');
+            return;
+        }
+        if (!/^\d{6}$/.test(code)) {
+            alert('请输入 6 位数字验证码');
+            return;
+        }
+
+        const token = AuthManager.getToken();
+        try {
+            const resp = await fetch('/api/auth/email/change-confirm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ new_email: email, code })
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                document.getElementById('info-email').textContent = data.email || email;
+                document.getElementById('email-code-row').style.display = 'none';
+                document.getElementById('email-code-hint-row').style.display = 'none';
+                document.getElementById('email-display-row').style.display = '';
+                window._pendingEmail = '';
+                alert('邮箱绑定成功');
+            } else {
+                alert(data.detail || '验证码确认失败');
+            }
+        } catch (e) {
+            alert('网络错误，请重试');
+        }
+    });
+
+    // 重新发送验证码（服务端 60s 冷却，429 会提示剩余秒数）
+    document.getElementById('btn-resend-email-code')?.addEventListener('click', async () => {
+        const email = window._pendingEmail || document.getElementById('input-new-email').value.trim();
+        if (!email) {
+            alert('请先填写新邮箱');
+            return;
+        }
+        const token = AuthManager.getToken();
+        try {
+            const resp = await fetch('/api/auth/email/change-request', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ new_email: email })
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                document.getElementById('email-code-hint-row').style.display = '';
+                document.getElementById('email-code-hint').textContent = data.message || '验证码已重新发送';
+            } else {
+                alert(data.detail || '发送失败，请稍后重试');
+            }
+        } catch (e) {
+            alert('网络错误，请重试');
+        }
+    });
+
+    // 取消输码，回到编辑态
+    document.getElementById('btn-cancel-email-code')?.addEventListener('click', () => {
+        window._pendingEmail = '';
+        document.getElementById('email-code-row').style.display = 'none';
+        document.getElementById('email-code-hint-row').style.display = 'none';
+        const email = document.getElementById('info-email').textContent;
+        if (email !== '未设置') {
+            document.getElementById('email-display-row').style.display = '';
         }
     });
 

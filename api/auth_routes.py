@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from app.models.user_models import (
     UserCreate, UserLogin, HistoryCreate, FavoriteCreate,
-    ProfileUpdate, PasswordChange,
+    PasswordChange,
     ForgotPassword, ResetPassword
 )
 from app.services.auth_service import AuthService
@@ -121,23 +122,43 @@ async def refresh_token(current_user: dict = Depends(get_current_user)):
         }
     }
 
-@router.patch("/profile")
-async def update_profile(
-    profile_data: ProfileUpdate,
+class EmailChangeRequest(BaseModel):
+    new_email: str
+
+
+class EmailChangeConfirm(BaseModel):
+    new_email: str
+    code: str
+
+
+@router.post("/email/change-request")
+async def email_change_request(
+    body: EmailChangeRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    if profile_data.email is None:
+    """邮箱改绑第一步：向新邮箱发送 6 位验证码（60s 冷却，15 分钟有效）。"""
+    result = AuthService.request_email_change(current_user["id"], body.new_email)
+    if not result["success"]:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="未提供需要更新的字段"
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS if result.get("retry_after") else status.HTTP_400_BAD_REQUEST,
+            detail=result["message"]
         )
-    result = AuthService.update_profile(current_user["id"], profile_data.email)
+    return {"message": result["message"]}
+
+
+@router.post("/email/change-confirm")
+async def email_change_confirm(
+    body: EmailChangeConfirm,
+    current_user: dict = Depends(get_current_user)
+):
+    """邮箱改绑第二步：校验验证码并正式改绑。"""
+    result = AuthService.confirm_email_change(current_user["id"], body.new_email, body.code)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result["message"]
         )
-    return {"message": result["message"]}
+    return {"message": result["message"], "email": result.get("email", "")}
 
 @router.post("/change-password")
 async def change_password(

@@ -372,4 +372,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
 SMTP_USER = os.getenv("SMTP_USER", "")  # 163邮箱（发件人），生产环境务必在 .env 中配置
 SMTP_PASS = os.getenv("SMTP_PASS", "")  # 163邮箱授权码，生产环境务必在 .env 中配置（切勿写死在代码里）
 RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("RESET_TOKEN_EXPIRE_MINUTES", "30"))
+# 邮箱改绑验证码有效期（分钟）；EMAIL_CODE_RESEND_COOLDOWN 秒内不可重复发码
+EMAIL_CODE_EXPIRE_MINUTES = int(os.getenv("EMAIL_CODE_EXPIRE_MINUTES", "15"))
+EMAIL_CODE_RESEND_COOLDOWN = int(os.getenv("EMAIL_CODE_RESEND_COOLDOWN", "60"))
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://cloudsol.cn")

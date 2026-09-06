@@ -62,6 +62,20 @@ def init_database():
         cursor.execute("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP")
     except sqlite3.OperationalError:
         pass  # 列已存在
+
+    # 迁移：为已有数据库添加邮箱改绑验证码相关列（待验证新邮箱 + 6位验证码 + 有效期）
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN pending_email TEXT")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN email_code TEXT")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN email_code_expiry TIMESTAMP")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)")

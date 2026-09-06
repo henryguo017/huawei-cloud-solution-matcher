@@ -1958,9 +1958,22 @@
                         <span class="profile-info-label"></span>
                         <div class="profile-email-edit">
                             <input type="email" id="input-new-email" placeholder="请输入新邮箱" class="profile-input">
-                            <button class="btn btn-primary btn-sm" id="btn-save-email">保存</button>
+                            <button class="btn btn-primary btn-sm" id="btn-save-email">发送验证码</button>
                             <button class="btn btn-secondary btn-sm" id="btn-cancel-email">取消</button>
                         </div>
+                    </div>
+                    <div class="profile-info-row profile-email-edit-row" id="email-code-row" style="display: none;">
+                        <span class="profile-info-label"></span>
+                        <div class="profile-email-edit">
+                            <input type="text" id="input-email-code" placeholder="6位验证码" class="profile-input" maxlength="6" inputmode="numeric" style="width: 110px; letter-spacing: 2px;">
+                            <button class="btn btn-primary btn-sm" id="btn-confirm-email">确认改绑</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-resend-email-code">重新发送</button>
+                            <button class="btn btn-secondary btn-sm" id="btn-cancel-email-code">取消</button>
+                        </div>
+                    </div>
+                    <div class="profile-info-row" id="email-code-hint-row" style="display: none;">
+                        <span class="profile-info-label"></span>
+                        <span class="profile-info-value" id="email-code-hint" style="font-size: 12px; opacity: 0.75;"></span>
                     </div>
                     <div class="profile-info-row">
                         <span class="profile-info-label">角色</span>
@@ -2202,7 +2215,7 @@
     </div>
 
     <script src="js/vendor/qrcode.js"></script>
-    <script src="script.js?v=20260902b"></script>
+    <script src="script.js?v=20260906a"></script>
     <script src="js/shared_runtime.js?v=20260815j"></script>
     <script src="js/agent_workspace.js?v=20260906a"></script>
     <script src="js/voice-input.js?v=20260726f"></script>
