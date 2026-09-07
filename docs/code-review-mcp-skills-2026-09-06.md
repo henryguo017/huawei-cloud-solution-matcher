@@ -160,7 +160,7 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 | `mcp_server_kb`         | `kb_stats` / `kb_reindex` / `kb_upload_parse`   | 让 Agent 能自查知识库覆盖度、触发重建、解析新上传文档（现靠人工/接口）  |
 | `mcp_server_competitor` | `competitor_battlecard(industry)`               | 把 12 竞品厂商的对比卡片结构化，Agent 直接取而不是每次 RAG 拼   |
 | `mcp_server_tco`        | 在 cost_calc 上扩 `quote_compare(skus, providers)` | 华为云 vs 阿里云 vs AWS 同规格比价                  |
-| `mcp_server_notify`     | `push_feishu(text)` / `push_dingtalk(text)`     | 把飞书/钉钉推送变成 Agent 可调工具（现是事件触发，非 Agent 主动） |
+| `mcp_server_notify`     | `push_feishu(text)` / `push_dingtalk(text)`     | ❌ **复核后建议不做**：推送功能本身已完整落地且**自动触发**（`app/services/notify.py`：用户级绑定 + 全局兜底 + 分享页 + 加签；经典 `solution_matcher` 与 Agent `agent_routes.py:163` 成功后自动推）。MCP 化只能补「Agent 主动发任意文本」这一小口，价值低且风险高（模型幻觉往客户群发消息）。详见 §7.9 |
 | `mcp_server_crm`        | `client_list` / `client_add` / `client_update` / `match_history` | ✅ **P2 已完成**（本地绿、待部署）：Agent 主动读写客户管理、查历史匹配（此前只会话内、无法落库） |
 | `mcp_server_report`     | `gen_word` / `gen_pptx` / `gen_pdf`             | 把导出能力做成标准工具，统一 generate_doc 与 PPT 引擎入口   |
 
@@ -242,7 +242,7 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 
 1. **P0 激活验证**（1 小时内可上线，零新代码）：开 `AGENT_MCP_CLIENT=1` + `AGENT_SKILL_PACKS=1`，生产跑 50 题核对成本步与行业包是否真生效；若 ECS `.env` 本就缺这俩 flag，则这是"被遗忘的已完工功能"。
 2. **P1 横向补包** ✅ 已完成（本地绿，待部署）：行业包 +6、能力包 +4（挂载钩子已扩，`kind`/`triggers` 纯数据驱动）、行业别名 +14（50 题路由 0 变化）。现共 15 包（11 行业 + 4 能力）。
-3. **P2 新 Server**：`mcp_server_crm` ✅ 已完成（本地绿、待部署）；`mcp_server_kb` / `mcp_server_notify` 待做。
+3. **P2 新 Server**：`mcp_server_crm` ✅ 已完成（本地绿、待部署）；`mcp_server_notify` ❌ 复核后不做（已自动触发，见 §7.9）；`mcp_server_kb` 待评估（见 §7.9 的数据缺口提示）。
 4. **P3 机制纵深**：热重载、用户级权限持久化、能力包可挂工具、双向暴露给外部 client（生态卖点）。
 
 ---
@@ -426,4 +426,40 @@ Registered tool: mcp__cost__cost_calc
 - 部署后抽查：Agent 说「把杭州某某科技存成客户，阶段需求调研」→ 应弹出权限确认（写入类 ask），确认后落库。
 
 **⑥ 下一步**
-- `mcp_server_notify`（飞书/钉钉推送工具化）与 `mcp_server_kb`（知识库自查/重建）待做，见 §4.3。
+- `mcp_server_notify` 经复核**不做**（见 §7.9）；`mcp_server_kb` 待评估数据缺口。
+
+### 7.9 P2 候选复核（2026-09-07）：notify 不做；kb / tco / competitor 的数据缺口
+
+**① `mcp_server_notify` —— 建议不做（功能已被自动触发覆盖）**
+
+用户提出质疑「钉钉飞书推送不是已经做了吗」→ 复核确认**属实**，现有实现已相当完整
+（`app/services/notify.py`，纯 stdlib urllib/hmac，零新依赖）：
+- 用户级绑定（`user_notify_bindings` 表，各人前端绑自己的飞书/钉钉）+ 全局兜底
+  （`.env` 的 `FEISHU_/DINGTALK_WEBHOOK`，仅在该用户未绑定对应平台时补发，避免运营者重复收）；
+- 飞书 interactive card / 钉钉 markdown 双适配，**加签差异已修**（钉钉 sign 必须拼 URL 查询串
+  且 urlencode，放 body 会被无视 → 一直 310000）；
+- fire-and-forget 不阻塞主链路、失败只记 warning、推的是临时分享页链接
+  （`/share.html?id=`，匿名只读）而非登录墙；
+- **触发点已覆盖主场景**：经典 `solution_matcher.py` 匹配完成、Agent `api/agent_routes.py:163`
+  成功后均自动调用 `notify_for_user` 推送。
+
+结论：MCP 化只剩「Agent 主动往群里发任意文本」这一小口增量，而这一口恰恰是把**外发动作**
+交给模型自主决定——幻觉或时机不当会直接发到客户群，风险远大于收益。故标记不做。
+若将来要做，必须保持 `ask`，且**只允许推已生成方案的摘要**，不允许自由文本。
+
+**② `mcp_server_kb` —— 待评估，先确认是否真有缺口**
+- `kb_stats`：知识库统计前端已有仪表盘接口；做成 Agent 工具的增量是「用户问『我们知识库有多少方案』时能自查」，价值中等。
+- `kb_reindex`：重建向量库属重操作，让 Agent 自主触发风险高（耗时/占用），建议不做或限 `ask` + 管理员。
+- `kb_upload_parse`：需先确认上传解析当前是同步自动还是人工触发——若已自动，则此项同样冗余。
+
+**③ `mcp_server_tco` / `mcp_server_competitor` —— 数据缺口（关键，别急着写代码）**
+- `quote_compare(skus, providers)`（华为云 vs 阿里云 vs AWS 同规格比价）：**我们没有友商价格的权威数据源**。
+  若工具返回「估算的友商价」，等于把编造数字固化进工具，与项目「不编造可核对数字」的纪律直接冲突。
+  正确姿势是只比对**公开列表价并标注来源与采集日期**，否则宁可不做。
+- `competitor_battlecard(industry)`（12 竞品结构化对比）：P1-B 已用**能力包（提示词层）**覆盖打法结构；
+  工具化需要一份结构化事实表（谁在哪些行业强/弱、资质、案例），这属于**内容建设**而非纯代码，需先有数据源。
+
+**④ 建议的下一步**
+- 优先做 `mcp_server_kb` 的**只读**部分（`kb_stats`），风险低、有增量；
+- `quote_compare` / `battlecard` 工具化**先解决数据源**再谈代码；
+- 或转向 §4.5 的机制纵深（热重载 / 权限持久化 / 双向暴露给外部 client）。
