@@ -24,7 +24,7 @@ AGENT_ROLES = {
     "demand_analyst": {
         "name": "需求分析师",
         "phase": "demand_analysis",
-        "tools": ["analyze_demand", "read_customer_file", "list_dir", "web_search"],
+        "tools": ["analyze_demand", "read_customer_file", "list_dir", "web_search", "web_extract"],
         "prompt": (
             "你扮演【需求分析师】，负责把用户的模糊需求梳理成可执行的结构化输入。\n"
             "任务：识别用户所在行业、核心业务场景、痛点与目标，给出检索关键词。\n"
@@ -34,7 +34,7 @@ AGENT_ROLES = {
     "solution_architect": {
         "name": "方案架构师",
         "phase": "solution_architect",
-        "tools": ["search_kb", "search_competitor", "web_search"],
+        "tools": ["search_kb", "search_competitor", "web_search", "web_extract"],
         "prompt": (
             "你扮演【方案架构师】，负责基于需求分析结果检索华为云相关资料，形成方案骨架。\n"
             "任务：检索知识库中的解决方案文档与产品资料（必要时竞品对比），"

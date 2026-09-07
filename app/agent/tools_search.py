@@ -30,6 +30,10 @@ class WebSearchProvider:
     def search(self, query: str, top_n: int = 5) -> List[Dict[str, str]]:
         raise NotImplementedError
 
+    def extract(self, url: str, max_chars: int = 2000) -> List[Dict[str, str]]:
+        """从指定 URL 抽取干净正文（Tavily /extract）。默认不支持时返回空列表。"""
+        return []
+
 
 class TavilyProvider(WebSearchProvider):
     """Tavily：面向 LLM 的搜索 API（默认推荐，免费额度充足，返回结构化结果）。"""
@@ -76,6 +80,38 @@ class TavilyProvider(WebSearchProvider):
                 "snippet": (r.get("content") or "")[:400],
                 "published": published[:10],
             })
+        return out
+
+    def extract(self, url: str, max_chars: int = 2000) -> List[Dict[str, str]]:
+        """Tavily /extract：抽取指定 URL 的干净正文（去广告/导航等噪音）。
+
+        返回 [{"domain", "title", "url", "content"}]；抽取失败的 URL 在 failed 日志体现，不抛异常。
+        max_chars 截断正文，控制注入 LLM 的 token 量。
+        """
+        import json
+        import urllib.request
+
+        payload = {"api_key": self.api_key, "urls": [url]}
+        req = urllib.request.Request(
+            "https://api.tavily.com/extract",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        out = []
+        for r in (data.get("results") or []):
+            u = r.get("url", url)
+            out.append({
+                "domain": _domain_of(u),
+                "title": r.get("title", "") or "",
+                "url": u,
+                "content": (r.get("raw_content") or "")[:max_chars],
+            })
+        failed = data.get("failed_results") or []
+        if failed:
+            logger.warning(f"[tavily-extract] {len(failed)} 个 URL 抽取失败: {failed}")
         return out
 
 

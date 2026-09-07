@@ -426,6 +426,60 @@ async def _tool_web_search(query: str, topic: str = "general") -> str:
 def reset_web_search_budget():
     """每轮 harness.run() 开始时重置联网检索计数（修复进程级不重置导致联网永久失效的 bug）。"""
     _tool_web_search._count = 0
+    _tool_web_extract._count = 0
+
+
+async def _tool_web_extract(url: str) -> str:
+    """
+    工具: web_extract（Tavily Extract，2026-09-07 集成）
+    作用: 抽取指定网页 URL 的干净正文全文（去导航/广告噪音），供深入阅读。
+    场景: web_search 命中新闻/文章后需要正文细节；用户给出具体链接要求阅读总结。
+    实现: 复用已配置的联网 provider（Tavily /extract），未配置时诚实降级。
+    """
+    from app.config import WEB_SEARCH_PROVIDER
+    provider = (WEB_SEARCH_PROVIDER or "").strip().lower()
+    if not provider:
+        return json.dumps({
+            "status": "disabled",
+            "message": "当前未配置联网抽取，仅基于本地知识库作答。",
+            "content": "",
+        }, ensure_ascii=False)
+    # 限流：本会话正文抽取上限（与 web_search 计数独立，随 run() 一并重置）
+    if getattr(_tool_web_extract, "_count", 0) >= 5:
+        return json.dumps({
+            "status": "limited",
+            "message": "已达本会话网页抽取上限（5 次）。",
+            "content": "",
+        }, ensure_ascii=False)
+    u = (url or "").strip()
+    if not re.match(r"^https?://", u):
+        return json.dumps({
+            "status": "error",
+            "message": "需要一个完整的 http(s) 网页链接。",
+            "content": "",
+        }, ensure_ascii=False)
+    try:
+        from app.agent.tools_search import get_web_search_provider
+        p = get_web_search_provider(provider)
+        results = await to_thread_limited(p.extract, u, max_chars=2000, _timeout=60.0)
+        _tool_web_extract._count = getattr(_tool_web_extract, "_count", 0) + 1
+        if not results:
+            return json.dumps({
+                "status": "no_content",
+                "message": "该网页未能抽取到正文（可能是动态渲染页或反爬）。",
+                "content": "",
+            }, ensure_ascii=False)
+        r = results[0]
+        # 脱敏：正文 + 来源域名，不暴露完整外链
+        return json.dumps({
+            "status": "ok",
+            "domain": r.get("domain", ""),
+            "title": r.get("title", ""),
+            "content": r.get("content", ""),
+        }, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"[web_extract] 抽取失败: {e}")
+        return json.dumps({"status": "error", "message": str(e), "content": ""}, ensure_ascii=False)
 
 
 # ============================================================
@@ -560,6 +614,23 @@ def create_default_tools() -> ToolRegistry:
             "required": ["query"],
         },
         func=_tool_web_search,
+    ))
+
+    # 8. web_extract — 联网抽取指定网页正文（Tavily Extract）
+    registry.register(Tool(
+        name="web_extract",
+        description="抽取指定网页链接的正文全文（去导航/广告噪音）。当 web_search 结果需要深入阅读正文细节，或用户给出具体网页链接要求阅读/总结时调用。每次调用抽取 1 个链接。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "要抽取正文的网页完整链接（http/https 开头）",
+                }
+            },
+            "required": ["url"],
+        },
+        func=_tool_web_extract,
     ))
 
     return registry

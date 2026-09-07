@@ -622,7 +622,7 @@ class AgentHarness:
                 # P3-2 并行子体：若单轮产出多个「只读检索」Action，且开关开启、落在步级工具集内、
                 # 数量不过 MAX_PARALLEL，则用 asyncio.gather 并发执行（权限闸门各自阻塞、自然等齐）。
                 parallel_actions = self._parse_react_actions(llm_response)
-                readonly_set = {"search_kb", "search_competitor", "web_search"}
+                readonly_set = {"search_kb", "search_competitor", "web_search", "web_extract"}
                 if (parallel_actions
                         and (AGENT_PARALLEL_TOOLS or "1").strip() == "1"
                         and len(parallel_actions) >= 2
@@ -1941,6 +1941,7 @@ Final Answer: [完整方案]）"""
         "generate_doc": "ask",
         "read_customer_file": "ask",
         "web_search": "allow",
+        "web_extract": "allow",
     }
 
     async def _gate_tool(self, tool_name: str, tool_input: dict, event_callback=None) -> Optional[str]:
@@ -1949,8 +1950,8 @@ Final Answer: [完整方案]）"""
         - #6 联网搜索关闭：直接跳过 web_search，不再联网。
         - #3 策略 deny：跳过；ask：发 permission_request SSE 并阻塞等待用户决策。
         """
-        # #6 联网搜索开关
-        if tool_name == "web_search" and getattr(self, "_disable_web_search", False):
+        # #6 联网搜索开关（同时关掉联网正文抽取）
+        if tool_name in ("web_search", "web_extract") and getattr(self, "_disable_web_search", False):
             return "（已关闭联网搜索，本次跳过网络检索，仅基于本地知识库作答。）"
         policy = self._resolve_tool_policy(tool_name)
         if policy == "deny":
@@ -1996,14 +1997,17 @@ Final Answer: [完整方案]）"""
         return {
             "generate_doc": "Agent 准备生成一份可下载的方案书（Word/PDF/PPTX），将占用存储并生成文件。",
             "read_customer_file": "Agent 准备读取你上传的客户资料文件。",
-            "web_search": "Agent 准备联网检索（华为云官网 / 竞品动态），可能产生额外请求。",
-        }.get(tool_name, f"Agent 准备执行工具「{tool_name}」。")
+        "web_search": "Agent 准备联网检索（华为云官网 / 竞品动态），可能产生额外请求。",
+        "web_extract": "Agent 准备联网读取一个网页的正文内容，可能产生额外请求。",
+    }.get(tool_name, f"Agent 准备执行工具「{tool_name}」。")
 
     def _permission_safe_input(self, tool_name: str, tool_input: dict) -> dict:
         """URL / 路径脱敏：只暴露对决策有用的最小信息。"""
         ti = tool_input or {}
         if tool_name == "web_search":
             return {"query": str(ti.get("query", ""))[:120]}
+        if tool_name == "web_extract":
+            return {"url": str(ti.get("url", ""))[:120]}
         if tool_name == "read_customer_file":
             return {"path": str(ti.get("path", ""))[:160]}
         if tool_name == "generate_doc":
@@ -2426,7 +2430,7 @@ Final Answer: [完整方案]）"""
             n = len(files) if isinstance(files, list) else 0
             return f"目录共 {n} 个文件" if n else "目录为空"
         if tool_name == "web_search":
-            # P1-2：联网检索摘要（observation 形如 {status, count, results:[{domain,title}]}）
+            # P1-2：联网检索摘要（observation 形如 {status, count, results:[{domain,title,snippet}]}）
             try:
                 res = json.loads(observation) if isinstance(observation, str) else observation
             except (json.JSONDecodeError, TypeError):
@@ -2439,6 +2443,18 @@ Final Answer: [完整方案]）"""
                 return "尚无可检索内容"
             n = res.get("count") or len(res.get("results", []) or [])
             return f"联网检索到 {n} 条资料" if n else "联网检索无结果"
+        if tool_name == "web_extract":
+            # 联网正文抽取摘要
+            try:
+                res = json.loads(observation) if isinstance(observation, str) else observation
+            except (json.JSONDecodeError, TypeError):
+                return ""
+            if res.get("status") == "disabled":
+                return "未配置联网抽取"
+            if res.get("status") == "limited":
+                return "已达本会话网页抽取上限"
+            n = len(str(res.get("content") or ""))
+            return f"已抽取网页正文（{n} 字）" if n else "该网页无正文可抽取"
         return ""
 
     async def _self_check_answer(self, user_input: str, answer: str, tool_calls: list, event_callback=None) -> str:
