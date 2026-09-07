@@ -105,6 +105,7 @@ class SolutionAgent:
         rerun_plan_index: Optional[int] = None,
         tool_permissions: Optional[dict] = None,
         disable_web_search: bool = False,
+        client_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         运行 Agent
@@ -146,6 +147,7 @@ class SolutionAgent:
             rerun_plan_index=rerun_plan_index,
             tool_permissions=tool_permissions,
             disable_web_search=disable_web_search,
+            client_id=client_id,
         )
 
     async def run_with_competitor(
