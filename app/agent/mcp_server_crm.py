@@ -4,8 +4,8 @@ P2：自带 MCP Server —— 客户管理与匹配历史（crm）
 零新依赖（纯 Python stdlib：sqlite3/json/os/sys/asyncio/logging），
 **不 import 任何 app 模块**（连 app.config 都不碰），数据库路径由 __file__ 推导，
 可独立作为子进程运行，被 `mcp_client.py` 通过 stdio JSON-RPC 消费，
-注册为 `mcp__crm__client_add` / `mcp__crm__client_list` /
-`mcp__crm__client_update` / `mcp__crm__match_history`。
+注册为 `mcp__crm__client_list` / `mcp__crm__client_add` / `mcp__crm__client_update` /
+`mcp__crm__client_delete` / `mcp__crm__match_history`。
 
 用途：
   让 Agent 能主动读写 CRM（此前客户档案只能在会话内提及、无法落库），
@@ -236,6 +236,33 @@ async def _h_client_update(**arguments) -> str:
     return f"已更新客户档案（{'、'.join(updates.keys())}）：\n" + _fmt_client(fresh)
 
 
+async def _h_client_delete(**arguments) -> str:
+    uid, err = _resolve_user_id(arguments)
+    if err:
+        return err
+    name = (arguments.get("name") or "").strip()
+    if not name:
+        return "错误：必须提供要删除的客户名称 name。"
+    if not os.path.exists(USERS_DB):
+        return f"错误：客户库不存在：{USERS_DB}"
+    conn = _conn(USERS_DB)
+    try:
+        row = conn.execute(
+            "SELECT id FROM clients WHERE user_id = ? AND name = ?", (uid, name)
+        ).fetchone()
+        if not row:
+            conn.close()
+            return f"错误：未找到客户「{name}」（user_id={uid}），无需删除。"
+        conn.execute("DELETE FROM clients WHERE id = ?", (row["id"],))
+        conn.commit()
+    except sqlite3.Error as e:
+        return f"错误：删除客户失败：{e}"
+    finally:
+        if conn is not None:
+            conn.close()
+    return f"已删除客户档案：「{name}」（id={row['id']}）。该客户的历史方案记录仍保留，不影响其他客户。"
+
+
 async def _h_match_history(**arguments) -> str:
     uid, err = _resolve_user_id(arguments)
     if err:
@@ -322,6 +349,20 @@ _REGISTRY = [
             "required": ["name"],
         },
         "handler": _h_client_update,
+    },
+    {
+        "name": "client_delete",
+        "description": "删除客户档案（按客户名定位，不可恢复）。需先确认客户名称；"
+                       "历史方案记录不受影响。删除是不可逆操作，调用前建议先 client_list 确认客户存在。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "integer", "description": "用户 ID；不传则取环境变量 MCP_CRM_DEFAULT_USER_ID"},
+                "name": {"type": "string", "description": "要删除的客户名称（必填，需已存在）"},
+            },
+            "required": ["name"],
+        },
+        "handler": _h_client_delete,
     },
     {
         "name": "match_history",

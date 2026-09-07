@@ -378,11 +378,51 @@ class AgentHarness:
         re.IGNORECASE,
     )
 
+    # 客户删除意图：client_delete 是不可逆写操作，走 ask 弹窗人工确认。
+    _CLIENT_DELETE_RE = re.compile(
+        r"(删除|删掉|删了|去掉|移除|清除).{0,8}客户|客户.{0,6}(删除|删掉)",
+        re.IGNORECASE,
+    )
+
+    # 客户/历史方案查询意图（只读）：命中走确定性查询（client_list / match_history），
+    # 修复 general 直答**编造客户数据**——比写入幻觉更危险（假档案会误导售前决策）。
+    _CLIENT_QUERY_RE = re.compile(
+        r"查.{0,8}客户|客户(列表|清单|名录|名单|档案|资料|信息)|我的客户|有哪些客户"
+        r"|多少.{0,6}客户|几[个户]客户|多少个客户|客户数"
+        r"|(查一?下|看看|看下|查看|调出?|打开).{0,12}(档案|客户资料|客户详情)"
+        r"|(合作过|服务过|做过|生成过).{0,10}方案|方案(历史|记录)|历史方案|匹配历史|给哪些客户"
+        r"|(客户|他|她|它).{0,6}的(阶段|预算|行业|联系人|痛点|决策链|档案|资料)"
+        r"|(什么|哪个|目前|现在|处于).{0,4}(商机)?阶段",
+        re.IGNORECASE,
+    )
+
+    # 知识库统计意图（只读真数据）：general 直答会编文档数，命中直接调 get_stats()。
+    _KB_STATS_RE = re.compile(
+        r"知识库.{0,12}(多少|几[个篇条]|统计|规模|概况|情况|有哪些|覆盖|行业)"
+        r"|(文档|资料|语料|方案文档|竞品资料).{0,8}(多少|几[个篇条])"
+        r"|(多少|几[个篇条]).{0,6}(篇|个)?(文档|资料|方案|竞品)",
+        re.IGNORECASE,
+    )
+
     @classmethod
     def _crm_intent_hit(cls, text: str) -> bool:
-        """建档或更新意图是否命中（general 分支与两阶段强制步共用）。"""
+        """建档/更新/删除意图是否命中（写入类，general 分支与两阶段强制步共用）。"""
         t = text or ""
-        return bool(cls._CLIENT_RE.search(t) or cls._CLIENT_UPDATE_RE.search(t))
+        return bool(
+            cls._CLIENT_RE.search(t)
+            or cls._CLIENT_UPDATE_RE.search(t)
+            or cls._CLIENT_DELETE_RE.search(t)
+        )
+
+    @classmethod
+    def _crm_query_hit(cls, text: str) -> bool:
+        """客户/历史方案查询意图是否命中（只读类，仅 general 分支用）。"""
+        return bool(cls._CLIENT_QUERY_RE.search(text or ""))
+
+    @classmethod
+    def _kb_stats_hit(cls, text: str) -> bool:
+        """知识库统计意图是否命中（只读类，仅 general 分支用）。"""
+        return bool(cls._KB_STATS_RE.search(text or ""))
 
     # 每步子循环内最多允许的 LLM 迭代次数（防单步无限循环）
     _STEP_MAX_ITER = 3
@@ -1054,31 +1094,83 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 return self._make_result(light, [], success=True, plan=[], plan_status=[])
 
             if self._intent == "general":
-                # CRM 建档/更新意图拦截（修复"模型幻觉已保存/已更新"根因）：general 路径
-                # 没有工具调用能力，「把X存成客户」「给X加个行业」这类诉求会被 LLM 空口应答
-                # 但从未落库。命中意图且远端工具可用时，确定性走 client_add/client_update
-                # （权限闸门 ask，用户在弹窗点「允许执行」才落库），用真实工具结果作答。
-                if self._remote_tool_names and self._crm_intent_hit(user_input or ""):
-                    await self._emit(event_callback, {
-                        "type": "thought",
-                        "step": 1,
-                        "text": "识别意图：客户建档/更新（CRM），调用客户管理工具写入档案",
-                    })
-                    try:
-                        crm_obs = await self._force_crm_step(
-                            event_callback, session_id, tool_calls_log, user_input
-                        )
-                    except Exception as crm_err:
-                        self._log("warn", f"[强制CRM步] 执行异常（如实反馈，不降级到通用问答防幻觉）: {crm_err}")
-                        crm_obs = f"（强制CRM步：执行异常 {crm_err}，客户档案未写入）"
-                    crm_answer = self._crm_save_answer(crm_obs)
-                    self.memory.add_agent_response(session_id, crm_answer)
+                # ── general 路径数据诚信拦截链 ──
+                # general 分支没有工具调用能力，LLM 直答会对「客户档案/价格/知识库统计」
+                # 等实时数据空口编造。以下按 写入CRM → 查询CRM → 知识库统计 → 成本测算
+                # 顺序确定性拦截，全部用真实工具/服务结果作答；都不命中才落通用问答。
+
+                async def _finish_general(answer_text: str):
+                    self.memory.add_agent_response(session_id, answer_text)
                     await self._emit(event_callback, {
                         "type": "final",
                         "step": 1,
                         "elapsed": round(time.time() - self._start_time, 2),
                     })
-                    return self._make_result(crm_answer, tool_calls_log, success=True, plan=[], plan_status=[])
+                    return self._make_result(answer_text, tool_calls_log, success=True, plan=[], plan_status=[])
+
+                # 1) CRM 写入（add/update/delete）：走权限闸门 ask，用户弹窗确认才落库
+                if self._remote_tool_names and self._crm_intent_hit(user_input or ""):
+                    await self._emit(event_callback, {
+                        "type": "thought",
+                        "step": 1,
+                        "text": "识别意图：客户建档/更新/删除（CRM），调用客户管理工具写入档案",
+                    })
+                    try:
+                        crm_obs = await self._force_crm_step(event_callback, session_id, tool_calls_log, user_input)
+                    except Exception as crm_err:
+                        self._log("warn", f"[强制CRM步] 执行异常（如实反馈，不降级到通用问答防幻觉）: {crm_err}")
+                        crm_obs = f"（强制CRM步：执行异常 {crm_err}，客户档案未写入）"
+                    return await _finish_general(self._crm_save_answer(crm_obs))
+
+                # 2) CRM 查询（client_list / match_history，只读，harness 确定性放行不弹窗）
+                if self._remote_tool_names and self._crm_query_hit(user_input or ""):
+                    await self._emit(event_callback, {
+                        "type": "thought",
+                        "step": 1,
+                        "text": "识别意图：客户档案/历史方案查询（CRM 只读），读取真实数据回答",
+                    })
+                    try:
+                        query_obs = await self._force_crm_query_step(event_callback, session_id, tool_calls_log, user_input)
+                    except Exception as q_err:
+                        self._log("warn", f"[CRM查询步] 执行异常: {q_err}")
+                        query_obs = f"（CRM查询：执行异常 {q_err}，未能读取真实档案）"
+                    return await _finish_general(self._crm_query_answer(query_obs))
+
+                # 3) 知识库统计（只读真数据，本地服务不依赖 MCP）
+                if self._kb_stats_hit(user_input or ""):
+                    await self._emit(event_callback, {
+                        "type": "thought",
+                        "step": 1,
+                        "text": "识别意图：知识库统计查询，读取真实统计回答",
+                    })
+                    try:
+                        kb_obs = await self._force_kb_stats_step()
+                    except Exception as kb_err:
+                        self._log("warn", f"[KB统计步] 执行异常: {kb_err}")
+                        kb_obs = f"（知识库统计：执行异常 {kb_err}，无法提供真实数字）"
+                    return await _finish_general(kb_obs)
+
+                # 4) 成本/价格问询兜底（带具体规格的问价多判 solution 走两阶段强制成本步；
+                #    此处兜 general 里仍命中定价词的问法，杜绝编价格；只读确定性放行）
+                if self._remote_tool_names and self._PRICING_RE.search(user_input or ""):
+                    await self._emit(event_callback, {
+                        "type": "thought",
+                        "step": 1,
+                        "text": "识别意图：成本/价格测算（只读），按真实 SKU 目录报价",
+                    })
+                    saved_perms = dict(getattr(self, "_tool_permissions", {}) or {})
+                    self._tool_permissions = {**saved_perms,
+                                              "mcp__cost__cost_calc": "allow",
+                                              "mcp__cost__cost_reference_list": "allow"}
+                    try:
+                        cost_obs = await self._force_cost_step(event_callback, session_id, tool_calls_log, user_input)
+                    except Exception as c_err:
+                        self._log("warn", f"[成本兜底步] 执行异常: {c_err}")
+                        cost_obs = f"（强制成本步：执行异常 {c_err}，以下回答不含真实报价）"
+                    finally:
+                        self._tool_permissions = saved_perms
+                    return await _finish_general(self._cost_query_answer(cost_obs, tool_calls_log))
+
                 # 通用问答（算数/常识/自我介绍/"你能做什么"等）：调 LLM 直答，
                 # 不套方案模板；可融合对话历史，让多轮追问能用上上下文。
                 await self._emit(event_callback, {
@@ -1567,16 +1659,17 @@ Final Answer: [完整方案]）"""
         extract_prompt = (
             "你是 CRM 客户档案操作抽取器。根据用户的话，判断操作类型并抽取客户名称与字段。\n\n"
             f"【用户原话】{user_input}\n\n"
-            '只输出一个 JSON 对象：{"op": "add" 或 "update", "name": "<客户名称，必填>", ...其余只填原话明确提到的字段}\n'
+            '只输出一个 JSON 对象：{"op": "add" 或 "update" 或 "delete", "name": "<客户名称，必填>", ...其余只填原话明确提到的字段}\n'
             "可填字段：stage（商机阶段）、industry（行业）、company_size（规模）、region（区域）、"
             "contact_name（联系人）、contact_title（职位）、contact_phone（电话）、contact_email（邮箱）、"
             "budget（预算）、pain_points（痛点）、decision_chain（决策链）、tags（标签）、note（备注）。\n"
             "规则：\n"
             "1. op 判断：想新建档案（存成客户/记录客户/添加客户/建档）→ \"add\"；"
-            "想给已有客户补充或修改信息（加个行业/更新阶段/修改备注/补充联系人）→ \"update\"；\n"
+            "想给已有客户补充或修改信息（加个行业/更新阶段/修改备注/补充联系人）→ \"update\"；"
+            "想删除客户档案（删除/删掉/移除某客户）→ \"delete\"；\n"
             "2. name 必须从原话提取客户主体名称，例如「把杭州海康威视存成客户」→ name=\"杭州海康威视\"；"
             "「给杭州海康威视加个行业，制造业」→ name=\"杭州海康威视\"、industry=\"制造业\"；\n"
-            "3. 除 name 外只填原话明确提到的字段，没提到的绝对不要编；"
+            "3. 除 name 外只填原话明确提到的字段，没提到的绝对不要编（delete 只需 name）；"
             "stage 取值限定：初步接触/需求调研/方案报价/商务谈判/已成交/已流失；\n"
             "4. 只输出 JSON，不要任何解释或代码围栏。\n"
         )
@@ -1592,16 +1685,77 @@ Final Answer: [完整方案]）"""
             v = data.get(f)
             if isinstance(v, str) and v.strip():
                 fields[f] = v.strip()
-        op = data.get("op") if data.get("op") in ("add", "update") else "add"
+        op = data.get("op") if data.get("op") in ("add", "update", "delete") else "add"
         if op == "update" and not fields:
             return "（强制CRM步：update 缺少要修改的字段，跳过写入）"
-        tool = "mcp__crm__client_update" if op == "update" else "mcp__crm__client_add"
-        args = {"name": name, **fields}
+        tool = {"add": "mcp__crm__client_add", "update": "mcp__crm__client_update",
+                "delete": "mcp__crm__client_delete"}[op]
+        args = {"name": name} if op == "delete" else {"name": name, **fields}
         obs = await self._exec_one_action(
             len(self._plan) + 1, tool, args,
             event_callback, session_id, tool_calls_log,
         )
         return f"（强制CRM步结果）\n{obs}"
+
+    # ── 强制 CRM 查询步：只读确定性查询（client_list / match_history），不弹窗 ──
+    async def _force_crm_query_step(self, event_callback, session_id, tool_calls_log, user_input) -> str:
+        """客户档案/历史方案查询意图（只读）：harness 确定性查询，杜绝 general 直答编造客户数据。
+        只读工具由 harness 确定性发起（非模型自主越权），临时放行不弹窗，调用后恢复原权限策略。"""
+        extract_prompt = (
+            "你是 CRM 查询意图解析器。根据用户的话输出一个 JSON 对象：\n"
+            '{"target": "clients" 或 "history", "keyword": "<关键词，可空字符串>"}\n'
+            "规则：\n"
+            "1. 问客户档案/客户列表/某客户的资料或阶段/有多少客户 → target=\"clients\"；"
+            "问历史方案/合作过什么方案/给哪些客户做过方案/匹配记录 → target=\"history\"；\n"
+            "2. keyword 取用户想查的客户名/行业/竞品名等过滤关键词，没有就留空字符串；\n"
+            "3. 只输出 JSON，不要解释。\n\n"
+            f"【用户原话】{user_input}"
+        )
+        raw = await self._call_llm(extract_prompt)
+        data = self._extract_json_object(raw) or {}
+        target = data.get("target") if data.get("target") in ("clients", "history") else "clients"
+        keyword = str(data.get("keyword") or "").strip()
+        args = {"keyword": keyword} if keyword else {}
+        saved_perms = dict(getattr(self, "_tool_permissions", {}) or {})
+        self._tool_permissions = {
+            **saved_perms,
+            "mcp__crm__client_list": "allow",
+            "mcp__crm__match_history": "allow",
+        }
+        try:
+            if target == "history":
+                obs = await self._exec_one_action(
+                    len(self._plan) + 1, "mcp__crm__match_history", args,
+                    event_callback, session_id, tool_calls_log,
+                )
+                return f"（历史方案查询结果）\n{obs}"
+            obs = await self._exec_one_action(
+                len(self._plan) + 1, "mcp__crm__client_list", args,
+                event_callback, session_id, tool_calls_log,
+            )
+            return f"（客户档案查询结果）\n{obs}"
+        finally:
+            self._tool_permissions = saved_perms
+
+    # ── 知识库统计步：直接调 get_stats() 真数据，杜绝 general 直答编文档数 ──
+    async def _force_kb_stats_step(self) -> str:
+        from app.services.knowledge_base import get_knowledge_base
+        kb = get_knowledge_base()
+        stats = await asyncio.to_thread(kb.get_stats)
+        total = stats.get("total_documents", 0) or 0
+        lines = [f"知识库实时统计：共 {total} 篇向量文档片段。"]
+        industries = stats.get("industry_counts") or {}
+        ind_pairs = sorted(((k, v) for k, v in industries.items() if v), key=lambda x: -x[1])
+        if ind_pairs:
+            shown = "、".join(f"{k} {v}篇" for k, v in ind_pairs[:8])
+            more = f" 等 {len(ind_pairs)} 个行业" if len(ind_pairs) > 8 else ""
+            lines.append(f"行业分布：{shown}{more}。")
+        comp_total = stats.get("total_competitor_files", 0) or 0
+        if comp_total:
+            comps = stats.get("competitor_stats") or {}
+            comp_names = "、".join(str(k) for k in comps.keys())[:80]
+            lines.append(f"竞品资料：{comp_total} 篇（{comp_names}）。")
+        return "（知识库统计结果）\n" + "\n".join(lines)
 
     @staticmethod
     def _crm_save_answer(obs: str) -> str:
@@ -1633,6 +1787,40 @@ Final Answer: [完整方案]）"""
             return obs
         # 成功建档/更新、同名已存在、未找到客户等：crm 返回文本本身可读，直接透出并补一句后续引导
         return obs + "\n\n已同步到你的「客户管理」档案，可随时让我查询或继续补充信息。"
+
+    @staticmethod
+    def _crm_query_answer(obs: str) -> str:
+        """CRM 查询步的答复映射：查询结果文本本身可读，直接透出；拒绝/空返回如实反馈。"""
+        if not obs or not obs.strip():
+            return "（查询未完成：工具没有返回结果，请稍后重试。）"
+        if "你拒绝了工具" in obs or "已被你设为禁止执行" in obs:
+            return "本次查询你选择了拒绝，未读取档案数据。"
+        return obs
+
+    def _cost_query_answer(self, obs: str, tool_calls_log: list) -> str:
+        """general 兜底成本步的答复映射：成功透出真实测算结果；抽取失败附真实 SKU 目录引导。"""
+        if not obs or not obs.strip():
+            return "（成本测算未完成：工具没有返回结果，请稍后重试。）"
+        if "无法从需求中抽取" in obs:
+            ans = (
+                "你想测算成本，但我没能从你的话里识别出具体的云资源与数量。"
+                "请说明资源和规模，例如「50台4核8G的ECS用3个月多少钱」，我按真实目录给你算。"
+            )
+        elif "均不在目录" in obs:
+            ans = "你提到的资源不在当前可报价 SKU 目录里，无法给出真实报价。"
+        elif "Error" in obs or "执行异常" in obs:
+            return f"成本测算没有完成：{obs}"
+        else:
+            ans = obs
+        if "无法从需求中抽取" in obs or "均不在目录" in obs:
+            dir_obs = ""
+            for t in reversed(tool_calls_log):
+                if t.get("tool") == "mcp__cost__cost_reference_list" and t.get("result"):
+                    dir_obs = t["result"]
+                    break
+            if dir_obs:
+                ans += "\n\n当前可报价的 SKU 目录：\n" + dir_obs
+        return ans
 
     @staticmethod
     def _extract_json_object(text):
@@ -2845,7 +3033,10 @@ Final Answer: [完整方案]）"""
             "1) 先**直接、准确**地回答用户问题（短答优先，不超过 3 句话，除非用户明确要详细）。\n"
             "2) 如果问题与方案匹配无关（如「1+1等于几」「Python 是什么」），**只回答问题本身**，不要强行推销方案能力。\n"
             "3) 回答结束时，自然地加一句过渡，告诉用户如果有方案匹配需求可继续告诉你。\n"
-            "4) 用**简洁、自然**的口吻，避免「我是华为云助手，根据行业+场景匹配…」这种固定模板式开场。\n\n"
+            "4) 用**简洁、自然**的口吻，避免「我是华为云助手，根据行业+场景匹配…」这种固定模板式开场。\n"
+            "5) 【数据诚信红线】你没有实时数据库访问能力：涉及客户档案内容、历史方案、实时报价、"
+            "知识库文档数等数据时，**绝对不要编造**具体数字、客户信息或价格；应如实说明并引导用户换"
+            "明确问法来触发对应功能（如「把XX存成客户」「查一下XX的档案」「50台4核8G的ECS用3个月多少钱」）。\n\n"
             f"{history}\n\n"
             f"用户最新问题：{user_input}\n\n"
             "直接回答："
