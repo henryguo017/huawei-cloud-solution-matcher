@@ -1091,9 +1091,11 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                         return intercepted
 
             # P2 修复：方案/竞品意图但需求过短、缺行业/场景 → 直接澄清，避免凭空生成方案
+            # 边界审计补（2026-09-08 线上实测）：竞品意图且消息里点名了具体竞品时，
+            # 对比问题本身自洽（"华为云和阿里云哪个好"），不该被 <12 字澄清门槛拦住。
             if self._intent in ("solution", "competitor") and self._need_clarify(
                 user_input, intent.get("industries") or []
-            ):
+            ) and not (self._intent == "competitor" and (intent.get("competitors") or [])):
                 questions = self._build_clarify_questions(user_input)
                 new_clarify_id = str(uuid.uuid4())
                 ClarifySessionStore.put(new_clarify_id, {
@@ -1225,6 +1227,13 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                                 "type": "thought",
                                 "step": 1,
                                 "text": "联网搜索未配置检索源（需 WEB_SEARCH_PROVIDER），本次跳过联网",
+                            })
+                        elif _data.get("status") == "error":
+                            # 检索源调用失败（超时/配额/网络）：如实透出，不让用户误以为"没结果"
+                            await self._emit(event_callback, {
+                                "type": "thought",
+                                "step": 1,
+                                "text": f"联网检索源调用失败，本次基于本地知识库回答（{_data.get('message', '')[:60]}）",
                             })
                         elif _data.get("status") == "ok" and _data.get("results"):
                             _lines = [
