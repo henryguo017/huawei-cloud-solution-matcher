@@ -1008,6 +1008,11 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             self.memory.clear_short_term(session_id)
             self.memory.add_user_message(session_id, user_input)
             self._client_context = extra_context  # B修复：首轮注入客户背景，供最终增强管线使用
+            # 联网检索预算每轮重置（2026-09-08 线上实测根因修复）：
+            # reset_web_search_budget 此前定义了但从未被调用，_count 为进程级只增不清，
+            # 重启后累计 3 次即所有会话永久 status="limited" 静默短路（凌晨实测全空的真实原因）。
+            from app.agent.tools import reset_web_search_budget
+            reset_web_search_budget()
 
             tools_desc = self.tools.get_tools_prompt()
 
@@ -1234,6 +1239,12 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                                 "type": "thought",
                                 "step": 1,
                                 "text": f"联网检索源调用失败，本次基于本地知识库回答（{_data.get('message', '')[:60]}）",
+                            })
+                        elif _data.get("status") == "limited":
+                            await self._emit(event_callback, {
+                                "type": "thought",
+                                "step": 1,
+                                "text": f"本轮联网检索次数已达上限（{_data.get('message', '')[:40]}），本次基于本地知识库回答",
                             })
                         elif _data.get("status") == "ok" and _data.get("results"):
                             _lines = [
