@@ -207,7 +207,7 @@
         sidebarCollapsed: false,
         selectedClient: null,          // 方案 B：当前客户上下文 {id, name, industry}
         clients: [],                   // /clients 缓存
-        webSearchDisabled: false,      // #6 联网搜索开关（持久化到 localStorage）
+        webSearchDisabled: true,       // #6 联网搜索开关（默认关闭省额度/保知识库纯度，持久化到 localStorage）
         toolPermissions: {},          // #3 工具权限策略 {tool: "allow"|"ask"|"deny"}（持久化到 localStorage）
         _permModalOpen: false,        // #3 权限确认弹窗是否打开（防止重复弹）
         capOpen: true,                 // 能力面板是否展开（默认展开，进入 Agent 模式即展开能力入口）
@@ -2054,7 +2054,8 @@
         /* ===== 工具栏能力方法（#1/#2/#6/#3） ===== */
         _loadToolbarPrefs: function () {
             try {
-                var raw = localStorage.getItem('hwcloud_agent_toolbar');
+                // v2：联网搜索默认翻转为关闭（2026-09-07），升键名让老用户的一次性拿到新默认
+                var raw = localStorage.getItem('hwcloud_agent_toolbar_v2');
                 if (raw) {
                     var d = JSON.parse(raw);
                     if (d && typeof d === 'object') {
@@ -2066,7 +2067,7 @@
         },
         _saveToolbarPrefs: function () {
             try {
-                localStorage.setItem('hwcloud_agent_toolbar', JSON.stringify({
+                localStorage.setItem('hwcloud_agent_toolbar_v2', JSON.stringify({
                     webSearchDisabled: !!this.webSearchDisabled,
                     toolPermissions: this.toolPermissions || {}
                 }));
