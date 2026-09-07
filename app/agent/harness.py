@@ -1983,8 +1983,11 @@ Final Answer: [完整方案]）"""
             return 0
         return max(1, int(len(text) / 1.6))
 
-    def estimate_context_usage(self, session_id: str) -> dict:
-        """预估当前会话上下文占用（token 估算，仅展示用，非精确分词）。"""
+    def estimate_context_usage(self, session_id: str, extra_text: str = "") -> dict:
+        """预估当前会话上下文占用（token 估算，仅展示用，非精确分词）。
+
+        extra_text：客户上下文块（用量接口按选中客户传入），单列 client_context 桶。
+        """
         # 系统提示词（方案类基准 + Final Answer 指南）：本模块顶层常量，直接引用
         system_text = (REACT_SYSTEM_PROMPT_BASE or "") + (REACT_FINAL_GUIDE or "")
         tools_text = ""
@@ -2013,6 +2016,8 @@ Final Answer: [完整方案]）"""
             "memory": self._est_tokens(memory_text),
             "conversation": self._est_tokens(conv_text),
         }
+        if extra_text:
+            buckets["client_context"] = self._est_tokens(extra_text)
         total = sum(buckets.values())
         return {
             "buckets": buckets,

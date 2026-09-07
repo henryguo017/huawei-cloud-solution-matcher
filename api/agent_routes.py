@@ -354,8 +354,12 @@ async def agent_memory_stats(user: dict = Depends(get_current_user)):
 # ========== Agent 工具栏能力（上下文用量 / 提示词优化 / 工具权限确认） ==========
 
 @router.get("/agent/context-usage", tags=["Agent 上下文"])
-async def agent_context_usage(session_id: str = "", user: dict = Depends(get_current_user)):
-    """#1 上下文用量预估：返回 system/tools/memory/conversation 各桶 token 估算与总占用百分比。"""
+async def agent_context_usage(session_id: str = "", client_id: str = "", user: dict = Depends(get_current_user)):
+    """#1 上下文用量预估：返回 system/tools/memory/conversation 各桶 token 估算与总占用百分比。
+
+    client_id：前端选中客户时传入——把该客户的背景+历史方案块计入统计，
+    否则不同客户的用量看起来一模一样（客户块此前不在四桶里）。
+    """
     try:
         from app.agent import get_agent
         uid = user.get("id") or user.get("user_id") or 0
@@ -368,7 +372,15 @@ async def agent_context_usage(session_id: str = "", user: dict = Depends(get_cur
             except Exception:
                 pass
             agent._user_id = uid
-        data = agent.harness.estimate_context_usage(sid)
+        extra_text = ""
+        cid = int(client_id) if str(client_id).strip().isdigit() else 0
+        if cid and uid and isinstance(uid, int) and uid > 0:
+            try:
+                client_block, _meta = await _build_client_context_block(cid, uid, "")
+                extra_text = client_block or ""
+            except Exception:
+                extra_text = ""
+        data = agent.harness.estimate_context_usage(sid, extra_text=extra_text)
         return {"ok": True, **data}
     except Exception as e:
         from fastapi import HTTPException

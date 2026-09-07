@@ -2088,7 +2088,7 @@
             var self = this;
             var token = this.userToken();
             if (!token) { this._toast('请先登录', 'warning'); return; }
-            fetch('/api/agent/context-usage?session_id=' + encodeURIComponent(this.sessionId || ''), {
+            fetch('/api/agent/context-usage?session_id=' + encodeURIComponent(this.sessionId || '') + (this.selectedClient ? '&client_id=' + encodeURIComponent(this.selectedClient.id) : ''), {
                 method: 'GET',
                 headers: { 'Authorization': 'Bearer ' + token }
             }).then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
@@ -2111,7 +2111,9 @@
             var rows = [
                 ['system', '系统提示'], ['tools', '工具描述'],
                 ['memory', '长程记忆'], ['conversation', '对话历史']
-            ].map(function (pair) {
+            ];
+            if (buckets.client_context) rows.push(['client_context', '客户上下文']);  // 选了客户才出现
+            rows = rows.map(function (pair) {
                 var v = buckets[pair[0]] || 0;
                 var p = window ? Math.min(100, Math.round(v * 100 / window)) : 0;
                 return '<div class="ws-ctx-row"><span class="ws-ctx-name">' + pair[1] + '</span>' +
@@ -2121,9 +2123,9 @@
             // 智能提示：>80% 严重 / >50% 警告 / 否则 普通
             var tipHtml = '';
             if (percent > 80) {
-                tipHtml = '<div class="ws-ctx-tip critical">⚠ 上下文已用 ' + percent + '%，建议立即开启新对话以避免溢出。</div>';
+                tipHtml = '<div class="ws-ctx-tip critical">⚠ 上下文已用 ' + percentTxt + '%，建议立即开启新对话以避免溢出。</div>';
             } else if (percent > 50) {
-                tipHtml = '<div class="ws-ctx-tip warn">⚠ 上下文已用 ' + percent + '%，留意容量；临近上限前开启新对话。</div>';
+                tipHtml = '<div class="ws-ctx-tip warn">⚠ 上下文已用 ' + percentTxt + '%，留意容量；临近上限前开启新对话。</div>';
             } else {
                 tipHtml = '<div class="ws-ctx-tip">对话越长占比越高，临近上限时建议开启新对话。</div>';
             }
