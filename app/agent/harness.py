@@ -1034,6 +1034,22 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 except Exception as _ce:
                     self._log("warn", f"能力包挂载失败（忽略）: {_ce}")
 
+            # ── CRM 操作短路（E2E T4 实测缺口）──
+            # 行业词会把"给X加个行业，制造业"这类纯客户档案操作判成 solution，
+            # 绕进两阶段生成完整方案（答非所问）。solution/competitor 意图但消息
+            # 命中 CRM 写入/查询/KB统计 且无明确方案制作动词时，短路走拦截链；
+            # 含"做一份/写一份"等组合诉求仍走两阶段（由强制步兜底写入）。
+            if self._intent in ("solution", "competitor"):
+                _s = user_input or ""
+                if (self._crm_intent_hit(_s) or self._crm_query_hit(_s) or self._kb_stats_hit(_s)) \
+                        and not self._SOLUTION_VERB_RE.search(_s):
+                    intercepted = await self._maybe_crm_intercept(
+                        user_input, session_id, event_callback, tool_calls_log
+                    )
+                    if intercepted is not None:
+                        self._log("system", "[CRM短路] 纯客户档案操作，跳过两阶段方案生成")
+                        return intercepted
+
             # P2 修复：方案/竞品意图但需求过短、缺行业/场景 → 直接澄清，避免凭空生成方案
             if self._intent in ("solution", "competitor") and self._need_clarify(
                 user_input, intent.get("industries") or []
@@ -1094,83 +1110,12 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 return self._make_result(light, [], success=True, plan=[], plan_status=[])
 
             if self._intent == "general":
-                # ── general 路径数据诚信拦截链 ──
-                # general 分支没有工具调用能力，LLM 直答会对「客户档案/价格/知识库统计」
-                # 等实时数据空口编造。以下按 写入CRM → 查询CRM → 知识库统计 → 成本测算
-                # 顺序确定性拦截，全部用真实工具/服务结果作答；都不命中才落通用问答。
-
-                async def _finish_general(answer_text: str):
-                    self.memory.add_agent_response(session_id, answer_text)
-                    await self._emit(event_callback, {
-                        "type": "final",
-                        "step": 1,
-                        "elapsed": round(time.time() - self._start_time, 2),
-                    })
-                    return self._make_result(answer_text, tool_calls_log, success=True, plan=[], plan_status=[])
-
-                # 1) CRM 写入（add/update/delete）：走权限闸门 ask，用户弹窗确认才落库
-                if self._remote_tool_names and self._crm_intent_hit(user_input or ""):
-                    await self._emit(event_callback, {
-                        "type": "thought",
-                        "step": 1,
-                        "text": "识别意图：客户建档/更新/删除（CRM），调用客户管理工具写入档案",
-                    })
-                    try:
-                        crm_obs = await self._force_crm_step(event_callback, session_id, tool_calls_log, user_input)
-                    except Exception as crm_err:
-                        self._log("warn", f"[强制CRM步] 执行异常（如实反馈，不降级到通用问答防幻觉）: {crm_err}")
-                        crm_obs = f"（强制CRM步：执行异常 {crm_err}，客户档案未写入）"
-                    return await _finish_general(self._crm_save_answer(crm_obs))
-
-                # 2) CRM 查询（client_list / match_history，只读，harness 确定性放行不弹窗）
-                if self._remote_tool_names and self._crm_query_hit(user_input or ""):
-                    await self._emit(event_callback, {
-                        "type": "thought",
-                        "step": 1,
-                        "text": "识别意图：客户档案/历史方案查询（CRM 只读），读取真实数据回答",
-                    })
-                    try:
-                        query_obs = await self._force_crm_query_step(event_callback, session_id, tool_calls_log, user_input)
-                    except Exception as q_err:
-                        self._log("warn", f"[CRM查询步] 执行异常: {q_err}")
-                        query_obs = f"（CRM查询：执行异常 {q_err}，未能读取真实档案）"
-                    return await _finish_general(self._crm_query_answer(query_obs))
-
-                # 3) 知识库统计（只读真数据，本地服务不依赖 MCP）
-                if self._kb_stats_hit(user_input or ""):
-                    await self._emit(event_callback, {
-                        "type": "thought",
-                        "step": 1,
-                        "text": "识别意图：知识库统计查询，读取真实统计回答",
-                    })
-                    try:
-                        kb_obs = await self._force_kb_stats_step()
-                    except Exception as kb_err:
-                        self._log("warn", f"[KB统计步] 执行异常: {kb_err}")
-                        kb_obs = f"（知识库统计：执行异常 {kb_err}，无法提供真实数字）"
-                    return await _finish_general(kb_obs)
-
-                # 4) 成本/价格问询兜底（带具体规格的问价多判 solution 走两阶段强制成本步；
-                #    此处兜 general 里仍命中定价词的问法，杜绝编价格；只读确定性放行）
-                if self._remote_tool_names and self._PRICING_RE.search(user_input or ""):
-                    await self._emit(event_callback, {
-                        "type": "thought",
-                        "step": 1,
-                        "text": "识别意图：成本/价格测算（只读），按真实 SKU 目录报价",
-                    })
-                    saved_perms = dict(getattr(self, "_tool_permissions", {}) or {})
-                    self._tool_permissions = {**saved_perms,
-                                              "mcp__cost__cost_calc": "allow",
-                                              "mcp__cost__cost_reference_list": "allow"}
-                    try:
-                        cost_obs = await self._force_cost_step(event_callback, session_id, tool_calls_log, user_input)
-                    except Exception as c_err:
-                        self._log("warn", f"[成本兜底步] 执行异常: {c_err}")
-                        cost_obs = f"（强制成本步：执行异常 {c_err}，以下回答不含真实报价）"
-                    finally:
-                        self._tool_permissions = saved_perms
-                    return await _finish_general(self._cost_query_answer(cost_obs, tool_calls_log))
-
+                # ── general 数据诚信拦截链（公共方法，与 solution/competitor 短路共用）──
+                intercepted = await self._maybe_crm_intercept(
+                    user_input, session_id, event_callback, tool_calls_log
+                )
+                if intercepted is not None:
+                    return intercepted
                 # 通用问答（算数/常识/自我介绍/"你能做什么"等）：调 LLM 直答，
                 # 不套方案模板；可融合对话历史，让多轮追问能用上上下文。
                 await self._emit(event_callback, {
@@ -1821,6 +1766,92 @@ Final Answer: [完整方案]）"""
             if dir_obs:
                 ans += "\n\n当前可报价的 SKU 目录：\n" + dir_obs
         return ans
+
+    # 明确的方案制作动词（出现时不做 CRM 短路，组合诉求仍走两阶段 + 强制步）
+    _SOLUTION_VERB_RE = re.compile(r"(做|写|生成|制定|输出)一?[份个]|做个|写个|生成个|出一份")
+
+    async def _maybe_crm_intercept(self, user_input, session_id, event_callback, tool_calls_log):
+        """general 路径与 solution/competitor 短路共用的数据诚信拦截链。
+
+        general 分支没有工具调用能力（会编数据）；solution 意图会被行业词把
+        纯 CRM 操作绕进两阶段方案生成（"给X加个行业，制造业"被当成要写方案，
+        E2E 实测）。两类路径统一走本拦截链：全部用真实工具/服务结果作答。
+        命中顺序：CRM写入(ask弹窗) → CRM查询 → KB统计 → 成本兜底；
+        全不命中返回 None（调用方继续走原路径）。
+        """
+        async def _finish(answer_text: str):
+            self.memory.add_agent_response(session_id, answer_text)
+            await self._emit(event_callback, {
+                "type": "final",
+                "step": 1,
+                "elapsed": round(time.time() - self._start_time, 2),
+            })
+            return self._make_result(answer_text, tool_calls_log, success=True, plan=[], plan_status=[])
+
+        # 1) CRM 写入（add/update/delete）：走权限闸门 ask，用户弹窗确认才落库
+        if self._remote_tool_names and self._crm_intent_hit(user_input or ""):
+            await self._emit(event_callback, {
+                "type": "thought",
+                "step": 1,
+                "text": "识别意图：客户建档/更新/删除（CRM），调用客户管理工具写入档案",
+            })
+            try:
+                crm_obs = await self._force_crm_step(event_callback, session_id, tool_calls_log, user_input)
+            except Exception as crm_err:
+                self._log("warn", f"[强制CRM步] 执行异常（如实反馈，不降级到通用问答防幻觉）: {crm_err}")
+                crm_obs = f"（强制CRM步：执行异常 {crm_err}，客户档案未写入）"
+            return await _finish(self._crm_save_answer(crm_obs))
+
+        # 2) CRM 查询（client_list / match_history，只读，harness 确定性放行不弹窗）
+        if self._remote_tool_names and self._crm_query_hit(user_input or ""):
+            await self._emit(event_callback, {
+                "type": "thought",
+                "step": 1,
+                "text": "识别意图：客户档案/历史方案查询（CRM 只读），读取真实数据回答",
+            })
+            try:
+                query_obs = await self._force_crm_query_step(event_callback, session_id, tool_calls_log, user_input)
+            except Exception as q_err:
+                self._log("warn", f"[CRM查询步] 执行异常: {q_err}")
+                query_obs = f"（CRM查询：执行异常 {q_err}，未能读取真实档案）"
+            return await _finish(self._crm_query_answer(query_obs))
+
+        # 3) 知识库统计（只读真数据，本地服务不依赖 MCP）
+        if self._kb_stats_hit(user_input or ""):
+            await self._emit(event_callback, {
+                "type": "thought",
+                "step": 1,
+                "text": "识别意图：知识库统计查询，读取真实统计回答",
+            })
+            try:
+                kb_obs = await self._force_kb_stats_step()
+            except Exception as kb_err:
+                self._log("warn", f"[KB统计步] 执行异常: {kb_err}")
+                kb_obs = f"（知识库统计：执行异常 {kb_err}，无法提供真实数字）"
+            return await _finish(kb_obs)
+
+        # 4) 成本/价格问询兜底（带具体规格的问价多判 solution 走两阶段强制成本步；
+        #    此处兜仍命中定价词的问法，杜绝编价格；只读确定性放行）
+        if self._remote_tool_names and self._PRICING_RE.search(user_input or ""):
+            await self._emit(event_callback, {
+                "type": "thought",
+                "step": 1,
+                "text": "识别意图：成本/价格测算（只读），按真实 SKU 目录报价",
+            })
+            saved_perms = dict(getattr(self, "_tool_permissions", {}) or {})
+            self._tool_permissions = {**saved_perms,
+                                      "mcp__cost__cost_calc": "allow",
+                                      "mcp__cost__cost_reference_list": "allow"}
+            try:
+                cost_obs = await self._force_cost_step(event_callback, session_id, tool_calls_log, user_input)
+            except Exception as c_err:
+                self._log("warn", f"[成本兜底步] 执行异常: {c_err}")
+                cost_obs = f"（强制成本步：执行异常 {c_err}，以下回答不含真实报价）"
+            finally:
+                self._tool_permissions = saved_perms
+            return await _finish(self._cost_query_answer(cost_obs, tool_calls_log))
+
+        return None
 
     @staticmethod
     def _extract_json_object(text):
