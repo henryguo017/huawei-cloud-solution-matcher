@@ -1159,12 +1159,35 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                                 f"- {r.get('title', '')}（来源：{r.get('domain', '')}）{r.get('snippet', '')[:200]}"
                                 for r in _data.get("results", [])[:5]
                             ]
+                            # Extract 精读（2026-09-07）：对前 2 条结果抽取正文全文，
+                            # 让"最新动态"类回答有细节支撑而非只有标题+摘要
+                            _details = []
+                            from app.agent.tools import _tool_web_extract
+                            for _r in _data.get("results", [])[:2]:
+                                _u = (_r.get("url") or "").strip()
+                                if not _u:
+                                    continue
+                                try:
+                                    _xo = await _tool_web_extract(_u)
+                                    _xd = _json.loads(_xo) if isinstance(_xo, str) else {}
+                                    if _xd.get("status") == "ok" and _xd.get("content"):
+                                        _details.append(
+                                            f"《{_xd.get('title') or _r.get('title', '')}》"
+                                            f"（来源：{_xd.get('domain', '')}）{_xd.get('content', '')[:1200]}"
+                                        )
+                                except Exception:
+                                    pass  # 单条抽取失败不影响整体
                             # 独立块（不并入记忆 extra_context）：让模型明确知道"这是刚刚搜到的"
                             web_results_text = "\n".join(_lines)
+                            if _details:
+                                web_results_text += "\n\n【正文精读】\n" + "\n\n".join(_details)
+                                _tip = f"已联网检索到 {len(_data.get('results', []))} 条最新信息，并精读 {len(_details)} 条正文，结合结果回答"
+                            else:
+                                _tip = f"已联网检索到 {len(_data.get('results', []))} 条最新信息，结合结果回答"
                             await self._emit(event_callback, {
                                 "type": "thought",
                                 "step": 1,
-                                "text": f"已联网检索到 {len(_data.get('results', []))} 条最新信息，结合结果回答",
+                                "text": _tip,
                             })
                     except Exception as _we:
                         self._log("warn", f"general 联网检索失败（忽略）: {_we}")
