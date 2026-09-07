@@ -8,12 +8,7 @@ sys.path.insert(0, r'E:\newai\huawei-cloud-solution-matcher')
 from app.agent.intent import classify_intent
 from app.agent.harness import AgentHarness
 
-DOC_RE = re.compile(
-    r"整理成?.{0,2}(文档|文件)|写成?.{0,2}(文章|文件)|整篇.{0,2}(文档|文件)"
-    r"|完整.{0,4}(文档|文章|文件)|生成.{0,6}(文档|报告|文章)"
-    r"|出一份.{0,8}(文档|报告|文章|文件)|导出成?\s?(word|pdf|ppt|文档|报告)"
-    r"|(?<!会)(?:做|来|要|出|生成|转成|换成|需要)\s*(?:个|一份?)?\s*(?:ppt|pptx|word|pdf)"
-    r"|ppt\s*(?:可以|文件|稿|版本|格式)", re.I)
+DOC_RE = AgentHarness._DOC_INTENT_RE  # 直接引用类属性，杜绝测试副本漂移
 WEB_TRIG = re.compile(r"搜索|联网|搜一下|查一下|查询|搜搜|新闻|最新|实时|今天|现在", re.I)
 
 # (utterance, expected_intent, expected_flags)  flags: doc/web/crm_w/crm_q/kb 任一集合
@@ -45,6 +40,8 @@ CASES = [
     ("那ppt可以吗", "general", {"doc"}),
     ("需要ppt文件", "general", {"doc"}),
     ("转成word", "general", {"doc"}),
+    ("把刚才那份华为云动态整理成PPT并导出", "general", {"doc"}),
+    ("把刚才的内容导出", "general", {"doc"}),
     ("给我生成PPT", "export", set()),
     ("导出成 PDF", "export", set()),
     # ── 方案/竞品 ──
