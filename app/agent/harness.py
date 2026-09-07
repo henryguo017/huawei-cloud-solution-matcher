@@ -909,6 +909,10 @@ class AgentHarness:
         tool_calls_log = []
         self._clarify_round = 0
         self._user_id = user_id
+        # 修复：记忆注入标记必须每轮 run 重置——Agent 是进程级单例，__init__ 只执行一次，
+        # 不重置会导致进程内第一次对话之后所有对话都不再注入长程记忆（P2-2 名存实亡）。
+        # 设计语义是"每个对话的首轮注入一次"（对话内澄清轮不重复注入）。
+        self._memory_context_injected = False
         # 客户上下文：情景记忆按 客户 隔离（save_episode/build_memory_context 共用）
         self._client_id = client_id if isinstance(client_id, int) and client_id > 0 else None
         # P1-3：反思注入标记（防重复反思死循环）+ 执行轨迹（供 reflexion 用）
