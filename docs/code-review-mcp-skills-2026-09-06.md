@@ -311,7 +311,7 @@ journalctl -u huawei-cloud-api --since "2 min ago" | grep -E "MCP|远端工具" 
 ```
 AGENT_MCP_CLIENT = 1
 AGENT_SKILL_PACKS = 1
-MCP_SERVERS = [{"command":["python","-m","app.agent.mcp_server_cost_calc"],"label":"cost"}]
+MCP_SERVERS = [{"command":["python","app/agent/mcp_server_cost_calc.py"],"label":"cost"}]
 ```
 
 > 注：早期用 `cat /proc/$PID/environ` 查为空是**假阴性**——Linux 的 `/proc/PID/environ` 只保留 exec 启动时的环境快照，不反映 Python `os.environ` 运行期改动（load_dotenv 走的后者）。改用 `venv/bin/python -c "import app.config"` 才是正确的实测方式。
@@ -398,6 +398,15 @@ Registered tool: mcp__cost__cost_calc
 
 ### 7.8 P2 执行记录（2026-09-07 · mcp_server_crm 客户管理 Server）
 
+> ⚠️ **生产事故根因（2026-09-07）**：首版 crm Server 在 ECS 连不上（MCPClient 35s 超时跳过），
+> 导致 Agent 在用户说"把杭州海康威视存成客户"后**幻觉"已为您保存"**，但经典模式客户管理看不到该客户。
+> **根因**：`MCP_SERVERS` 用了 `python -m app.agent.mcp_server_crm`，`-m` 会先执行 `app/agent/__init__.py`，
+> 旧版该文件**顶层 import 重型依赖**（chromadb/langchain/BGE 等）→ 子进程冷启动 import 耗时可达数十秒，
+> 在 ECS 资源紧张时易超过 MCPClient 的 35s 握手预算（cost 偶发 7s 连上、crm 本次 >35s 超时跳过）→ 工具未注册。
+> **修复（双保险）**：① `app/agent/__init__.py` 改为 PEP 562 惰性导入（import 本包零副作用，重型依赖延到真正访问时）；
+> ② 所有 MCP_SERVER 命令改脚本模式 `python app/agent/mcp_server_*.py`（禁止 `python -m`，脚本模式连包 import 都不触发，秒起）。
+> 二者任一即可根治；生产现已用脚本模式 + 惰性兜底，重启即自愈。
+
 **① 新增文件**
 | 文件 | 作用 |
 |---|---|
@@ -417,7 +426,7 @@ Registered tool: mcp__cost__cost_calc
 
 **④ 本地验证（全绿）**
 - 独立加载 + 临时 DB：initialize OK；4 工具注册；无 `user_id` → 安全报错（`isError=True`）；add / 重复 add 报错 / update / update 不存在报错 / list / history 全部符合预期。
-- **真实子进程握手**（`MCPClient` ↔ `python -m app.agent.mcp_server_crm`）：`list_tools` 得 4 工具；对真实库只读调用 `client_list`、`match_history` 均 `isError=false` 且无异常（未做任何写入）。
+- **真实子进程握手**（`MCPClient` ↔ `python app/agent/mcp_server_crm.py` 脚本模式）：`list_tools` 得 4 工具；对真实库只读调用 `client_list`、`match_history` 均 `isError=false` 且无异常（未做任何写入）。
 - `py_compile` 通过。
 
 **⑤ 部署说明**

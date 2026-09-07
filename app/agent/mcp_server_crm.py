@@ -11,7 +11,7 @@ P2：自带 MCP Server —— 客户管理与匹配历史（crm）
   让 Agent 能主动读写 CRM（此前客户档案只能在会话内提及、无法落库），
   并回溯历史匹配/竞品分析，做「这个客户上次聊到哪了」的连续性售前。
 
-启动：python -m app.agent.mcp_server_crm
+启动：python app/agent/mcp_server_crm.py   （⚠️ 务必脚本模式，禁止 python -m：后者会触发 app.agent 包 import 卡死）
 协议：stdin 逐行 JSON-RPC（\\n 分隔），stdout 逐行响应。
 
 ⚠️ 多租户：clients / match_history 均按 user_id 隔离。

@@ -8,7 +8,7 @@ P2-3：最小 MCP（Model Context Protocol）Server — 零新依赖（Python st
   1. 能力展示：本 Agent 的工具集是标准 MCP 可消费的（对接任意 MCP client）。
   2. 可插拔：工具生态符合行业标准，第三方 MCP client 可接入。
 
-启动：python -m app.agent.mcp_server
+启动：python app/agent/mcp_server.py   （⚠️ 务必脚本模式，禁止 python -m）
 协议：stdin 逐行 JSON-RPC（\n 分隔），stdout 逐行响应。
 """
 
@@ -130,7 +130,7 @@ def serve_http(registry=None, host: str = "127.0.0.1", port: int = 8001) -> None
 
     纯标准库 http.server：POST /mcp 接收 JSON-RPC，_handle_request 处理后以
     text/event-stream（SSE）返回 data: {...}，客户端据此按 id 解析。零新依赖。
-    启动：python -m app.agent.mcp_server --http --port 8001
+    启动：python app/agent/mcp_server.py --http --port 8001   （⚠️ 务必脚本模式，禁止 python -m）
     """
     import asyncio
     if registry is None:

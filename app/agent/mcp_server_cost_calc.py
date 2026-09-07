@@ -9,7 +9,7 @@ P0：自带 MCP Server —— 华为云方案成本测算（cost_calc）
   1. 验证「项目能力 → MCP → Agent 可调用」闭环（远端的成本测算能力被 Agent 当作工具调用）。
   2. 演示用：Agent 在做方案时，可随时调用成本测算给出 TCO 估算。
 
-启动：python -m app.agent.mcp_server_cost_calc
+启动：python app/agent/mcp_server_cost_calc.py   （⚠️ 务必脚本模式，禁止 python -m：后者会触发 app.agent 包 import 卡死）
 协议：stdin 逐行 JSON-RPC（\\n 分隔），stdout 逐行响应。
 
 注意：价格数据为华为云公开官网列表价区间的「估算值」，非实时报价，
