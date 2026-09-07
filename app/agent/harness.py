@@ -2007,6 +2007,9 @@ Final Answer: [完整方案]）"""
         try:
             hist = self.memory.get_conversation_history(session_id) or ""
             conv_text = hist if isinstance(hist, str) else str(hist)
+            # 空会话占位文案不算 token（否则新对话"对话历史 5"造成像有残留的误解）
+            if conv_text.startswith("（这是第一次对话）"):
+                conv_text = ""
         except Exception:  # noqa: BLE001
             conv_text = ""
         window = int(AGENT_CONTEXT_WINDOW or 64000)
