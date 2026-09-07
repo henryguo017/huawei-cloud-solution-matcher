@@ -357,6 +357,18 @@ class AgentHarness:
         r"成本|TCO|报价|预算|月租|月费|总价|多少钱|测算|费用", re.IGNORECASE
     )
 
+    # 客户建档意图关键词（用于「强制建档步」守卫）：命中且整轮未调 client_add 时补专用步，
+    # 修复根因 —— 模型在编排中漏掉写入工具、反而在终稿里幻觉"已为你保存客户"，
+    # 导致经典模式客户管理看不到（客户根本没落库）。harness 确定性补建档步，走权限闸门 ask。
+    # 动词与「客户」间允许 0-8 字 filler（"保存这个客户"）；误命中无害：
+    # 抽取步先于权限弹窗执行，抽不出客户名只会如实要求用户补充，不会误写库。
+    _CLIENT_RE = re.compile(
+        r"存成客户|存为.{0,8}客户|存入.{0,8}客户|记录.{0,8}客户|添加.{0,8}客户|"
+        r"保存.{0,8}客户|新建.{0,8}客户|录入.{0,8}客户|登记.{0,8}客户|"
+        r"客户建档|建档|录入客户库|存入客户库",
+        re.IGNORECASE,
+    )
+
     # 每步子循环内最多允许的 LLM 迭代次数（防单步无限循环）
     _STEP_MAX_ITER = 3
 
@@ -435,6 +447,17 @@ class AgentHarness:
                     forced_obs = await self._force_cost_step(event_callback, session_id, tool_calls_log, user_input)
                     if forced_obs:
                         step_outputs.append(forced_obs)
+
+            # ── 强制建档步（修复 client_add 不被调用 → 模型幻觉"已保存"）──
+            # 用户明确要"把 X 存成客户 / 记录客户"等，但整轮没调 client_add 时，
+            # 由 harness 确定性补建档步：LLM 抽字段 → 直接调 mcp__crm__client_add
+            # （穿过权限闸门 ask，需用户在弹窗点"允许执行"才落库；拒绝/超时则不写，杜绝脏档案）。
+            if self._remote_tool_names and self._CLIENT_RE.search(self._plan_original_input or user_input or ""):
+                if not any(t.get("tool") == "mcp__crm__client_add" for t in tool_calls_log):
+                    self._log("system", "[强制建档步] 客户建档意图命中且 client_add 未调用，确定性补建档步")
+                    forced_crm = await self._force_crm_save_step(event_callback, session_id, tool_calls_log, user_input)
+                    if forced_crm:
+                        step_outputs.append(forced_crm)
 
             # P3-1 真反思-重规划：若任一执行步含 Error:（失败步），且开关开启、预算未超，
             # 则读失败步 → planner 产修订计划 → 重跑失败步 → 重新汇总；否则走常规汇总。
@@ -1016,6 +1039,31 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 return self._make_result(light, [], success=True, plan=[], plan_status=[])
 
             if self._intent == "general":
+                # CRM 建档意图拦截（修复"模型幻觉已保存"根因）：general 路径没有工具调用
+                # 能力，「把X存成客户」这类建档诉求会被 LLM 空口应答"已保存"但从未落库。
+                # 命中建档意图且远端工具可用时，确定性走 client_add（权限闸门 ask，
+                # 用户在弹窗点「允许执行」才落库），用真实工具结果作答，不进通用问答。
+                if self._remote_tool_names and self._CLIENT_RE.search(user_input or ""):
+                    await self._emit(event_callback, {
+                        "type": "thought",
+                        "step": 1,
+                        "text": "识别意图：客户建档（CRM），调用客户管理工具写入档案",
+                    })
+                    try:
+                        crm_obs = await self._force_crm_save_step(
+                            event_callback, session_id, tool_calls_log, user_input
+                        )
+                    except Exception as crm_err:
+                        self._log("warn", f"[强制建档步] 执行异常（如实反馈，不降级到通用问答防幻觉）: {crm_err}")
+                        crm_obs = f"（强制建档步：执行异常 {crm_err}，客户未写入档案）"
+                    crm_answer = self._crm_save_answer(crm_obs)
+                    self.memory.add_agent_response(session_id, crm_answer)
+                    await self._emit(event_callback, {
+                        "type": "final",
+                        "step": 1,
+                        "elapsed": round(time.time() - self._start_time, 2),
+                    })
+                    return self._make_result(crm_answer, tool_calls_log, success=True, plan=[], plan_status=[])
                 # 通用问答（算数/常识/自我介绍/"你能做什么"等）：调 LLM 直答，
                 # 不套方案模板；可融合对话历史，让多轮追问能用上上下文。
                 await self._emit(event_callback, {
@@ -1494,6 +1542,84 @@ Final Answer: [完整方案]）"""
             event_callback, session_id, tool_calls_log,
         )
         return f"（强制成本测算步结果）\n{obs}"
+
+    # ── 强制建档步：harness 确定性驱动 client_add（绕过模型不稳定/幻觉的写入工具链）──
+    async def _force_crm_save_step(self, event_callback, session_id, tool_calls_log, user_input) -> str:
+        """客户建档意图下若整轮未调 client_add，由 harness 确定性建档：
+        1) 用 LLM 从原话抽取客户名称/阶段等字段（自由文本解析仍交给模型更稳）；
+        2) 直接调用 mcp__crm__client_add（走权限闸门 ask，需用户确认才落库）。
+        返回该步的 Observation 文本（含建档结果或拒绝/跳过原因），供终稿如实反映。"""
+        extract_prompt = (
+            "你是 CRM 客户建档信息抽取器。根据用户的话，抽取要新建的客户档案字段。\n\n"
+            f"【用户原话】{user_input}\n\n"
+            "只输出一个 JSON 对象，字段可选：\n"
+            '  {"name": "<客户名称，必填>", "stage": "<商机阶段，可选>", "industry": "<行业，可选>", '
+            '"region": "<区域，可选>", "note": "<备注，可选>"}\n'
+            "规则：\n"
+            "1. name 必须从原话提取客户主体名称，例如「把杭州海康威视存成客户」→ name=\"杭州海康威视\"；"
+            "「记录客户：比亚迪」→ name=\"比亚迪\"；\n"
+            "2. stage 仅当原话明确提到商机阶段（需求调研/方案报价/商务谈判/初步接触/已成交/已流失等）才填，"
+            "否则留空字符串；\n"
+            "3. 只输出 JSON，不要任何解释或代码围栏。\n"
+        )
+        raw = await self._call_llm(extract_prompt)
+        data = self._extract_json_object(raw)
+        if not isinstance(data, dict) or not (data.get("name") or "").strip():
+            return "（强制建档步：未能从输入中提取有效客户名称，跳过建档）"
+        name = str(data["name"]).strip()
+        args = {"name": name}
+        for f in ("stage", "industry", "region", "note"):
+            v = data.get(f)
+            if isinstance(v, str) and v.strip():
+                args[f] = v.strip()
+        obs = await self._exec_one_action(
+            len(self._plan) + 1, "mcp__crm__client_add", args,
+            event_callback, session_id, tool_calls_log,
+        )
+        return f"（强制建档步结果）\n{obs}"
+
+    @staticmethod
+    def _crm_save_answer(obs: str) -> str:
+        """把强制建档步的真实 Observation 映射为对用户的诚实答复。
+
+        铁律：工具没执行/被拒绝/失败时绝不声称"已保存"。成功与重复建档等
+        情况直接透出 crm Server 的可读结果文本。
+        """
+        if not obs or not obs.strip():
+            return "（建档未完成：工具没有返回结果，客户未写入档案。请稍后重试。）"
+        if "未能从输入中提取有效客户名称" in obs:
+            return (
+                "你想把客户信息存入档案，但我没能从你的话里识别出客户名称。"
+                "请按「把XX存成客户」的格式再说一次（例：把杭州海康威视存成客户，阶段需求调研），"
+                "我来帮你建档。"
+            )
+        if "你拒绝了工具" in obs or "已被你设为禁止执行" in obs:
+            return (
+                "本次写入你选择了拒绝（或确认超时），客户档案**没有**保存。"
+                "如需建档请再次告诉我，并在权限弹窗中点「允许执行」。"
+            )
+        if "（强制建档步" in obs:
+            # 其余跳过类（如异常），原样如实反馈，不粉饰
+            return obs
+        # 成功建档 / 同名已存在等：crm 返回文本本身可读，直接透出并补一句后续引导
+        return obs + "\n\n已同步到你的「客户管理」档案，可随时让我查询或补充行业/联系人等信息。"
+
+    @staticmethod
+    def _extract_json_object(text):
+        if not text:
+            return None
+        cleaned = re.sub(r"```(?:json)?", "", text).strip()
+        try:
+            return json.loads(cleaned)
+        except Exception:
+            pass
+        m = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                return None
+        return None
 
     @staticmethod
     def _extract_json_array(text):
