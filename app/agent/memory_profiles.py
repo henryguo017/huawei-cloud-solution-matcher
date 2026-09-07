@@ -61,7 +61,7 @@ def save_episode(user_id: int, session_id: str, demand: str, answer: str,
             conn.commit()
         finally:
             conn.close()
-        logger.debug(f"[memory] saved episode user_id={user_id} session={session_id} client={client_id}")
+        logger.info(f"[memory] saved episode user_id={user_id} session={session_id} client={client_id}")
     except Exception as e:
         logger.warning(f"[memory] save_episode 失败(忽略): {e}")
 

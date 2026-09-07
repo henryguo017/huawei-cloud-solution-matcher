@@ -267,11 +267,21 @@ def init_database():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_episodes_user ON agent_episodes(user_id, created_at)")
 
     # 幂等迁移：老库补 client_id 列（2026-09-07 客户级记忆隔离）——必须先于下方 client_id 索引
-    try:
-        cursor.execute("ALTER TABLE agent_episodes ADD COLUMN client_id INTEGER")
-        logger.info('[OK] agent_episodes migrated: added client_id column')
-    except Exception:
-        pass  # 列已存在
+    # 注意：不能用裸 except pass——若被其他常驻进程（IM 机器人）持锁导致 "database is locked"，
+    # 静默吞掉会让 client_id 列缺失、后续 INSERT 全部失败且难排查。PRAGMA 预检 + 锁重试。
+    cols = [r[1] for r in cursor.execute("PRAGMA table_info(agent_episodes)").fetchall()]
+    if "client_id" not in cols:
+        for _attempt in range(3):
+            try:
+                cursor.execute("ALTER TABLE agent_episodes ADD COLUMN client_id INTEGER")
+                logger.info('[OK] agent_episodes migrated: added client_id column')
+                break
+            except Exception as e:
+                if "duplicate column" in str(e).lower():
+                    break
+                logger.warning(f"[MIGRATE] agent_episodes 加列第{_attempt+1}次失败（将重试）: {e}")
+                import time as _t
+                _t.sleep(2)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_episodes_client ON agent_episodes(user_id, client_id)")
 
     conn.commit()
