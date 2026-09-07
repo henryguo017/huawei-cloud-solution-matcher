@@ -260,10 +260,19 @@ def init_database():
             demand TEXT NOT NULL,
             summary TEXT NOT NULL,
             embedding_json TEXT,
+            client_id INTEGER,
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         )
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_episodes_user ON agent_episodes(user_id, created_at)")
+
+    # 幂等迁移：老库补 client_id 列（2026-09-07 客户级记忆隔离）——必须先于下方 client_id 索引
+    try:
+        cursor.execute("ALTER TABLE agent_episodes ADD COLUMN client_id INTEGER")
+        logger.info('[OK] agent_episodes migrated: added client_id column')
+    except Exception:
+        pass  # 列已存在
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_episodes_client ON agent_episodes(user_id, client_id)")
 
     conn.commit()
     conn.close()

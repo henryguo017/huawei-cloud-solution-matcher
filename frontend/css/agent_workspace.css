@@ -2123,3 +2123,63 @@ body.view-agent .welcome-page {
 }
 .ws-notify-msg.ok { background: rgba(16, 155, 84, 0.10); color: #0f7a44; }
 .ws-notify-msg.err { background: rgba(199, 0, 11, 0.08); color: #C7000B; }
+
+/* ===== 欢迎页客户卡：先选客户再对话（2026-09-07） ===== */
+.ws-welcome-client {
+    position: relative;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin: 18px auto 0;
+    max-width: 560px;
+}
+.ws-welcome-client-label {
+    font-size: 0.85rem; color: var(--text-secondary); flex-shrink: 0;
+}
+.ws-welcome-client-btn {
+    display: flex; align-items: center; gap: 8px;
+    min-width: 240px;
+    padding: 9px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    color: var(--text-secondary); font-size: 0.92rem; font-family: var(--font-family);
+    cursor: pointer; text-align: left;
+    transition: all var(--transition-fast);
+}
+.ws-welcome-client-btn:hover { border-color: var(--primary-color); color: var(--text-primary); }
+.ws-welcome-client-btn .icon { width: 1rem; height: 1rem; flex-shrink: 0; }
+.ws-welcome-client-btn > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-welcome-client.has-client .ws-welcome-client-btn {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: color-mix(in srgb, var(--primary-color) 6%, var(--bg-card));
+}
+.ws-welcome-client-menu {
+    position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 420px; z-index: 40;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+    max-height: 280px; overflow-y: auto;
+    padding: 4px;
+    text-align: left;
+}
+.ws-welcome-client-menu::-webkit-scrollbar { width: 6px; }
+.ws-welcome-client-menu::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 3px; }
+.ws-welcome-client-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: 8px; cursor: pointer;
+    color: var(--text-secondary); font-size: 0.88rem;
+    transition: background var(--transition-fast);
+}
+.ws-welcome-client-item:hover { background: rgba(0, 0, 0, 0.04); color: var(--text-primary); }
+.ws-welcome-client-item.active { background: color-mix(in srgb, var(--primary-color) 10%, transparent); color: var(--primary-color); }
+.ws-welcome-client-item.clear { color: var(--text-muted); }
+.ws-welcome-client-item .ws-context-item-icon {
+    display: flex; align-items: center; justify-content: center;
+    width: 1.25rem; height: 1.25rem; color: var(--text-muted); flex-shrink: 0;
+}
+.ws-welcome-client-item .ws-context-item-icon .icon { width: 1.25rem; height: 1.25rem; }
+.ws-welcome-client-item .ws-context-item-body { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.ws-welcome-client-item .ws-context-item-name { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-welcome-client-item .ws-context-item-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }

@@ -148,6 +148,7 @@ async def agent_chat(
                         rerun_plan_index=body.rerun_plan_index,
                         tool_permissions=body.tool_permissions,
                         disable_web_search=body.disable_web_search,
+                        client_id=(body.client_id if isinstance(body.client_id, int) and body.client_id > 0 else None),
                     ),
                     timeout=480.0,
                 )

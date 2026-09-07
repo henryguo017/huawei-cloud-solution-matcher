@@ -36,10 +36,12 @@ def _cosine(a: List[float], b: List[float]) -> float:
     return dot / (na * nb)
 
 
-def save_episode(user_id: int, session_id: str, demand: str, answer: str) -> None:
+def save_episode(user_id: int, session_id: str, demand: str, answer: str,
+                 client_id: Optional[int] = None) -> None:
     """保存一条情景记忆（同步；调用方已用 asyncio.to_thread 包裹，不阻塞主流程）。
 
     answer 为终稿摘要（harness 传入 answer[:400]）。summary 过短（<30 字符）不存储。
+    client_id：客户上下文对话时携带，实现客户级记忆隔离（None=通用对话记忆）。
     """
     try:
         summary = (answer or "").strip()
@@ -51,28 +53,38 @@ def save_episode(user_id: int, session_id: str, demand: str, answer: str) -> Non
         try:
             conn.execute(
                 "INSERT INTO agent_episodes "
-                "(user_id, session_id, demand, summary, embedding_json, created_at) "
-                "VALUES (?, ?, ?, ?, ?, datetime('now','localtime'))",
+                "(user_id, session_id, demand, summary, embedding_json, client_id, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))",
                 (user_id, session_id, (demand or "")[:500], summary[:500],
-                 json.dumps(vec, ensure_ascii=False)),
+                 json.dumps(vec, ensure_ascii=False), client_id),
             )
             conn.commit()
         finally:
             conn.close()
-        logger.debug(f"[memory] saved episode user_id={user_id} session={session_id}")
+        logger.debug(f"[memory] saved episode user_id={user_id} session={session_id} client={client_id}")
     except Exception as e:
         logger.warning(f"[memory] save_episode 失败(忽略): {e}")
 
 
-def _retrieve(user_id: int, query: str, top_k: int = TOP_K) -> List[dict]:
+def _retrieve(user_id: int, query: str, top_k: int = TOP_K,
+              client_id: Optional[int] = None) -> List[dict]:
     try:
         conn = get_db_connection()
         try:
-            rows = conn.execute(
-                "SELECT id, demand, summary, embedding_json FROM agent_episodes "
-                "WHERE user_id = ? ORDER BY created_at DESC",
-                (user_id,),
-            ).fetchall()
+            if client_id:
+                # 客户上下文对话：只检索该客户自己的情景记忆（跨客户隔离）
+                rows = conn.execute(
+                    "SELECT id, demand, summary, embedding_json FROM agent_episodes "
+                    "WHERE user_id = ? AND client_id = ? ORDER BY created_at DESC",
+                    (user_id, client_id),
+                ).fetchall()
+            else:
+                # 通用对话：只检索不带客户标记的通用记忆，防止客户方案摘要串入
+                rows = conn.execute(
+                    "SELECT id, demand, summary, embedding_json FROM agent_episodes "
+                    "WHERE user_id = ? AND client_id IS NULL ORDER BY created_at DESC",
+                    (user_id,),
+                ).fetchall()
         finally:
             conn.close()
         if not rows:
@@ -98,11 +110,15 @@ def _retrieve(user_id: int, query: str, top_k: int = TOP_K) -> List[dict]:
         return []
 
 
-def build_memory_context(user_id: int, query: str) -> str:
-    """构造情景记忆上下文（top-k 相关历史方案），截断到 MAX_INJECT_CHARS。"""
+def build_memory_context(user_id: int, query: str,
+                         client_id: Optional[int] = None) -> str:
+    """构造情景记忆上下文（top-k 相关历史方案），截断到 MAX_INJECT_CHARS。
+
+    client_id 隔离语义：客户对话只看该客户记忆；通用对话只看无客户标记记忆。
+    """
     if not user_id or not query:
         return ""
-    eps = _retrieve(user_id, query)
+    eps = _retrieve(user_id, query, client_id=client_id)
     if not eps:
         return ""
     lines = []

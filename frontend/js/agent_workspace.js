@@ -477,10 +477,21 @@
                             '<div class="ws-welcome-sub">描述你的客户需求，或选择下方能力胶囊快速开始，我来匹配方案、分析竞品、检索知识库。</div>' +
                         '</div>' +
                         '<div class="ws-caps-row">' + capsHtml + '</div>' +
+                        /* 先选客户再对话：欢迎页显眼客户卡（与底部工具栏下拉双向同步） */
+                        '<div class="ws-welcome-client" id="ws-welcome-client">' +
+                            '<span class="ws-welcome-client-label">对话客户</span>' +
+                            '<button class="ws-welcome-client-btn" id="ws-welcome-client-btn" type="button">' +
+                                '<svg class="icon" aria-hidden="true"><use id="ws-welcome-client-icon" href="#i-message-circle"></use></svg>' +
+                                '<span id="ws-welcome-client-current">通用对话 · 不关联客户</span>' +
+                                '<svg class="icon ws-context-pick-caret" aria-hidden="true"><use href="#i-chevron-down"></use></svg>' +
+                            '</button>' +
+                            '<div class="ws-welcome-client-menu" id="ws-welcome-client-menu" style="display:none;"></div>' +
+                        '</div>' +
                         '<div class="ws-welcome-hint">在下方输入需求 · 工具栏可加附件 / 语音输入</div>' +
                         '<div class="ws-kb-status">知识库就绪 · 点击上方能力可一键填入示例</div>' +
                     '</div>' +
                 '</div>';
+            this._syncWelcomeClientUI();   // 渲染后立即反映当前已选客户
             this._hideWelcomeChrome();   // 欢迎态：隐藏 chat-header（已用 ws-welcome 居中标题替代），底部输入栏统一显示（含工具栏）
         },
 
@@ -655,6 +666,45 @@
                     return;
                 }
                 if (e.target.closest('#ws-compose-send')) { self._send(); return; }
+                // 欢迎页客户卡：展开/收起下拉（委托，重渲染不失效）
+                var wcBtn = e.target.closest('#ws-welcome-client-btn');
+                if (wcBtn) {
+                    var wcMenu = root.querySelector('#ws-welcome-client-menu');
+                    if (wcMenu) {
+                        var open = wcMenu.style.display === 'block';
+                        wcMenu.style.display = open ? 'none' : 'block';
+                        wcBtn.classList.toggle('open', !open);
+                        if (!open) self._renderWelcomeClientMenu();
+                    }
+                    return;
+                }
+                var wcItem = e.target.closest('.ws-welcome-client-item');
+                if (wcItem) {
+                    var id = wcItem.getAttribute('data-id');
+                    if (!id) { self._selectClient(null); }
+                    else {
+                        var c = null;
+                        for (var i = 0; i < self.clients.length; i++) {
+                            if (String(self.clients[i].id) === id) { c = self.clients[i]; break; }
+                        }
+                        self._selectClient(c ? { id: c.id, name: c.name, industry: c.industry } : null);
+                    }
+                    var m = root.querySelector('#ws-welcome-client-menu');
+                    if (m) m.style.display = 'none';
+                    var b = root.querySelector('#ws-welcome-client-btn');
+                    if (b) b.classList.remove('open');
+                    return;
+                }
+            });
+            // 点击欢迎客户卡外部关闭下拉
+            document.addEventListener('click', function (ev) {
+                var card = document.getElementById('ws-welcome-client');
+                if (card && !card.contains(ev.target)) {
+                    var m = card.querySelector('#ws-welcome-client-menu');
+                    if (m) m.style.display = 'none';
+                    var b = card.querySelector('#ws-welcome-client-btn');
+                    if (b) b.classList.remove('open');
+                }
             });
             // 欢迎 compose 输入框：Enter 发送 / 自动增高（委托，重渲染不失效）
             root.addEventListener('keydown', function (e) {
@@ -2835,6 +2885,44 @@
                 });
             }
         },
+        /* 欢迎页客户卡下拉：条目点击走根级事件委托（.ws-welcome-client-item），此处只负责渲染 */
+        _renderWelcomeClientMenu: function () {
+            var menu = this.root.querySelector('#ws-welcome-client-menu');
+            if (!menu) return;
+            var html = '<div class="ws-welcome-client-item clear" data-id="">' +
+                '<span class="ws-context-item-icon"><svg class="icon" aria-hidden="true"><use href="#i-message-circle"></use></svg></span><span>通用对话 · 不关联客户</span></div>';
+            this.clients.forEach(function (c) {
+                html += '<div class="ws-welcome-client-item" data-id="' + escHtml(String(c.id)) + '">' +
+                    '<span class="ws-context-item-icon"><svg class="icon" aria-hidden="true"><use href="#i-building-2"></use></svg></span>' +
+                    '<div class="ws-context-item-body">' +
+                        '<div class="ws-context-item-name">' + escHtml(c.name || ('客户' + c.id)) + '</div>' +
+                        (c.industry ? '<div class="ws-context-item-meta">' + escHtml(c.industry) + '</div>' : '') +
+                    '</div>' +
+                '</div>';
+            });
+            menu.innerHTML = html;
+            this._syncWelcomeClientUI();
+        },
+        /* 欢迎客户卡与 selectedClient 双向同步：文案 + 图标 + active 态 */
+        _syncWelcomeClientUI: function () {
+            var cur = this.root.querySelector('#ws-welcome-client-current');
+            var icon = this.root.querySelector('#ws-welcome-client-icon');
+            var card = this.root.querySelector('#ws-welcome-client');
+            if (cur) {
+                cur.textContent = this.selectedClient
+                    ? (this.selectedClient.name + (this.selectedClient.industry ? ' · ' + this.selectedClient.industry : ''))
+                    : '通用对话 · 不关联客户';
+            }
+            if (icon) icon.setAttribute('href', this.selectedClient ? '#i-building-2' : '#i-message-circle');
+            if (card) card.classList.toggle('has-client', !!this.selectedClient);
+            var menu = this.root.querySelector('#ws-welcome-client-menu');
+            if (menu) {
+                var sid = this.selectedClient ? String(this.selectedClient.id) : '';
+                menu.querySelectorAll('.ws-welcome-client-item').forEach(function (it) {
+                    it.classList.toggle('active', it.getAttribute('data-id') === sid);
+                });
+            }
+        },
         _selectClient: function (client) {
             this.selectedClient = client;
             this._updateContextUI();
@@ -2850,6 +2938,7 @@
             }
         },
         _updateContextUI: function () {
+            this._syncWelcomeClientUI();   // 欢迎页客户卡同步（元素不存在时内部自兜底）
             var current = this.root.querySelector('#ws-context-current');
             var btnIcon = this.root.querySelector('#ws-context-btn-icon use');
             var pickCur = this.root.querySelector('#ws-context-pick-current');

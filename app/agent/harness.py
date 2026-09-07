@@ -769,6 +769,7 @@ class AgentHarness:
             loop = asyncio.get_running_loop()
             loop.create_task(asyncio.to_thread(
                 save_episode, uid, session_id, demand[:200], answer[:400],
+                getattr(self, "_client_id", None),
             ))
         except Exception as e:
             self._log("warn", f"保存情景记忆失败（忽略）: {e}")
@@ -882,6 +883,7 @@ class AgentHarness:
         rerun_plan_index: Optional[int] = None,
         tool_permissions: Optional[dict] = None,
         disable_web_search: bool = False,
+        client_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         运行 ReAct 循环
@@ -907,6 +909,8 @@ class AgentHarness:
         tool_calls_log = []
         self._clarify_round = 0
         self._user_id = user_id
+        # 客户上下文：情景记忆按 客户 隔离（save_episode/build_memory_context 共用）
+        self._client_id = client_id if isinstance(client_id, int) and client_id > 0 else None
         # P1-3：反思注入标记（防重复反思死循环）+ 执行轨迹（供 reflexion 用）
         self._reflexion_injected = False
         self._last_trajectory = ""
@@ -979,7 +983,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 try:
                     from app.agent.memory_profiles import build_memory_context, build_profile_context
                     uid = user_id if isinstance(user_id, int) and user_id > 0 else None
-                    mem_block = build_memory_context(uid, user_input) if uid else ""
+                    mem_block = build_memory_context(uid, user_input, client_id=getattr(self, "_client_id", None)) if uid else ""
                     profile_block = build_profile_context(uid) if uid else ""
                     if mem_block or profile_block:
                         extra_context = (extra_context or "") + "\n\n" + mem_block + "\n" + profile_block
@@ -1984,7 +1988,7 @@ Final Answer: [完整方案]）"""
             from app.agent.memory_profiles import build_memory_context, build_profile_context
             uid = getattr(self, "_user_id", None)
             if isinstance(uid, int) and uid > 0:
-                memory_text = (build_memory_context(uid, "") or "") + (build_profile_context(uid) or "")
+                memory_text = (build_memory_context(uid, "", client_id=getattr(self, "_client_id", None)) or "") + (build_profile_context(uid) or "")
         except Exception:  # noqa: BLE001
             memory_text = ""
         conv_text = ""
