@@ -483,6 +483,7 @@
                             '<button class="ws-welcome-client-btn" id="ws-welcome-client-btn" type="button">' +
                                 '<svg class="icon" aria-hidden="true"><use id="ws-welcome-client-icon" href="#i-message-circle"></use></svg>' +
                                 '<span id="ws-welcome-client-current">通用对话 · 不关联客户</span>' +
+                                '<span class="ws-welcome-client-clear" id="ws-welcome-client-clear" role="button" title="清除已选客户">×</span>' +
                                 '<svg class="icon ws-context-pick-caret" aria-hidden="true"><use href="#i-chevron-down"></use></svg>' +
                             '</button>' +
                             '<div class="ws-welcome-client-menu" id="ws-welcome-client-menu" style="display:none;"></div>' +
@@ -667,6 +668,14 @@
                 }
                 if (e.target.closest('#ws-compose-send')) { self._send(); return; }
                 // 欢迎页客户卡：展开/收起下拉（委托，重渲染不失效）
+                // 注意：× 清除判断必须在 btn 之前——× 是 btn 的子元素，closest 会同时命中
+                if (e.target.closest('#ws-welcome-client-clear')) {
+                    e.stopPropagation();
+                    self._selectClient(null);
+                    var wm2 = root.querySelector('#ws-welcome-client-menu');
+                    if (wm2) wm2.style.display = 'none';
+                    return;
+                }
                 var wcBtn = e.target.closest('#ws-welcome-client-btn');
                 if (wcBtn) {
                     var wcMenu = root.querySelector('#ws-welcome-client-menu');
@@ -2913,8 +2922,10 @@
                     ? (this.selectedClient.name + (this.selectedClient.industry ? ' · ' + this.selectedClient.industry : ''))
                     : '通用对话 · 不关联客户';
             }
-            if (icon) icon.setAttribute('href', this.selectedClient ? '#i-building-2' : '#i-message-circle');
+            if (icon) icon.setAttribute('href', this.selectedClient ? '#i-check' : '#i-message-circle');
             if (card) card.classList.toggle('has-client', !!this.selectedClient);
+            var clr = this.root.querySelector('#ws-welcome-client-clear');
+            if (clr) clr.style.display = this.selectedClient ? 'flex' : 'none';
             var menu = this.root.querySelector('#ws-welcome-client-menu');
             if (menu) {
                 var sid = this.selectedClient ? String(this.selectedClient.id) : '';
