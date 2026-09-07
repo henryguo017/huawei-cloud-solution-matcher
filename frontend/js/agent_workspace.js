@@ -1663,8 +1663,9 @@
             self._streamDone = false;
             self._streamConvoId = runConvoId;
             self._streamFullAnswer = '';
-            // 预置一个 agent 占位：保证流式过程中即时落库，且后续 upsert 有确定目标（幂等、不重复）
-            if (runConvoId) this._upsertAgentTail('', runConvoId);
+            // 预置一条新的 agent 占位（每轮一条，不覆写上一轮）：保证流式过程中即时落库，
+            // 且后续 upsert 有确定目标（幂等、不重复）
+            if (runConvoId) this._pushAgentTail('', runConvoId);
             // 思考过程面板：手动折叠/展开（标记 user-open 以免被自动收起覆盖）
             shell.thinkingToggle.addEventListener('click', function () {
                 shell.thinking.classList.toggle('collapsed');
@@ -2647,6 +2648,22 @@
             });
             this._saveConvos(list);
             this._renderTasks();
+        },
+        /* 每轮回答追加一条新的 agent 占位（修复多轮历史被覆写：
+           原 _upsertAgentTail 语义是"就地覆写最后一条 agent 消息"，多轮对话时
+           第 2 轮会覆写第 1 轮的记录——localStorage 里永远只剩一条 agent 消息，
+           刷新后表现为"发言只剩第一次的"。新回答一律先 push 占位，流式期间
+           再由 _upsertAgentTail 就地更新这条新占位，历史完整保留。） */
+        _pushAgentTail: function (content, convoId) {
+            var targetId = convoId || this.currentConvoId;
+            if (!targetId) return;
+            var list = this._loadConvos(), found = null;
+            for (var i = 0; i < list.length; i++) { if (list[i].id === targetId) { found = list[i]; break; } }
+            if (!found) return;
+            if (!found.messages) found.messages = [];
+            found.messages.push({ role: 'agent', content: content || '' });
+            found.updatedAt = Date.now();
+            this._saveConvos(list);
         },
         /* 幂等写入：更新当前对话最后一条 agent 消息（而非重复追加）。
            convoId 可选——用于"离开对话前的兜底 flush"写入指定对话，不依赖 this.currentConvoId。 */
