@@ -1147,11 +1147,14 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 })
                 # ── 文档成文意图：先只做标记。成文动作统一放在"搜索/复用"之后——
                 # 这样即使服务重启清空了会话级联网记忆，用户首轮直接说"把XX最新动态整理成文档"
-                # 也能当场检索并成文，而不是掉回闲聊反问（2026-09-07 二次实测反馈）──
+                # 也能当场检索并成文，而不是掉回闲聊反问（2026-09-07 二次实测反馈）。
+                # 正则覆盖长尾问法："那ppt可以吗""需要ppt文件""转成word"等（三次实测迭代）──
                 _doc_flag = bool(re.search(
                     r"整理成?.{0,2}(文档|文件)|写成?.{0,2}(文章|文件)|整篇.{0,2}(文档|文件)"
                     r"|完整.{0,4}(文档|文章|文件)|生成.{0,6}(文档|报告|文章)"
-                    r"|出一份.{0,8}(文档|报告|文章|文件)|导出成?\s?(word|pdf|ppt|文档|报告)",
+                    r"|出一份.{0,8}(文档|报告|文章|文件)|导出成?\s?(word|pdf|ppt|文档|报告)"
+                    r"|(?<!会)(?:做|来|要|出|生成|转成|换成|需要)\s*(?:个|一份?)?\s*(?:ppt|pptx|word|pdf)"
+                    r"|ppt\s*(?:可以|文件|稿|版本|格式)",
                     user_input, re.I,
                 ))
                 # 联网补齐（2026-09-07）：general 直答默认无工具，用户明确要搜索/实时信息
@@ -1161,7 +1164,12 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 _need_search = not (
                     re.search(r"整理|总结|文档|摘要|成文", _q_probe) and web_ctx.get("results_text")
                 )
-                if not self._disable_web_search and _need_search and (
+                # 已有现成成稿且本轮没给新主题/新检索指令（如"那ppt可以吗"）：直接复用成稿转格式，不瞎搜
+                _skip_search_for_draft = bool(
+                    _doc_flag and web_ctx.get("draft")
+                    and not re.search(r"搜索|联网|新闻|最新|实时|今天|现在|根据|关于", user_input)
+                )
+                if not self._disable_web_search and _need_search and not _skip_search_for_draft and (
                     _doc_flag or re.search(r"搜索|联网|搜一下|新闻|最新|实时|今天|现在", user_input)
                 ):
                     try:
@@ -1220,8 +1228,13 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                                 "step": 1,
                                 "text": _tip,
                             })
-                            # 存入会话级联网记忆（含精读正文），供追问复用
-                            web_ctx_all[session_id] = {"query": _q[:80], "results_text": web_results_text}
+                            # 存入会话级联网记忆（含精读正文），供追问复用；保留已生成文档草稿
+                            _prev = web_ctx_all.get(session_id) or {}
+                            web_ctx_all[session_id] = {
+                                "query": _q[:80],
+                                "results_text": web_results_text,
+                                "draft": _prev.get("draft", ""),
+                            }
                     except Exception as _we:
                         self._log("warn", f"general 联网检索失败（忽略）: {_we}")
                 if not _need_search and web_ctx.get("results_text"):
@@ -1232,9 +1245,10 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                         "step": 1,
                         "text": "复用本会话刚才的联网检索内容作答（含正文精读，不重复搜索）",
                     })
-                # ── 文档成文：统一在"搜索/复用"之后判断。web_results_text 可能来自
-                # 会话记忆复用，也可能来自本轮新鲜检索（覆盖重启后首轮直出文档的场景）──
-                if _doc_flag and web_results_text:
+                # ── 文档成文：统一在"搜索/复用"之后判断。素材优先级：本轮检索结果 >
+                # 会话记忆复用 > 已生成文档草稿（"那ppt可以吗"直接把上一份 Word 稿转 PPT，
+                # 不重新组稿、不再反问）──
+                if _doc_flag and (web_results_text or web_ctx.get("draft")):
                     await self._emit(event_callback, {
                         "type": "thought",
                         "step": 1,
@@ -1242,7 +1256,16 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     })
                     fmt = "pptx" if re.search(r"ppt", user_input, re.I) else (
                         "pdf" if re.search(r"pdf", user_input, re.I) else "word")
-                    article = await self._compose_web_article(user_input, session_id, web_results_text)
+                    if web_results_text:
+                        article = await self._compose_web_article(user_input, session_id, web_results_text)
+                    else:
+                        article = web_ctx.get("draft") or ""
+                        if article:
+                            await self._emit(event_callback, {
+                                "type": "thought",
+                                "step": 1,
+                                "text": "复用上一份文档成稿转换格式，不重新组稿",
+                            })
                     if article and len(article.strip()) > 200:
                         # 复用导出链路：_intercept_generate_doc 吃 _last_draft
                         # （report_type 非 competitor 即 solution 模板，封面/章节骨架通用）
@@ -1255,9 +1278,13 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                             data = {}
                         if data.get("status") == "ok" and data.get("download_url"):
                             answer = (
-                                f"已根据联网检索到的内容撰写全文并生成文档"
-                                f"（{data.get('file_name', 'news_digest.docx')}），点击下载按钮即可获取。"
+                                f"已生成{('PPT' if fmt == 'pptx' else ('PDF' if fmt == 'pdf' else 'Word'))}文档"
+                                f"（{data.get('file_name', 'doc')}），点击下载按钮即可获取。"
                             )
+                            # 成稿存回会话记忆，后续"转成XX格式"直接复用
+                            _prev = web_ctx_all.get(session_id) or {}
+                            _prev["draft"] = article
+                            web_ctx_all[session_id] = _prev
                         else:
                             answer = data.get("message", "文档生成失败，请稍后再试。")
                     else:
@@ -3327,7 +3354,11 @@ Final Answer: [完整方案]）"""
             "**直接引用作答并注明来源**，不要否认它的存在；"
             "若没有该块，只代表本次回答未附检索结果——**绝对不要**说「我不具备联网能力」「我无法联网」"
             "这类否认能力的话（那是错的，系统有检索功能），也不要承诺「我马上去搜」（你无法主动触发）；"
-            "此时涉及实时信息就基于已有对话信息作答，并如实说明本次没有可引用的检索结果。\n\n"
+            "此时涉及实时信息就基于已有对话信息作答，并如实说明本次没有可引用的检索结果。\n"
+            "8) 【不做空头承诺】你无法在对话里主动执行生成动作；当用户要 Word/PPT/PDF 文件时，"
+            "**不要**回答「好的我马上生成」「请稍等」——那是永远不会兑现的空头支票。"
+            "正确做法：告诉用户发一句明确指令即可，例如「把这份内容整理成PPT」「导出成Word」，"
+            "系统收到指令会自动生成可下载文件。\n\n"
             f"{web_block}"
             f"{memory_block}"
             f"{history}\n\n"
