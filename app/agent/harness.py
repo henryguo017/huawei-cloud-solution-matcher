@@ -488,8 +488,12 @@ class AgentHarness:
                 else:
                     toolset = list(self.PLAN_STEP_TOOL_MAP.get(intent, [])[idx]) \
                         if idx < len(self.PLAN_STEP_TOOL_MAP.get(intent, [])) else []
-                # P2-3：远端 MCP 工具作为每步的「逃生舱」，LLM 可随时按需调用
-                if self._remote_tool_names:
+                # P2-3：远端 MCP 工具作为动作步的「逃生舱」，LLM 可随时按需调用。
+                # 边界审计（2026-09-08 线上 OBS 实测根因）：仅动作步追加——此前无脑追加到
+                # 每一步，导致综合生成步（映射表末步为空）也只剩成本/CRM 工具，知识问答类
+                # 末步"检索知识库并呈现定义"无检索工具可用，模型被迫乱调 CRM 工具触发
+                # 权限弹窗，无人值守时逐个 60s 超时拒绝直至整体超时。
+                if toolset and self._remote_tool_names:
                     toolset = toolset + self._remote_tool_names
                 # P2-Skills：角色提示词追加行业技能包块（仅提示词注入，不动工具集；无包/异常为空串）
                 role_prompt = role["prompt"] if role else None
@@ -862,8 +866,8 @@ class AgentHarness:
             })
         toolset = list(role["tools"]) if role else list(self.PLAN_STEP_TOOL_MAP.get(self._intent, [])[idx]) \
             if idx < len(self.PLAN_STEP_TOOL_MAP.get(self._intent, [])) else []
-        # P2-3：远端 MCP 工具作为每步的「逃生舱」
-        if self._remote_tool_names:
+        # P2-3：远端 MCP 工具作为动作步的「逃生舱」（综合生成步不追加，同 _plan_and_execute 修复）
+        if toolset and self._remote_tool_names:
             toolset = toolset + self._remote_tool_names
         tool_calls_log: list = []
         # 重跑该步前先复位该步状态为 pending → running

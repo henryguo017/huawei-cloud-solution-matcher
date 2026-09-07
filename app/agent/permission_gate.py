@@ -19,6 +19,17 @@ _PERMISSION_TIMEOUT = 120  # 秒：用户未响应则默认拒绝，避免 SSE �
 # 远端 MCP 工具名前缀：由外部 Server 提供，能力不可信，默认走 human-in-the-loop 确认
 MCP_TOOL_PREFIX = "mcp__"
 
+# 只读/无副作用 MCP 工具白名单（2026-09-08 线上实测）：查询类工具无需人工确认——
+# 与 api/agent_routes.py 的无头 allow 表对齐（此前只放行了 API 层，harness 闸门仍逐次
+# ask，无人值守时每个工具卡 60~120s 超时拒绝，方案/竞品/知识问答全部被拖到超时）。
+# 写入类（client_add/client_update）保持 ask，杜绝脏档案。
+MCP_READONLY_ALLOW = {
+    "mcp__crm__match_history",
+    "mcp__crm__client_list",
+    "mcp__cost__cost_calc",
+    "mcp__cost__cost_reference_list",
+}
+
 
 def resolve_tool_policy(
     tool_name: str,
@@ -36,6 +47,8 @@ def resolve_tool_policy(
     # 远端工具（mcp__<label>__<tool>）由外部 Server 提供，能力不可信，
     # 默认要求用户确认，避免越权调用或产生副作用（安全硬门槛，P0）。
     if tool_name.startswith(MCP_TOOL_PREFIX):
+        if tool_name in MCP_READONLY_ALLOW:
+            return "allow"
         return "ask"
     default_policy = default_policy or {}
     return default_policy.get(tool_name)
