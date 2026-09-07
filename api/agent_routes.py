@@ -130,18 +130,41 @@ async def agent_chat(
                         logger.info(f"[Agent/chat] 已注入客户上下文 client_id={body.client_id}")
                 except Exception as e:
                     logger.warning(f"[Agent/chat] 客户上下文构建失败（忽略，不影响对话）: {e}")
-            result = await get_agent().run(
-                message,
-                session_id=session_id,
-                extra_context=extra_context,
-                event_callback=emit,
-                user_id=user_id,
-                user_info=user,
-                model=model_override,
-                thinking=thinking_override,
-                rerun_plan_index=body.rerun_plan_index,
-                tool_permissions=body.tool_permissions,
-                disable_web_search=body.disable_web_search,
+            result = None
+            try:
+                # 硬超时兜底：正常两阶段 ≤3 分钟；超 8 分钟必是某个无超时 await 卡死
+                # （线程池耗尽/底层调用挂起）。与其让 SSE 静默 600s，不如主动失败：
+                # 客户端拿到明确 error 事件，服务端留下 CRITICAL 日志指纹用于定位。
+                result = await asyncio.wait_for(
+                    get_agent().run(
+                        message,
+                        session_id=session_id,
+                        extra_context=extra_context,
+                        event_callback=emit,
+                        user_id=user_id,
+                        user_info=user,
+                        model=model_override,
+                        thinking=thinking_override,
+                        rerun_plan_index=body.rerun_plan_index,
+                        tool_permissions=body.tool_permissions,
+                        disable_web_search=body.disable_web_search,
+                    ),
+                    timeout=480.0,
+                )
+            except asyncio.TimeoutError:
+                logger.critical(
+                    "[agent/chat] 运行硬超时(480s) session=%s message=%s —— 存在无超时阻塞 await，"
+                    "请结合 to_thread 硬超时日志定位卡点",
+                    session_id, message[:80],
+                )
+                await event_queue.put({
+                    "type": "error",
+                    "message": "方案生成超时（服务端已终止本次运行），请重试；若反复出现请联系管理员查看日志。",
+                })
+                return
+            logger.info(
+                "[agent/chat] 运行完成 session=%s 耗时=%.1fs success=%s",
+                session_id, float(result.get("elapsed") or 0), bool(result.get("success")),
             )
             await event_queue.put({
                 "type": "result",

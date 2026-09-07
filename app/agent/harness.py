@@ -2579,7 +2579,7 @@ Final Answer: [完整方案]）"""
         kb = _get_kb()
         huawei_items = []
         try:
-            hw_docs = await asyncio.to_thread(kb.search_huawei, user_input, 6, filter_industry=(industry or None))
+            hw_docs = await to_thread_limited(kb.search_huawei, user_input, 6, filter_industry=(industry or None))
         except Exception as e:
             logger.warning(f"[Agent] 保底检索华为失败: {e}")
             hw_docs = []

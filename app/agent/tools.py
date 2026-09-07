@@ -20,6 +20,24 @@ from app.services.knowledge_base import get_kb_user_context
 logger = logging.getLogger(__name__)
 
 
+async def to_thread_limited(fn: Callable, *args, _timeout: float = 120.0, **kwargs):
+    """asyncio.to_thread + 硬超时守护。
+
+    背景：裸 asyncio.to_thread 无超时——若默认线程池被耗尽（如先前异常运行遗留的
+    僵尸任务占满 worker）或底层调用（ChromaDB/BGE 编码）卡死，协程会静默永久等待，
+    表现为 SSE 零日志挂起、事件循环却存活。加 wait_for 后：超时必抛异常并留日志，
+    协程得以解除阻塞（注意：线程本身无法杀死，仅解除 await 等待）。
+    """
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn, *args, **kwargs), timeout=_timeout)
+    except asyncio.TimeoutError:
+        logger.error(
+            "[to_thread] 硬超时(%.0fs) fn=%s —— 疑似线程池耗尽或底层调用卡死，已解除阻塞",
+            _timeout, getattr(fn, "__name__", fn),
+        )
+        raise
+
+
 def _get_kb():
     """根据当前上下文获取知识库实例（用户上下文或全局）"""
     user_id = get_kb_user_context()
@@ -143,7 +161,7 @@ async def _tool_search_kb(query: str, industry: str = "") -> str:
         logger.info(f"[search_kb] 开始查询, query={query[:50]}...")
         t0 = __import__('time').time()
         # A修复：召回 6 篇（与标准模式 4+2 对齐），并按行业过滤收敛到客户行业
-        docs = await asyncio.to_thread(kb.search_huawei, query, 6, filter_industry=(industry or None))
+        docs = await to_thread_limited(kb.search_huawei, query, 6, filter_industry=(industry or None))
         elapsed = round(__import__('time').time() - t0, 1)
         logger.info(f"[search_kb] 查询完成, 耗时={elapsed}s, 结果数={len(docs)}")
         if not docs:
@@ -199,11 +217,11 @@ async def _tool_search_competitor(competitor: str, industry: str = "") -> str:
 
         # 先检索华为方案
         hw_query = "华为云" + (f"在{industry}行业的解决方案 竞争优势" if industry else "解决方案")
-        hw_docs = await asyncio.to_thread(kb.search_huawei, hw_query, 6)
+        hw_docs = await to_thread_limited(kb.search_huawei, hw_query, 6)
 
         # 再检索竞品方案
         comp_query = f"{competitor}" + (f"在{industry}行业的解决方案 产品 优势" if industry else "解决方案")
-        comp_docs = await asyncio.to_thread(kb.search_competitor, comp_query, 6)
+        comp_docs = await to_thread_limited(kb.search_competitor, comp_query, 6)
 
         hw_results = []
         for i, doc in enumerate(hw_docs[:6]):  # A修复：6 篇 + 1000 字
@@ -341,7 +359,7 @@ async def _tool_generate_doc(fmt: str = "word", content: str = "", report_type: 
             ExportFormat.PPTX if str(fmt).lower() == "pptx" else ExportFormat.WORD
         )
         rt = ReportType.COMPETITOR if str(report_type).lower() == "competitor" else ReportType.SOLUTION
-        task = await asyncio.to_thread(rg.generate_report, rt, content, ef, {})
+        task = await to_thread_limited(rg.generate_report, rt, content, ef, {}, _timeout=180.0)
         if getattr(task.status, "value", str(task.status)) != "completed":
             return json.dumps({"status": "error", "message": getattr(task, "error_message", "生成失败")}, ensure_ascii=False)
         return json.dumps({
@@ -378,7 +396,7 @@ async def _tool_web_search(query: str) -> str:
     try:
         from app.agent.tools_search import get_web_search_provider
         p = get_web_search_provider(provider)
-        results = await asyncio.to_thread(p.search, query, top_n=5)
+        results = await to_thread_limited(p.search, query, top_n=5, _timeout=60.0)
         _tool_web_search._count = getattr(_tool_web_search, "_count", 0) + 1
         # URL 脱敏：只留来源域名，不在 observation 暴露完整外链（防幻觉外链；LLM 只引来源名）
         slim = [{"domain": r.get("domain", ""), "title": r.get("title", "")} for r in (results or [])]
