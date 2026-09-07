@@ -1128,6 +1128,16 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 )
                 if intercepted is not None:
                     return intercepted
+                # ── 会话级联网记忆：跨轮记住本会话上次的检索词与结果文本。
+                # 追问"整理成文档/总结一下"时直接复用，避免把整句口语喂给搜索引擎带回
+                # 无关新闻污染上下文（2026-09-07 实测：'能根据最新消息给我整理一份文档吗'
+                # 整句搜索会搜回 GPT-6/美伊局势等无关结果）──
+                web_ctx_all = getattr(self, "_web_sessions", None)
+                if web_ctx_all is None:
+                    web_ctx_all = self._web_sessions = {}
+                if len(web_ctx_all) > 50:  # 防长期运行膨胀
+                    web_ctx_all.pop(next(iter(web_ctx_all)))
+                web_ctx = web_ctx_all.get(session_id) or {}
                 # 通用问答（算数/常识/自我介绍/"你能做什么"等）：调 LLM 直答，
                 # 不套方案模板；可融合对话历史，让多轮追问能用上上下文。
                 await self._emit(event_callback, {
@@ -1135,10 +1145,57 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "text": "识别意图：通用问答（非方案/非竞品/非账户/非纯礼节），调 LLM 直接回答",
                 })
+                # ── 文档成文意图：基于本会话最近的联网检索内容直接撰写全文并产出可下载文件，
+                # 不再在聊天里给摘要再反问格式（2026-09-07 用户体验实测反馈）──
+                if web_ctx.get("results_text") and re.search(
+                    r"整理成?.{0,2}(文档|文件)|写成?.{0,2}(文章|文件)|整篇.{0,2}(文档|文件)"
+                    r"|完整.{0,4}(文档|文章|文件)|生成.{0,6}(文档|报告|文章)"
+                    r"|出一份.{0,8}(文档|报告|文章|文件)|导出成?\s?(word|pdf|ppt|文档|报告)",
+                    user_input, re.I,
+                ):
+                    await self._emit(event_callback, {
+                        "type": "thought",
+                        "step": 1,
+                        "text": "识别意图：把刚才联网检索到的内容整理成文档，撰写全文并生成可下载文件",
+                    })
+                    fmt = "pptx" if re.search(r"ppt", user_input, re.I) else (
+                        "pdf" if re.search(r"pdf", user_input, re.I) else "word")
+                    article = await self._compose_web_article(user_input, session_id, web_ctx["results_text"])
+                    if article and len(article.strip()) > 200:
+                        # 复用导出链路：_intercept_generate_doc 吃 _last_draft
+                        # （report_type 非 competitor 即 solution 模板，封面/章节骨架通用）
+                        self._last_draft = article
+                        self._format_mode = "solution"
+                        obs = await self._intercept_generate_doc(fmt, event_callback)
+                        try:
+                            data = json.loads(obs) if isinstance(obs, str) else obs
+                        except (json.JSONDecodeError, TypeError):
+                            data = {}
+                        if data.get("status") == "ok" and data.get("download_url"):
+                            answer = (
+                                f"已根据刚才联网检索到的内容撰写全文并生成文档"
+                                f"（{data.get('file_name', 'news_digest.docx')}），点击下载按钮即可获取。"
+                            )
+                        else:
+                            answer = data.get("message", "文档生成失败，请稍后再试。")
+                    else:
+                        answer = "刚才检索到的素材还不够支撑一篇完整文档，建议换一个具体话题让我重新联网检索后再试。"
+                    self.memory.add_agent_response(session_id, answer)
+                    await self._emit(event_callback, {
+                        "type": "final",
+                        "step": 1,
+                        "elapsed": round(time.time() - self._start_time, 2),
+                        "format_mode": "general",
+                    })
+                    return self._make_result(answer, [], success=True, plan=[], plan_status=[], format_mode="general")
                 # 联网补齐（2026-09-07）：general 直答默认无工具，用户明确要搜索/实时信息
                 # 且联网开关开启时，先真搜一次再把结果喂给直答——杜绝"口头答应搜索"的假动作
                 web_results_text = ""
-                if not self._disable_web_search and re.search(
+                _q_probe = re.sub(r"^(帮我|请)?(联网|搜索|搜一下|查一下)+", "", user_input).strip()
+                _need_search = not (
+                    re.search(r"整理|总结|文档|摘要|成文", _q_probe) and web_ctx.get("results_text")
+                )
+                if not self._disable_web_search and _need_search and re.search(
                     r"搜索|联网|搜一下|新闻|最新|实时|今天|现在", user_input
                 ):
                     try:
@@ -1191,8 +1248,18 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                                 "step": 1,
                                 "text": _tip,
                             })
+                            # 存入会话级联网记忆（含精读正文），供追问复用
+                            web_ctx_all[session_id] = {"query": _q[:80], "results_text": web_results_text}
                     except Exception as _we:
                         self._log("warn", f"general 联网检索失败（忽略）: {_we}")
+                if not _need_search and web_ctx.get("results_text"):
+                    # 追问元请求（"总结一下/再详细说说"类）：复用上次检索结果，不重复搜索
+                    web_results_text = web_ctx["results_text"]
+                    await self._emit(event_callback, {
+                        "type": "thought",
+                        "step": 1,
+                        "text": "复用本会话刚才的联网检索内容作答（含正文精读，不重复搜索）",
+                    })
                 general = await self._answer_general_chat(
                     user_input, session_id, extra_context=extra_context, web_results=web_results_text,
                 )
@@ -3142,6 +3209,32 @@ Final Answer: [完整方案]）"""
             "- 给出**产品组合、实施路径与商务建议**\n\n"
             "告诉我你的业务需求，我们从方案匹配开始。"
         )
+
+    async def _compose_web_article(self, user_input: str, session_id: str, web_results_text: str) -> str:
+        """把本会话最近的联网检索素材撰写成一篇结构完整的文章（供导出链路成 doc）。
+
+        铁律：只用检索素材里的事实，不编造数字与细节；素材不足用概述带过。
+        失败返回空串，调用方走兜底话术（不阻断）。
+        """
+        from app.models.llm import get_llm_response
+        history = self.memory.get_conversation_history(session_id) or ""
+        prompt = (
+            "你是售前资料撰稿人。基于下面提供的联网检索素材，撰写一篇结构完整的中文文章：\n"
+            "- 必须有一个 Markdown 一级标题（# ）和 3-5 个二级小节（## ）\n"
+            "- 开头一段导语概括主题，结尾一段小结\n"
+            "- 只使用素材中出现的事实与数字，严禁编造素材里没有的细节；\n"
+            "  素材不足的部分用概述性语言带过，不要虚构\n"
+            "- 篇幅 800-1500 字，语气客观专业\n\n"
+            f"【对话上下文（理解用户意图用）】\n{history[:1500]}\n\n"
+            f"【联网检索素材（唯一事实来源）】\n{web_results_text[:6000]}\n\n"
+            f"【用户要求】{user_input}\n\n直接输出文章正文，不要任何解释。"
+        )
+        try:
+            article = await get_llm_response(prompt)
+            return str(article or "").strip()
+        except Exception as e:
+            self._log("warn", f"联网素材成文失败（忽略）: {e}")
+            return ""
 
     async def _answer_general_chat(self, user_input: str, session_id: str,
                                    extra_context: str = "", web_results: str = "") -> str:
