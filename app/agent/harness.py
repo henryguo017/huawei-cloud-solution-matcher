@@ -1145,49 +1145,15 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "text": "识别意图：通用问答（非方案/非竞品/非账户/非纯礼节），调 LLM 直接回答",
                 })
-                # ── 文档成文意图：基于本会话最近的联网检索内容直接撰写全文并产出可下载文件，
-                # 不再在聊天里给摘要再反问格式（2026-09-07 用户体验实测反馈）──
-                if web_ctx.get("results_text") and re.search(
+                # ── 文档成文意图：先只做标记。成文动作统一放在"搜索/复用"之后——
+                # 这样即使服务重启清空了会话级联网记忆，用户首轮直接说"把XX最新动态整理成文档"
+                # 也能当场检索并成文，而不是掉回闲聊反问（2026-09-07 二次实测反馈）──
+                _doc_flag = bool(re.search(
                     r"整理成?.{0,2}(文档|文件)|写成?.{0,2}(文章|文件)|整篇.{0,2}(文档|文件)"
                     r"|完整.{0,4}(文档|文章|文件)|生成.{0,6}(文档|报告|文章)"
                     r"|出一份.{0,8}(文档|报告|文章|文件)|导出成?\s?(word|pdf|ppt|文档|报告)",
                     user_input, re.I,
-                ):
-                    await self._emit(event_callback, {
-                        "type": "thought",
-                        "step": 1,
-                        "text": "识别意图：把刚才联网检索到的内容整理成文档，撰写全文并生成可下载文件",
-                    })
-                    fmt = "pptx" if re.search(r"ppt", user_input, re.I) else (
-                        "pdf" if re.search(r"pdf", user_input, re.I) else "word")
-                    article = await self._compose_web_article(user_input, session_id, web_ctx["results_text"])
-                    if article and len(article.strip()) > 200:
-                        # 复用导出链路：_intercept_generate_doc 吃 _last_draft
-                        # （report_type 非 competitor 即 solution 模板，封面/章节骨架通用）
-                        self._last_draft = article
-                        self._format_mode = "solution"
-                        obs = await self._intercept_generate_doc(fmt, event_callback)
-                        try:
-                            data = json.loads(obs) if isinstance(obs, str) else obs
-                        except (json.JSONDecodeError, TypeError):
-                            data = {}
-                        if data.get("status") == "ok" and data.get("download_url"):
-                            answer = (
-                                f"已根据刚才联网检索到的内容撰写全文并生成文档"
-                                f"（{data.get('file_name', 'news_digest.docx')}），点击下载按钮即可获取。"
-                            )
-                        else:
-                            answer = data.get("message", "文档生成失败，请稍后再试。")
-                    else:
-                        answer = "刚才检索到的素材还不够支撑一篇完整文档，建议换一个具体话题让我重新联网检索后再试。"
-                    self.memory.add_agent_response(session_id, answer)
-                    await self._emit(event_callback, {
-                        "type": "final",
-                        "step": 1,
-                        "elapsed": round(time.time() - self._start_time, 2),
-                        "format_mode": "general",
-                    })
-                    return self._make_result(answer, [], success=True, plan=[], plan_status=[], format_mode="general")
+                ))
                 # 联网补齐（2026-09-07）：general 直答默认无工具，用户明确要搜索/实时信息
                 # 且联网开关开启时，先真搜一次再把结果喂给直答——杜绝"口头答应搜索"的假动作
                 web_results_text = ""
@@ -1195,15 +1161,21 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 _need_search = not (
                     re.search(r"整理|总结|文档|摘要|成文", _q_probe) and web_ctx.get("results_text")
                 )
-                if not self._disable_web_search and _need_search and re.search(
-                    r"搜索|联网|搜一下|新闻|最新|实时|今天|现在", user_input
+                if not self._disable_web_search and _need_search and (
+                    _doc_flag or re.search(r"搜索|联网|搜一下|新闻|最新|实时|今天|现在", user_input)
                 ):
                     try:
                         from app.agent.tools import _tool_web_search
                         import json as _json
-                        # 检索词去掉"联网搜一下"类口语前缀，提高 Tavily 命中质量
-                        _q = re.sub(r"^(帮我|请)?(联网|搜索|搜一下|查一下)+", "", user_input).strip() or user_input[:80]
-                        _obs = await _tool_web_search(_q[:120])
+                        # 检索词构造：主题提取 + 口语剥离 + 元请求回退（详见 _build_search_query）
+                        _q = self._build_search_query(user_input, web_ctx.get("query"))
+                        if not _q:
+                            # 纯元请求且无历史主题（如首次就说"你联网去搜索相关材料"）：
+                            # 不瞎搜，让直答正常向用户追问主题
+                            _obs = json.dumps({"status": "ok", "count": 0, "results": []}, ensure_ascii=False)
+                            _data = {"status": "no_query"}
+                        else:
+                            _obs = await _tool_web_search(_q[:120])
                         _data = _json.loads(_obs) if isinstance(_obs, str) else {}
                         if _data.get("status") == "disabled":
                             await self._emit(event_callback, {
@@ -1260,6 +1232,44 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                         "step": 1,
                         "text": "复用本会话刚才的联网检索内容作答（含正文精读，不重复搜索）",
                     })
+                # ── 文档成文：统一在"搜索/复用"之后判断。web_results_text 可能来自
+                # 会话记忆复用，也可能来自本轮新鲜检索（覆盖重启后首轮直出文档的场景）──
+                if _doc_flag and web_results_text:
+                    await self._emit(event_callback, {
+                        "type": "thought",
+                        "step": 1,
+                        "text": "识别意图：把联网检索到的内容整理成文档，撰写全文并生成可下载文件",
+                    })
+                    fmt = "pptx" if re.search(r"ppt", user_input, re.I) else (
+                        "pdf" if re.search(r"pdf", user_input, re.I) else "word")
+                    article = await self._compose_web_article(user_input, session_id, web_results_text)
+                    if article and len(article.strip()) > 200:
+                        # 复用导出链路：_intercept_generate_doc 吃 _last_draft
+                        # （report_type 非 competitor 即 solution 模板，封面/章节骨架通用）
+                        self._last_draft = article
+                        self._format_mode = "solution"
+                        obs = await self._intercept_generate_doc(fmt, event_callback)
+                        try:
+                            data = json.loads(obs) if isinstance(obs, str) else obs
+                        except (json.JSONDecodeError, TypeError):
+                            data = {}
+                        if data.get("status") == "ok" and data.get("download_url"):
+                            answer = (
+                                f"已根据联网检索到的内容撰写全文并生成文档"
+                                f"（{data.get('file_name', 'news_digest.docx')}），点击下载按钮即可获取。"
+                            )
+                        else:
+                            answer = data.get("message", "文档生成失败，请稍后再试。")
+                    else:
+                        answer = "刚才检索到的素材还不够支撑一篇完整文档，建议换一个更具体的话题让我重新联网检索后再试。"
+                    self.memory.add_agent_response(session_id, answer)
+                    await self._emit(event_callback, {
+                        "type": "final",
+                        "step": 1,
+                        "elapsed": round(time.time() - self._start_time, 2),
+                        "format_mode": "general",
+                    })
+                    return self._make_result(answer, [], success=True, plan=[], plan_status=[], format_mode="general")
                 general = await self._answer_general_chat(
                     user_input, session_id, extra_context=extra_context, web_results=web_results_text,
                 )
@@ -3210,6 +3220,37 @@ Final Answer: [完整方案]）"""
             "告诉我你的业务需求，我们从方案匹配开始。"
         )
 
+    @staticmethod
+    def _build_search_query(user_input: str, last_query: str = "") -> str:
+        """从口语输入构造检索词（2026-09-07）：整句口语直接喂搜索引擎会搜回无关结果
+        （实测'你联网去搜索相关材料'/'能根据华为云最新消息给我整理一份文档吗'）。
+
+        三级策略：
+        1. 主题提取：命中"根据/关于/围绕 X + 动词"句式 → 取 X（剥指代词）
+        2. 前缀/元词剥离：剥口语前缀与"整理/文档/材料"类元词，剩核心词≥3字就用
+        3. 元请求兜底：剥完为空（纯"你联网去搜索相关材料"类）→ 复用上次检索词
+        """
+        q = (user_input or "").strip()
+        # 1) 主题提取
+        m = re.search(r"(?:根据|关于|围绕|就)\s*([^，。？?!，。？！]{2,30}?)(?:整理|搜索|写|生成|查|做|出|汇总)", q)
+        if m:
+            topic = re.sub(r"^(刚才|刚刚|上面|以上|最新的?|相关|这些|那些)", "", m.group(1)).strip()
+            topic = re.sub(r"(给我|帮我|请|麻烦|一下|的最新?|的新闻|的消息|的动态|的信息)+$", "", topic).strip()
+            if len(topic) >= 2:
+                return topic
+        # 2) 前缀与元词剥离
+        q2 = re.sub(r"^(帮我|请|麻烦|你|您|先|给我|去|再|帮忙|能不能|可以)+", "", q).strip()
+        q2 = re.sub(r"^(联网|搜索|搜一下|搜搜|查一下|查查)+", "", q2).strip()
+        core = re.sub(
+            r"(整理|总结|文档|摘要|成文|一份|相关|材料|资料|搜索|联网|查一下|搜一下"
+            r"|最新的?|消息|新闻|动态|信息|吗|吧|呢|么|呢)",
+            "", q2,
+        ).strip()
+        if len(core) >= 3:
+            return q2[:120]
+        # 3) 元请求兜底：有上次主题就复用；没有则返回空串（调用方跳过搜索，让模型正常追问主题）
+        return (last_query or "").strip()
+
     async def _compose_web_article(self, user_input: str, session_id: str, web_results_text: str) -> str:
         """把本会话最近的联网检索素材撰写成一篇结构完整的文章（供导出链路成 doc）。
 
@@ -3281,10 +3322,12 @@ Final Answer: [完整方案]）"""
             "**不要**主动引导「存成客户档案」「查客户档案」，一次都不要提；"
             "**更不要虚构「我记住了」「已帮你保存」**——系统只有用户明确说「把XX存成客户」并确认后才真正保存，"
             "在那之前你只是聊过天而已。\n"
-            "7) 【联网引用规则】若上下文里有【联网检索结果·刚刚实时搜索所得】块，它就是你刚刚"
-            "真实搜索到的最新信息，**直接引用作答并注明来源**，不要否认它的存在；"
-            "若没有该块，则说明本次未联网，**绝对不要**说「我来搜索」「稍等我查一下」，"
-            "涉及实时信息（新闻/价格/动态）时坦承无法联网获取。\n\n"
+            "7) 【联网引用规则】你**具备**联网检索能力（系统会在需要时自动检索并把结果注入上下文）。"
+            "若上下文里有【联网检索结果·刚刚实时搜索所得】块，它就是你刚刚真实搜到的最新信息，"
+            "**直接引用作答并注明来源**，不要否认它的存在；"
+            "若没有该块，只代表本次回答未附检索结果——**绝对不要**说「我不具备联网能力」「我无法联网」"
+            "这类否认能力的话（那是错的，系统有检索功能），也不要承诺「我马上去搜」（你无法主动触发）；"
+            "此时涉及实时信息就基于已有对话信息作答，并如实说明本次没有可引用的检索结果。\n\n"
             f"{web_block}"
             f"{memory_block}"
             f"{history}\n\n"
