@@ -1145,7 +1145,13 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                         import json as _json
                         _obs = await _tool_web_search(user_input[:120])
                         _data = _json.loads(_obs) if isinstance(_obs, str) else {}
-                        if _data.get("status") == "ok" and _data.get("results"):
+                        if _data.get("status") == "disabled":
+                            await self._emit(event_callback, {
+                                "type": "thought",
+                                "step": 1,
+                                "text": "联网搜索未配置检索源（需 WEB_SEARCH_PROVIDER），本次跳过联网",
+                            })
+                        elif _data.get("status") == "ok" and _data.get("results"):
                             _lines = [
                                 f"- {r.get('title', '')}（来源：{r.get('domain', '')}）"
                                 for r in _data.get("results", [])[:5]
@@ -3131,7 +3137,10 @@ Final Answer: [完整方案]）"""
             "6) 【不拽业务】用户自我介绍、聊人际、聊日常时，像朋友一样自然回应即可，"
             "**不要**主动引导「存成客户档案」「查客户档案」，一次都不要提；"
             "**更不要虚构「我记住了」「已帮你保存」**——系统只有用户明确说「把XX存成客户」并确认后才真正保存，"
-            "在那之前你只是聊过天而已。\n\n"
+            "在那之前你只是聊过天而已。\n"
+            "7) 【不假称联网】若上下文里没有【联网检索结果】块，就说明本次没有联网，"
+            "**绝对不要**说「我来搜索」「稍等我查一下」这类话——如实回答你知道的内容，"
+            "涉及实时信息（新闻/价格/动态）时坦承无法联网获取。\n\n"
             f"{memory_block}"
             f"{history}\n\n"
             f"用户最新问题：{user_input}\n\n"
