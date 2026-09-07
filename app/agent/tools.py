@@ -405,6 +405,9 @@ async def _tool_web_search(query: str, topic: str = "general") -> str:
         p = get_web_search_provider(provider)
         results = await to_thread_limited(p.search, query, top_n=5, topic=topic, _timeout=60.0)
         _tool_web_search._count = getattr(_tool_web_search, "_count", 0) + 1
+        # 原始结果（含完整 url）挂函数属性供 harness 程序化读取（如 Extract 精读）；
+        # LLM 可见的 observation 仍不含 url（防幻觉外链，见下）
+        _tool_web_search._last_results = results or []
         # URL 脱敏：只留来源域名+标题+摘要，不在 observation 暴露完整外链（防幻觉外链；LLM 只引来源名）。
         # snippet 必须保留——它是模型作答的唯一内容依据，只给标题会导致空洞转述。
         slim = [{

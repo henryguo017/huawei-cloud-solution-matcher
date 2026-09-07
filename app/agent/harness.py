@@ -1160,10 +1160,12 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                                 for r in _data.get("results", [])[:5]
                             ]
                             # Extract 精读（2026-09-07）：对前 2 条结果抽取正文全文，
-                            # 让"最新动态"类回答有细节支撑而非只有标题+摘要
+                            # 让"最新动态"类回答有细节支撑而非只有标题+摘要。
+                            # url 不在脱敏 observation 里，从 _last_results 原始结果取
                             _details = []
-                            from app.agent.tools import _tool_web_extract
-                            for _r in _data.get("results", [])[:2]:
+                            from app.agent.tools import _tool_web_extract, _tool_web_search as _tws
+                            _raw = (getattr(_tws, "_last_results", None) or [])[:2]
+                            for _r in _raw:
                                 _u = (_r.get("url") or "").strip()
                                 if not _u:
                                     continue
