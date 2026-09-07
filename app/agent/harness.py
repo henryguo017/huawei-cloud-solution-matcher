@@ -1137,13 +1137,16 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 })
                 # 联网补齐（2026-09-07）：general 直答默认无工具，用户明确要搜索/实时信息
                 # 且联网开关开启时，先真搜一次再把结果喂给直答——杜绝"口头答应搜索"的假动作
+                web_results_text = ""
                 if not self._disable_web_search and re.search(
                     r"搜索|联网|搜一下|新闻|最新|实时|今天|现在", user_input
                 ):
                     try:
                         from app.agent.tools import _tool_web_search
                         import json as _json
-                        _obs = await _tool_web_search(user_input[:120])
+                        # 检索词去掉"联网搜一下"类口语前缀，提高 Tavily 命中质量
+                        _q = re.sub(r"^(帮我|请)?(联网|搜索|搜一下|查一下)+", "", user_input).strip() or user_input[:80]
+                        _obs = await _tool_web_search(_q[:120])
                         _data = _json.loads(_obs) if isinstance(_obs, str) else {}
                         if _data.get("status") == "disabled":
                             await self._emit(event_callback, {
@@ -1153,21 +1156,21 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                             })
                         elif _data.get("status") == "ok" and _data.get("results"):
                             _lines = [
-                                f"- {r.get('title', '')}（来源：{r.get('domain', '')}）"
+                                f"- {r.get('title', '')}（来源：{r.get('domain', '')}）{r.get('content', '')[:120]}"
                                 for r in _data.get("results", [])[:5]
                             ]
-                            extra_context = (extra_context or "") + "\n\n" + (
-                                "【联网检索结果（真实数据，可引用，注明来源；与问题无关则忽略）】\n"
-                                + "\n".join(_lines)
-                            )
+                            # 独立块（不并入记忆 extra_context）：让模型明确知道"这是刚刚搜到的"
+                            web_results_text = "\n".join(_lines)
                             await self._emit(event_callback, {
                                 "type": "thought",
                                 "step": 1,
-                                "text": "已联网检索最新信息，结合结果回答",
+                                "text": f"已联网检索到 {len(_data.get('results', []))} 条最新信息，结合结果回答",
                             })
                     except Exception as _we:
                         self._log("warn", f"general 联网检索失败（忽略）: {_we}")
-                general = await self._answer_general_chat(user_input, session_id, extra_context=extra_context)
+                general = await self._answer_general_chat(
+                    user_input, session_id, extra_context=extra_context, web_results=web_results_text,
+                )
                 self.memory.add_agent_response(session_id, general)
                 await self._emit(event_callback, {
                     "type": "final",
@@ -3100,7 +3103,7 @@ Final Answer: [完整方案]）"""
         )
 
     async def _answer_general_chat(self, user_input: str, session_id: str,
-                                   extra_context: str = "") -> str:
+                                   extra_context: str = "", web_results: str = "") -> str:
         """通用问答（算数/常识/自我介绍/"你能做什么"等）：调 LLM 直接回答。
 
         关键能力：
@@ -3120,6 +3123,12 @@ Final Answer: [完整方案]）"""
                 "用户问起历史需求/记忆时可放心引用；与问题无关就忽略）】\n"
                 f"{extra_context.strip()}\n\n"
             )
+        web_block = ""
+        if web_results and web_results.strip():
+            web_block = (
+                "【联网检索结果·刚刚实时搜索所得（真实有效的最新信息，回答时应优先引用并注明来源）】\n"
+                f"{web_results.strip()}\n\n"
+            )
         prompt = (
             "你是华为云解决方案智能匹配助手。下面是用户与你的多轮对话历史。\n"
             "【关键】用户当前问的不一定是方案问题，可能是算数/常识/概念/自我介绍等通用问询。\n"
@@ -3138,9 +3147,11 @@ Final Answer: [完整方案]）"""
             "**不要**主动引导「存成客户档案」「查客户档案」，一次都不要提；"
             "**更不要虚构「我记住了」「已帮你保存」**——系统只有用户明确说「把XX存成客户」并确认后才真正保存，"
             "在那之前你只是聊过天而已。\n"
-            "7) 【不假称联网】若上下文里没有【联网检索结果】块，就说明本次没有联网，"
-            "**绝对不要**说「我来搜索」「稍等我查一下」这类话——如实回答你知道的内容，"
+            "7) 【联网引用规则】若上下文里有【联网检索结果·刚刚实时搜索所得】块，它就是你刚刚"
+            "真实搜索到的最新信息，**直接引用作答并注明来源**，不要否认它的存在；"
+            "若没有该块，则说明本次未联网，**绝对不要**说「我来搜索」「稍等我查一下」，"
             "涉及实时信息（新闻/价格/动态）时坦承无法联网获取。\n\n"
+            f"{web_block}"
             f"{memory_block}"
             f"{history}\n\n"
             f"用户最新问题：{user_input}\n\n"
