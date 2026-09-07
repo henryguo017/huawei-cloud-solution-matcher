@@ -172,14 +172,19 @@ class ConversationMemory:
         self._trim_and_archive(session_id)
 
     def _persist(self, session_id: str, role: str, content: str) -> None:
-        """单条长期记忆落库（截断 500 字，写失败降级内存仅记日志）"""
+        """单条长期记忆落库（截断 2000 字，写失败降级内存仅记日志）。
+
+        边界审计（2026-09-07）：原 500 字截断会把方案/文档类回答砍得只剩开头，
+        重启后"方案里的成本明细给我列一下"这类追问无法从历史恢复上下文。
+        方案正文通常 3~8k 字，2000 字可保住章节骨架与成本表；DB 体积可忽略。
+        """
         try:
             conn = self._db_conn()
             cur = conn.cursor()
             uid = self._parse_user_id(session_id)
             cur.execute(
                 "INSERT INTO agent_memory (user_id, session_id, role, content) VALUES (?, ?, ?, ?)",
-                (uid, session_id, role, content[:500]),
+                (uid, session_id, role, content[:2000]),
             )
             conn.commit()
             conn.close()
@@ -210,7 +215,11 @@ class ConversationMemory:
         lines = ["【对话历史】"]
         for e in entries:
             role_label = "用户" if e.role == "user" else "助手"
-            content = e.content[:300] + "..." if len(e.content) > 300 else e.content
+            # 边界审计（2026-09-07）：助手回答 300→1500 字。方案/文档类回答动辄数千字，
+            # 300 字只剩开头，"刚才那个方案的网络部分再细化一下"这类追问模型看不到正文。
+            # 用户输入语义密度高，400 字足够。
+            limit = 1500 if e.role == "agent" else 400
+            content = e.content[:limit] + "..." if len(e.content) > limit else e.content
             lines.append(f"{role_label}: {content}")
         return "\n".join(lines)
 

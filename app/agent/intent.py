@@ -55,7 +55,7 @@ _HAS_COMPARE_VERB = re.compile(
 
 # 明确的方案动作（含动词 + 方案/平台/系统/上云 等），避免把"这个方案让我有成就感"误判为方案意图
 _SOLUTION_ACTION_RE = re.compile(
-    r"(做个|做份|做一|生成方案|生成一份|写一份.*(方案|报告|文档)|规划.*方案|设计方案|建设.*平台|搭建.*平台|"
+    r"(做个|做份|做一|弄个|弄份|弄一|整一|生成方案|生成一份|写一份.*(方案|报告|文档)|规划.*方案|设计方案|建设.*平台|搭建.*平台|"
     r"部署.*(云|平台)|上云|帮我做.*方案|给我.*方案|出.*方案|一份方案)"
 )
 
@@ -184,7 +184,10 @@ def classify_intent(text: str) -> Dict[str, Any]:
         return _mk("competitor", competitors, industries, 0.9)
 
     # 4) 方案类：含行业 / 规模 / 明确方案动作
-    if industries or _SCALE_RE.search(t) or _SOLUTION_ACTION_RE.search(t):
+    #    边界审计（2026-09-07）：裸行业词（用户在澄清对话里单独回"制造业/教育"）
+    #    不应直接触发方案生成——除非带规模数字或方案动作动词。行业词总长≥5 或
+    #    有规模/动作信号才算方案意图，否则落 general 由 LLM 结合上下文接续。
+    if (industries and len(t) >= 5) or _SCALE_RE.search(t) or _SOLUTION_ACTION_RE.search(t):
         # 概念提问（"什么是 AWS 的 S3"）且无方案动作 → general
         if _CONCEPT_RE.match(t) and not re.search(r"(方案|对比|竞品|做一个|帮我|生成|上云|建设|搭建)", t):
             return _mk("general", competitors, industries, 0.6)

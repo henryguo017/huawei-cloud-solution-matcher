@@ -416,7 +416,19 @@ class AgentHarness:
         r"|出一份.{0,8}(文档|报告|文章|文件)|导出成?\s?(word|pdf|ppt|文档|报告)"
         r"|并导出|(?:把|将)[^。]{0,12}导出\s*$"
         r"|(?<!会)(?:做|来|要|出|生成|转成|换成|需要)\s*(?:个|一份?)?\s*(?:ppt|pptx|word|pdf)"
-        r"|ppt\s*(?:可以|文件|稿|版本|格式)",
+        r"|ppt\s*(?:可以|文件|稿|版本|格式)"
+        # 边界审计补（2026-09-07）：裸格式词应答（"word吧"/"pdf"，澄清问答的典型回法）
+        r"|^\s*(?:ppt|pptx|word|pdf)\s*[吧呗啊呀。.！!，,？?]*$"
+        # 英文成文请求（"help me make a PPT"）
+        r"|\b(?:make|create|generate|convert|export)\b[^。]{0,16}\b(?:ppt|pptx|word|pdf|document|report)s?\b",
+        re.IGNORECASE,
+    )
+
+    # 短确认应答（"好/可以/行/嗯/生成吧"）：仅当会话里刚有可成文素材
+    # （material_pending 标记，见 general 分支）时升级为成文意图，防陈旧误触发。
+    _CONFIRM_RE = re.compile(
+        r"^(?:好(?:的|呀|啊|吧)?|可以|行(?:吧|的)?|嗯+|要|生成吧|导出吧|转吧|就这么办|没问题|ok|okay)"
+        r"[吧呀啊嘛呢，,！!。\s]{0,4}$",
         re.IGNORECASE,
     )
 
@@ -1167,6 +1179,19 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 # 正则提为类属性 _DOC_INTENT_RE：tests/test_intent_coverage.py 直接引用，
                 # 杜绝测试副本漂移（2026-09-07 四次实测迭代，覆盖"整理成PPT并导出"类）──
                 _doc_flag = bool(self._DOC_INTENT_RE.search(user_input))
+                # ── 短确认续接（2026-09-07 边界审计）：模型答完素材类内容后用户回
+                # "好/可以/生成吧"这类短确认，不应掉回闲聊制造空头承诺。仅当会话带
+                # material_pending 标记（上一轮刚检索/复用过素材）或已有成稿草稿时
+                # 升级为成文意图；本轮是实质性新消息（非短确认且>4字）则清除标记，
+                # 防止陈旧素材在数轮之后被"好"误触发。
+                _is_confirm = bool(self._CONFIRM_RE.match((user_input or "").strip()))
+                _gctx = web_ctx_all.get(session_id) or {}
+                if not _is_confirm and len((user_input or "").strip()) > 4:
+                    _gctx.pop("material_pending", None)
+                if not _doc_flag and _is_confirm and (
+                    _gctx.get("material_pending") or web_ctx.get("draft")
+                ):
+                    _doc_flag = True
                 # 联网补齐（2026-09-07）：general 直答默认无工具，用户明确要搜索/实时信息
                 # 且联网开关开启时，先真搜一次再把结果喂给直答——杜绝"口头答应搜索"的假动作
                 web_results_text = ""
@@ -1239,11 +1264,13 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                                 "text": _tip,
                             })
                             # 存入会话级联网记忆（含精读正文），供追问复用；保留已生成文档草稿
+                            # material_pending：短确认（"好/生成吧"）可续接成文的素材标记
                             _prev = web_ctx_all.get(session_id) or {}
                             web_ctx_all[session_id] = {
                                 "query": _q[:80],
                                 "results_text": web_results_text,
                                 "draft": _prev.get("draft", ""),
+                                "material_pending": True,
                             }
                     except Exception as _we:
                         self._log("warn", f"general 联网检索失败（忽略）: {_we}")
@@ -1291,9 +1318,11 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                                 f"已生成{('PPT' if fmt == 'pptx' else ('PDF' if fmt == 'pdf' else 'Word'))}文档"
                                 f"（{data.get('file_name', 'doc')}），点击下载按钮即可获取。"
                             )
-                            # 成稿存回会话记忆，后续"转成XX格式"直接复用
+                            # 成稿存回会话记忆，后续"转成XX格式"直接复用；
+                            # material_pending 清零：文档已产出，裸"好"不必再生成一份
                             _prev = web_ctx_all.get(session_id) or {}
                             _prev["draft"] = article
+                            _prev["material_pending"] = False
                             web_ctx_all[session_id] = _prev
                         else:
                             answer = data.get("message", "文档生成失败，请稍后再试。")

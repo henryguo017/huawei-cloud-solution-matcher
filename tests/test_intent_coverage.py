@@ -73,6 +73,18 @@ CASES = [
     # ── 平台咨询 ──
     ("怎么上传知识库", "general", set()),
     ("怎么修改密码", "general", set()),
+    # ── 边界审计补（2026-09-07 对抗性探针）：口语动词 / 裸行业词 / 裸格式应答 / 中英混合 ──
+    ("帮我弄个方案", "solution", set()),          # 口语动词"弄个"原漏判为 general
+    ("做个PPT呗", "export", set()),               # PPT 口语应走导出链（PPT 引擎）
+    ("制造业", "general", set()),                 # 裸行业词（澄清回答）不应触发方案生成
+    ("教育", "general", set()),                   # 同上
+    ("3个园区", "solution", set()),               # 带规模数字的澄清回答 → 方案
+    ("word吧", "general", {"doc"}),               # 裸格式词应答 → 成文意图
+    ("pdf", "general", {"doc"}),                  # 同上
+    ("help me make a PPT", "general", {"doc"}),   # 英文成文请求
+    ("What is OBS?", "knowledge_q", set()),       # 英文产品概念问 → 知识库
+    ("在吗", "greeting", set()),                  # 问候变体
+    ("把上次生成的方案导出", "general", {"doc"}),  # 指代历史的导出诉求 → 成文链
 ]
 
 fails = []
