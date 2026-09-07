@@ -1989,6 +1989,7 @@
            format_mode: solution=方案书 / competitor=竞品对比；导出复用经典 /api/export/report 链路 */
         _appendExportActions: function (shell, answer, formatMode) {
             if (!shell || !shell.actions) return;
+            if (formatMode === 'general') return;  // 闲聊/问候/账户类不出现导出按钮（保持自然对话感）
             var actions = shell.actions;
             if (actions.querySelector('.ws-export-btn')) return;  // 幂等：不重复追加
             actions.style.display = '';

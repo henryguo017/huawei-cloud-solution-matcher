@@ -1099,7 +1099,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "elapsed": round(time.time() - self._start_time, 2),
                 })
-                return self._make_result(light, [], success=True, plan=[], plan_status=[])
+                return self._make_result(light, [], success=True, plan=[], plan_status=[], format_mode="general")
 
             if self._intent == "greeting":
                 # 纯礼节性问候/致谢/再见：极短固定模板
@@ -1115,7 +1115,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "elapsed": round(time.time() - self._start_time, 2),
                 })
-                return self._make_result(light, [], success=True, plan=[], plan_status=[])
+                return self._make_result(light, [], success=True, plan=[], plan_status=[], format_mode="general")
 
             if self._intent == "general":
                 # ── general 数据诚信拦截链（公共方法，与 solution/competitor 短路共用）──
@@ -1137,8 +1137,9 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "type": "final",
                     "step": 1,
                     "elapsed": round(time.time() - self._start_time, 2),
+                    "format_mode": "general",
                 })
-                return self._make_result(general, [], success=True, plan=[], plan_status=[])
+                return self._make_result(general, [], success=True, plan=[], plan_status=[], format_mode="general")
 
             if self._intent == "export":
                 # P1-2：导出文档意图（用户说"导出成 Word/PDF"），直接生成可下载文件，不进 ReAct
@@ -3088,7 +3089,11 @@ Final Answer: [完整方案]）"""
             "5) 【数据诚信红线】凡系统注入的记忆/上下文块中**明确写出**的历史需求与客户信息，可以"
             "直接引用作答；块中**没有**的客户档案内容、历史方案、实时报价、知识库文档数等数据"
             "**绝对不要编造**，应如实说明并引导用户换明确问法来触发对应功能"
-            "（如「把XX存成客户」「查一下XX的档案」「50台4核8G的ECS用3个月多少钱」）。\n\n"
+            "（如「把XX存成客户」「查一下XX的档案」「50台4核8G的ECS用3个月多少钱」）。\n"
+            "6) 【不拽业务】用户自我介绍、聊人际、聊日常时，像朋友一样自然回应即可，"
+            "**不要**主动引导「存成客户档案」「查客户档案」，一次都不要提；"
+            "**更不要虚构「我记住了」「已帮你保存」**——系统只有用户明确说「把XX存成客户」并确认后才真正保存，"
+            "在那之前你只是聊过天而已。\n\n"
             f"{memory_block}"
             f"{history}\n\n"
             f"用户最新问题：{user_input}\n\n"
@@ -3125,6 +3130,7 @@ Final Answer: [完整方案]）"""
         expired: bool = False,
         plan: Optional[list] = None,
         plan_status: Optional[list] = None,
+        format_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         elapsed = time.time() - self._start_time
         # P1-2：集中缓存终稿，供后续 export 意图 / generate_doc 拦截导出（跨轮保留）。
@@ -3152,7 +3158,7 @@ Final Answer: [完整方案]）"""
             # 把上一轮 plan-driven 运行的旧计划残留进本轮 result。
             "plan": list(self._plan) if plan is None else plan,
             "plan_status": list(self._plan_status if plan_status is None else plan_status),  # P1-1：plan 每步状态
-            "format_mode": getattr(self, "_format_mode", "solution"),  # P0：导出时决定 report_type（solution/competitor）
+            "format_mode": format_mode or getattr(self, "_format_mode", "solution"),  # P0：导出时决定 report_type（solution/competitor）；轻量路径传 general 让前端不出导出按钮
             "reflexion_used": self._reflexion_count > 0,   # P1-3：是否触发过反思
             "reflexion_success": self._reflexion_success,  # P1-3：反思是否成功注入
             "replanned": getattr(self, "_last_replanned", False),  # P3-1：本次是否触发真重规划
