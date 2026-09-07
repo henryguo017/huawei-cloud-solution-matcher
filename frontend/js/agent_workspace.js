@@ -2107,6 +2107,7 @@
             var total = data && data.total ? data.total : 0;
             var window = data && data.window ? data.window : 64000;
             var percent = data && typeof data.percent === 'number' ? data.percent : 0;
+            var percentTxt = (Math.round(percent * 10) / 10).toFixed(1);  // 一位小数：低占用区间也能看出对话增长
             var rows = [
                 ['system', '系统提示'], ['tools', '工具描述'],
                 ['memory', '长程记忆'], ['conversation', '对话历史']
@@ -2134,7 +2135,7 @@
                     '<div class="ws-ctx-head-row">' +
                         '<div>' +
                             '<div class="ws-ctx-title">上下文用量（预估）</div>' +
-                            '<div class="ws-ctx-percent">' + percent + '%</div>' +
+                            '<div class="ws-ctx-percent">' + percentTxt + '%</div>' +
                         '</div>' +
                         '<button type="button" class="ws-ctx-refresh" id="ws-ctx-refresh" title="重新查询">↻</button>' +
                     '</div>' +

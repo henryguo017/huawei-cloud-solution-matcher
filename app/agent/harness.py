@@ -981,9 +981,22 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             self.memory.add_user_message(session_id, user_input)
             self._client_context = extra_context  # B修复：首轮注入客户背景，供最终增强管线使用
 
+            tools_desc = self.tools.get_tools_prompt()
+
+            # ── 意图路由（A 方案）：首轮先识别意图，非方案类直接轻量回复，不进 ReAct/14章流水线 ──
+            intent = classify_intent(user_input)
+            self._intent = intent.get("intent", "solution")
+            self._format_mode = "competitor" if self._intent == "competitor" else "solution"
+            competitors = intent.get("competitors", []) or []
+            self._log("system", f"[INTENT] {intent}")
+
             # P2-2：首轮注入长程记忆（episodic 相关历史方案 + procedural 用户画像），
             # 仅注入一次，不随澄清轮次重复追加；无记忆/异常时为空串不影响主流程。
-            if not getattr(self, "_memory_context_injected", False):
+            # 【2026-09-07 用户拍板】general/greeting/account/export 不注入——通用对话就是
+            # 纯会话上下文，不带跨对话长程记忆（原位置在意图分类前，无法按意图门控）。
+            if not getattr(self, "_memory_context_injected", False) and self._intent not in (
+                "general", "greeting", "account", "export",
+            ):
                 try:
                     from app.agent.memory_profiles import build_memory_context, build_profile_context
                     uid = user_id if isinstance(user_id, int) and user_id > 0 else None
@@ -996,15 +1009,6 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                 except Exception as e:
                     self._log("warn", f"长程记忆注入失败（忽略）: {e}")
                     self._memory_context_injected = True
-
-            tools_desc = self.tools.get_tools_prompt()
-
-            # ── 意图路由（A 方案）：首轮先识别意图，非方案类直接轻量回复，不进 ReAct/14章流水线 ──
-            intent = classify_intent(user_input)
-            self._intent = intent.get("intent", "solution")
-            self._format_mode = "competitor" if self._intent == "competitor" else "solution"
-            competitors = intent.get("competitors", []) or []
-            self._log("system", f"[INTENT] {intent}")
 
             # P2-Skills：行业技能包挂载（默认关；仅 solution/competitor；异常静默降级）。
             # 只注入提示词（三角色 + 终稿口径），不改工具集——工具集决策仍归角色/映射表。
@@ -2014,7 +2018,7 @@ Final Answer: [完整方案]）"""
             "buckets": buckets,
             "total": total,
             "window": window,
-            "percent": min(100, round(total * 100 / window)) if window else 0,
+            "percent": min(100, round(total * 1000 / window) / 10) if window else 0,  # 一位小数：低占用区间也能看出对话增长
             "estimated": True,
         }
 
