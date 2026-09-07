@@ -1131,7 +1131,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "text": "识别意图：通用问答（非方案/非竞品/非账户/非纯礼节），调 LLM 直接回答",
                 })
-                general = await self._answer_general_chat(user_input, session_id)
+                general = await self._answer_general_chat(user_input, session_id, extra_context=extra_context)
                 self.memory.add_agent_response(session_id, general)
                 await self._emit(event_callback, {
                     "type": "final",
@@ -3054,17 +3054,27 @@ Final Answer: [完整方案]）"""
             "告诉我你的业务需求，我们从方案匹配开始。"
         )
 
-    async def _answer_general_chat(self, user_input: str, session_id: str) -> str:
+    async def _answer_general_chat(self, user_input: str, session_id: str,
+                                   extra_context: str = "") -> str:
         """通用问答（算数/常识/自我介绍/"你能做什么"等）：调 LLM 直接回答。
 
         关键能力：
         - 多轮上下文：注入 `get_conversation_history(session_id)`，让追问能用上前面
+        - 长程记忆/客户上下文：注入 extra_context（系统检索的记忆块，带防矛盾措辞），
+          否则用户问"翻一下记忆"时模型会按诚信红线否认真实存在的记忆
         - 防止驴头不对马嘴：明确禁止套方案模板，要求「先答用户问题，再补一句方案能力」
         - 失败安全兜底（LLM 超时/异常）：返回一个简洁自我介绍
         """
         from app.models.llm import get_llm_response
 
         history = self.memory.get_conversation_history(session_id) or "（这是第一次对话）"
+        memory_block = ""
+        if extra_context and extra_context.strip():
+            memory_block = (
+                "【系统检索到的记忆与客户上下文（以下是真实数据，不是你的编造；"
+                "用户问起历史需求/记忆时可放心引用；与问题无关就忽略）】\n"
+                f"{extra_context.strip()}\n\n"
+            )
         prompt = (
             "你是华为云解决方案智能匹配助手。下面是用户与你的多轮对话历史。\n"
             "【关键】用户当前问的不一定是方案问题，可能是算数/常识/概念/自我介绍等通用问询。\n"
@@ -3073,9 +3083,11 @@ Final Answer: [完整方案]）"""
             "2) 如果问题与方案匹配无关（如「1+1等于几」「Python 是什么」），**只回答问题本身**，不要强行推销方案能力。\n"
             "3) 回答结束时，自然地加一句过渡，告诉用户如果有方案匹配需求可继续告诉你。\n"
             "4) 用**简洁、自然**的口吻，避免「我是华为云助手，根据行业+场景匹配…」这种固定模板式开场。\n"
-            "5) 【数据诚信红线】你没有实时数据库访问能力：涉及客户档案内容、历史方案、实时报价、"
-            "知识库文档数等数据时，**绝对不要编造**具体数字、客户信息或价格；应如实说明并引导用户换"
-            "明确问法来触发对应功能（如「把XX存成客户」「查一下XX的档案」「50台4核8G的ECS用3个月多少钱」）。\n\n"
+            "5) 【数据诚信红线】凡系统注入的记忆/上下文块中**明确写出**的历史需求与客户信息，可以"
+            "直接引用作答；块中**没有**的客户档案内容、历史方案、实时报价、知识库文档数等数据"
+            "**绝对不要编造**，应如实说明并引导用户换明确问法来触发对应功能"
+            "（如「把XX存成客户」「查一下XX的档案」「50台4核8G的ECS用3个月多少钱」）。\n\n"
+            f"{memory_block}"
             f"{history}\n\n"
             f"用户最新问题：{user_input}\n\n"
             "直接回答："
