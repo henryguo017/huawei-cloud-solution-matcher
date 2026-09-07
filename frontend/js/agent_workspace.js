@@ -483,8 +483,8 @@
                             '<button class="ws-welcome-client-btn" id="ws-welcome-client-btn" type="button">' +
                                 '<svg class="icon" aria-hidden="true"><use id="ws-welcome-client-icon" href="#i-message-circle"></use></svg>' +
                                 '<span id="ws-welcome-client-current">通用对话 · 不关联客户</span>' +
-                                '<span class="ws-welcome-client-clear" id="ws-welcome-client-clear" role="button" title="清除已选客户">×</span>' +
                                 '<svg class="icon ws-context-pick-caret" aria-hidden="true"><use href="#i-chevron-down"></use></svg>' +
+                                '<span class="ws-welcome-client-clear" id="ws-welcome-client-clear" role="button" title="清除已选客户">×</span>' +
                             '</button>' +
                             '<div class="ws-welcome-client-menu" id="ws-welcome-client-menu" style="display:none;"></div>' +
                         '</div>' +
