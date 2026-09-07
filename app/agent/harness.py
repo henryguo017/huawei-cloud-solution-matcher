@@ -391,6 +391,7 @@ class AgentHarness:
         r"|多少.{0,6}客户|几[个户]客户|多少个客户|客户数"
         r"|(查一?下|看看|看下|查看|调出?|打开).{0,12}(档案|客户资料|客户详情)"
         r"|(合作过|服务过|做过|生成过).{0,10}方案|方案(历史|记录)|历史方案|匹配历史|给哪些客户"
+        r"|(合作过|服务过|支持过).{0,8}客户|(客户|名单).{0,6}(合作|服务)过"
         r"|(客户|他|她|它).{0,6}的(阶段|预算|行业|联系人|痛点|决策链|档案|资料)"
         r"|(什么|哪个|目前|现在|处于).{0,4}(商机)?阶段",
         re.IGNORECASE,
@@ -1170,7 +1171,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     and not re.search(r"搜索|联网|新闻|最新|实时|今天|现在|根据|关于", user_input)
                 )
                 if not self._disable_web_search and _need_search and not _skip_search_for_draft and (
-                    _doc_flag or re.search(r"搜索|联网|搜一下|新闻|最新|实时|今天|现在", user_input)
+                    _doc_flag or re.search(r"搜索|联网|搜一下|查一下|查询|搜搜|新闻|最新|实时|今天|现在", user_input)
                 ):
                     try:
                         from app.agent.tools import _tool_web_search

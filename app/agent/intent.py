@@ -49,7 +49,9 @@ _FILE_CONSULT_RE = re.compile(
 _COMPARE_METHOD_RE = re.compile(r"^(怎么|如何|怎样).{0,8}(对比|比较|选)")
 
 # 对比动词信号（用于判定"是否真的在对比"）
-_HAS_COMPARE_VERB = re.compile(r"(对比|比较|比一比|比怎么样|比怎么样|优劣势|差异|怎么选|谁更强|谁更|选型)")
+_HAS_COMPARE_VERB = re.compile(
+    r"(对比|比较|比一比|比怎么样|优劣势|差异|怎么选|谁更强|谁更|选型|哪个好|哪个更|哪家强|更好|选哪个|选哪家)"
+)
 
 # 明确的方案动作（含动词 + 方案/平台/系统/上云 等），避免把"这个方案让我有成就感"误判为方案意图
 _SOLUTION_ACTION_RE = re.compile(
@@ -187,6 +189,12 @@ def classify_intent(text: str) -> Dict[str, Any]:
         if _CONCEPT_RE.match(t) and not re.search(r"(方案|对比|竞品|做一个|帮我|生成|上云|建设|搭建)", t):
             return _mk("general", competitors, industries, 0.6)
         return _mk("solution", competitors, industries, 0.85)
+
+    # 4.4) 显式联网检索意图（搜索/查一下/搜一下）优先于产品知识问答：
+    #      "搜一下昇腾Atlas 950的发布信息"应走联网检索（general+web），
+    #      而不是被"昇腾"产品词截进 knowledge_q 后只能翻本地知识库
+    if re.search(r"搜索|联网|搜一下|搜搜|查一下|查询", t):
+        return _mk("general", competitors, industries, 0.7)
 
     # 4.5) 产品知识问答（方案类已先行，带行业/规模/方案动作的不会走到这）
     if _KNOWLEDGE_Q_RE.search(t):
