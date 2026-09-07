@@ -43,6 +43,7 @@ MCP 与 Skills 两套机制的**代码骨架已全部就绪、且工程质量很
 | `app/agent/mcp_server.py`           | **能力自暴露 Server**（把本地 7 工具喂给任意 MCP client） | 已落地 | stdio + HTTP/SSE 双传输；`initialize/tools/list/tools/call`；纯 stdlib                                                             |
 | `app/agent/mcp_client.py`           | **消费端**（把外部 Server 的工具拉进本地 ToolRegistry）  | 已落地 | stdio(`MCPClient`) + HTTP(`MCPHttpClient`) 双传输；前缀 `mcp__<label>__<tool>` 隔离；env + `data/mcp_servers.json` manifest 合并；任一失败跳过 |
 | `app/agent/mcp_server_cost_calc.py` | **自带业务 Server**（P0）                       | 已落地 | 成本测算 `cost_calc` + `cost_reference_list`；内置 SKU 目录（10 项）；单价只在工具内计算，强制 Agent 调工具报价                                            |
+| `app/agent/mcp_server_crm.py`      | **自带业务 Server**（P2）                       | 已落地 | 客户管理 `client_list`/`client_add`/`client_update` + `match_history`；纯 stdlib + sqlite3（不 import 任何 app 模块），按 `user_id` 隔离 |
 
 ### 1.2 协议与传输
 
@@ -160,7 +161,7 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 | `mcp_server_competitor` | `competitor_battlecard(industry)`               | 把 12 竞品厂商的对比卡片结构化，Agent 直接取而不是每次 RAG 拼   |
 | `mcp_server_tco`        | 在 cost_calc 上扩 `quote_compare(skus, providers)` | 华为云 vs 阿里云 vs AWS 同规格比价                  |
 | `mcp_server_notify`     | `push_feishu(text)` / `push_dingtalk(text)`     | 把飞书/钉钉推送变成 Agent 可调工具（现是事件触发，非 Agent 主动） |
-| `mcp_server_crm`        | `client_add` / `client_list` / `match_history`  | Agent 主动写客户管理/查历史匹配（现只会话内）               |
+| `mcp_server_crm`        | `client_list` / `client_add` / `client_update` / `match_history` | ✅ **P2 已完成**（本地绿、待部署）：Agent 主动读写客户管理、查历史匹配（此前只会话内、无法落库） |
 | `mcp_server_report`     | `gen_word` / `gen_pptx` / `gen_pdf`             | 把导出能力做成标准工具，统一 generate_doc 与 PPT 引擎入口   |
 
 ### 4.4 第三方 Server 接入（生态闭环）
@@ -241,7 +242,7 @@ harness.run() 按 intent 路由 → 两阶段/多智能体 plan 驱动
 
 1. **P0 激活验证**（1 小时内可上线，零新代码）：开 `AGENT_MCP_CLIENT=1` + `AGENT_SKILL_PACKS=1`，生产跑 50 题核对成本步与行业包是否真生效；若 ECS `.env` 本就缺这俩 flag，则这是"被遗忘的已完工功能"。
 2. **P1 横向补包** ✅ 已完成（本地绿，待部署）：行业包 +6、能力包 +4（挂载钩子已扩，`kind`/`triggers` 纯数据驱动）、行业别名 +14（50 题路由 0 变化）。现共 15 包（11 行业 + 4 能力）。
-3. **P2 新 Server**：`mcp_server_kb` / `mcp_server_crm` / `mcp_server_notify`（售前最高频动作工具化）。
+3. **P2 新 Server**：`mcp_server_crm` ✅ 已完成（本地绿、待部署）；`mcp_server_kb` / `mcp_server_notify` 待做。
 4. **P3 机制纵深**：热重载、用户级权限持久化、能力包可挂工具、双向暴露给外部 client（生态卖点）。
 
 ---
@@ -394,3 +395,35 @@ Registered tool: mcp__cost__cost_calc
 **⑤ 已知取舍**
 - 能力包**单槽位**：一次只挂 1 个（按 slug 排序取首个命中）。重叠场景（如竞品对比+成本）取 `capability_battlecard`。真实重叠罕见，若后续需要多能力叠加，把 `_active_capability` 改成列表即可。
 - 能力包只注入提示词（与行业包同铁律），不改工具集；`capability_tco` 里"金额必须 cost_calc 实算"是**口径约束**，真正强制调工具仍靠 harness 既有的 `_force_cost_step` 确定性逻辑（提示词无法保证工具调用，这点已在 §3 记录）。
+
+### 7.8 P2 执行记录（2026-09-07 · mcp_server_crm 客户管理 Server）
+
+**① 新增文件**
+| 文件 | 作用 |
+|---|---|
+| `app/agent/mcp_server_crm.py` | 自带 CRM Server：注册 `mcp__crm__client_list` / `client_add` / `client_update` / `match_history` |
+
+**② 实现要点**
+- **纯 stdlib + sqlite3，不 import 任何 app 模块**（连 `app.config` 都不碰），DB 路径由 `__file__` 推导（`data/users.db` → clients；`data/usage_logs.db` → match_history），与 `mcp_server_cost_calc.py` 同构（initialize/tools·list/tools·call/ping/shutdown）。
+- **多租户隔离**：`user_id` 解析顺序 = ① 工具显式入参 ② 环境变量 `MCP_CRM_DEFAULT_USER_ID`。**两者都无则返回「错误：」提示要求确认，绝不默认写进某个账号**（防串号）。
+- **写字段白名单** `_CLIENT_WRITABLE`（13 个结构化字段）+ 参数化 SQL，防注入与防幻觉列；展示标签与 schema 描述分离（前者短、进返回文本；后者长、只进 schema）。
+- `client_add` 命中 `UNIQUE(user_id, name)` 时返回明确错误并引导 `client_update`，避免重复建档；`client_update` 定位不到客户时提示先建档。
+- `match_history` 只返回摘要（需求/行业/竞品/时间），不把方案全文灌进上下文（避免爆 token），提示按需由上层按 id 取 `solution`。
+
+**③ 权限策略（重要取舍）**
+- `api/agent_routes.py` 无头放行表新增 **`mcp__crm__client_list` / `mcp__crm__match_history`（只读，allow）**。
+- **写入类 `client_add` / `client_update` 保持 `mcp__` 默认 `"ask"`** —— 需人工确认才落库，避免模型幻觉写入脏客户档案。
+- 交互态（非 IM）路径沿用既有 `mcp__` → ask 的默认策略，与成本工具当前行为一致。
+
+**④ 本地验证（全绿）**
+- 独立加载 + 临时 DB：initialize OK；4 工具注册；无 `user_id` → 安全报错（`isError=True`）；add / 重复 add 报错 / update / update 不存在报错 / list / history 全部符合预期。
+- **真实子进程握手**（`MCPClient` ↔ `python -m app.agent.mcp_server_crm`）：`list_tools` 得 4 工具；对真实库只读调用 `client_list`、`match_history` 均 `isError=false` 且无异常（未做任何写入）。
+- `py_compile` 通过。
+
+**⑤ 部署说明**
+- `.env.example`：`MCP_SERVERS` 增加 `{"command":["python","-m","app.agent.mcp_server_crm"],"label":"crm"}`；新增 `MCP_CRM_DEFAULT_USER_ID` 说明（**生产 `.env` 必须补这一行**，否则 CRM 工具一律返回"请确认 user_id"）。
+- 含 Python 新增文件，走标准 `wget main zip → cp -r → restart`；restart 前 `chown`（铁律⑥）。
+- 部署后抽查：Agent 说「把杭州某某科技存成客户，阶段需求调研」→ 应弹出权限确认（写入类 ask），确认后落库。
+
+**⑥ 下一步**
+- `mcp_server_notify`（飞书/钉钉推送工具化）与 `mcp_server_kb`（知识库自查/重建）待做，见 §4.3。

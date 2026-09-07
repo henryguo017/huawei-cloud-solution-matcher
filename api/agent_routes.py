@@ -257,6 +257,10 @@ async def agent_chat_internal(request: Request, body: InternalChatRequest):
         "read_customer_file": "allow",
         "mcp__cost__cost_calc": "allow",
         "mcp__cost__cost_reference_list": "allow",
+        # P2 CRM：只读工具放行（无副作用）；写入类 client_add/client_update 保持
+        # mcp__ 默认 "ask" —— 需人工确认才落库，避免模型幻觉写入脏客户档案。
+        "mcp__crm__client_list": "allow",
+        "mcp__crm__match_history": "allow",
     }
     result = await get_agent().run(
         message,
