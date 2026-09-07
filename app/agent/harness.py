@@ -1135,6 +1135,32 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     "step": 1,
                     "text": "识别意图：通用问答（非方案/非竞品/非账户/非纯礼节），调 LLM 直接回答",
                 })
+                # 联网补齐（2026-09-07）：general 直答默认无工具，用户明确要搜索/实时信息
+                # 且联网开关开启时，先真搜一次再把结果喂给直答——杜绝"口头答应搜索"的假动作
+                if not self._disable_web_search and re.search(
+                    r"搜索|联网|搜一下|新闻|最新|实时|今天|现在", user_input
+                ):
+                    try:
+                        from app.agent.tools import _tool_web_search
+                        import json as _json
+                        _obs = await _tool_web_search(user_input[:120])
+                        _data = _json.loads(_obs) if isinstance(_obs, str) else {}
+                        if _data.get("status") == "ok" and _data.get("results"):
+                            _lines = [
+                                f"- {r.get('title', '')}（来源：{r.get('domain', '')}）"
+                                for r in _data.get("results", [])[:5]
+                            ]
+                            extra_context = (extra_context or "") + "\n\n" + (
+                                "【联网检索结果（真实数据，可引用，注明来源；与问题无关则忽略）】\n"
+                                + "\n".join(_lines)
+                            )
+                            await self._emit(event_callback, {
+                                "type": "thought",
+                                "step": 1,
+                                "text": "已联网检索最新信息，结合结果回答",
+                            })
+                    except Exception as _we:
+                        self._log("warn", f"general 联网检索失败（忽略）: {_we}")
                 general = await self._answer_general_chat(user_input, session_id, extra_context=extra_context)
                 self.memory.add_agent_response(session_id, general)
                 await self._emit(event_callback, {
