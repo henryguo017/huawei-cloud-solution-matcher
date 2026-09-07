@@ -186,6 +186,20 @@ class ConversationMemory:
         except Exception as e:
             logger.warning(f"[memory] 长期记忆落库失败 session={session_id}: {e}")
 
+    def get_history_messages(self, session_id: str, limit: int = 60) -> List[Dict[str, str]]:
+        """结构化历史（[{role, content}]，时间正序）——供前端历史补全接口使用。
+
+        注意：与 get_conversation_history 不同，这里返回结构化列表而非拼好的文本。
+        单条 content 受 _persist 500 字截断限制（DB 里的存量即截断后的）。
+        """
+        self._ensure_loaded(session_id)
+        entries = self._get_or_create_session(session_id)["long_term"]
+        out = [
+            {"role": e.role, "content": e.content}
+            for e in entries if e.role in ("user", "agent")
+        ]
+        return out[-limit:]
+
     def get_conversation_history(self, session_id: str) -> str:
         self._ensure_loaded(session_id)
         if session_id not in self._sessions:

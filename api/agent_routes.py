@@ -387,6 +387,32 @@ async def agent_context_usage(session_id: str = "", client_id: str = "", user: d
         raise HTTPException(status_code=500, detail=f"上下文用量统计失败: {e}")
 
 
+@router.get("/agent/history", tags=["Agent 对话"])
+async def agent_history(session_id: str = "", user: dict = Depends(get_current_user)):
+    """会话历史补全接口：返回该 session 的结构化对话（[{role, content}]，时间正序）。
+
+    用途：前端 localStorage 曾因"每轮覆写最后一条 agent 消息"的 bug 丢失多轮回答，
+    打开老对话时前端比对本地与服务端条数，服务端更全则回填修复。
+    单条 content 受落库 500 字截断限制。归属校验：session_id 解析出的 uid 必须是
+    当前用户（或匿名 0），防止拉别人的对话。
+    """
+    from fastapi import HTTPException
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id 必填")
+    uid = user.get("id") or user.get("user_id") or 0
+    from app.agent.memory import ConversationMemory
+    sid_uid = ConversationMemory._parse_user_id(session_id)
+    if sid_uid not in (0, uid):
+        raise HTTPException(status_code=403, detail="无权访问该会话历史")
+    try:
+        from app.agent.memory import ConversationMemory
+        memory = ConversationMemory()
+        msgs = memory.get_history_messages(session_id)
+        return {"ok": True, "session_id": session_id, "messages": msgs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取会话历史失败: {e}")
+
+
 class EnhancePromptRequest(BaseModel):
     prompt: str
     session_id: str = ""

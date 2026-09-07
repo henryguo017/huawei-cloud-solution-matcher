@@ -2843,6 +2843,37 @@
             }
             this._renderTasks();
             this._scrollBottom();
+            this._repairHistoryFromServer(id);
+        },
+
+        /* 历史补全：老对话曾因"每轮覆写最后一条 agent 消息"的 bug 丢失多轮回答，
+           打开时与后端 agent_memory 比对——服务端 agent 消息更全则回填本地并重渲染。
+           每条对话只修一次（_histRepaired 标记）；单条内容受后端 500 字截断限制。 */
+        _repairHistoryFromServer: function (id) {
+            var self = this;
+            var token = this.userToken();
+            if (!token || !id) return;
+            this._histRepaired = this._histRepaired || {};
+            if (this._histRepaired[id]) return;
+            fetch('/api/agent/history?session_id=' + encodeURIComponent(id), {
+                headers: { 'Authorization': 'Bearer ' + token }
+            }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+                self._histRepaired[id] = true;
+                if (!d || !d.ok || !Array.isArray(d.messages) || !d.messages.length) return;
+                var list = self._loadConvos(), found = null;
+                for (var i = 0; i < list.length; i++) { if (list[i].id === id) { found = list[i]; break; } }
+                if (!found) return;
+                var localAgents = (found.messages || []).filter(function (m) { return m.role === 'agent'; }).length;
+                var serverAgents = d.messages.filter(function (m) { return m.role === 'agent'; }).length;
+                if (serverAgents > localAgents) {
+                    found.messages = d.messages.map(function (m) {
+                        return { role: (m.role === 'user' ? 'user' : 'agent'), content: String(m.content || '') };
+                    });
+                    found.updatedAt = Date.now();
+                    self._saveConvos(list);
+                    if (self.currentConvoId === id) self._openConvo(id);  // 正打开这条则重渲染（已标记不再递归拉取）
+                }
+            }).catch(function () { /* 静默：补全失败不影响本地历史展示 */ });
         },
 
         /* ---------------- 方案 B：客户上下文选择器 ---------------- */
