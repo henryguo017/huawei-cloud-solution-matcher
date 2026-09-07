@@ -9,6 +9,7 @@
 """
 
 import os
+import re
 import json
 import asyncio
 import inspect
@@ -372,11 +373,14 @@ async def _tool_generate_doc(fmt: str = "word", content: str = "", report_type: 
         return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
 
-async def _tool_web_search(query: str) -> str:
+async def _tool_web_search(query: str, topic: str = "general") -> str:
     """
     工具: web_search（P1-2）
     作用: 补充知识库之外的联网检索（华为云官网/白皮书/新闻/竞品动态）。
     实现: 可插拔 provider（Tavily 默认），未配置 WEB_SEARCH_PROVIDER 时优雅降级（仅基于知识库作答）。
+    调优（2026-09-08）:
+    - 新闻语义查询自动走 topic=news（Tavily 新闻索引 + 近 30 天时间窗），减少命中栏目页
+    - 脱敏结果保留 snippet 摘要（此前只留 domain+title，模型拿到的是"空壳结果"）
     """
     from app.config import WEB_SEARCH_PROVIDER, WEB_SEARCH_MAX_PER_SESSION
     provider = (WEB_SEARCH_PROVIDER or "").strip().lower()
@@ -386,20 +390,29 @@ async def _tool_web_search(query: str) -> str:
             "message": "当前未配置联网搜索，仅基于本地知识库作答。",
             "results": [],
         }, ensure_ascii=False)
-    # 限流：本会话联网检索次数上限
+    # 限流：本会话联网检索次数上限（计数器由 harness.run() 每轮 reset，此前是进程级不重置的 bug）
     if getattr(_tool_web_search, "_count", 0) >= int(WEB_SEARCH_MAX_PER_SESSION or 3):
         return json.dumps({
             "status": "limited",
             "message": f"已达本会话联网检索上限（{WEB_SEARCH_MAX_PER_SESSION} 次）。",
             "results": [],
         }, ensure_ascii=False)
+    # 新闻语义判定：查询带时效词时走新闻索引（provider 侧映射为 topic=news + days=30）
+    if topic == "general" and re.search(r"新闻|最新|动态|近期|最近|今天|实时|发布", query or ""):
+        topic = "news"
     try:
         from app.agent.tools_search import get_web_search_provider
         p = get_web_search_provider(provider)
-        results = await to_thread_limited(p.search, query, top_n=5, _timeout=60.0)
+        results = await to_thread_limited(p.search, query, top_n=5, topic=topic, _timeout=60.0)
         _tool_web_search._count = getattr(_tool_web_search, "_count", 0) + 1
-        # URL 脱敏：只留来源域名，不在 observation 暴露完整外链（防幻觉外链；LLM 只引来源名）
-        slim = [{"domain": r.get("domain", ""), "title": r.get("title", "")} for r in (results or [])]
+        # URL 脱敏：只留来源域名+标题+摘要，不在 observation 暴露完整外链（防幻觉外链；LLM 只引来源名）。
+        # snippet 必须保留——它是模型作答的唯一内容依据，只给标题会导致空洞转述。
+        slim = [{
+            "domain": r.get("domain", ""),
+            "title": r.get("title", ""),
+            "snippet": (r.get("snippet") or "")[:220],
+            "published": r.get("published", ""),
+        } for r in (results or [])]
         return json.dumps({
             "status": "ok",
             "count": len(slim),
@@ -408,6 +421,11 @@ async def _tool_web_search(query: str) -> str:
     except Exception as e:
         logger.warning(f"[web_search] 检索失败: {e}")
         return json.dumps({"status": "error", "message": str(e), "results": []}, ensure_ascii=False)
+
+
+def reset_web_search_budget():
+    """每轮 harness.run() 开始时重置联网检索计数（修复进程级不重置导致联网永久失效的 bug）。"""
+    _tool_web_search._count = 0
 
 
 # ============================================================

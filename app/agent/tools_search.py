@@ -8,6 +8,7 @@ P1-2 联网检索 provider（可插拔抽象）
 - 铁律：API Key 只来自 config / .env，绝不写死在代码里。
 """
 import logging
+import re
 from typing import Dict, List
 
 logger = logging.getLogger(__name__)
@@ -38,33 +39,42 @@ class TavilyProvider(WebSearchProvider):
     def __init__(self, api_key: str):
         self.api_key = api_key
 
-    def search(self, query: str, top_n: int = 5) -> List[Dict[str, str]]:
+    def search(self, query: str, top_n: int = 5, topic: str = "general") -> List[Dict[str, str]]:
         import json
         import urllib.request
 
+        # 查询调优（2026-09-08）：
+        # - search_depth=advanced：Tavily 会做正文抽取，返回的内容摘要远比 basic 饱满
+        # - topic=news（调用方按查询语义判定）+ days=30：新闻类查询走新闻索引并限定近 30 天，
+        #   避免"华为云最新动态"命中年久失修的栏目页/落地页
         url = "https://api.tavily.com/search"
         payload = {
             "api_key": self.api_key,
             "query": query,
             "max_results": top_n,
-            "search_depth": "basic",
+            "search_depth": "advanced",
         }
+        if topic == "news":
+            payload["topic"] = "news"
+            payload["days"] = 30
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         out = []
         for r in (data.get("results") or [])[:top_n]:
             u = r.get("url", "")
+            published = r.get("published_date") or ""
             out.append({
                 "domain": _domain_of(u),
                 "title": r.get("title", ""),
                 "url": u,
-                "snippet": (r.get("content") or "")[:200],
+                "snippet": (r.get("content") or "")[:400],
+                "published": published[:10],
             })
         return out
 
@@ -77,10 +87,13 @@ class SerperProvider(WebSearchProvider):
     def __init__(self, api_key: str):
         self.api_key = api_key
 
-    def search(self, query: str, top_n: int = 5) -> List[Dict[str, str]]:
+    def search(self, query: str, top_n: int = 5, topic: str = "general") -> List[Dict[str, str]]:
         import json
         import urllib.request
 
+        # serper 无 topic 概念，news 类查询追加时效词兜底
+        if topic == "news" and not re.search(r"最新|近期|20\d\d", query):
+            query = f"{query} 最新"
         url = "https://google.serper.dev/search"
         req = urllib.request.Request(
             url,
@@ -98,6 +111,7 @@ class SerperProvider(WebSearchProvider):
                 "title": r.get("title", ""),
                 "url": u,
                 "snippet": (r.get("snippet") or "")[:200],
+                "published": (r.get("date") or "")[:10],
             })
         return out
 

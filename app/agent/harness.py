@@ -1156,7 +1156,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                             })
                         elif _data.get("status") == "ok" and _data.get("results"):
                             _lines = [
-                                f"- {r.get('title', '')}（来源：{r.get('domain', '')}）{r.get('content', '')[:120]}"
+                                f"- {r.get('title', '')}（来源：{r.get('domain', '')}）{r.get('snippet', '')[:200]}"
                                 for r in _data.get("results", [])[:5]
                             ]
                             # 独立块（不并入记忆 extra_context）：让模型明确知道"这是刚刚搜到的"
