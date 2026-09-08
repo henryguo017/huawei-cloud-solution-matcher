@@ -24,6 +24,12 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 
 from app.agent.tools import ToolRegistry
 from app.agent.tools import _tool_analyze_demand, _get_kb
+
+# 文档附件注入标记（2026-09-09）：api/agent_routes.py 构建 doc_block 以此开头；
+# harness 意图路由检测到 extra_context 含该标记即强制走两阶段工具链——
+# general 直答分支零工具能力会把"读取附件"变成空头承诺，CRM 档案分支会忽略附件（E2E 双实测）。
+DOC_ATTACH_MARKER = "[用户在本对话附带了以下客户资料文件"
+
 from app.agent.memory import ConversationMemory
 from app.services.solution_prompt import (
     parse_markdown_to_chapters,
@@ -1023,6 +1029,11 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             # ── 意图路由（A 方案）：首轮先识别意图，非方案类直接轻量回复，不进 ReAct/14章流水线 ──
             intent = classify_intent(user_input)
             self._intent = intent.get("intent", "solution")
+            # 附件强制工具链（2026-09-09 E2E 双实测）：请求携带文档附件时一律走两阶段，
+            # 不进 general 直答 / CRM 档案等无 read_customer_file 能力的分支。
+            if extra_context and DOC_ATTACH_MARKER in extra_context:
+                self._log("system", f"[INTENT] 检测到文档附件，强制走工具链（覆盖原意图 {self._intent}）")
+                self._intent = "solution"
             self._format_mode = "competitor" if self._intent == "competitor" else "solution"
             competitors = intent.get("competitors", []) or []
             self._log("system", f"[INTENT] {intent}")

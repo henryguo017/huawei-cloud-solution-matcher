@@ -243,8 +243,9 @@ async def agent_chat(
                 doc_rels = _validate_user_doc_paths(user_id, body.customer_files)
                 if doc_rels:
                     file_list = "\n".join(f"- {p}" for p in doc_rels)
+                    from app.agent.harness import DOC_ATTACH_MARKER
                     doc_block = (
-                        "[用户在本对话附带了以下客户资料文件，如与本次需求相关，"
+                        DOC_ATTACH_MARKER + "，如与本次需求相关，"
                         "请先用 read_customer_file 工具读取并提取要点，再综合回答]\n" + file_list
                     )
                     extra_context = (extra_context + "\n\n" if extra_context else "") + doc_block
