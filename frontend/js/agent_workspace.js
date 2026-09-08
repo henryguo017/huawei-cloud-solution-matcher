@@ -560,7 +560,8 @@
                 });
 
                 // 粘贴截图（Ctrl+V）直接进图片输入（2026-09-09）
-                input.addEventListener('paste', function (e) {
+                // 注意：此处位于 _bind 靠前位置，this.els.input 此时尚未赋给局部变量，必须走 self.els
+                self.els.input.addEventListener('paste', function (e) {
                     var files = Array.prototype.slice.call((e.clipboardData && e.clipboardData.files) || []);
                     var imgs = files.filter(function (f) { return /^image\//.test(f.type); });
                     if (imgs.length) { e.preventDefault(); self._addImageFiles(imgs); }
