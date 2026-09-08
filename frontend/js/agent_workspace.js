@@ -3176,16 +3176,28 @@
                         if (!r.ok) { return r.json().then(function (j) { throw new Error(j.detail || ('上传失败 (' + r.status + ')')); }); }
                         return r.json();
                     }).then(function (data) {
-                        self.pendingImages.push({
-                            path: data.path,
-                            name: data.filename || f.name,
-                            url: URL.createObjectURL(blob)
+                        // 预览用 data URL 而非 blob: URL —— CSP img-src 未放行 blob:，会裂图
+                        return self._blobToDataUrl(blob).then(function (dataUrl) {
+                            self.pendingImages.push({
+                                path: data.path,
+                                name: data.filename || f.name,
+                                url: dataUrl
+                            });
+                            self._renderImgChips();
                         });
-                        self._renderImgChips();
                     });
                 }).catch(function (e) {
                     self._toast((e && e.message) || '图片上传失败', 'warning');
                 });
+            });
+        },
+        /* blob → data URL（nginx CSP 的 img-src 只放行 self/data:，blob: 预览图会被拦成裂图，2026-09-09 修复） */
+        _blobToDataUrl: function (blob) {
+            return new Promise(function (resolve, reject) {
+                var fr = new FileReader();
+                fr.onload = function () { resolve(fr.result); };
+                fr.onerror = function () { reject(fr.error); };
+                fr.readAsDataURL(blob);
             });
         },
         /* 过大图 canvas 压缩：最长边 ≤2000px，超 5MB 转 JPEG q0.85 */
@@ -3194,33 +3206,32 @@
             if (file.size <= this.MAX_IMAGE_BYTES) return Promise.resolve(file);
             return new Promise(function (resolve) {
                 var img = new Image();
-                var objUrl = URL.createObjectURL(file);
-                img.onload = function () {
-                    URL.revokeObjectURL(objUrl);
-                    var MAXSIDE = 2000;
-                    var w = img.naturalWidth, h = img.naturalHeight;
-                    var scale = Math.min(1, MAXSIDE / Math.max(w, h));
-                    var canvas = document.createElement('canvas');
-                    canvas.width = Math.round(w * scale);
-                    canvas.height = Math.round(h * scale);
-                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                    var outType = (file.type === 'image/png') ? 'image/png' : 'image/jpeg';
-                    var tryQuality = [0.85, 0.75];
-                    var attempt = function (qi) {
-                        canvas.toBlob(function (blob) {
-                            if (!blob) { resolve(null); return; }
-                            if (blob.size <= self.MAX_IMAGE_BYTES || qi >= tryQuality.length) resolve(blob);
-                            else attempt(qi + 1);
-                        }, outType, tryQuality[qi]);
+                self._blobToDataUrl(file).then(function (dataUrl) {
+                    img.onload = function () {
+                        var MAXSIDE = 2000;
+                        var w = img.naturalWidth, h = img.naturalHeight;
+                        var scale = Math.min(1, MAXSIDE / Math.max(w, h));
+                        var canvas = document.createElement('canvas');
+                        canvas.width = Math.round(w * scale);
+                        canvas.height = Math.round(h * scale);
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        var outType = (file.type === 'image/png') ? 'image/png' : 'image/jpeg';
+                        var tryQuality = [0.85, 0.75];
+                        var attempt = function (qi) {
+                            canvas.toBlob(function (blob) {
+                                if (!blob) { resolve(null); return; }
+                                if (blob.size <= self.MAX_IMAGE_BYTES || qi >= tryQuality.length) resolve(blob);
+                                else attempt(qi + 1);
+                            }, outType, tryQuality[qi]);
+                        };
+                        attempt(0);
                     };
-                    attempt(0);
-                };
-                img.onerror = function () {
-                    URL.revokeObjectURL(objUrl);
-                    self._toast('图片读取失败：' + (file.name || '截图'), 'warning');
-                    resolve(null);
-                };
-                img.src = objUrl;
+                    img.onerror = function () {
+                        self._toast('图片读取失败：' + (file.name || '截图'), 'warning');
+                        resolve(null);
+                    };
+                    img.src = dataUrl;
+                }, function () { resolve(null); });
             });
         },
         _renderImgChips: function () {
@@ -3247,8 +3258,7 @@
         },
         _removePendingImage: function (idx) {
             if (!this.pendingImages || !this.pendingImages[idx]) return;
-            try { URL.revokeObjectURL(this.pendingImages[idx].url); } catch (e) {}
-            this.pendingImages.splice(idx, 1);
+            this.pendingImages.splice(idx, 1);   // url 是 data URL，无需 revoke
             this._renderImgChips();
         },
         /* 发送前取走待发图片路径（所有权转移给本次请求） */
@@ -3258,7 +3268,7 @@
             return list;
         },
         _clearOutgoingImages: function () {
-            // 注意：不 revoke objectURL —— 用户气泡可能还在用它显示缩略图，交由页面生命周期回收
+            // url 是 data URL（字符串引用），气泡可能还在用它显示缩略图，交由 GC 回收
             this.pendingImages = [];
             this._renderImgChips();
         },
