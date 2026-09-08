@@ -25,9 +25,10 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 from app.agent.tools import ToolRegistry
 from app.agent.tools import _tool_analyze_demand, _get_kb
 
-# 文档附件注入标记（2026-09-09）：api/agent_routes.py 构建 doc_block 以此开头；
-# harness 意图路由检测到 extra_context 含该标记即强制走两阶段工具链——
-# general 直答分支零工具能力会把"读取附件"变成空头承诺，CRM 档案分支会忽略附件（E2E 双实测）。
+# 文档附件注入标记（2026-09-09）：api/agent_routes.py 构建 doc_block 以此开头。
+# 用途：①带附件时跳过澄清表（需求往往就在附件里）；②真方案诉求下引导 read_customer_file。
+# 注意：附件文本已由 agent_routes 预处理注入消息，此处不再强制 intent=solution
+# （简历案例实测：强制会把"聊着天让看看简历"拉进方案流水线还弹澄清表）。
 DOC_ATTACH_MARKER = "[用户在本对话附带了以下客户资料文件"
 
 from app.agent.memory import ConversationMemory
@@ -1033,12 +1034,11 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             # 会被行业词带进方案匹配全流程。注入内容只参与回答，不参与意图判定。
             intent = classify_intent(intent_text or user_input)
             self._intent = intent.get("intent", "solution")
-            # 附件强制工具链（2026-09-09 E2E 双实测）：请求携带文档附件时一律走两阶段，
-            # 不进 general 直答 / CRM 档案等无 read_customer_file 能力的分支。
+            # 文档附件（2026-09-09 简历案例二次修正）：附件内容已由 agent_routes 预处理
+            # 注入消息（与图片 vision 同架构），不再强制 intent=solution——"聊着天传个
+            # 简历让它看看"应该走通用直答自然回答。标记仅用于：①带附件时跳过澄清表；
+            # ②真方案诉求下 extra_context 仍有 read_customer_file 引导。
             _has_doc_attach = bool(extra_context and DOC_ATTACH_MARKER in extra_context)
-            if _has_doc_attach:
-                self._log("system", f"[INTENT] 检测到文档附件，强制走工具链（覆盖原意图 {self._intent}）")
-                self._intent = "solution"
             self._format_mode = "competitor" if self._intent == "competitor" else "solution"
             competitors = intent.get("competitors", []) or []
             self._log("system", f"[INTENT] {intent}")

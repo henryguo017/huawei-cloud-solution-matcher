@@ -208,6 +208,38 @@ async def agent_chat(
     if not llm_message.strip():
         raise HTTPException(status_code=400, detail="message 不能为空")
 
+    # 文档附件预处理（2026-09-09 简历案例）：服务端直接提取附件文本、注入消息——
+    # 与图片 vision 预处理同一架构。这样"聊着天传个简历让它看看"走通用直答也能
+    # 真实读到内容，而不是被强制拉进方案两阶段还弹澄清表；真方案诉求（消息含
+    # 方案动词）依旧自然进两阶段，extra_context 的 read_customer_file 引导保留。
+    if body.customer_files:
+        if not isinstance(user_id, int) or user_id <= 0:
+            raise HTTPException(status_code=401, detail="请先登录后再使用附件")
+        doc_rels = _validate_user_doc_paths(user_id, body.customer_files)
+        if doc_rels:
+            from app.agent.parsers.read_file import extract_text
+
+            def _extract_all():
+                parts = []
+                for rel in doc_rels:
+                    abs_path = os.path.realpath(os.path.join(USER_DOCS_BASE_DIR, str(user_id), rel))
+                    try:
+                        txt = (extract_text(abs_path) or "").strip()
+                    except Exception as ex:
+                        txt = f"（附件读取失败: {ex}）"
+                    if len(txt) > 15000:
+                        txt = txt[:15000] + "\n…（内容过长已截断，完整内容可让我用 read_customer_file 工具读取）"
+                    parts.append(f"【附件 {rel} 内容】\n{txt}")
+                return "\n\n".join(parts)
+
+            doc_content = await asyncio.to_thread(_extract_all)
+            if doc_content.strip():
+                llm_message = (
+                    f"[客户在本轮上传了 {len(doc_rels)} 个附件，内容如下]\n"
+                    f"{doc_content}\n[/附件内容结束]\n\n" + llm_message
+                )
+                logger.info("[agent/chat] 文档附件预处理完成 files=%s session=%s", len(doc_rels), session_id)
+
     event_queue: "asyncio.Queue" = asyncio.Queue()
 
     async def emit(event: dict) -> None:
