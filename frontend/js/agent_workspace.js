@@ -336,8 +336,11 @@
                                 '<button class="ws-header-icon-btn" id="ws-archive" type="button" title="归档当前对话" aria-label="归档当前对话">' +
                                     '<svg class="icon" aria-hidden="true"><use href="#i-archive"></use></svg>' +
                                 '</button>' +
-                                '<button class="ws-header-icon-btn" id="ws-copy" type="button" title="复制对话" aria-label="复制对话">' +
-                                    '<svg class="icon" aria-hidden="true"><use href="#i-copy"></use></svg>' +
+                                '<button class="ws-header-icon-btn" id="ws-share" type="button" title="分享为只读链接" aria-label="分享为只读链接">' +
+                                    '<svg class="icon" aria-hidden="true"><use href="#i-share"></use></svg>' +
+                                '</button>' +
+                                '<button class="ws-header-icon-btn" id="ws-history-q" type="button" title="历史提问" aria-label="历史提问">' +
+                                    '<svg class="icon" aria-hidden="true"><use href="#i-clock"></use></svg>' +
                                 '</button>' +
                                 '<button class="ws-header-icon-btn" id="ws-header-more" type="button" title="更多" aria-label="更多">' +
                                     '<svg class="icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg>' +
@@ -440,7 +443,8 @@
                 drawer: this.root.querySelector('#ws-drawer'),
                 drawerMask: this.root.querySelector('#ws-drawer-mask'),
                 drawerToggle: this.root.querySelector('#ws-drawer-toggle'),
-                copyBtn: this.root.querySelector('#ws-copy'),
+                shareBtn: this.root.querySelector('#ws-share'),
+                historyQBtn: this.root.querySelector('#ws-history-q'),
                 headerMore: this.root.querySelector('#ws-header-more'),
                 drawerClose: this.root.querySelector('#ws-drawer-close'),
                 previewEmpty: this.root.querySelector('#ws-preview-empty'),
@@ -514,7 +518,8 @@
 
             root.querySelector('#ws-drawer-toggle').addEventListener('click', function () { self._toggleDrawer(); });
             root.querySelector('#ws-drawer-close').addEventListener('click', function () { self._toggleDrawer(); });
-            if (this.els.copyBtn) this.els.copyBtn.addEventListener('click', function () { self._copyConversation(); });
+            if (this.els.shareBtn) this.els.shareBtn.addEventListener('click', function () { self._shareConversation(); });
+            if (this.els.historyQBtn) this.els.historyQBtn.addEventListener('click', function (e) { e.stopPropagation(); self._toggleHistoryQuestions(this); });
             if (this.els.headerMore) this.els.headerMore.addEventListener('click', function (e) { e.stopPropagation(); self._showHeaderMoreMenu(e.currentTarget); });
             root.querySelector('#ws-drawer-mask').addEventListener('click', function () { self._toggleDrawer(); });
 
@@ -981,55 +986,199 @@
             document.body.appendChild(t);
             setTimeout(function () { if (t && t.parentNode) t.remove(); }, 2800);
         },
-        /* 复制当前整段对话为纯文本到剪贴板（WorkBuddy 顶栏第 3 个图标） */
-        _copyConversation: function () {
+        /* 顶栏分享：把当前对话生成只读分享链接（复用 /api/share + share.html，30 天有效） */
+        _shareConversation: function () {
             var self = this;
             var found = null, list = this._loadConvos();
             for (var i = 0; i < list.length; i++) { if (list[i].id === this.currentConvoId) { found = list[i]; break; } }
-            if (!found || !found.messages || !found.messages.length) {
-                // 本地无消息体（老对话/跨设备）：回退服务端 /agent/history 拉取后复制
-                self._copyFromServer(this.currentConvoId);
+            var msgs = (found && found.messages) || [];
+            if (!msgs.length) {
+                // 本地无消息体（老对话/跨设备）：回退服务端 /agent/history 拉取后分享
+                self._shareFromServer(this.currentConvoId);
                 return;
             }
-            var text = (found.title || '对话') + '\n\n';
-            found.messages.forEach(function (m) {
-                var who = m.role === 'user' ? (self.userName() || '我') : '华为云方案助手';
-                text += '【' + who + '】\n' + String(m.content || '').replace(/\n{3,}/g, '\n\n').trim() + '\n\n';
-            });
-            var done = function (ok) {
-                if (window.UI && window.UI.showToast) window.UI.showToast(ok ? '对话已复制到剪贴板' : '复制失败', ok ? 'success' : 'error');
-            };
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
-            } else {
-                try {
-                    var ta = document.createElement('textarea');
-                    ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
-                    document.body.appendChild(ta); ta.select();
-                    var ok = document.execCommand('copy');
-                    document.body.removeChild(ta); done(ok);
-                } catch (e) { done(false); }
-            }
+            self._createConversationShare(found.title || (this.els.title.textContent || '对话分享'), msgs);
         },
-        /* 服务端历史回退复制：本地无消息体时从 /agent/history 拉取（2026-09-08） */
-        _copyFromServer: function (sessionId) {
+        _shareFromServer: function (sessionId) {
             var self = this;
             var token = this.userToken();
-            if (!token || !sessionId) { self._toast('当前没有可复制的对话', 'warning'); return; }
+            if (!token || !sessionId) { self._toast('当前没有可分享的对话', 'warning'); return; }
             fetch('/api/agent/history?session_id=' + encodeURIComponent(sessionId), {
                 headers: { 'Authorization': 'Bearer ' + token }
             }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
                 var msgs = (data && data.messages) || [];
-                if (!msgs.length) { self._toast('当前没有可复制的对话', 'warning'); return; }
-                var text = (self.els.title.textContent || '对话') + '\n\n';
+                if (!msgs.length) { self._toast('当前没有可分享的对话', 'warning'); return; }
+                self._createConversationShare(self.els.title.textContent || '对话分享', msgs);
+            }).catch(function () { self._toast('分享失败', 'error'); });
+        },
+        _createConversationShare: function (title, msgs) {
+            var self = this;
+            // 上限 60 条消息，防超大对话把分享快照撑爆
+            var clipped = msgs.slice(0, 60).map(function (m) {
+                return { role: m.role === 'user' ? 'user' : 'agent', content: String(m.content || '') };
+            });
+            var firstUser = '';
+            for (var i = 0; i < clipped.length; i++) { if (clipped[i].role === 'user') { firstUser = clipped[i].content; break; } }
+            var token = self.userToken();
+            self._toast('正在生成分享链接…', 'info');
+            fetch('/api/share', {
+                method: 'POST',
+                headers: token ? { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token } : { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: (title || '对话分享').slice(0, 100),
+                    payload: {
+                        kind: 'conversation',
+                        title: (title || '对话分享').slice(0, 100),
+                        demand: firstUser.slice(0, 500),
+                        messages: clipped,
+                        created_at: new Date().toISOString()
+                    }
+                })
+            }).then(function (r) {
+                if (!r.ok) { return r.json().then(function (j) { throw new Error(j.detail || ('HTTP ' + r.status)); }); }
+                return r.json();
+            }).then(function (data) {
+                if (!data || !data.share_id) throw new Error('分享创建失败');
+                var url = location.origin + '/share.html?id=' + encodeURIComponent(data.share_id);
+                self._showShareModal(url);
+            }).catch(function (e) {
+                self._toast((e && e.message) || '分享失败', 'error');
+            });
+        },
+        /* 分享结果弹窗：二维码 + 链接 + 一键复制 */
+        _showShareModal: function (url) {
+            var self = this;
+            self._closeShareModal();
+            var mask = document.createElement('div');
+            mask.className = 'ws-share-modal-mask';
+            var qrHtml = '';
+            try {
+                var qr = qrcode(0, 'M');
+                qr.addData(url);
+                qr.make();
+                qrHtml = qr.createSvgTag(4, 0);
+            } catch (e) { qrHtml = ''; }
+            mask.innerHTML =
+                '<div class="ws-share-modal" role="dialog" aria-label="分享链接">' +
+                    '<div class="ws-share-modal-head">' +
+                        '<span>分享 · 只读链接</span>' +
+                        '<button type="button" class="ws-share-modal-close" title="关闭">×</button>' +
+                    '</div>' +
+                    '<div class="ws-share-modal-body">' +
+                        (qrHtml ? '<div class="ws-share-qr">' + qrHtml + '</div>' : '') +
+                        '<div class="ws-share-link" id="ws-share-link"></div>' +
+                        '<div class="ws-share-tip">任何人可通过此链接只读查看该对话（30 天有效），不含账号信息</div>' +
+                    '</div>' +
+                    '<div class="ws-share-modal-foot">' +
+                        '<button type="button" class="ws-share-copy" id="ws-share-copy">复制链接</button>' +
+                        '<a class="ws-share-open" href="' + escHtml(url) + '" target="_blank">打开分享页</a>' +
+                    '</div>' +
+                '</div>';
+            document.body.appendChild(mask);
+            mask.querySelector('#ws-share-link').textContent = url;
+            mask.querySelector('.ws-share-modal-close').addEventListener('click', function () { self._closeShareModal(); });
+            mask.addEventListener('click', function (e) { if (e.target === mask) self._closeShareModal(); });
+            mask.querySelector('#ws-share-copy').addEventListener('click', function () {
+                self._copyText(url, function (ok) {
+                    self._toast(ok ? '链接已复制到剪贴板' : '复制失败，请手动选择链接复制', ok ? 'success' : 'error');
+                });
+            });
+        },
+        _closeShareModal: function () {
+            var m = document.querySelector('.ws-share-modal-mask');
+            if (m) m.parentNode.removeChild(m);
+        },
+        /* 顶栏时钟按钮：历史提问下拉面板 —— 汇总所有对话里的用户提问，点击回填输入框 */
+        _toggleHistoryQuestions: function (anchor) {
+            if (document.querySelector('.ws-history-questions')) { this._closeHistoryQuestions(); return; }
+            var items = [];
+            var seen = {};
+            var list = this._loadConvos();
+            // convos 已按 updatedAt 降序保存，遍历即最新优先；归档对话同样计入
+            for (var i = 0; i < list.length; i++) {
+                var msgs = list[i].messages || [];
+                for (var j = msgs.length - 1; j >= 0; j--) {
+                    var m = msgs[j];
+                    if (!m || m.role !== 'user') continue;
+                    var text = String(m.content || '').replace(/\s+/g, ' ').trim();
+                    if (!text || seen[text]) continue;
+                    seen[text] = true;
+                    items.push(text);
+                    if (items.length >= 200) break;
+                }
+                if (items.length >= 200) break;
+            }
+            var self = this;
+            var panel = document.createElement('div');
+            panel.className = 'ws-history-questions';
+            var head = '<div class="ws-hq-head">历史提问（' + items.length + '）</div>';
+            var body;
+            if (!items.length) {
+                body = '<div class="ws-hq-empty">暂无提问记录</div>';
+            } else {
+                body = '<div class="ws-hq-list">';
+                for (var k = 0; k < items.length; k++) {
+                    body += '<button type="button" class="ws-hq-item" title="' + escHtml(items[k]) + '">' + escHtml(items[k]) + '</button>';
+                }
+                body += '</div>';
+            }
+            panel.innerHTML = head + body;
+            document.body.appendChild(panel);
+            var r = anchor.getBoundingClientRect();
+            var pw = 340;
+            panel.style.top = (r.bottom + 8) + 'px';
+            panel.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+            panel.style.width = pw + 'px';
+            panel.addEventListener('click', function (e) {
+                var btn = e.target.closest('.ws-hq-item');
+                if (!btn) return;
+                self._closeHistoryQuestions();
+                var input = self.els.input;
+                if (!input) return;
+                input.value = btn.getAttribute('title') || btn.textContent;
+                input.dispatchEvent(new Event('input'));
+                input.focus();
+            });
+            setTimeout(function () {
+                document.addEventListener('click', self._historyQCloseHandler = function () { self._closeHistoryQuestions(); });
+            }, 0);
+        },
+        _closeHistoryQuestions: function () {
+            var p = document.querySelector('.ws-history-questions');
+            if (p) p.parentNode.removeChild(p);
+            if (this._historyQCloseHandler) { document.removeEventListener('click', this._historyQCloseHandler); this._historyQCloseHandler = null; }
+        },
+        /* ⋮ 菜单「复制对话文本」：整段对话导出为纯文本到剪贴板（原顶栏复制按钮能力，2026-09-08 迁入） */
+        _copyConversationText: function (sessionId) {
+            var self = this;
+            var found = null, list = this._loadConvos();
+            for (var i = 0; i < list.length; i++) { if (list[i].id === sessionId) { found = list[i]; break; } }
+            var build = function (title, msgs) {
+                var text = (title || '对话') + '\n\n';
                 msgs.forEach(function (m) {
                     var who = m.role === 'user' ? (self.userName() || '我') : '华为云方案助手';
                     text += '【' + who + '】\n' + String(m.content || '').replace(/\n{3,}/g, '\n\n').trim() + '\n\n';
                 });
-                self._copyText(text, function (ok) {
-                    self._toast(ok ? '对话已复制到剪贴板（来自服务端历史）' : '复制失败', ok ? 'success' : 'error');
-                });
-            }).catch(function () { self._toast('复制失败', 'error'); });
+                return text;
+            };
+            if (!found || !found.messages || !found.messages.length) {
+                // 本地无消息体（老对话/跨设备）：回退服务端 /agent/history 拉取
+                var token = self.userToken();
+                if (!token || !sessionId) { self._toast('当前没有可复制的对话', 'warning'); return; }
+                fetch('/api/agent/history?session_id=' + encodeURIComponent(sessionId), {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+                    var msgs = (data && data.messages) || [];
+                    if (!msgs.length) { self._toast('当前没有可复制的对话', 'warning'); return; }
+                    self._copyText(build(self.els.title.textContent, msgs), function (ok) {
+                        self._toast(ok ? '对话已复制到剪贴板（来自服务端历史）' : '复制失败', ok ? 'success' : 'error');
+                    });
+                }).catch(function () { self._toast('复制失败', 'error'); });
+                return;
+            }
+            self._copyText(build(found.title, found.messages), function (ok) {
+                self._toast(ok ? '对话已复制到剪贴板' : '复制失败', ok ? 'success' : 'error');
+            });
         },
         _copyText: function (text, done) {
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1054,6 +1203,7 @@
             menu.className = 'ws-header-more-menu';
             menu.innerHTML =
                 '<button type="button" class="ws-header-more-item" data-act="rename">重命名</button>' +
+                '<button type="button" class="ws-header-more-item" data-act="copy">复制对话文本</button>' +
                 '<button type="button" class="ws-header-more-item danger" data-act="delete">删除对话</button>';
             document.body.appendChild(menu);
             var r = anchor.getBoundingClientRect();
@@ -1068,6 +1218,8 @@
                     var cur = self._loadConvos().filter(function (c) { return c.id === id; })[0];
                     var v = window.prompt('重命名对话', (cur && cur.title) || '');
                     if (v != null) self._rename(id, v);
+                } else if (act === 'copy') {
+                    self._copyConversationText(id);
                 } else if (act === 'delete') {
                     self._confirmDelete({ id: id });
                 }

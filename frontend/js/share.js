@@ -183,22 +183,49 @@
         }
     }
 
+    // 对话分享：把 messages 渲染为问答块（用户问题 → 深色需求框，助手回答 → 正文 markdown）
+    function buildConversation(p) {
+        const msgs = Array.isArray(p.messages) ? p.messages : [];
+        if (!msgs.length) return '<p style="color:var(--text-muted);">该分享不含对话内容</p>';
+        let html = '';
+        msgs.forEach(function (m, i) {
+            const content = String(m.content || '').trim();
+            if (!content) return;
+            if (m.role === 'user') {
+                html += '<div class="share-section-label">提问 ' + (i + 1) + '</div>' +
+                    '<div class="share-demand-box">' + escapeHtml(content) + '</div>';
+            } else {
+                html += '<div class="share-section-label">方案助手回答</div>' +
+                    '<div class="result-content">' + simpleMarkdown(content) + '</div>';
+            }
+        });
+        return html;
+    }
+
     function render(data, el) {
         const p = data.payload || {};
         const isAnalyze = p.kind === 'analyze';
+        const isConvo = p.kind === 'conversation';
+        document.title = (isConvo ? '对话分享 · ' : '方案分享 · ') + 'cloudsol.cn';
+        const tb = document.querySelector('.topbar-title');
+        if (tb && isConvo) tb.textContent = 'cloudsol.cn · 对话分享（只读）';
         let html = '';
-        html += '<span class="share-kind-badge">' + (isAnalyze ? '竞品分析' : '解决方案') + '</span>';
+        html += '<span class="share-kind-badge">' + (isConvo ? '对话分享' : (isAnalyze ? '竞品分析' : '解决方案')) + '</span>';
         html += '<h1 class="share-title">' + escapeHtml(p.title || data.title || '方案分享') + '</h1>';
         let meta = '';
         if (p.industry) meta += '<span>行业：' + escapeHtml(p.industry) + '</span>';
         if (data.created_at) meta += '<span>生成：' + fmtDate(data.created_at) + '</span>';
         if (data.view_count != null) meta += '<span>浏览：' + data.view_count + '</span>';
         if (meta) html += '<div class="share-meta">' + meta + '</div>';
-        if (p.demand) html += '<div class="share-section-label">客户需求</div><div class="share-demand-box">' + escapeHtml(p.demand) + '</div>';
-        const sol = p.solution || p.answer || '';
-        if (sol && !isAnalyze) html += buildSummaryCard(sol);
-        if (sol) html += '<div class="share-section-label">' + (isAnalyze ? '分析报告' : '解决方案') + '</div><div class="result-content">' + simpleMarkdown(sol) + '</div>';
-        if (p.sources && p.sources.length) html += '<div class="share-section-label">参考文档</div><div class="share-sources">' + buildSources(p.sources) + '</div>';
+        if (isConvo) {
+            html += buildConversation(p);
+        } else {
+            if (p.demand) html += '<div class="share-section-label">客户需求</div><div class="share-demand-box">' + escapeHtml(p.demand) + '</div>';
+            const sol = p.solution || p.answer || '';
+            if (sol && !isAnalyze) html += buildSummaryCard(sol);
+            if (sol) html += '<div class="share-section-label">' + (isAnalyze ? '分析报告' : '解决方案') + '</div><div class="result-content">' + simpleMarkdown(sol) + '</div>';
+            if (p.sources && p.sources.length) html += '<div class="share-section-label">参考文档</div><div class="share-sources">' + buildSources(p.sources) + '</div>';
+        }
         // 纵深防御（安全审计 M2，2026-09-08）：最终 HTML 过 DOMPurify 白名单清洗（匿名公开页，防护优先）
         el.innerHTML = window.DOMPurify ? DOMPurify.sanitize(html, { ADD_ATTR: ['target'] }) : html;
     }
