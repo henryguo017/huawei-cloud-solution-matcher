@@ -1104,11 +1104,11 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             # 命中 CRM 写入/查询/KB统计 且无明确方案制作动词时，短路走拦截链；
             # 含"做一份/写一份"等组合诉求仍走两阶段（由强制步兜底写入）。
             if self._intent in ("solution", "competitor"):
-                _s = user_input or ""
+                _s = intent_text or user_input or ""   # 拦截判定用用户原话（2026-09-09，同意图分类口径）
                 if (self._crm_intent_hit(_s) or self._crm_query_hit(_s) or self._kb_stats_hit(_s)) \
                         and not self._SOLUTION_VERB_RE.search(_s):
                     intercepted = await self._maybe_crm_intercept(
-                        user_input, session_id, event_callback, tool_calls_log
+                        user_input, session_id, event_callback, tool_calls_log, intent_text=intent_text
                     )
                     if intercepted is not None:
                         self._log("system", "[CRM短路] 纯客户档案操作，跳过两阶段方案生成")
@@ -1178,7 +1178,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             if self._intent == "general":
                 # ── general 数据诚信拦截链（公共方法，与 solution/competitor 短路共用）──
                 intercepted = await self._maybe_crm_intercept(
-                    user_input, session_id, event_callback, tool_calls_log
+                    user_input, session_id, event_callback, tool_calls_log, intent_text=intent_text
                 )
                 if intercepted is not None:
                     return intercepted
@@ -2025,7 +2025,7 @@ Final Answer: [完整方案]）"""
     # 明确的方案制作动词（出现时不做 CRM 短路，组合诉求仍走两阶段 + 强制步）
     _SOLUTION_VERB_RE = re.compile(r"(做|写|生成|制定|输出)一?[份个]|做个|写个|生成个|出一份")
 
-    async def _maybe_crm_intercept(self, user_input, session_id, event_callback, tool_calls_log):
+    async def _maybe_crm_intercept(self, user_input, session_id, event_callback, tool_calls_log, intent_text=None):
         """general 路径与 solution/competitor 短路共用的数据诚信拦截链。
 
         general 分支没有工具调用能力（会编数据）；solution 意图会被行业词把
@@ -2033,7 +2033,12 @@ Final Answer: [完整方案]）"""
         E2E 实测）。两类路径统一走本拦截链：全部用真实工具/服务结果作答。
         命中顺序：CRM写入(ask弹窗) → CRM查询 → KB统计 → 成本兜底；
         全不命中返回 None（调用方继续走原路径）。
+
+        intent_text（2026-09-09）：全部正则判定只用用户原话——vision 描述拼进
+        user_input 后，其行业/成本词会误触发成本兜底等拦截（图片求描述被拉去报价）。
+        user_input 仍作为强制步的输入（工具需要完整上下文）。
         """
+        _match_text = intent_text or user_input or ""
         async def _finish(answer_text: str):
             self.memory.add_agent_response(session_id, answer_text)
             await self._emit(event_callback, {
@@ -2044,7 +2049,7 @@ Final Answer: [完整方案]）"""
             return self._make_result(answer_text, tool_calls_log, success=True, plan=[], plan_status=[])
 
         # 1) CRM 写入（add/update/delete）：走权限闸门 ask，用户弹窗确认才落库
-        if self._remote_tool_names and self._crm_intent_hit(user_input or ""):
+        if self._remote_tool_names and self._crm_intent_hit(_match_text):
             await self._emit(event_callback, {
                 "type": "thought",
                 "step": 1,
@@ -2058,7 +2063,7 @@ Final Answer: [完整方案]）"""
             return await _finish(self._crm_save_answer(crm_obs))
 
         # 2) CRM 查询（client_list / match_history，只读，harness 确定性放行不弹窗）
-        if self._remote_tool_names and self._crm_query_hit(user_input or ""):
+        if self._remote_tool_names and self._crm_query_hit(_match_text):
             await self._emit(event_callback, {
                 "type": "thought",
                 "step": 1,
@@ -2072,7 +2077,7 @@ Final Answer: [完整方案]）"""
             return await _finish(self._crm_query_answer(query_obs))
 
         # 3) 知识库统计（只读真数据，本地服务不依赖 MCP）
-        if self._kb_stats_hit(user_input or ""):
+        if self._kb_stats_hit(_match_text):
             await self._emit(event_callback, {
                 "type": "thought",
                 "step": 1,
@@ -2087,7 +2092,7 @@ Final Answer: [完整方案]）"""
 
         # 4) 成本/价格问询兜底（带具体规格的问价多判 solution 走两阶段强制成本步；
         #    此处兜仍命中定价词的问法，杜绝编价格；只读确定性放行）
-        if self._remote_tool_names and self._PRICING_RE.search(user_input or ""):
+        if self._remote_tool_names and self._PRICING_RE.search(_match_text):
             await self._emit(event_callback, {
                 "type": "thought",
                 "step": 1,
