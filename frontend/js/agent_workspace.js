@@ -2512,25 +2512,35 @@
             pop.innerHTML = '<div class="ws-notify-bar-top"></div>' +
                 '<div class="ws-notify-inner">' +
                     '<div class="ws-notify-head">' +
-                        '<div class="ws-notify-head-title"><span class="ws-notify-head-icon">🔔</span>消息通知</div>' +
+                        '<div class="ws-notify-head-title"><span class="ws-notify-head-icon"><svg class="icon" aria-hidden="true"><use href="#i-bell"></use></svg></span>消息通知</div>' +
                         '<span class="ws-notify-close" id="ws-notify-close" title="关闭">×</span>' +
                     '</div>' +
                     '<div class="ws-notify-tabs">' +
-                        '<button type="button" class="ws-notify-tab active" data-tab="notify">通知绑定</button>' +
-                        '<button type="button" class="ws-notify-tab" data-tab="subs">情报订阅</button>' +
+                        '<button type="button" class="ws-notify-tab active" data-tab="notify"><svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg>通知绑定</button>' +
+                        '<button type="button" class="ws-notify-tab" data-tab="subs"><svg class="icon" aria-hidden="true"><use href="#i-calendar"></use></svg>自动化任务</button>' +
                     '</div>' +
                     '<div class="ws-notify-tabpane" id="ws-pane-notify">' +
                         '<div class="ws-notify-desc">绑定你自己的飞书 / 钉钉群机器人（签名校验 / 加签）。方案匹配或 Agent 生成完成后，推送到你自己的群。仅你本人可见。</div>' +
                         '<div class="ws-notify-body" id="ws-notify-body"><div class="ws-notify-loading">加载中…</div></div>' +
                     '</div>' +
                     '<div class="ws-notify-tabpane" id="ws-pane-subs" style="display:none;">' +
-                        '<div class="ws-notify-desc">定时让 Agent 联网汇总行业与竞品动态，推送到你绑定的飞书 / 钉钉（未绑定则仅存站内）。</div>' +
+                        '<div class="ws-notify-desc">到点自动执行任务：Agent 联网/读档案/查知识库后，结果推送到你绑定的飞书 / 钉钉（未绑定则仅存站内）。</div>' +
+                        '<div class="ws-sub-mode">' +
+                            '<button type="button" class="ws-sub-mode-btn active" data-mode="tpl"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>行业情报模板</button>' +
+                            '<button type="button" class="ws-sub-mode-btn" data-mode="custom"><svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg>自定义任务</button>' +
+                        '</div>' +
                         '<div id="ws-subs-list"><div class="ws-notify-loading">加载中…</div></div>' +
                         '<div class="ws-subs-form">' +
-                            '<div class="ws-notify-field"><label>行业</label>' +
-                                '<input type="text" id="ws-sub-industry" placeholder="如：智慧园区 / 制造业" autocomplete="off"></div>' +
-                            '<div class="ws-notify-field"><label>竞品（逗号分隔，可空）</label>' +
-                                '<input type="text" id="ws-sub-competitors" placeholder="如：深询科技, 中科云" autocomplete="off"></div>' +
+                            '<div class="ws-notify-field" id="ws-sub-name-row" style="display:none;"><label>任务名（可空，自动取描述前 20 字）</label>' +
+                                '<input type="text" id="ws-sub-name" placeholder="如：客户跟进周检" autocomplete="off"></div>' +
+                            '<div class="ws-notify-field" id="ws-sub-prompt-row" style="display:none;"><label>任务描述（到点要做什么）</label>' +
+                                '<textarea id="ws-sub-prompt" rows="3" placeholder="如：每周检查客户档案，列出超过 30 天没跟进的客户及其阶段，给出跟进建议"></textarea></div>' +
+                            '<div id="ws-sub-tpl-fields">' +
+                                '<div class="ws-notify-field"><label>行业</label>' +
+                                    '<input type="text" id="ws-sub-industry" placeholder="如：智慧园区 / 制造业" autocomplete="off"></div>' +
+                                '<div class="ws-notify-field"><label>竞品（逗号分隔，可空）</label>' +
+                                    '<input type="text" id="ws-sub-competitors" placeholder="如：深询科技, 中科云" autocomplete="off"></div>' +
+                            '</div>' +
                             '<div class="ws-notify-field"><label>频率</label>' +
                                 '<select id="ws-sub-freq">' +
                                     '<option value="weekly_mon_9">每周一 09:00</option>' +
@@ -2541,7 +2551,7 @@
                                 '<input type="datetime-local" id="ws-sub-sched"></div>' +
                             '<div class="ws-notify-field"><label>补充要求（可空）</label>' +
                                 '<input type="text" id="ws-sub-extra" placeholder="如：重点关注价格与中标" autocomplete="off"></div>' +
-                            '<button type="button" class="ws-notify-save" id="ws-sub-create">创建订阅</button>' +
+                            '<button type="button" class="ws-notify-save" id="ws-sub-create">创建任务</button>' +
                         '</div>' +
                     '</div>' +
                 '</div>';
@@ -2560,6 +2570,18 @@
             var freqSel = pop.querySelector('#ws-sub-freq');
             freqSel.addEventListener('change', function () {
                 pop.querySelector('#ws-sub-sched-row').style.display = freqSel.value === 'once' ? '' : 'none';
+            });
+            // 任务模式切换：行业情报模板 / 自定义任务
+            var subMode = 'tpl';
+            pop.querySelectorAll('.ws-sub-mode-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    subMode = btn.getAttribute('data-mode');
+                    pop.querySelectorAll('.ws-sub-mode-btn').forEach(function (b) { b.classList.toggle('active', b === btn); });
+                    var custom = subMode === 'custom';
+                    pop.querySelector('#ws-sub-name-row').style.display = custom ? '' : 'none';
+                    pop.querySelector('#ws-sub-prompt-row').style.display = custom ? '' : 'none';
+                    pop.querySelector('#ws-sub-tpl-fields').style.display = custom ? 'none' : '';
+                });
             });
 
             function cardHtml(platform, label, state) {
@@ -2680,21 +2702,35 @@
                     }
                     box.innerHTML = list.map(function (s) {
                         var comps = (s.competitors || []).join('、');
+                        var isCustom = !!(s.prompt || '').trim();
+                        var titleTxt = s.name || s.industry || '未命名任务';
+                        var kindBadge = isCustom
+                            ? '<svg class="icon ws-sub-kind" aria-hidden="true"><use href="#i-zap"></use></svg>'
+                            : '<svg class="icon ws-sub-kind" aria-hidden="true"><use href="#i-search"></use></svg>';
+                        var subLine = isCustom
+                            ? escHtml(stripMd(s.prompt).slice(0, 50)) + '…'
+                            : (comps ? '竞品：' + escHtml(comps) : '行业情报汇总');
                         var lr = s.last_run;
+                        var statusIcon = lr
+                            ? (lr.ok
+                                ? '<svg class="icon ws-sub-ok" aria-hidden="true"><use href="#i-circle-check"></use></svg>'
+                                : '<svg class="icon ws-sub-fail" aria-hidden="true"><use href="#i-alert-triangle"></use></svg>')
+                            : '';
                         var lastTxt = lr
-                            ? ((lr.ok ? '✅' : '❌') + ' ' + String(lr.created_at || '').slice(0, 16) + ' · ' + escHtml(stripMd(lr.summary).slice(0, 60)) + '…')
+                            ? statusIcon + ' ' + String(lr.created_at || '').slice(0, 16) + ' · ' + escHtml(stripMd(lr.summary).slice(0, 50)) + '…'
                             : '尚未运行';
                         return '<div class="ws-sub-item" data-id="' + s.id + '">' +
                             '<div class="ws-sub-item-head">' +
-                                '<span class="ws-sub-industry">' + escHtml(s.industry) + '</span>' +
+                                kindBadge +
+                                '<span class="ws-sub-industry">' + escHtml(titleTxt) + '</span>' +
                                 '<span class="ws-sub-freq">' + freqLabel(s.frequency) + '</span>' +
                                 '<label class="ws-sub-toggle"><input type="checkbox" class="ws-sub-enabled"' + (s.enabled ? ' checked' : '') + '>启用</label>' +
                             '</div>' +
-                            (comps ? '<div class="ws-sub-comp">竞品：' + escHtml(comps) + '</div>' : '') +
+                            '<div class="ws-sub-comp">' + subLine + '</div>' +
                             '<div class="ws-sub-last">上次：' + lastTxt + '</div>' +
                             '<div class="ws-sub-actions">' +
-                                '<button type="button" class="ws-sub-run">立即运行</button>' +
-                                '<button type="button" class="ws-sub-del">删除</button>' +
+                                '<button type="button" class="ws-sub-run"><svg class="icon" aria-hidden="true"><use href="#i-rocket"></use></svg>立即运行</button>' +
+                                '<button type="button" class="ws-sub-del"><svg class="icon" aria-hidden="true"><use href="#i-trash-2"></use></svg>删除</button>' +
                             '</div>' +
                         '</div>';
                     }).join('');
@@ -2756,21 +2792,30 @@
                 var freq = pop.querySelector('#ws-sub-freq').value;
                 var extra = (pop.querySelector('#ws-sub-extra').value || '').trim();
                 var sched = pop.querySelector('#ws-sub-sched').value || null;
-                if (!industry) { self._toast('行业不能为空', 'warning'); return; }
+                var name = (pop.querySelector('#ws-sub-name').value || '').trim();
+                var prompt = (pop.querySelector('#ws-sub-prompt').value || '').trim();
+                if (subMode === 'custom' && !prompt) { self._toast('请填写任务描述', 'warning'); return; }
+                if (subMode === 'tpl' && !industry) { self._toast('行业不能为空', 'warning'); return; }
                 if (freq === 'once' && !sched) { self._toast('请选择执行时间', 'warning'); return; }
                 var btn = pop.querySelector('#ws-sub-create');
                 btn.disabled = true;
                 fetch('/api/subscriptions', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ industry: industry, competitors: comps, frequency: freq, prompt_extra: extra, scheduled_at: sched })
+                    body: JSON.stringify({
+                        name: name, prompt: prompt,
+                        industry: industry, competitors: comps, frequency: freq,
+                        prompt_extra: extra, scheduled_at: sched
+                    })
                 }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
                 .then(function (res) {
                     if (res.ok && res.j.ok) {
-                        self._toast('订阅已创建：' + freqLabel(freq), 'success');
+                        self._toast('任务已创建：' + freqLabel(freq), 'success');
                         pop.querySelector('#ws-sub-industry').value = '';
                         pop.querySelector('#ws-sub-competitors').value = '';
                         pop.querySelector('#ws-sub-extra').value = '';
+                        pop.querySelector('#ws-sub-name').value = '';
+                        pop.querySelector('#ws-sub-prompt').value = '';
                         refreshSubs();
                     } else {
                         self._toast((res.j && res.j.detail) || '创建失败', 'warning');
@@ -3410,7 +3455,7 @@
                 // 历史消息中的图片徽标（blob URL 已失效，显示文件名徽标）
                 var histImgs = '';
                 ((m.images || [])).forEach(function (p) {
-                    histImgs += '<span class="ws-msg-img-badge">🖼 ' + escHtml((p && p.name) || '图片') + '</span>';
+                    histImgs += '<span class="ws-msg-img-badge"><svg class="icon" aria-hidden="true"><use href="#i-image"></use></svg>' + escHtml((p && p.name) || '图片') + '</span>';
                 });
                 var wrap = document.createElement('div');
                 wrap.className = 'ws-msg-wrap ' + (isUser ? 'ws-msg-wrap-user' : 'ws-msg-wrap-agent');

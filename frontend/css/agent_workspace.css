@@ -938,6 +938,7 @@ body.view-agent .theme-label { margin-bottom: 8px; }
 }
 .ws-notify-tab {
     flex: 1;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     border: none; background: transparent;
     border-radius: 8px;
     padding: 7px 0;
@@ -947,7 +948,41 @@ body.view-agent .theme-label { margin-bottom: 8px; }
     font-family: var(--font-family);
     transition: background var(--transition-fast), color var(--transition-fast);
 }
+.ws-notify-tab .icon { width: 14px; height: 14px; }
 .ws-notify-tab.active { background: #fff; color: var(--primary-color, #C7000B); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.10); }
+.ws-sub-mode { display: flex; gap: 6px; margin-bottom: 10px; }
+.ws-sub-mode-btn {
+    flex: 1;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: #fff;
+    border-radius: 8px;
+    padding: 6px 0;
+    font-size: 0.75rem; font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: var(--font-family);
+}
+.ws-sub-mode-btn .icon { width: 13px; height: 13px; }
+.ws-sub-mode-btn.active { border-color: var(--primary-color, #C7000B); color: var(--primary-color, #C7000B); background: rgba(199, 0, 11, 0.04); }
+.ws-notify-field textarea {
+    width: 100%;
+    border: 1px solid var(--border-color, #E5E7EB);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 0.8125rem;
+    font-family: var(--font-family);
+    background: #fff;
+    color: var(--text-primary);
+    resize: vertical;
+    line-height: 1.5;
+}
+.ws-sub-kind { width: 14px; height: 14px; flex-shrink: 0; color: var(--text-muted); }
+.ws-sub-ok { width: 13px; height: 13px; color: #16a34a; vertical-align: -2px; }
+.ws-sub-fail { width: 13px; height: 13px; color: #e23d3d; vertical-align: -2px; }
+.ws-sub-actions button { display: inline-flex; align-items: center; gap: 4px; }
+.ws-sub-actions button .icon { width: 12px; height: 12px; }
+.ws-msg-img-badge .icon { width: 12px; height: 12px; margin-right: 4px; }
 .ws-subs-form { border-top: 1px dashed rgba(0, 0, 0, 0.10); margin-top: 12px; padding-top: 10px; }
 .ws-subs-form .ws-notify-save { width: 100%; }
 .ws-sub-item {

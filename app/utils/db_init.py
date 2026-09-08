@@ -305,6 +305,8 @@ def init_database():
         CREATE TABLE IF NOT EXISTS subscriptions (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id       INTEGER NOT NULL,
+            name          TEXT NOT NULL DEFAULT '',
+            prompt        TEXT NOT NULL DEFAULT '',
             industry      TEXT NOT NULL DEFAULT '',
             competitors   TEXT NOT NULL DEFAULT '[]',
             frequency     TEXT NOT NULL DEFAULT 'weekly_mon_9',
@@ -317,6 +319,12 @@ def init_database():
             created_at    TEXT DEFAULT (datetime('now', 'localtime'))
         )
     """)
+    # 兼容早期建表（2026-09-09 当天无 name/prompt 列的库）：幂等加列
+    _sub_cols = [r[1] for r in cursor.execute("PRAGMA table_info(subscriptions)").fetchall()]
+    if "name" not in _sub_cols:
+        cursor.execute("ALTER TABLE subscriptions ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+    if "prompt" not in _sub_cols:
+        cursor.execute("ALTER TABLE subscriptions ADD COLUMN prompt TEXT NOT NULL DEFAULT ''")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_subs_user ON subscriptions(user_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_subs_due ON subscriptions(enabled, next_run_at)")
     cursor.execute("""

@@ -16,7 +16,9 @@ router = APIRouter()
 
 
 class SubscriptionCreate(BaseModel):
-    industry: str
+    name: str = ""                        # 任务名；缺省自动推导
+    prompt: str = ""                      # 通用自动化：自由任务描述；为空则走行业情报模板
+    industry: str = ""                    # 情报模板模式必填
     competitors: List[str] = []
     frequency: str = "weekly_mon_9"
     prompt_extra: str = ""
@@ -37,6 +39,7 @@ async def create_subscription(body: SubscriptionCreate, user: dict = Depends(get
         sub = ss.create_subscription(
             uid, body.industry, body.competitors, body.frequency,
             prompt_extra=body.prompt_extra, scheduled_at=body.scheduled_at,
+            name=body.name, prompt=body.prompt,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

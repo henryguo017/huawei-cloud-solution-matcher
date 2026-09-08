@@ -77,15 +77,24 @@ def _row_to_dict(row):
     return d
 
 
-def create_subscription(user_id, industry, competitors, frequency, prompt_extra="", scheduled_at=None):
+def create_subscription(user_id, industry, competitors, frequency, prompt_extra="", scheduled_at=None,
+                        name="", prompt=""):
     if frequency not in FREQ_WHITELIST:
         raise ValueError("不支持的订阅频率")
+    prompt = str(prompt or "").strip()
     industry = str(industry or "").strip()
-    if not industry:
-        raise ValueError("行业不能为空")
+    name = str(name or "").strip()
     if not isinstance(competitors, list):
         competitors = []
     competitors = [str(c).strip() for c in competitors if str(c).strip()][:10]
+    if prompt:
+        # 通用自动化任务：自由任务描述；名称缺省取任务描述前 20 字
+        name = name or prompt[:20]
+    else:
+        # 情报模板：行业必填；名称缺省「{行业}情报」
+        if not industry:
+            raise ValueError("行业不能为空")
+        name = name or f"{industry}情报"
     sched_str = None
     if frequency == FREQ_ONCE:
         sched = _parse_dt(scheduled_at)
@@ -98,9 +107,9 @@ def create_subscription(user_id, industry, competitors, frequency, prompt_extra=
             raise ValueError(f"每人最多 {MAX_PER_USER} 条订阅")
         next_run = _compute_next_run(frequency, sched_str)
         conn.execute(
-            "INSERT INTO subscriptions (user_id, industry, competitors, frequency, scheduled_at, prompt_extra, enabled, next_run_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
-            (user_id, industry, json.dumps(competitors, ensure_ascii=False), frequency, sched_str,
+            "INSERT INTO subscriptions (user_id, name, prompt, industry, competitors, frequency, scheduled_at, prompt_extra, enabled, next_run_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)",
+            (user_id, name[:60], prompt[:2000], industry, json.dumps(competitors, ensure_ascii=False), frequency, sched_str,
              str(prompt_extra or "").strip(), next_run),
         )
         row = conn.execute("SELECT * FROM subscriptions WHERE id = last_insert_rowid()").fetchone()
@@ -201,6 +210,15 @@ def mark_executed(sub_id, frequency, scheduled_at, ok):
 
 
 def build_prompt(sub):
+    custom = str(sub.get("prompt") or "").strip()
+    if custom:
+        # 通用自动化任务：用户自由描述 + 通用输出约束
+        return (
+            custom
+            + "\n\n（执行要求：如需最新信息请联网检索；输出结构化结果，要点式呈现；"
+              "引用外部信息时附来源链接；总长度控制在 1500 字以内。本次为无人值守自动执行，"
+              "不要反问、不要请求确认，基于已有信息直接给出结果。）"
+        )
     competitors = "、".join(sub.get("competitors") or [])
     prompt = (
         f"请联网搜索并汇总近 7 天「{sub['industry']}」行业"
@@ -249,13 +267,15 @@ async def execute_subscription(sub):
     mark_executed(sub_id, sub["frequency"], sub.get("scheduled_at"), ok)
 
     # 推送（未绑定飞书则仅存站内）：成功推摘要，失败也推通知
-    title = ("[情报订阅] " + (sub.get("industry") or "") + ("" if ok else " · 本次执行失败"))
+    task_name = sub.get("name") or sub.get("industry") or "自动化任务"
+    title = "[自动化] " + task_name + ("" if ok else " · 本次执行失败")
     push_text = (summary or "执行失败，请查看站内结果")[:2500]
     try:
         from app.services.notify import notify_for_user
         await asyncio.to_thread(
             notify_for_user, user_id,
-            **{"demand": push_text, "industry": sub.get("industry") or "", "title": title},
+            **{"demand": push_text, "industry": sub.get("industry") or "", "title": title,
+               "url": "https://cloudsol.cn/"},
         )
     except Exception as e:
         logger.warning("[订阅] 推送失败（忽略，结果已落库） sub=%s: %s", sub_id, e)
