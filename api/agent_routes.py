@@ -53,17 +53,19 @@ _IMAGE_MAX_BYTES = 10 * 1024 * 1024
 def _load_user_images_as_data_urls(user_id, rel_paths):
     """校验并读取用户上传的图片 → base64 data URL 列表。
 
-    安全校验：拒绝绝对路径/..；resolve 后必须落在 user_docs/{uid}/customer_uploads/ 内；
+    安全校验：拒绝绝对路径/..；resolve 后必须落在 user_docs/{uid}/customer_uploads/ 内
+    （upload 接口返回的 rel 是相对 user_docs/{uid}/ 的路径，已含 customer_uploads/ 前缀）；
     扩展名白名单；单张 ≤10MB。任一不合法抛 HTTPException(400)。
     """
-    base = os.path.realpath(os.path.join(USER_DOCS_BASE_DIR, str(user_id), "customer_uploads"))
+    user_base = os.path.realpath(os.path.join(USER_DOCS_BASE_DIR, str(user_id)))
+    uploads_dir = os.path.realpath(os.path.join(user_base, "customer_uploads"))
     out = []
     for rel in rel_paths:
         rel = str(rel or "").strip()
         if not rel or rel.startswith(("/", "\\")) or ":" in rel:
             raise HTTPException(status_code=400, detail="非法图片路径")
-        abs_path = os.path.realpath(os.path.join(base, rel))
-        if not abs_path.startswith(base + os.sep):
+        abs_path = os.path.realpath(os.path.join(user_base, rel))
+        if not abs_path.startswith(uploads_dir + os.sep):
             raise HTTPException(status_code=400, detail="图片路径越界")
         ext = os.path.splitext(abs_path)[1].lower()
         if ext not in _IMAGE_EXTS:
