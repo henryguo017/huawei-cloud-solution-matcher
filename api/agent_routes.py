@@ -269,6 +269,7 @@ async def agent_chat(
                         tool_permissions=body.tool_permissions,
                         disable_web_search=body.disable_web_search,
                         client_id=(body.client_id if isinstance(body.client_id, int) and body.client_id > 0 else None),
+                        intent_text=message,  # 意图分类只看用户原话，不看不带图片描述的增强文本（2026-09-09）
                     ),
                     timeout=480.0,
                 )

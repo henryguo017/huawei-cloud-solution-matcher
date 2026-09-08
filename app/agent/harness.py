@@ -922,6 +922,7 @@ class AgentHarness:
         tool_permissions: Optional[dict] = None,
         disable_web_search: bool = False,
         client_id: Optional[int] = None,
+        intent_text: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         运行 ReAct 循环
@@ -1027,7 +1028,10 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             tools_desc = self.tools.get_tools_prompt()
 
             # ── 意图路由（A 方案）：首轮先识别意图，非方案类直接轻量回复，不进 ReAct/14章流水线 ──
-            intent = classify_intent(user_input)
+            # intent_text（2026-09-09 E2E 实测）：意图只看用户原话——图片/附件预处理会把大段
+            # 描述内容拼进 user_input（如"校徽…智慧校园…数字化"），“仔细描述一下这张图”
+            # 会被行业词带进方案匹配全流程。注入内容只参与回答，不参与意图判定。
+            intent = classify_intent(intent_text or user_input)
             self._intent = intent.get("intent", "solution")
             # 附件强制工具链（2026-09-09 E2E 双实测）：请求携带文档附件时一律走两阶段，
             # 不进 general 直答 / CRM 档案等无 read_customer_file 能力的分支。
