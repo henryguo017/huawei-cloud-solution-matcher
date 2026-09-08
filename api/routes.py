@@ -1639,12 +1639,15 @@ async def analyze_competitor(
 
 @router.get("/knowledge/stats", response_model=KnowledgeStatsResponse, tags=["知识库管理"])
 async def get_knowledge_stats(
-    kb_service: KnowledgeBaseService = Depends(get_knowledge_base)
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
-    获取知识库统计信息
+    获取知识库统计信息（按登录态区分口径）：
+    - 登录用户：返回其独立知识库（data/user_docs/{user_id}/）的实时统计，上传/删除后刷新即变
+    - 未登录（欢迎页营销数字等）：返回全局默认知识库统计
     """
     try:
+        kb_service = get_user_knowledge_base(current_user['id']) if current_user else get_knowledge_base()
         stats = kb_service.get_stats()
         
         return KnowledgeStatsResponse(

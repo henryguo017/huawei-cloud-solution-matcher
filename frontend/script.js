@@ -1636,7 +1636,10 @@ const API = {
     },
 
     async getKnowledgeStats() {
-        const response = await fetch(`${Config.API_BASE_URL}/knowledge/stats`);
+        // 登录时带 token：后端按登录态返回用户独立知识库统计；未登录返回全局营销数字
+        const token = AuthManager.getToken();
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const response = await fetch(`${Config.API_BASE_URL}/knowledge/stats`, { headers: headers });
 
         if (!response.ok) {
             throw new Error(`获取统计失败: ${response.statusText}`);
