@@ -909,6 +909,25 @@ body.view-agent .theme-label { margin-bottom: 8px; }
     display: flex; align-items: center; justify-content: center;
 }
 .ws-img-chip-x:hover { background: rgba(199, 0, 11, 0.85); }
+
+/* 文档附件 chip（挂对话，2026-09-09）：胶囊形，图标+文件名+移除 */
+.ws-doc-chips {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 0 16px 8px;
+}
+.ws-doc-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    max-width: 260px;
+    padding: 6px 8px 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.10);
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    font-size: 0.75rem;
+}
+.ws-doc-chip .icon { width: 14px; height: 14px; flex-shrink: 0; color: #C7000B; }
+.ws-doc-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--frame-text, #333); }
+.ws-doc-chip .ws-img-chip-x { position: static; flex-shrink: 0; }
 .ws-input-bar.ws-dragover { outline: 2px dashed var(--primary-color, #C7000B); outline-offset: -4px; border-radius: 12px; }
 
 /* 用户气泡内图片缩略图 / 历史图片徽标 */

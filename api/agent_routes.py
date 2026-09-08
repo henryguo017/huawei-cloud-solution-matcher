@@ -79,6 +79,43 @@ def _load_user_images_as_data_urls(user_id, rel_paths):
         out.append(f"data:{_IMAGE_MIME[ext]};base64,{b64}")
     return out
 
+
+# 文档附件白名单（2026-09-09）：与 read_customer_file 工具可解析格式对齐（图片走 vision 链路，不在此列）
+_DOC_EXTS = {".docx", ".xlsx", ".pdf", ".pptx", ".txt", ".csv", ".md"}
+_DOC_MAX_BYTES = 100 * 1024 * 1024
+_DOC_MAX_COUNT = 5
+
+
+def _validate_user_doc_paths(user_id, rel_paths):
+    """校验对话携带的文档附件路径（只校验不读内容，读取交给 Agent 的 read_customer_file 工具）。
+
+    安全校验与图片一致：拒绝绝对路径/..；resolve 后必须落在 user_docs/{uid}/customer_uploads/ 内；
+    扩展名白名单；单文件 ≤100MB；≤5 个。任一不合法抛 HTTPException(400)。
+    """
+    if not rel_paths:
+        return []
+    if len(rel_paths) > _DOC_MAX_COUNT:
+        raise HTTPException(status_code=400, detail=f"每个对话最多附带 {_DOC_MAX_COUNT} 个文档附件")
+    user_base = os.path.realpath(os.path.join(USER_DOCS_BASE_DIR, str(user_id)))
+    uploads_dir = os.path.realpath(os.path.join(user_base, "customer_uploads"))
+    out = []
+    for rel in rel_paths:
+        rel = str(rel or "").strip()
+        if not rel or rel.startswith(("/", "\\")) or ":" in rel:
+            raise HTTPException(status_code=400, detail="非法附件路径")
+        abs_path = os.path.realpath(os.path.join(user_base, rel))
+        if not abs_path.startswith(uploads_dir + os.sep):
+            raise HTTPException(status_code=400, detail="附件路径越界")
+        ext = os.path.splitext(abs_path)[1].lower()
+        if ext not in _DOC_EXTS:
+            raise HTTPException(status_code=400, detail=f"不支持的附件格式: {ext}")
+        if not os.path.isfile(abs_path):
+            raise HTTPException(status_code=404, detail="附件不存在或已失效")
+        if os.path.getsize(abs_path) > _DOC_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="单个附件超过 100MB 上限")
+        out.append(rel)
+    return out
+
 # 本地工具名缓存（首次枚举后复用，避免每次请求重建 ToolRegistry）
 _LOCAL_TOOL_NAMES = None
 
@@ -105,6 +142,7 @@ class AgentChatRequest(BaseModel):
     tool_permissions: Optional[dict] = None  # #3 工具权限策略 {tool: "allow"|"ask"|"deny"}，None 走 harness 默认
     disable_web_search: bool = False         # #6 联网搜索开关：True 时 Agent 不调用 web_search
     images: Optional[List[str]] = None       # 2026-09-09 图片输入：customer_uploads 内的相对路径，≤4 张
+    customer_files: Optional[List[str]] = None  # 2026-09-09 文档附件：customer_uploads 内的相对路径，≤5 个，随对话每轮携带
 
 
 @router.get("/agent/tools", tags=["Agent 工具发现"])
@@ -198,6 +236,19 @@ async def agent_chat(
                         logger.info(f"[Agent/chat] 已注入客户上下文 client_id={body.client_id}")
                 except Exception as e:
                     logger.warning(f"[Agent/chat] 客户上下文构建失败（忽略，不影响对话）: {e}")
+            # 文档附件注入（2026-09-09）：路径白名单校验后引导 Agent 用 read_customer_file 读取
+            if body.customer_files:
+                if not isinstance(user_id, int) or user_id <= 0:
+                    raise HTTPException(status_code=401, detail="请先登录后再使用附件")
+                doc_rels = _validate_user_doc_paths(user_id, body.customer_files)
+                if doc_rels:
+                    file_list = "\n".join(f"- {p}" for p in doc_rels)
+                    doc_block = (
+                        "[用户在本对话附带了以下客户资料文件，如与本次需求相关，"
+                        "请先用 read_customer_file 工具读取并提取要点，再综合回答]\n" + file_list
+                    )
+                    extra_context = (extra_context + "\n\n" if extra_context else "") + doc_block
+                    logger.info(f"[Agent/chat] 已注入文档附件 files={len(doc_rels)} session={session_id}")
             result = None
             try:
                 # 硬超时兜底：正常两阶段 ≤3 分钟；超 8 分钟必是某个无超时 await 卡死

@@ -235,6 +235,7 @@
             this.root = document.getElementById(ROOT_ID);
             if (!this.root) { console.warn('[AgentWorkspace] 未找到 #' + ROOT_ID); return; }
             this.sessionId = this._genSessionId();
+            this.pendingDocs = [];                      // 当前对话附带的文档附件（随对话持久化，2026-09-09）
             this.prevNarrow = window.innerWidth < DRAWER_BREAKPOINT;
             this.drawerOpen = false;                     // 默认收起，点击方案预览再以浮层覆盖方式展开
             this._render();
@@ -354,6 +355,7 @@
                         '<div class="ws-context-hint" id="ws-context-hint" style="display:none;"></div>' +
                         '<div class="ws-input-bar">' +
                             '<div class="ws-img-chips" id="ws-img-chips" style="display:none;"></div>' +
+                            '<div class="ws-doc-chips" id="ws-doc-chips" style="display:none;"></div>' +
                             '<div class="ws-input-row ws-input-row-top">' +
                                 '<div class="ws-input-wrap">' +
                                     '<textarea id="ws-input" class="ws-input" rows="1" autocomplete="off" ' +
@@ -450,6 +452,7 @@
                 shareBtn: this.root.querySelector('#ws-share'),
                 historyQBtn: this.root.querySelector('#ws-history-q'),
                 imgChips: this.root.querySelector('#ws-img-chips'),
+                docChips: this.root.querySelector('#ws-doc-chips'),
                 headerMore: this.root.querySelector('#ws-header-more'),
                 drawerClose: this.root.querySelector('#ws-drawer-close'),
                 previewEmpty: this.root.querySelector('#ws-preview-empty'),
@@ -894,6 +897,8 @@
             this.readOnly = false;                      // 新对话默认可编辑（退出只读态）
             this.activeCap = '';
             this.selectedClient = null;                 // 新对话默认通用对话，重新选择客户
+            this.pendingDocs = [];                      // 新对话不带走旧对话附件（2026-09-09）
+            this._renderDocChips();
             this.els.title.textContent = '新对话';
             this._renderWelcome();
             this.els.input.value = ''; this.els.input.style.height = 'auto'; this._updateCount();
@@ -2093,7 +2098,8 @@
                     client_id: self.selectedClient ? self.selectedClient.id : null,
                     tool_permissions: self.toolPermissions || {},
                     disable_web_search: !!self.webSearchDisabled,
-                    images: (self._outgoingImages && self._outgoingImages.length) ? self._outgoingImages : null
+                    images: (self._outgoingImages && self._outgoingImages.length) ? self._outgoingImages : null,
+                    customer_files: (self.pendingDocs && self.pendingDocs.length) ? self.pendingDocs.map(function (p) { return p.path; }) : null
                 }),
                 signal: signal
             }).then(function (resp) {
@@ -3121,10 +3127,17 @@
             var self = this, root = this.root;
             var token = this.userToken();
             var pending = files.length;
+            if (!this.pendingDocs) this.pendingDocs = [];
             files.forEach(function (f) {
                 if (f.size > 30 * 1024 * 1024) {
                     pending--;
                     self._toast('超过 30MB 上限：' + f.name, 'warning');
+                    if (pending <= 0) self._toast('文件上传完成', 'success');
+                    return;
+                }
+                if (self.pendingDocs.length >= 5) {
+                    pending--;
+                    self._toast('每个对话最多附带 5 个文档附件', 'warning');
                     if (pending <= 0) self._toast('文件上传完成', 'success');
                     return;
                 }
@@ -3137,14 +3150,17 @@
                 }).then(function (r) {
                     if (!r.ok) { var m = '上传失败 (' + r.status + ')'; return r.json().then(function (j) { throw new Error(j.detail || m); }); }
                     return r.json();
-                }).then(function () {
-                    self._toast('已上传：' + f.name, 'success');
+                }).then(function (data) {
+                    // 挂到当前对话（2026-09-09）：路径随每轮 /agent/chat 的 customer_files 下发，Agent 用 read_customer_file 读取
+                    self.pendingDocs.push({ path: data.path, name: f.name });
+                    self._renderDocChips();
+                    self._persistConvoDocs();
+                    self._toast('已附带：' + f.name, 'success');
                 }).catch(function (e) {
                     self._toast((e && e.message) || '上传失败：' + f.name, 'warning');
                 }).finally(function () {
                     pending--;
                     if (pending <= 0) {
-                        self._toast('文件上传完成，可在对话中让我读取客户资料', 'success');
                         var ta = root.querySelector('#ws-input');
                         if (ta) { ta.focus(); }
                     }
@@ -3261,6 +3277,44 @@
             this.pendingImages.splice(idx, 1);   // url 是 data URL，无需 revoke
             this._renderImgChips();
         },
+        /* ---------------- 文档附件 chip（挂对话，随 customer_files 下发，2026-09-09） ---------------- */
+        _renderDocChips: function () {
+            var self = this;
+            var box = this.els.docChips;
+            if (!box) return;
+            var list = this.pendingDocs || [];
+            if (!list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+            var html = '';
+            list.forEach(function (p, i) {
+                html += '<span class="ws-doc-chip" data-idx="' + i + '" title="附件将随本对话每轮消息提供给 Agent">' +
+                    '<svg class="icon" aria-hidden="true"><use href="#i-file-text"></use></svg>' +
+                    '<span class="ws-doc-chip-name">' + escHtml(p.name || '附件') + '</span>' +
+                    '<button type="button" class="ws-img-chip-x" title="移除">×</button>' +
+                '</span>';
+            });
+            box.innerHTML = html;
+            box.style.display = 'flex';
+            box.querySelectorAll('.ws-doc-chip').forEach(function (chip) {
+                chip.querySelector('.ws-img-chip-x').addEventListener('click', function () {
+                    self._removePendingDoc(parseInt(chip.getAttribute('data-idx'), 10));
+                });
+            });
+        },
+        _removePendingDoc: function (idx) {
+            if (!this.pendingDocs || !this.pendingDocs[idx]) return;
+            this.pendingDocs.splice(idx, 1);
+            this._renderDocChips();
+            this._persistConvoDocs();
+        },
+        /* 文档列表随对话元数据持久化：切走切回仍附带；欢迎页暂存内存，等首条消息建对话时落盘 */
+        _persistConvoDocs: function () {
+            if (!this.currentConvoId) return;
+            var list = this._loadConvos();
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id === this.currentConvoId) { list[i].docs = (this.pendingDocs || []).slice(); break; }
+            }
+            this._saveConvos(list);
+        },
         /* 发送前取走待发图片路径（所有权转移给本次请求） */
         _takeOutgoingImages: function () {
             var list = (this.pendingImages || []).map(function (p) { return p.path; });
@@ -3293,6 +3347,7 @@
                 id: id, title: title, cap: this.activeCap,
                 clientId: this.selectedClient ? this.selectedClient.id : null,
                 clientName: this.selectedClient ? this.selectedClient.name : null,
+                docs: (this.pendingDocs || []).slice(),   // 欢迎页上传的附件随首条消息落到对话元数据
                 updatedAt: Date.now(), messages: []
             });
             this._saveConvos(list);
@@ -3462,6 +3517,8 @@
             // 能力胶囊只在点击瞬间作为入口提示，切回历史对话不再常亮（2026-09-09 用户反馈）
             this.activeCap = '';
             this.selectedClient = (found.clientId != null) ? { id: found.clientId, name: found.clientName } : null;
+            this.pendingDocs = (found.docs || []).slice();   // 恢复该对话附带的文档（切走切回仍有效）
+            this._renderDocChips();
             this.els.title.textContent = found.title || '未命名对话';
             this._showChatInput();                          // 同步显示顶栏 + 底部输入框 + 选择器 + 标题
             this._updateContextUI();                   // 还原侧栏上下文显示
