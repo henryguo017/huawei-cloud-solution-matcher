@@ -880,6 +880,24 @@
             this.root.querySelectorAll('.ws-menu-item[data-cap]').forEach(function (x) { x.classList.remove('active'); });
             this._renderTasks();
         },
+        /* 会话管理服务端双写（2026-09-08 修复右上角按钮只改本地的双轨问题）：
+           本地先生效（UI 响应快），服务端异步同步，失败 toast 提示不阻断。 */
+        _convServerSync: function (action, sessionId, extra) {
+            var self = this;
+            var token = this.userToken();
+            if (!token || !sessionId) return;
+            var body = { session_id: sessionId };
+            if (extra) { for (var k in extra) { body[k] = extra[k]; } }
+            fetch('/api/agent/conv/' + action, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify(body)
+            }).then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+            }).catch(function () {
+                self._toast('已本地生效，服务端同步失败', 'warning');
+            });
+        },
         /* 归档当前打开的对话（chat-header 右上"归档"按钮调用） */
         _archive: function (id) {
             var targetId = id || this.currentConvoId;
@@ -893,6 +911,7 @@
                 }
             }
             this._saveConvos(convos);
+            this._convServerSync('archive', targetId, { archived: true });
             if (targetId === this.currentConvoId) this._newChat();
             else this._renderTasks();
         },
@@ -907,16 +926,18 @@
                 }
             }
             this._saveConvos(convos);
+            this._convServerSync('archive', id, { archived: false });
             this._renderTasks();
         },
-        /* 真删：物理删除；二次确认由调用方负责 */
+        /* 真删：物理删除（本地 + 服务端会话消息一并清除）；二次确认由调用方负责 */
         _delete: function (id) {
             var convos = this._loadConvos().filter(function (c) { return c.id !== id; });
             this._saveConvos(convos);
+            this._convServerSync('delete', id);
             if (id === this.currentConvoId) this._newChat();
             else this._renderTasks();
         },
-        /* 重命名：弹窗输入新标题，空/未变不保存 */
+        /* 重命名：弹窗输入新标题，空/未变不保存（本地 + 服务端双写） */
         _rename: function (id, newTitle) {
             var t = (newTitle || '').trim();
             if (!t) return false;
@@ -929,6 +950,7 @@
                 }
             }
             this._saveConvos(convos);
+            this._convServerSync('rename', id, { title: t.slice(0, 80) });
             if (id === this.currentConvoId) this.els.title.textContent = convos.find(function (c) { return c.id === id; }).title;
             this._renderTasks();
             return true;
@@ -965,7 +987,8 @@
             var found = null, list = this._loadConvos();
             for (var i = 0; i < list.length; i++) { if (list[i].id === this.currentConvoId) { found = list[i]; break; } }
             if (!found || !found.messages || !found.messages.length) {
-                if (window.UI && window.UI.showToast) window.UI.showToast('当前没有可复制的对话', 'warning');
+                // 本地无消息体（老对话/跨设备）：回退服务端 /agent/history 拉取后复制
+                self._copyFromServer(this.currentConvoId);
                 return;
             }
             var text = (found.title || '对话') + '\n\n';
@@ -976,6 +999,39 @@
             var done = function (ok) {
                 if (window.UI && window.UI.showToast) window.UI.showToast(ok ? '对话已复制到剪贴板' : '复制失败', ok ? 'success' : 'error');
             };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+            } else {
+                try {
+                    var ta = document.createElement('textarea');
+                    ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+                    document.body.appendChild(ta); ta.select();
+                    var ok = document.execCommand('copy');
+                    document.body.removeChild(ta); done(ok);
+                } catch (e) { done(false); }
+            }
+        },
+        /* 服务端历史回退复制：本地无消息体时从 /agent/history 拉取（2026-09-08） */
+        _copyFromServer: function (sessionId) {
+            var self = this;
+            var token = this.userToken();
+            if (!token || !sessionId) { self._toast('当前没有可复制的对话', 'warning'); return; }
+            fetch('/api/agent/history?session_id=' + encodeURIComponent(sessionId), {
+                headers: { 'Authorization': 'Bearer ' + token }
+            }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+                var msgs = (data && data.messages) || [];
+                if (!msgs.length) { self._toast('当前没有可复制的对话', 'warning'); return; }
+                var text = (self.els.title.textContent || '对话') + '\n\n';
+                msgs.forEach(function (m) {
+                    var who = m.role === 'user' ? (self.userName() || '我') : '华为云方案助手';
+                    text += '【' + who + '】\n' + String(m.content || '').replace(/\n{3,}/g, '\n\n').trim() + '\n\n';
+                });
+                self._copyText(text, function (ok) {
+                    self._toast(ok ? '对话已复制到剪贴板（来自服务端历史）' : '复制失败', ok ? 'success' : 'error');
+                });
+            }).catch(function () { self._toast('复制失败', 'error'); });
+        },
+        _copyText: function (text, done) {
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
             } else {

@@ -413,6 +413,59 @@ async def agent_history(session_id: str = "", user: dict = Depends(get_current_u
         raise HTTPException(status_code=500, detail=f"读取会话历史失败: {e}")
 
 
+# ===== 会话管理端点（2026-09-08 对话管理真服务端化） =====
+# 前端右上角 归档/重命名/删除 此前只写 localStorage（服务端无感），此处提供真身。
+# 归属校验与 /agent/history 同口径：session_id 解析出的 uid ∈ {0, 当前用户}。
+
+class ConvManageRequest(BaseModel):
+    session_id: str = ""
+    title: str = ""
+    archived: bool = False
+
+
+def _conv_manage_guard(session_id: str, user: dict) -> int:
+    from fastapi import HTTPException
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id 必填")
+    uid = user.get("id") or user.get("user_id") or 0
+    from app.agent.memory import ConversationMemory
+    sid_uid = ConversationMemory._parse_user_id(session_id)
+    if sid_uid not in (0, uid):
+        raise HTTPException(status_code=403, detail="无权操作该会话")
+    return uid
+
+
+@router.post("/agent/conv/rename", tags=["Agent 对话"])
+async def agent_conv_rename(body: ConvManageRequest, user: dict = Depends(get_current_user)):
+    _conv_manage_guard(body.session_id, user)
+    title = (body.title or "").strip()[:80]
+    if not title:
+        raise HTTPException(status_code=400, detail="title 不能为空")
+    from app.agent.memory import ConversationMemory
+    ok = ConversationMemory().set_session_title(body.session_id, title)
+    if not ok:
+        raise HTTPException(status_code=500, detail="改名落库失败")
+    return {"ok": True, "session_id": body.session_id, "title": title}
+
+
+@router.post("/agent/conv/archive", tags=["Agent 对话"])
+async def agent_conv_archive(body: ConvManageRequest, user: dict = Depends(get_current_user)):
+    _conv_manage_guard(body.session_id, user)
+    from app.agent.memory import ConversationMemory
+    ok = ConversationMemory().set_session_archived(body.session_id, bool(body.archived))
+    if not ok:
+        raise HTTPException(status_code=500, detail="归档标记落库失败")
+    return {"ok": True, "session_id": body.session_id, "archived": bool(body.archived)}
+
+
+@router.post("/agent/conv/delete", tags=["Agent 对话"])
+async def agent_conv_delete(body: ConvManageRequest, user: dict = Depends(get_current_user)):
+    _conv_manage_guard(body.session_id, user)
+    from app.agent.memory import ConversationMemory
+    deleted = ConversationMemory().delete_session(body.session_id)
+    return {"ok": True, "session_id": body.session_id, "deleted_messages": deleted}
+
+
 class EnhancePromptRequest(BaseModel):
     prompt: str
     session_id: str = ""

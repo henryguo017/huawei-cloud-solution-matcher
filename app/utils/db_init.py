@@ -227,6 +227,22 @@ def init_database():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_memory_user ON agent_memory(user_id, session_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_memory_created ON agent_memory(created_at)")
 
+    # Agent 会话元数据（2026-09-08 对话管理真服务端化）：标题/归档标记的服务端真身。
+    # 前端 localStorage 仍作侧栏缓存，但 rename/archive/delete 双写到这里，
+    # 修复"右上角管理按钮只改本地、服务端无感"的双轨问题。
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agent_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 0,
+            session_id TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL DEFAULT '',
+            archived INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
+            updated_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_sessions_user ON agent_sessions(user_id, session_id)")
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS agent_memory_archive (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

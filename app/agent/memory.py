@@ -205,6 +205,68 @@ class ConversationMemory:
         ]
         return out[-limit:]
 
+    # ---- 会话元数据管理（2026-09-08 对话管理真服务端化） ----
+    # 前端右上角 归档/重命名/删除 此前只写 localStorage，服务端 agent_memory 无感——
+    # 属于历史迁移双轨问题。以下方法配合 agent_sessions 表（db_init）提供真身。
+
+    def _session_uid(self, session_id: str) -> int:
+        return self._parse_user_id(session_id)
+
+    def set_session_title(self, session_id: str, title: str) -> bool:
+        try:
+            conn = self._db_conn()
+            conn.execute("""
+                INSERT INTO agent_sessions (user_id, session_id, title, updated_at)
+                VALUES (?, ?, ?, datetime('now', 'localtime'))
+                ON CONFLICT(session_id) DO UPDATE SET
+                    title=excluded.title, updated_at=datetime('now', 'localtime')
+            """, (self._session_uid(session_id), session_id, (title or '')[:80]))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            logger.warning(f"[memory] 会话改名落库失败 session={session_id}: {e}")
+            return False
+
+    def set_session_archived(self, session_id: str, archived: bool) -> bool:
+        try:
+            conn = self._db_conn()
+            conn.execute("""
+                INSERT INTO agent_sessions (user_id, session_id, archived, updated_at)
+                VALUES (?, ?, ?, datetime('now', 'localtime'))
+                ON CONFLICT(session_id) DO UPDATE SET
+                    archived=excluded.archived, updated_at=datetime('now', 'localtime')
+            """, (self._session_uid(session_id), session_id, 1 if archived else 0))
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            logger.warning(f"[memory] 会话归档标记落库失败 session={session_id}: {e}")
+            return False
+
+    def delete_session(self, session_id: str) -> int:
+        """物理删除会话：agent_memory 消息行 + agent_sessions 元数据行 + 内存缓存。
+
+        返回删除的 agent_memory 行数（0 也可能合法：无消息的空会话）。
+        """
+        uid = self._session_uid(session_id)
+        deleted = 0
+        try:
+            conn = self._db_conn()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM agent_memory WHERE user_id=? AND session_id=?", (uid, session_id))
+            deleted = cur.rowcount or 0
+            cur.execute("DELETE FROM agent_sessions WHERE session_id=?", (session_id,))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"[memory] 会话删除落库失败 session={session_id}: {e}")
+            return deleted
+        # 同步清内存缓存，防已删会话被内存残留"复活"
+        self._sessions.pop(session_id, None)
+        self._loaded.discard(session_id)
+        return deleted
+
     def get_conversation_history(self, session_id: str) -> str:
         self._ensure_loaded(session_id)
         if session_id not in self._sessions:
