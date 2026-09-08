@@ -667,7 +667,9 @@
                     var inp = self._getActiveInput();
                     inp.value = CAPS[key].tpl;
                     inp.focus();
-                    root.querySelectorAll('.ws-menu-item[data-cap]').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-cap') === key); });
+                    self._onInputDraft();   // 程序赋值不触发 input 事件，手动落草稿（否则切走即丢）
+                    // 能力入口点击后不亮（模板已填入输入框即为反馈），不持久常亮（2026-09-09 用户反馈）
+                    root.querySelectorAll('.ws-menu-item[data-cap]').forEach(function (x) { x.classList.remove('active'); });
                     if (capList && capGroup) { capList.style.display = 'none'; capGroup.classList.remove('open'); }
                     self._autoResizeActive(); self._updateCount();
                     return;
@@ -679,6 +681,7 @@
                     var inp2 = self._getActiveInput();
                     inp2.value = txt;
                     inp2.focus();
+                    self._onInputDraft();   // 程序赋值不触发 input 事件，手动落草稿
                     self._autoResizeActive(); self._updateCount();
                     return;
                 }
@@ -3094,16 +3097,18 @@
                 try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); } catch (e) {}
             }
         },
-        /* input 事件 → 防抖 300ms 落草稿（欢迎页尚无 convoId 时不写） */
+        /* input 事件 → 防抖 300ms 落草稿（欢迎页尚无 convoId 时不写；
+           槽位在输入瞬间锁定，防止 300ms 防抖窗口内切换对话导致串槽） */
         _onInputDraft: function () {
             var self = this;
+            var slot = self.currentConvoId;
             clearTimeout(this._draftTimer);
             this._draftTimer = setTimeout(function () {
-                if (!self.currentConvoId) return;
+                if (!slot) return;
                 var input = self.els.input;
                 var val = input ? (input.value || '') : '';
-                if (val.trim()) self._saveDraft(self.currentConvoId, val);
-                else self._delDraft(self.currentConvoId);   // 清空输入 = 删除草稿
+                if (val.trim()) self._saveDraft(slot, val);
+                else self._delDraft(slot);   // 清空输入 = 删除草稿
             }, 300);
         },
         /* ---------------- 图片输入理解（2026-09-09） ----------------
@@ -3379,6 +3384,12 @@
                     '<span class="ws-task-name-text">' + escHtml(c.title || '未命名对话') + '</span>' +
                     '<span class="ws-task-time">' + relTime(c.updatedAt) + '</span>' +
                 '</div>';
+            // 草稿徽标：该对话有未发送输入时显示（2026-09-09）
+            var _d = self._getDraft(c.id);
+            if (_d && _d.text && String(_d.text).trim()) {
+                tpl = tpl.replace('<span class="ws-task-time">',
+                    '<span class="ws-task-draft" title="有未发送的草稿">草稿</span><span class="ws-task-time">');
+            }
             // 鼠标移上去时直接显示操作按钮（无方框、仅图标）；活跃项：归档+删除；归档项：恢复+删除
             var actionsHtml = (mode === 'archive')
                 ? '<button type="button" class="ws-task-hover-btn" data-action="restore" title="恢复" aria-label="恢复">' +

@@ -450,6 +450,8 @@ body.view-agent   .ws-sidebar    { animation: wsSidebarIn .30s cubic-bezier(.22,
 .ws-task-name { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.6875rem; font-weight: 500; color: #fff; line-height: 1.35; overflow: hidden; }
 .ws-task-name-text { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-task-time { flex-shrink: 0; font-size: 0.625rem; color: var(--frame-text-dim); white-space: nowrap; transition: opacity var(--transition-fast); }
+.ws-task-draft { flex-shrink: 0; font-size: 0.5625rem; line-height: 1; padding: 2px 5px; border-radius: 999px; background: rgba(199, 0, 11, 0.12); color: #C7000B; font-weight: 600; white-space: nowrap; transition: opacity var(--transition-fast); }
+.ws-task-item:hover .ws-task-draft { opacity: 0; }
 .ws-task-meta { display: none; }       /* 已合并到 ws-task-name 单行展示，不再渲染 */
 .ws-task-cap,
 .ws-task-client { display: none; }     /* 标签已从侧栏移除 */
