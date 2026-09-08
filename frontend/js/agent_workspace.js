@@ -1088,24 +1088,24 @@
             var m = document.querySelector('.ws-share-modal-mask');
             if (m) m.parentNode.removeChild(m);
         },
-        /* 顶栏时钟按钮：历史提问下拉面板 —— 汇总所有对话里的用户提问，点击回填输入框 */
+        /* 顶栏时钟按钮：历史提问下拉面板 —— 只显示当前对话内的用户提问（对话级隔离），
+           点击回填输入框 */
         _toggleHistoryQuestions: function (anchor) {
             if (document.querySelector('.ws-history-questions')) { this._closeHistoryQuestions(); return; }
             var items = [];
             var seen = {};
             var list = this._loadConvos();
-            // convos 已按 updatedAt 降序保存，遍历即最新优先；归档对话同样计入
-            for (var i = 0; i < list.length; i++) {
-                var msgs = list[i].messages || [];
-                for (var j = msgs.length - 1; j >= 0; j--) {
-                    var m = msgs[j];
-                    if (!m || m.role !== 'user') continue;
-                    var text = String(m.content || '').replace(/\s+/g, ' ').trim();
-                    if (!text || seen[text]) continue;
-                    seen[text] = true;
-                    items.push(text);
-                    if (items.length >= 200) break;
-                }
+            // 对话级隔离：只取当前打开对话的用户提问，最新优先（不跨对话汇总）
+            var found = null;
+            for (var i = 0; i < list.length; i++) { if (list[i].id === this.currentConvoId) { found = list[i]; break; } }
+            var msgs = (found && found.messages) || [];
+            for (var j = msgs.length - 1; j >= 0; j--) {
+                var m = msgs[j];
+                if (!m || m.role !== 'user') continue;
+                var text = String(m.content || '').replace(/\s+/g, ' ').trim();
+                if (!text || seen[text]) continue;
+                seen[text] = true;
+                items.push(text);
                 if (items.length >= 200) break;
             }
             var self = this;
@@ -1114,7 +1114,7 @@
             var head = '<div class="ws-hq-head">历史提问（' + items.length + '）</div>';
             var body;
             if (!items.length) {
-                body = '<div class="ws-hq-empty">暂无提问记录</div>';
+                body = '<div class="ws-hq-empty">当前对话暂无提问</div>';
             } else {
                 body = '<div class="ws-hq-list">';
                 for (var k = 0; k < items.length; k++) {
