@@ -29,7 +29,9 @@ def rate_limit(limit: int = 120, window: int = 60):
     """简单的单进程 IP/用户限流；多 worker 部署时应替换为 Redis 等共享存储。"""
     async def dependency(request: Request):
         now = time.time()
-        key = _rate_limit_key(request)
+        # key = IP + 路由路径：同一 IP 下不同端点各自计数（此前共享同桶，
+        # 多端点页签式操作会误触严格端点的限流，2026-09-09 情报订阅实测暴露）
+        key = _rate_limit_key(request) + ":" + request.url.path
         bucket = _ratelimit_buckets.setdefault(key, [])
         bucket[:] = [t for t in bucket if t > now - window]
         if len(bucket) >= limit:
