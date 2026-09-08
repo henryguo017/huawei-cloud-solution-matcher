@@ -3438,7 +3438,8 @@
             this.currentConvoId = id;
             // 切换 sessionId 与 convId 对齐，让后续追问命中后端按 session_id 累积的 ConversationMemory
             this.sessionId = id;
-            this.activeCap = found.cap || '';
+            // 能力胶囊只在点击瞬间作为入口提示，切回历史对话不再常亮（2026-09-09 用户反馈）
+            this.activeCap = '';
             this.selectedClient = (found.clientId != null) ? { id: found.clientId, name: found.clientName } : null;
             this.els.title.textContent = found.title || '未命名对话';
             this._showChatInput();                          // 同步显示顶栏 + 底部输入框 + 选择器 + 标题
@@ -3447,7 +3448,7 @@
             var picker = this.root.querySelector('#ws-context-picker');
             if (picker) picker.style.display = (this.readOnly || found.clientId != null) ? 'none' : '';
             this._clearPreview();
-            this.root.querySelectorAll('.ws-menu-item[data-cap]').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-cap') === (found.cap || '')); });
+            this.root.querySelectorAll('.ws-menu-item[data-cap]').forEach(function (x) { x.classList.remove('active'); });
             var stream = this.els.stream; stream.innerHTML = '';
             var msgs = found.messages || [];
             for (var j = 0; j < msgs.length; j++) {
