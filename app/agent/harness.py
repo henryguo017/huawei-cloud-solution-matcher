@@ -1035,7 +1035,8 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             self._intent = intent.get("intent", "solution")
             # 附件强制工具链（2026-09-09 E2E 双实测）：请求携带文档附件时一律走两阶段，
             # 不进 general 直答 / CRM 档案等无 read_customer_file 能力的分支。
-            if extra_context and DOC_ATTACH_MARKER in extra_context:
+            _has_doc_attach = bool(extra_context and DOC_ATTACH_MARKER in extra_context)
+            if _has_doc_attach:
                 self._log("system", f"[INTENT] 检测到文档附件，强制走工具链（覆盖原意图 {self._intent}）")
                 self._intent = "solution"
             self._format_mode = "competitor" if self._intent == "competitor" else "solution"
@@ -1115,9 +1116,9 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                         return intercepted
 
             # P2 修复：方案/竞品意图但需求过短、缺行业/场景 → 直接澄清，避免凭空生成方案
-            # 边界审计补（2026-09-08 线上实测）：竞品意图且消息里点名了具体竞品时，
-            # 对比问题本身自洽（"华为云和阿里云哪个好"），不该被 <12 字澄清门槛拦住。
-            if self._intent in ("solution", "competitor") and self._need_clarify(
+            # 附件例外（2026-09-09 简历案例实测）：带文档附件时需求信息往往就在附件里，
+            # 弹澄清表单等于让用户把附件内容再敲一遍——跳过澄清，让 Agent 先读附件再答。
+            if self._intent in ("solution", "competitor") and not _has_doc_attach and self._need_clarify(
                 user_input, intent.get("industries") or []
             ) and not (self._intent == "competitor" and (intent.get("competitors") or [])):
                 questions = self._build_clarify_questions(user_input)

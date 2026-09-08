@@ -82,6 +82,12 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
+    /* 图片文件判定：MIME + 扩展名双保险（2026-09-09 实测：微信下载的图片拖拽时 type 为空，
+       仅按 MIME 分流会把 jpg 送进文档通道 → 触发附件强制方案流程 → 弹澄清表） */
+    function isImageFile(f) {
+        if (f && /^image\//.test(f.type)) return true;
+        return !!(f && f.name && /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name));
+    }
     function autoTitle(text) {
         var t = String(text || '').replace(/\r/g, '').split('\n')[0].trim();
         t = t.replace(/【[^】]*】/g, '');                       // 去【占位】
@@ -556,8 +562,8 @@
                     fileInput.value = '';
                     if (!files.length) return;
                     // 图片与文档分流（2026-09-09）：图片 → 视觉输入 chips；文档 → 原资料上传
-                    var imgs = files.filter(function (f) { return /^image\//.test(f.type); });
-                    var docs = files.filter(function (f) { return !/^image\//.test(f.type); });
+                    var imgs = files.filter(isImageFile);
+                    var docs = files.filter(function (f) { return !isImageFile(f); });
                     if (imgs.length) self._addImageFiles(imgs);
                     if (docs.length) self._uploadDocFiles(docs);
                 });
@@ -566,7 +572,7 @@
                 // 注意：此处位于 _bind 靠前位置，this.els.input 此时尚未赋给局部变量，必须走 self.els
                 self.els.input.addEventListener('paste', function (e) {
                     var files = Array.prototype.slice.call((e.clipboardData && e.clipboardData.files) || []);
-                    var imgs = files.filter(function (f) { return /^image\//.test(f.type); });
+                    var imgs = files.filter(isImageFile);
                     if (imgs.length) { e.preventDefault(); self._addImageFiles(imgs); }
                 });
 
@@ -582,8 +588,8 @@
                         dropZone.classList.remove('ws-dragover');
                         var files = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.files) || []);
                         if (!files.length) return;
-                        var imgs = files.filter(function (f) { return /^image\//.test(f.type); });
-                        var docs = files.filter(function (f) { return !/^image\//.test(f.type); });
+                        var imgs = files.filter(isImageFile);
+                        var docs = files.filter(function (f) { return !isImageFile(f); });
                         if (imgs.length) self._addImageFiles(imgs);
                         if (docs.length) self._uploadDocFiles(docs);
                     });
