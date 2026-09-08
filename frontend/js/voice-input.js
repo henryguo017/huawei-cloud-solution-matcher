@@ -81,6 +81,7 @@
         var listening = false;
         var failed = false;           // 该输入框语音已被判定不可用（如识别服务连不上）
         var watchdog = null;          // 静默挂起看门狗：开始后长时间无结果则判定失败
+        var lastWritten = '';         // 本模块最后一次写入输入框的内容（用于检测外部清空）
 
         function notify(msg, type) {
             if (window.UI && typeof window.UI.showToast === 'function') {
@@ -102,8 +103,21 @@
             notify('语音识别不可用：' + reason + ' 请直接输入文字（建议用 Chrome / Edge / Safari 的语音输入）。', 'warning');
         }
 
+        function discardStaleBuffer() {
+            /* 外部清空检测（bugfix 2026-09-08）：监听期间应用发送消息会把输入框清空，
+               但连续识别的语音缓冲（baseValue/finalTranscript）还留着已发送的旧文本，
+               下一次识别回调会把旧问题回填进输入框。发现输入框被外部清掉即作废缓冲。 */
+            if (listening && !el.value && lastWritten) {
+                baseValue = '';
+                finalTranscript = '';
+            }
+        }
+
         function render(interim) {
-            setVal(el, baseValue + finalTranscript + (interim || ''));
+            discardStaleBuffer();
+            var text = baseValue + finalTranscript + (interim || '');
+            lastWritten = text;
+            setVal(el, text);
         }
 
         function armWatchdog() {
@@ -156,9 +170,13 @@
 
         rec.onend = function () {
             if (watchdog) { clearTimeout(watchdog); watchdog = null; }
+            discardStaleBuffer();
             // 提交最终文本（去掉临时 interim）
-            setVal(el, baseValue + finalTranscript);
+            var text = baseValue + finalTranscript;
+            lastWritten = text;
+            setVal(el, text);
             finalTranscript = '';
+            baseValue = text;
             if (listening && !failed) {
                 // continuous 模式浏览器静音自动结束后，保持续听
                 try { rec.start(); } catch (err) { /* 已在监听则忽略 */ }
