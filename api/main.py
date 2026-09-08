@@ -1,5 +1,6 @@
 import sys
 import os
+import asyncio
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -17,6 +18,7 @@ from api.achievement_routes import router as achievement_router
 from api.share_routes import router as share_router
 from api.agent_routes import router as agent_router
 from api.user_notify_routes import router as user_notify_router
+from api.subscription_routes import router as subscription_router
 from app.config import APP_NAME, APP_VERSION
 from app.core.errors import AppError, app_error_handler
 import logging
@@ -145,6 +147,7 @@ app.include_router(achievement_router, prefix="/api")
 app.include_router(share_router, prefix="/api")
 app.include_router(agent_router, prefix="/api")
 app.include_router(user_notify_router, prefix="/api")
+app.include_router(subscription_router, prefix="/api")
 
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 js_root = (Path(frontend_path) / "js").resolve()
@@ -281,6 +284,7 @@ async def spa_fallback(full_path: str):
 
 @app.on_event("startup")
 async def startup_event():
+    global _subscription_loop_task
     logger.info("=" * 50)
     logger.info(f"{APP_NAME} v{APP_VERSION} 启动中...")
     logger.info("=" * 50)
@@ -306,11 +310,46 @@ async def startup_event():
         logger.info("向量模型预热完成")
     except Exception as e:
         logger.warning(f"知识库初始化警告: {e}")
-    
+
+    # 情报订阅调度器（2026-09-09）：asyncio 循环每 60s 轮询到期任务，零新依赖
+    try:
+        _subscription_loop_task = asyncio.create_task(_subscription_loop())
+        logger.info("情报订阅调度器已启动（60s 轮询）")
+    except Exception as e:
+        logger.warning(f"情报订阅调度器启动失败: {e}")
+
     logger.info("API 服务启动完成")
+
+_subscription_loop_task = None
+
+async def _subscription_loop():
+    """每 60s 检查到期订阅并逐条后台执行（互相不阻塞；异常吞掉不中断循环）。"""
+    while True:
+        try:
+            from app.services import subscription_service as ss
+            due = ss.due_subscriptions()
+            for sub in due:
+                logger.info("[订阅调度] 触发 sub_id=%s industry=%s freq=%s", sub["id"], sub.get("industry"), sub.get("frequency"))
+                asyncio.create_task(_run_subscription_safe(sub))
+        except Exception as e:
+            logger.warning("[订阅调度] 轮询异常（继续）: %s", e)
+        await asyncio.sleep(60)
+
+async def _run_subscription_safe(sub):
+    try:
+        await ss_execute(sub)
+    except Exception as e:
+        logger.warning("[订阅调度] 执行异常 sub_id=%s: %s", sub.get("id"), e)
+
+def ss_execute(sub):
+    from app.services import subscription_service
+    return subscription_service.execute_subscription(sub)
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    global _subscription_loop_task
+    if _subscription_loop_task:
+        _subscription_loop_task.cancel()
     logger.info("API 服务关闭")
 
 if __name__ == "__main__":

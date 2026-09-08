@@ -20,11 +20,12 @@ tool_end / final / final_answer / clarify）桥接为 SSE 流式推送，供前�
 """
 import json
 import os
+import base64
 import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import StreamingResponse
@@ -36,12 +37,45 @@ from api.models import MatchRequest, MatchResponse, ClarifyRequest, SourceDocume
 from api.sse_utils import sse_json_default as _sse_json_default
 from api.routes import _build_client_context_block
 from app.agent import get_agent
-from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT, MATCH_LLM_MODEL
+from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT, MATCH_LLM_MODEL, USER_DOCS_BASE_DIR
 from app.services.knowledge_base import set_kb_user_context
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 图片输入白名单（2026-09-09）：仅 customer_uploads 内的图片，防路径穿越读任意文件
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+_IMAGE_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+
+
+def _load_user_images_as_data_urls(user_id, rel_paths):
+    """校验并读取用户上传的图片 → base64 data URL 列表。
+
+    安全校验：拒绝绝对路径/..；resolve 后必须落在 user_docs/{uid}/customer_uploads/ 内；
+    扩展名白名单；单张 ≤10MB。任一不合法抛 HTTPException(400)。
+    """
+    base = os.path.realpath(os.path.join(USER_DOCS_BASE_DIR, str(user_id), "customer_uploads"))
+    out = []
+    for rel in rel_paths:
+        rel = str(rel or "").strip()
+        if not rel or rel.startswith(("/", "\\")) or ":" in rel:
+            raise HTTPException(status_code=400, detail="非法图片路径")
+        abs_path = os.path.realpath(os.path.join(base, rel))
+        if not abs_path.startswith(base + os.sep):
+            raise HTTPException(status_code=400, detail="图片路径越界")
+        ext = os.path.splitext(abs_path)[1].lower()
+        if ext not in _IMAGE_EXTS:
+            raise HTTPException(status_code=400, detail=f"不支持的图片格式: {ext}")
+        if not os.path.isfile(abs_path):
+            raise HTTPException(status_code=404, detail="图片不存在或已失效")
+        if os.path.getsize(abs_path) > _IMAGE_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="单张图片超过 10MB 上限")
+        with open(abs_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+        out.append(f"data:{_IMAGE_MIME[ext]};base64,{b64}")
+    return out
 
 # 本地工具名缓存（首次枚举后复用，避免每次请求重建 ToolRegistry）
 _LOCAL_TOOL_NAMES = None
@@ -68,6 +102,7 @@ class AgentChatRequest(BaseModel):
     rerun_plan_index: Optional[int] = None  # P2-D5：Plan 单步重跑（后端从 _step_results 取原参数重跑该步并重新汇总）
     tool_permissions: Optional[dict] = None  # #3 工具权限策略 {tool: "allow"|"ask"|"deny"}，None 走 harness 默认
     disable_web_search: bool = False         # #6 联网搜索开关：True 时 Agent 不调用 web_search
+    images: Optional[List[str]] = None       # 2026-09-09 图片输入：customer_uploads 内的相对路径，≤4 张
 
 
 @router.get("/agent/tools", tags=["Agent 工具发现"])
@@ -99,7 +134,38 @@ async def agent_chat(
     user_id = user.get("id") or user.get("user_id") or "anon"
     session_id = body.session_id or f"agent_{user_id}"
     message = (body.message or "").strip()
-    if not message:
+    if not message and not body.images:
+        raise HTTPException(status_code=400, detail="message 不能为空")
+
+    # 图片视觉预处理（2026-09-09）：v4-flash/pro 不支持图片（flash 静默丢弃 / pro 幻觉编造，
+    # 2026-09-08 spike 实测），统一先由 deepseek-v4-flash-vision-exp 转成文字描述，
+    # 再把描述块拼进消息进 harness —— 工具循环 / RAG / 记忆链路保持原架构零改动。
+    llm_message = message
+    if body.images:
+        if len(body.images) > 4:
+            raise HTTPException(status_code=400, detail="每轮最多附带 4 张图片")
+        if not isinstance(user_id, int) or user_id <= 0:
+            raise HTTPException(status_code=401, detail="请先登录后再使用图片输入")
+        data_urls = _load_user_images_as_data_urls(user_id, body.images)
+        try:
+            from app.services import vision_describe
+            desc = await asyncio.wait_for(
+                asyncio.to_thread(vision_describe.describe_images, data_urls),
+                timeout=120.0,
+            )
+            llm_message = (
+                f"[客户在本轮附带了 {len(data_urls)} 张图片，图片内容如下]\n"
+                f"{desc}\n[/图片内容结束]\n\n" + message
+            )
+            logger.info("[agent/chat] 图片预处理完成 images=%s session=%s", len(data_urls), session_id)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("[agent/chat] 图片描述失败（降级为纯文本继续）: %s", e)
+            llm_message = (
+                f"[客户附带了 {len(body.images)} 张图片，但图片识别失败，请基于文字回答]\n\n" + message
+            )
+    if not llm_message.strip():
         raise HTTPException(status_code=400, detail="message 不能为空")
 
     event_queue: "asyncio.Queue" = asyncio.Queue()
@@ -137,7 +203,7 @@ async def agent_chat(
                 # 客户端拿到明确 error 事件，服务端留下 CRITICAL 日志指纹用于定位。
                 result = await asyncio.wait_for(
                     get_agent().run(
-                        message,
+                        llm_message,
                         session_id=session_id,
                         extra_context=extra_context,
                         event_callback=emit,

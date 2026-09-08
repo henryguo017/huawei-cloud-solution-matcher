@@ -300,6 +300,37 @@ def init_database():
                 _t.sleep(2)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_episodes_client ON agent_episodes(user_id, client_id)")
 
+    # ==================== 情报订阅（定时自动化，2026-09-09） ====================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id       INTEGER NOT NULL,
+            industry      TEXT NOT NULL DEFAULT '',
+            competitors   TEXT NOT NULL DEFAULT '[]',
+            frequency     TEXT NOT NULL DEFAULT 'weekly_mon_9',
+            scheduled_at  TEXT,
+            prompt_extra  TEXT NOT NULL DEFAULT '',
+            enabled       INTEGER NOT NULL DEFAULT 1,
+            channel       TEXT NOT NULL DEFAULT 'feishu',
+            last_run_at   TEXT,
+            next_run_at   TEXT,
+            created_at    TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_subs_user ON subscriptions(user_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_subs_due ON subscriptions(enabled, next_run_at)")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_runs (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            subscription_id INTEGER NOT NULL,
+            ok             INTEGER NOT NULL DEFAULT 0,
+            summary        TEXT NOT NULL DEFAULT '',
+            elapsed        REAL NOT NULL DEFAULT 0,
+            created_at     TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_subruns_sub ON subscription_runs(subscription_id, created_at)")
+
     conn.commit()
     conn.close()
     

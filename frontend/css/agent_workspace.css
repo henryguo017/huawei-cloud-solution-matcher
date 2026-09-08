@@ -882,6 +882,119 @@ body.view-agent .theme-label { margin-bottom: 8px; }
 @keyframes ws-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ws-pop-in { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
+/* ---- 图片输入 chips（2026-09-09） ---- */
+.ws-img-chips {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 0 16px 8px;
+}
+.ws-img-chip {
+    position: relative;
+    width: 52px; height: 52px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.10);
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.ws-img-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ws-img-chip-x {
+    position: absolute; top: 1px; right: 1px;
+    width: 16px; height: 16px;
+    border: none; border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55); color: #fff;
+    font-size: 12px; line-height: 1;
+    cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+}
+.ws-img-chip-x:hover { background: rgba(199, 0, 11, 0.85); }
+.ws-input-bar.ws-dragover { outline: 2px dashed var(--primary-color, #C7000B); outline-offset: -4px; border-radius: 12px; }
+
+/* 用户气泡内图片缩略图 / 历史图片徽标 */
+.ws-msg-images { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ws-msg-img {
+    max-width: 180px; max-height: 130px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.10);
+    object-fit: cover; display: block;
+}
+.ws-msg-images-badges { margin-top: 6px; }
+.ws-msg-img-badge {
+    display: inline-flex; align-items: center;
+    font-size: 0.75rem;
+    background: rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 6px;
+    padding: 2px 8px;
+    color: var(--text-secondary);
+}
+
+/* ---- 通知弹层：页签 + 情报订阅（2026-09-09） ---- */
+.ws-notify-tabs {
+    display: flex; gap: 4px;
+    margin: 8px 0 10px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 10px;
+    padding: 3px;
+}
+.ws-notify-tab {
+    flex: 1;
+    border: none; background: transparent;
+    border-radius: 8px;
+    padding: 7px 0;
+    font-size: 0.8125rem; font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: var(--font-family);
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ws-notify-tab.active { background: #fff; color: var(--primary-color, #C7000B); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.10); }
+.ws-subs-form { border-top: 1px dashed rgba(0, 0, 0, 0.10); margin-top: 12px; padding-top: 10px; }
+.ws-subs-form .ws-notify-save { width: 100%; }
+.ws-sub-item {
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: rgba(0, 0, 0, 0.015);
+}
+.ws-sub-item-head { display: flex; align-items: center; gap: 8px; }
+.ws-sub-industry { font-weight: 600; font-size: 0.875rem; color: var(--text-primary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-sub-freq {
+    font-size: 0.6875rem; font-weight: 600;
+    color: var(--primary-color, #C7000B);
+    background: rgba(199, 0, 11, 0.06);
+    border: 1px solid rgba(199, 0, 11, 0.15);
+    border-radius: 999px;
+    padding: 1px 8px;
+    white-space: nowrap;
+}
+.ws-sub-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
+.ws-sub-comp, .ws-sub-last { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; line-height: 1.5; word-break: break-all; }
+.ws-sub-actions { display: flex; gap: 8px; margin-top: 8px; }
+.ws-sub-actions button {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: #fff;
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    font-family: var(--font-family);
+    color: var(--text-secondary);
+}
+.ws-sub-actions button:hover { border-color: var(--primary-color, #C7000B); color: var(--primary-color, #C7000B); }
+.ws-sub-actions .ws-sub-del:hover { border-color: #e23d3d; color: #e23d3d; }
+.ws-subs-empty { text-align: center; font-size: 0.8125rem; color: var(--text-muted); padding: 16px 0; }
+.ws-notify-field select, .ws-notify-field input[type="datetime-local"] {
+    width: 100%;
+    border: 1px solid var(--border-color, #E5E7EB);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 0.8125rem;
+    font-family: var(--font-family);
+    background: #fff;
+    color: var(--text-primary);
+}
+
 .ws-stream {
     flex: 1 1 0; min-height: 0; overflow-y: auto;
     padding: 0;

@@ -26,6 +26,9 @@
     var DRAWER_BREAKPOINT = 1400;
     var MAX_INPUT = 2000;
     var MAX_CONVOS = 50;
+    /* 草稿保存：按对话隔离的未发送输入（2026-09-09） */
+    var DRAFT_KEY = 'agent_drafts_v1';
+    var DRAFT_MAX = 50;
 
     /* 方案预览解析词库（v1 前端轻量解析，后续可由后端 structured 字段替代） */
     var PRODUCT_DB = {
@@ -350,6 +353,7 @@
                         '<div class="ws-stream" id="ws-stream"></div>' +
                         '<div class="ws-context-hint" id="ws-context-hint" style="display:none;"></div>' +
                         '<div class="ws-input-bar">' +
+                            '<div class="ws-img-chips" id="ws-img-chips" style="display:none;"></div>' +
                             '<div class="ws-input-row ws-input-row-top">' +
                                 '<div class="ws-input-wrap">' +
                                     '<textarea id="ws-input" class="ws-input" rows="1" autocomplete="off" ' +
@@ -445,6 +449,7 @@
                 drawerToggle: this.root.querySelector('#ws-drawer-toggle'),
                 shareBtn: this.root.querySelector('#ws-share'),
                 historyQBtn: this.root.querySelector('#ws-history-q'),
+                imgChips: this.root.querySelector('#ws-img-chips'),
                 headerMore: this.root.querySelector('#ws-header-more'),
                 drawerClose: this.root.querySelector('#ws-drawer-close'),
                 previewEmpty: this.root.querySelector('#ws-preview-empty'),
@@ -547,38 +552,38 @@
                     var files = Array.prototype.slice.call(fileInput.files || []);
                     fileInput.value = '';
                     if (!files.length) return;
-                    var token = self.userToken();
-                    var pending = files.length;
-                    files.forEach(function (f) {
-                        if (f.size > 30 * 1024 * 1024) {
-                            pending--;
-                            self._toast('超过 30MB 上限：' + f.name, 'warning');
-                            if (pending <= 0) self._toast('文件上传完成', 'success');
-                            return;
-                        }
-                        var form = new FormData();
-                        form.append('file', f);
-                        fetch('/api/upload/customer-file', {
-                            method: 'POST',
-                            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
-                            body: form
-                        }).then(function (r) {
-                            if (!r.ok) { var m = '上传失败 (' + r.status + ')'; return r.json().then(function (j) { throw new Error(j.detail || m); }); }
-                            return r.json();
-                        }).then(function () {
-                            self._toast('已上传：' + f.name, 'success');
-                        }).catch(function (e) {
-                            self._toast((e && e.message) || '上传失败：' + f.name, 'warning');
-                        }).finally(function () {
-                            pending--;
-                            if (pending <= 0) {
-                                self._toast('文件上传完成，可在对话中让我读取客户资料', 'success');
-                                var ta = root.querySelector('#ws-input');
-                                if (ta) { ta.focus(); }
-                            }
-                        });
-                    });
+                    // 图片与文档分流（2026-09-09）：图片 → 视觉输入 chips；文档 → 原资料上传
+                    var imgs = files.filter(function (f) { return /^image\//.test(f.type); });
+                    var docs = files.filter(function (f) { return !/^image\//.test(f.type); });
+                    if (imgs.length) self._addImageFiles(imgs);
+                    if (docs.length) self._uploadDocFiles(docs);
                 });
+
+                // 粘贴截图（Ctrl+V）直接进图片输入（2026-09-09）
+                input.addEventListener('paste', function (e) {
+                    var files = Array.prototype.slice.call((e.clipboardData && e.clipboardData.files) || []);
+                    var imgs = files.filter(function (f) { return /^image\//.test(f.type); });
+                    if (imgs.length) { e.preventDefault(); self._addImageFiles(imgs); }
+                });
+
+                // 拖拽图片/文档到输入框（2026-09-09）
+                var dropZone = root.querySelector('.ws-input-bar');
+                if (dropZone) {
+                    ['dragenter', 'dragover'].forEach(function (ev) {
+                        dropZone.addEventListener(ev, function (e) { e.preventDefault(); dropZone.classList.add('ws-dragover'); });
+                    });
+                    dropZone.addEventListener('dragleave', function (e) { dropZone.classList.remove('ws-dragover'); });
+                    dropZone.addEventListener('drop', function (e) {
+                        e.preventDefault();
+                        dropZone.classList.remove('ws-dragover');
+                        var files = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.files) || []);
+                        if (!files.length) return;
+                        var imgs = files.filter(function (f) { return /^image\//.test(f.type); });
+                        var docs = files.filter(function (f) { return !/^image\//.test(f.type); });
+                        if (imgs.length) self._addImageFiles(imgs);
+                        if (docs.length) self._uploadDocFiles(docs);
+                    });
+                }
             }
 
             // ===== Agent 工具栏能力（#1 上下文用量 / #2 提示词优化 / #6 联网开关 / #3 工具权限）=====
@@ -649,7 +654,7 @@
             input.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); self._send(); }
             });
-            input.addEventListener('input', function () { self._autoResizeInput(); self._updateCount(); });
+            input.addEventListener('input', function () { self._autoResizeInput(); self._updateCount(); self._onInputDraft(); });
 
             // 能力胶囊 / 欢迎场景 / compose 发送：事件委托（欢迎区会被 _renderWelcome 重渲染，委托可避免监听失效）
             root.addEventListener('click', function (e) {
@@ -836,7 +841,10 @@
         /* ---------------- 对话流程 ---------------- */
         _send: function () {
             var input = this._getActiveInput(), raw = input.value || '', message = raw.trim();
-            if (!message) return;
+            // 图片输入（2026-09-09）：可只发图片不打字；二者至少其一
+            var previews = (this.pendingImages && this.pendingImages.length) ? this.pendingImages.slice() : [];
+            var imgMeta = previews.map(function (p) { return { path: p.path, name: p.name }; });
+            if (!message && !imgMeta.length) return;
             if (message.length > MAX_INPUT) { alert('消息长度超过 ' + MAX_INPUT + ' 字符限制'); return; }
             if (!this.userToken()) { this._showLoginHint(); return; }
 
@@ -845,21 +853,26 @@
             if (intent) {
                 this._appendUser(message);
                 this.els.input.value = ''; this.els.input.style.height = 'auto'; this._updateCount();
+                if (this.currentConvoId) this._delDraft(this.currentConvoId);
                 this._handleIntent(intent);
                 return;
             }
 
             var isFirst = !this.currentConvoId;            // 用逻辑状态判定，不被 DOM 增删干扰：已有 currentConvoId 即"已在当前对话"
-            var title = isFirst ? autoTitle(message) : null;
+            var title = isFirst ? autoTitle(message || (imgMeta[0] && imgMeta[0].name) || '图片提问') : null;
 
-            this._appendUser(message);
+            this._appendUser(message, previews);
             this.els.input.value = ''; this.els.input.style.height = 'auto'; this._updateCount();
+            // 待发图片所有权转移给本次请求（chips 清空；气泡已用 previews 渲染完毕）
+            this._outgoingImages = imgMeta.map(function (p) { return p.path; });
+            this._clearOutgoingImages();
+            if (this.currentConvoId) this._delDraft(this.currentConvoId);   // 发送成功 → 清除草稿
 
             if (isFirst) {
                 this.els.title.textContent = title;
                 this._saveConvoMeta(title);
             }
-            this._persistUser(message);                  // 补齐用户消息持久化（修复历史恢复丢半边）
+            this._persistUser(message, imgMeta);                  // 补齐用户消息持久化（修复历史恢复丢半边）
             if (isFirst) {
                 // 首条消息发出后隐藏主区选择器，上下文锁定为只读，避免聊到一半串客户
                 var picker = this.root.querySelector('#ws-context-picker');
@@ -938,6 +951,7 @@
         _delete: function (id) {
             var convos = this._loadConvos().filter(function (c) { return c.id !== id; });
             this._saveConvos(convos);
+            this._delDraft(id);                         // 草稿随对话一并删除
             this._convServerSync('delete', id);
             if (id === this.currentConvoId) this._newChat();
             else this._renderTasks();
@@ -1566,7 +1580,7 @@
             alert('请先登录后使用 Agent 对话（登录后数据对同一账号生效）。');
         },
 
-        _appendUser: function (text) {
+        _appendUser: function (text, images) {
             var stream = this.els.stream;
             // 只在欢迎态（首次提问）清掉 welcome 卡，进入对话态后追加新用户消息而非整体清空
             // ——旧版无条件 innerHTML='' 会把上一轮整段对话 UI 都覆盖掉，是用户报的"每次新问题覆盖旧消息"主因之一
@@ -1574,12 +1588,18 @@
             this._showChatInput();
             var samplesBar = this.root.querySelector('.ws-samples-bar');
             if (samplesBar) samplesBar.style.display = 'none';
+            var imgsHtml = '';
+            ((images || [])).forEach(function (p) {
+                if (p && p.url) imgsHtml += '<img class="ws-msg-img" src="' + escHtml(p.url) + '" alt="' + escHtml(p.name || '图片') + '" />';
+            });
             var wrap = document.createElement('div');
             wrap.className = 'ws-msg-wrap ws-msg-wrap-user';
             wrap.innerHTML =
                 '<div class="ws-msg ws-msg-user">' +
                     '<div class="ws-msg-author">' + escHtml(this.userName() || 'guo') + '</div>' +
-                    '<div class="ws-msg-body">' + renderMarkdown(text) + '</div>' +
+                    '<div class="ws-msg-body">' + (text ? renderMarkdown(text) : '') +
+                        (imgsHtml ? '<div class="ws-msg-images">' + imgsHtml + '</div>' : '') +
+                    '</div>' +
                 '</div>';
             stream.appendChild(wrap);
             this._scrollBottom();
@@ -2068,7 +2088,8 @@
                     session_id: sessionId,
                     client_id: self.selectedClient ? self.selectedClient.id : null,
                     tool_permissions: self.toolPermissions || {},
-                    disable_web_search: !!self.webSearchDisabled
+                    disable_web_search: !!self.webSearchDisabled,
+                    images: (self._outgoingImages && self._outgoingImages.length) ? self._outgoingImages : null
                 }),
                 signal: signal
             }).then(function (resp) {
@@ -2494,11 +2515,52 @@
                         '<div class="ws-notify-head-title"><span class="ws-notify-head-icon">🔔</span>消息通知</div>' +
                         '<span class="ws-notify-close" id="ws-notify-close" title="关闭">×</span>' +
                     '</div>' +
-                    '<div class="ws-notify-desc">绑定你自己的飞书 / 钉钉群机器人（签名校验 / 加签）。方案匹配或 Agent 生成完成后，推送到你自己的群。仅你本人可见。</div>' +
-                    '<div class="ws-notify-body" id="ws-notify-body"><div class="ws-notify-loading">加载中…</div></div>' +
+                    '<div class="ws-notify-tabs">' +
+                        '<button type="button" class="ws-notify-tab active" data-tab="notify">通知绑定</button>' +
+                        '<button type="button" class="ws-notify-tab" data-tab="subs">情报订阅</button>' +
+                    '</div>' +
+                    '<div class="ws-notify-tabpane" id="ws-pane-notify">' +
+                        '<div class="ws-notify-desc">绑定你自己的飞书 / 钉钉群机器人（签名校验 / 加签）。方案匹配或 Agent 生成完成后，推送到你自己的群。仅你本人可见。</div>' +
+                        '<div class="ws-notify-body" id="ws-notify-body"><div class="ws-notify-loading">加载中…</div></div>' +
+                    '</div>' +
+                    '<div class="ws-notify-tabpane" id="ws-pane-subs" style="display:none;">' +
+                        '<div class="ws-notify-desc">定时让 Agent 联网汇总行业与竞品动态，推送到你绑定的飞书 / 钉钉（未绑定则仅存站内）。</div>' +
+                        '<div id="ws-subs-list"><div class="ws-notify-loading">加载中…</div></div>' +
+                        '<div class="ws-subs-form">' +
+                            '<div class="ws-notify-field"><label>行业</label>' +
+                                '<input type="text" id="ws-sub-industry" placeholder="如：智慧园区 / 制造业" autocomplete="off"></div>' +
+                            '<div class="ws-notify-field"><label>竞品（逗号分隔，可空）</label>' +
+                                '<input type="text" id="ws-sub-competitors" placeholder="如：深询科技, 中科云" autocomplete="off"></div>' +
+                            '<div class="ws-notify-field"><label>频率</label>' +
+                                '<select id="ws-sub-freq">' +
+                                    '<option value="weekly_mon_9">每周一 09:00</option>' +
+                                    '<option value="daily_9">每天 09:00</option>' +
+                                    '<option value="once">仅一次（指定时间）</option>' +
+                                '</select></div>' +
+                            '<div class="ws-notify-field" id="ws-sub-sched-row" style="display:none;"><label>执行时间</label>' +
+                                '<input type="datetime-local" id="ws-sub-sched"></div>' +
+                            '<div class="ws-notify-field"><label>补充要求（可空）</label>' +
+                                '<input type="text" id="ws-sub-extra" placeholder="如：重点关注价格与中标" autocomplete="off"></div>' +
+                            '<button type="button" class="ws-notify-save" id="ws-sub-create">创建订阅</button>' +
+                        '</div>' +
+                    '</div>' +
                 '</div>';
             root.appendChild(pop);
             pop.querySelector('#ws-notify-close').addEventListener('click', function () { pop.remove(); });
+            // 页签切换
+            pop.querySelectorAll('.ws-notify-tab').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    pop.querySelectorAll('.ws-notify-tab').forEach(function (t) { t.classList.toggle('active', t === tab); });
+                    var isSubs = tab.getAttribute('data-tab') === 'subs';
+                    pop.querySelector('#ws-pane-notify').style.display = isSubs ? 'none' : '';
+                    pop.querySelector('#ws-pane-subs').style.display = isSubs ? '' : 'none';
+                    if (isSubs) refreshSubs();
+                });
+            });
+            var freqSel = pop.querySelector('#ws-sub-freq');
+            freqSel.addEventListener('change', function () {
+                pop.querySelector('#ws-sub-sched-row').style.display = freqSel.value === 'once' ? '' : 'none';
+            });
 
             function cardHtml(platform, label, state) {
                 var bound = !!(state && state.webhook_masked);
@@ -2598,6 +2660,124 @@
             }
 
             refresh();
+
+            /* ---- 情报订阅页签（2026-09-09） ---- */
+            function freqLabel(f) {
+                return f === 'daily_9' ? '每天 09:00' : (f === 'once' ? '单次' : '每周一 09:00');
+            }
+            function stripMd(s) {
+                return String(s || '').replace(/[#*`>|]/g, ' ').replace(/\s+/g, ' ').trim();
+            }
+            function refreshSubs() {
+                fetch('/api/subscriptions', { headers: { 'Authorization': 'Bearer ' + token } })
+                .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+                .then(function (d) {
+                    var list = (d && d.subscriptions) || [];
+                    var box = pop.querySelector('#ws-subs-list');
+                    if (!list.length) {
+                        box.innerHTML = '<div class="ws-subs-empty">暂无订阅 —— 用下方表单创建第一条</div>';
+                        return;
+                    }
+                    box.innerHTML = list.map(function (s) {
+                        var comps = (s.competitors || []).join('、');
+                        var lr = s.last_run;
+                        var lastTxt = lr
+                            ? ((lr.ok ? '✅' : '❌') + ' ' + String(lr.created_at || '').slice(0, 16) + ' · ' + escHtml(stripMd(lr.summary).slice(0, 60)) + '…')
+                            : '尚未运行';
+                        return '<div class="ws-sub-item" data-id="' + s.id + '">' +
+                            '<div class="ws-sub-item-head">' +
+                                '<span class="ws-sub-industry">' + escHtml(s.industry) + '</span>' +
+                                '<span class="ws-sub-freq">' + freqLabel(s.frequency) + '</span>' +
+                                '<label class="ws-sub-toggle"><input type="checkbox" class="ws-sub-enabled"' + (s.enabled ? ' checked' : '') + '>启用</label>' +
+                            '</div>' +
+                            (comps ? '<div class="ws-sub-comp">竞品：' + escHtml(comps) + '</div>' : '') +
+                            '<div class="ws-sub-last">上次：' + lastTxt + '</div>' +
+                            '<div class="ws-sub-actions">' +
+                                '<button type="button" class="ws-sub-run">立即运行</button>' +
+                                '<button type="button" class="ws-sub-del">删除</button>' +
+                            '</div>' +
+                        '</div>';
+                    }).join('');
+                    wireSubs(list);
+                }).catch(function () {
+                    pop.querySelector('#ws-subs-list').innerHTML = '<div class="ws-notify-loading">加载失败，请重试</div>';
+                });
+            }
+            function wireSubs(list) {
+                pop.querySelectorAll('.ws-sub-item').forEach(function (item) {
+                    var id = parseInt(item.getAttribute('data-id'), 10);
+                    var sub = list.filter(function (s) { return s.id === id; })[0] || {};
+                    var en = item.querySelector('.ws-sub-enabled');
+                    if (en) en.addEventListener('change', function () {
+                        fetch('/api/subscriptions/' + id + '/toggle', {
+                            method: 'POST', headers: { 'Authorization': 'Bearer ' + token }
+                        }).then(function (r) { return r.json(); }).then(function (d) {
+                            self._toast(d.ok ? (d.subscription.enabled ? '已启用' : '已停用') : '操作失败', d.ok ? 'success' : 'warning');
+                            refreshSubs();
+                        }).catch(function () { self._toast('操作失败', 'warning'); en.checked = !en.checked; });
+                    });
+                    var runBtn = item.querySelector('.ws-sub-run');
+                    if (runBtn) runBtn.addEventListener('click', function () {
+                        runBtn.disabled = true;
+                        runBtn.textContent = '运行中…（最长 7 分钟）';
+                        self._toast('订阅执行中，完成后推送到你的群', 'info');
+                        fetch('/api/subscriptions/' + id + '/run-now', {
+                            method: 'POST', headers: { 'Authorization': 'Bearer ' + token }
+                        }).then(function (r) { return r.json(); }).then(function (d) {
+                            if (d.ok && d.result && d.result.ok) self._toast('执行完成，已推送/落库', 'success');
+                            else self._toast('执行失败：' + ((d.result && d.result.summary || '').slice(0, 60) || '详见运行记录'), 'warning');
+                        }).catch(function () { self._toast('执行请求失败', 'warning'); })
+                        .then(function () { refreshSubs(); });
+                    });
+                    var delBtn = item.querySelector('.ws-sub-del');
+                    if (delBtn) delBtn.addEventListener('click', function () {
+                        self._confirmDialog({
+                            title: '删除这条订阅？',
+                            body: '删除后不再定时执行，运行记录一并清除。',
+                            inputValue: null,
+                            primary: '删除',
+                            danger: true,
+                            onConfirm: function () {
+                                fetch('/api/subscriptions/' + id, {
+                                    method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
+                                }).then(function (r) { return r.json(); }).then(function (d) {
+                                    self._toast(d.ok ? '已删除' : '删除失败', d.ok ? 'success' : 'warning');
+                                    refreshSubs();
+                                }).catch(function () { self._toast('删除失败', 'warning'); });
+                            }
+                        });
+                    });
+                });
+            }
+            pop.querySelector('#ws-sub-create').addEventListener('click', function () {
+                var industry = (pop.querySelector('#ws-sub-industry').value || '').trim();
+                var comps = (pop.querySelector('#ws-sub-competitors').value || '')
+                    .split(/[,，、]/).map(function (s) { return s.trim(); }).filter(Boolean);
+                var freq = pop.querySelector('#ws-sub-freq').value;
+                var extra = (pop.querySelector('#ws-sub-extra').value || '').trim();
+                var sched = pop.querySelector('#ws-sub-sched').value || null;
+                if (!industry) { self._toast('行业不能为空', 'warning'); return; }
+                if (freq === 'once' && !sched) { self._toast('请选择执行时间', 'warning'); return; }
+                var btn = pop.querySelector('#ws-sub-create');
+                btn.disabled = true;
+                fetch('/api/subscriptions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ industry: industry, competitors: comps, frequency: freq, prompt_extra: extra, scheduled_at: sched })
+                }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                .then(function (res) {
+                    if (res.ok && res.j.ok) {
+                        self._toast('订阅已创建：' + freqLabel(freq), 'success');
+                        pop.querySelector('#ws-sub-industry').value = '';
+                        pop.querySelector('#ws-sub-competitors').value = '';
+                        pop.querySelector('#ws-sub-extra').value = '';
+                        refreshSubs();
+                    } else {
+                        self._toast((res.j && res.j.detail) || '创建失败', 'warning');
+                    }
+                }).catch(function () { self._toast('创建失败', 'warning'); })
+                .then(function () { btn.disabled = false; });
+            });
 
             setTimeout(function () {
                 var close = function (ev) {
@@ -2836,6 +3016,201 @@
         _loadConvos: function () {
             try { var v = localStorage.getItem(STORE_KEY); return v ? JSON.parse(v) : []; } catch (e) { return []; }
         },
+        /* ---------------- 草稿保存（按对话隔离，2026-09-09） ---------------- */
+        _draftAll: function () {
+            try { var v = localStorage.getItem(DRAFT_KEY); return v ? JSON.parse(v) : {}; } catch (e) { return {}; }
+        },
+        _saveDraft: function (convoId, text) {
+            if (!convoId) return;
+            var all = this._draftAll();
+            all[convoId] = { text: String(text || ''), savedAt: Date.now() };
+            // LRU：超过上限时淘汰 savedAt 最旧的草稿（当前对话除外）
+            var keys = Object.keys(all);
+            if (keys.length > DRAFT_MAX) {
+                keys.sort(function (a, b) { return (all[a].savedAt || 0) - (all[b].savedAt || 0); });
+                while (keys.length > DRAFT_MAX) {
+                    var oldest = keys.shift();
+                    if (oldest !== convoId) delete all[oldest];
+                }
+            }
+            try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); } catch (e) {}
+        },
+        _getDraft: function (convoId) {
+            if (!convoId) return null;
+            var all = this._draftAll();
+            return all[convoId] || null;
+        },
+        _delDraft: function (convoId) {
+            if (!convoId) return;
+            var all = this._draftAll();
+            if (all[convoId] !== undefined) {
+                delete all[convoId];
+                try { localStorage.setItem(DRAFT_KEY, JSON.stringify(all)); } catch (e) {}
+            }
+        },
+        /* input 事件 → 防抖 300ms 落草稿（欢迎页尚无 convoId 时不写） */
+        _onInputDraft: function () {
+            var self = this;
+            clearTimeout(this._draftTimer);
+            this._draftTimer = setTimeout(function () {
+                if (!self.currentConvoId) return;
+                var input = self.els.input;
+                var val = input ? (input.value || '') : '';
+                if (val.trim()) self._saveDraft(self.currentConvoId, val);
+                else self._delDraft(self.currentConvoId);   // 清空输入 = 删除草稿
+            }, 300);
+        },
+        /* ---------------- 图片输入理解（2026-09-09） ----------------
+           链路：前端压缩 → /api/upload/customer-file 存 customer_uploads →
+           发送时带 images=[相对路径] → 后端 vision-exp 预处理成文字描述进 harness */
+        MAX_PENDING_IMAGES: 4,
+        MAX_IMAGE_BYTES: 5 * 1024 * 1024,
+        /* 文档上传（原附件按钮逻辑抽出，非图片文件走这里） */
+        _uploadDocFiles: function (files) {
+            var self = this, root = this.root;
+            var token = this.userToken();
+            var pending = files.length;
+            files.forEach(function (f) {
+                if (f.size > 30 * 1024 * 1024) {
+                    pending--;
+                    self._toast('超过 30MB 上限：' + f.name, 'warning');
+                    if (pending <= 0) self._toast('文件上传完成', 'success');
+                    return;
+                }
+                var form = new FormData();
+                form.append('file', f);
+                fetch('/api/upload/customer-file', {
+                    method: 'POST',
+                    headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+                    body: form
+                }).then(function (r) {
+                    if (!r.ok) { var m = '上传失败 (' + r.status + ')'; return r.json().then(function (j) { throw new Error(j.detail || m); }); }
+                    return r.json();
+                }).then(function () {
+                    self._toast('已上传：' + f.name, 'success');
+                }).catch(function (e) {
+                    self._toast((e && e.message) || '上传失败：' + f.name, 'warning');
+                }).finally(function () {
+                    pending--;
+                    if (pending <= 0) {
+                        self._toast('文件上传完成，可在对话中让我读取客户资料', 'success');
+                        var ta = root.querySelector('#ws-input');
+                        if (ta) { ta.focus(); }
+                    }
+                });
+            });
+        },
+        /* 图片入口统一收口：登录校验 → 数量上限 → 压缩 → 上传 → chips */
+        _addImageFiles: function (files) {
+            var self = this;
+            if (!this.userToken()) { this._showLoginHint(); return; }
+            if (!this.pendingImages) this.pendingImages = [];
+            var room = this.MAX_PENDING_IMAGES - this.pendingImages.length;
+            if (room <= 0) { this._toast('每轮最多附带 ' + this.MAX_PENDING_IMAGES + ' 张图片', 'warning'); return; }
+            if (files.length > room) {
+                this._toast('最多再添加 ' + room + ' 张图片，超出部分已忽略', 'warning');
+                files = files.slice(0, room);
+            }
+            var chain = Promise.resolve();
+            files.forEach(function (f) {
+                chain = chain.then(function () { return self._compressImage(f); }).then(function (blob) {
+                    if (!blob) return null;
+                    var form = new FormData();
+                    form.append('file', blob, f.name || ('截图_' + Date.now() + '.png'));
+                    return fetch('/api/upload/customer-file', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + self.userToken() },
+                        body: form
+                    }).then(function (r) {
+                        if (!r.ok) { return r.json().then(function (j) { throw new Error(j.detail || ('上传失败 (' + r.status + ')')); }); }
+                        return r.json();
+                    }).then(function (data) {
+                        self.pendingImages.push({
+                            path: data.path,
+                            name: data.filename || f.name,
+                            url: URL.createObjectURL(blob)
+                        });
+                        self._renderImgChips();
+                    });
+                }).catch(function (e) {
+                    self._toast((e && e.message) || '图片上传失败', 'warning');
+                });
+            });
+        },
+        /* 过大图 canvas 压缩：最长边 ≤2000px，超 5MB 转 JPEG q0.85 */
+        _compressImage: function (file) {
+            var self = this;
+            if (file.size <= this.MAX_IMAGE_BYTES) return Promise.resolve(file);
+            return new Promise(function (resolve) {
+                var img = new Image();
+                var objUrl = URL.createObjectURL(file);
+                img.onload = function () {
+                    URL.revokeObjectURL(objUrl);
+                    var MAXSIDE = 2000;
+                    var w = img.naturalWidth, h = img.naturalHeight;
+                    var scale = Math.min(1, MAXSIDE / Math.max(w, h));
+                    var canvas = document.createElement('canvas');
+                    canvas.width = Math.round(w * scale);
+                    canvas.height = Math.round(h * scale);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    var outType = (file.type === 'image/png') ? 'image/png' : 'image/jpeg';
+                    var tryQuality = [0.85, 0.75];
+                    var attempt = function (qi) {
+                        canvas.toBlob(function (blob) {
+                            if (!blob) { resolve(null); return; }
+                            if (blob.size <= self.MAX_IMAGE_BYTES || qi >= tryQuality.length) resolve(blob);
+                            else attempt(qi + 1);
+                        }, outType, tryQuality[qi]);
+                    };
+                    attempt(0);
+                };
+                img.onerror = function () {
+                    URL.revokeObjectURL(objUrl);
+                    self._toast('图片读取失败：' + (file.name || '截图'), 'warning');
+                    resolve(null);
+                };
+                img.src = objUrl;
+            });
+        },
+        _renderImgChips: function () {
+            var box = this.els.imgChips;
+            if (!box) return;
+            var list = this.pendingImages || [];
+            if (!list.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+            var self = this;
+            var html = '';
+            list.forEach(function (p, i) {
+                html += '<span class="ws-img-chip" data-idx="' + i + '">' +
+                    '<img src="' + escHtml(p.url) + '" alt="' + escHtml(p.name) + '" />' +
+                    '<button type="button" class="ws-img-chip-x" title="移除">×</button>' +
+                '</span>';
+            });
+            box.innerHTML = html;
+            box.style.display = 'flex';
+            box.querySelectorAll('.ws-img-chip-x').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var idx = parseInt(btn.parentNode.getAttribute('data-idx'), 10);
+                    self._removePendingImage(idx);
+                });
+            });
+        },
+        _removePendingImage: function (idx) {
+            if (!this.pendingImages || !this.pendingImages[idx]) return;
+            try { URL.revokeObjectURL(this.pendingImages[idx].url); } catch (e) {}
+            this.pendingImages.splice(idx, 1);
+            this._renderImgChips();
+        },
+        /* 发送前取走待发图片路径（所有权转移给本次请求） */
+        _takeOutgoingImages: function () {
+            var list = (this.pendingImages || []).map(function (p) { return p.path; });
+            this._clearOutgoingImages();
+            return list;
+        },
+        _clearOutgoingImages: function () {
+            // 注意：不 revoke objectURL —— 用户气泡可能还在用它显示缩略图，交由页面生命周期回收
+            this.pendingImages = [];
+            this._renderImgChips();
+        },
         _saveConvos: function (list) {
             try {
                 // 活跃对话按更新时间降序，仅受 MAX_CONVOS(50) 上限约束；
@@ -2914,13 +3289,15 @@
                 this._saveConvos(list);
             }
         },
-        _persistUser: function (text) {
+        _persistUser: function (text, images) {
             if (!this.currentConvoId) return;
             var list = this._loadConvos(), found = null;
             for (var i = 0; i < list.length; i++) { if (list[i].id === this.currentConvoId) { found = list[i]; break; } }
             if (!found) return;
             if (!found.messages) found.messages = [];
-            found.messages.push({ role: 'user', content: text });
+            var msg = { role: 'user', content: text };
+            if (images && images.length) msg.images = images;   // [{path,name}] —— 历史恢复后显示图片徽标
+            found.messages.push(msg);
             this._saveConvos(list);
         },
         /* 渲染主列表 + 归档列表（避免一处刷新把对方也冲掉） */
@@ -3030,12 +3407,19 @@
             for (var j = 0; j < msgs.length; j++) {
                 var m = msgs[j];
                 var isUser = m.role === 'user';
+                // 历史消息中的图片徽标（blob URL 已失效，显示文件名徽标）
+                var histImgs = '';
+                ((m.images || [])).forEach(function (p) {
+                    histImgs += '<span class="ws-msg-img-badge">🖼 ' + escHtml((p && p.name) || '图片') + '</span>';
+                });
                 var wrap = document.createElement('div');
                 wrap.className = 'ws-msg-wrap ' + (isUser ? 'ws-msg-wrap-user' : 'ws-msg-wrap-agent');
                 wrap.innerHTML =
                     '<div class="ws-msg ' + (isUser ? 'ws-msg-user' : 'ws-msg-agent') + '">' +
                         '<div class="ws-msg-author">' + (isUser ? escHtml(this.userName() || 'guo') : '华为云方案助手') + '</div>' +
-                        '<div class="ws-msg-body">' + renderMarkdown(m.content) + '</div>' +
+                        '<div class="ws-msg-body">' + (m.content ? renderMarkdown(m.content) : '') +
+                            (histImgs ? '<div class="ws-msg-images ws-msg-images-badges">' + histImgs + '</div>' : '') +
+                        '</div>' +
                     '</div>';
                 stream.appendChild(wrap);
             }
@@ -3055,6 +3439,13 @@
                 if (samplesBar) samplesBar.style.display = 'none';
             }
             this._renderTasks();
+            // 草稿恢复（2026-09-09）：回填该对话未发送的输入；无草稿则清空输入（修复切换对话输入残留）
+            var draft = this._getDraft(id);
+            var draftText = (draft && draft.text && !this.readOnly) ? String(draft.text) : '';
+            this.els.input.value = draftText;
+            this.els.input.style.height = 'auto';
+            this._autoResizeInput();
+            this._updateCount();
             this._scrollBottom();
             this._repairHistoryFromServer(id);
         },
