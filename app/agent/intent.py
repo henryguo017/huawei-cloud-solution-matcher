@@ -168,6 +168,13 @@ def classify_intent(text: str) -> Dict[str, Any]:
     if _ACCOUNT_RE.search(t):
         return _mk("account", competitors, industries, 0.9)
 
+    # 2.2) 把助手当"你们学校/你们公司"的一员聊日常（2026-09-09 语气 E2E 实测）：
+    #      "你们学校出来的人是不是都去干互联网了"——行业词"互联网"会把纯闲聊
+    #      拉进方案匹配全流程。无任何任务词时按闲聊处理；带任务词（"你们公司能
+    #      帮我做什么方案"）不拦截。
+    if re.search(r"你们(学校|公司|厂|那边|家)", t) and not _TASK_WORDS.search(t):
+        return _mk("general", competitors, industries, 0.6)
+
     # 2.5) 导出文档（明确导出/下载动作 + 格式词；账户类已先行，避免误吃"下载我的方案"）
     #      补：生成类动词+PPT 组合（"给我生成PPT"），疑问句（"PPT怎么做"）排除
     if _EXPORT_RE.search(t) or (_PPT_GEN_RE.search(t)
