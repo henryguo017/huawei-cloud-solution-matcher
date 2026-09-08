@@ -2891,12 +2891,8 @@
         _loadStats: function () {
             var self = this;
             var token = this.userToken();
-            // 未登录：统计反映登录用户自己的知识库，无归属用户，明确提示"登录后可见"而非留 -- 占位
-            var metaEl = self.root.querySelector('.ws-footer-meta');
-            if (!token) {
-                if (metaEl) metaEl.textContent = '登录后可查看知识库统计';
-                return;
-            }
+            // 未登录时静默跳过：与经典模式 KnowledgeUI.loadStats 一致，保持 -- 占位符（统计反映登录用户自己的知识库）
+            if (!token) return;
             var headers = { 'Authorization': 'Bearer ' + token };
             fetch('/api/knowledge/stats', { headers: headers })
                 .then(function (r) { return r.ok ? r.json() : {}; })
