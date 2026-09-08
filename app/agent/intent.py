@@ -36,7 +36,8 @@ _THANKS_RE = re.compile(r"(谢谢|感谢|辛苦|麻烦你了)")
 
 # 账户类：我的成就/收藏/历史方案/生成的方案等个人数据
 _ACCOUNT_RE = re.compile(
-    r"(我的成就|我的收藏|我的历史|我之前生成|我生成的方案|查看我|我的方案|我的导出|我的报告|我的账户|我的资料|我的画像|我的成就是)"
+    r"(我的成就|我的收藏|我的历史|我之前生成|我生成的方案|查看我|我的方案|我的导出|我的报告|我的账户|我的资料|我的画像|我的成就是"
+    r"|我的邮箱|密码忘了|密码找不回|密码找回|账户余额|我的余额|我的账号|登录密码)"
 )
 
 # 平台使用/功能咨询句式（原 _FILE_CONSULT_RE 片段）：这类归 general
@@ -50,7 +51,7 @@ _COMPARE_METHOD_RE = re.compile(r"^(怎么|如何|怎样).{0,8}(对比|比较|�
 
 # 对比动词信号（用于判定"是否真的在对比"）
 _HAS_COMPARE_VERB = re.compile(
-    r"(对比|比较|比一比|比怎么样|优劣势|差异|怎么选|谁更强|谁更|选型|哪个好|哪个更|哪家强|更好|选哪个|选哪家)"
+    r"(对比|比较|比一比|比怎么样|优劣势|差异|怎么选|谁更强|谁更|选型|哪个好|哪个更|哪家强|更好|选哪个|选哪家|哪个强|竞品分析|\bvs\b|vs)"
 )
 
 # 明确的方案动作（含动词 + 方案/平台/系统/上云 等），避免把"这个方案让我有成就感"误判为方案意图
@@ -82,7 +83,8 @@ _CONCEPT_RE = re.compile(r"^(什么是|什么叫|怎么理解|解释一下|什�
 
 # 导出文档意图（P1-2 harness export 分支依赖此分类）：明确的导出/下载动作 + 文档格式词
 _EXPORT_RE = re.compile(
-    r"(导出|下载|另存)[^。]{0,12}(word|pdf|pptx?|文档|方案书|报告)|(导出成|导出为)",
+    r"(导出|下载|另存)[^。]{0,12}(word|pdf|pptx?|文档|方案书|报告)|(导出成|导出为)"
+    r"|(生成|写|做)[^。]{0,3}(word|pdf|pptx?|文档)(?:文件|文档)?",
     re.I,
 )
 
@@ -198,6 +200,10 @@ def classify_intent(text: str) -> Dict[str, Any]:
         # 概念提问（"什么是 AWS 的 S3"）且无方案动作 → general
         if _CONCEPT_RE.match(t) and not re.search(r"(方案|对比|竞品|做一个|帮我|生成|上云|建设|搭建)", t):
             return _mk("general", competitors, industries, 0.6)
+        # 纯闲聊感叹（2026-09-09 矩阵实测 10 例）："制造业不景气啊""钢铁价格涨了"——
+        # 行业词单独出现、无任何任务词/规模/方案动作时是感慨不是需求，落 general。
+        if not _TASK_WORDS.search(t) and not _SCALE_RE.search(t) and not _SOLUTION_ACTION_RE.search(t):
+            return _mk("general", competitors, industries, 0.6)
         return _mk("solution", competitors, industries, 0.85)
 
     # 4.4) 显式联网检索意图（搜索/查一下/搜一下）优先于产品知识问答：
@@ -207,7 +213,9 @@ def classify_intent(text: str) -> Dict[str, Any]:
         return _mk("general", competitors, industries, 0.7)
 
     # 4.5) 产品知识问答（方案类已先行，带行业/规模/方案动作的不会走到这）
-    if _KNOWLEDGE_Q_RE.search(t):
+    #      价格/成本类提问排除（2026-09-09 矩阵实测："华为云服务器一年多少钱"被
+    #      "华为云…服务"截进 knowledge_q 走 RAG——价格必须走 harness 成本兜底真数）
+    if _KNOWLEDGE_Q_RE.search(t) and not re.search(r"多少钱|费用|报价|预算|价格|测算|成本", t):
         return _mk("knowledge_q", competitors, industries, 0.85)
 
     # 4.6) 文件操作（咨询句式"怎么上传/如何查看"仍归 general，不抢）
