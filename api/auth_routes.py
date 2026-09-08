@@ -9,12 +9,12 @@ from app.services.auth_service import AuthService
 from app.utils.captcha_utils import generate_captcha
 from app.utils.auth_utils import create_access_token
 from api.auth_dependencies import get_current_user
-from api.dependencies import get_achievement_service_dep
+from api.dependencies import get_achievement_service_dep, rate_limit
 from typing import Optional
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
-@router.post("/register")
+@router.post("/register", dependencies=[Depends(rate_limit(5, 300))])
 async def register(user_data: UserCreate):
     result = AuthService.register(user_data)
     
@@ -39,7 +39,7 @@ async def register(user_data: UserCreate):
     
     return {"message": result["message"], "user_id": result["user_id"]}
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(rate_limit(10, 300))])
 async def login(login_data: UserLogin):
     result = AuthService.login(login_data)
     

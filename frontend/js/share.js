@@ -199,7 +199,8 @@
         if (sol && !isAnalyze) html += buildSummaryCard(sol);
         if (sol) html += '<div class="share-section-label">' + (isAnalyze ? '分析报告' : '解决方案') + '</div><div class="result-content">' + simpleMarkdown(sol) + '</div>';
         if (p.sources && p.sources.length) html += '<div class="share-section-label">参考文档</div><div class="share-sources">' + buildSources(p.sources) + '</div>';
-        el.innerHTML = html;
+        // 纵深防御（安全审计 M2，2026-09-08）：最终 HTML 过 DOMPurify 白名单清洗（匿名公开页，防护优先）
+        el.innerHTML = window.DOMPurify ? DOMPurify.sanitize(html, { ADD_ATTR: ['target'] }) : html;
     }
 
     async function load() {

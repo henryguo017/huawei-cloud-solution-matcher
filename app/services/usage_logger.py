@@ -255,6 +255,27 @@ class UsageLoggerService:
             logger.error(f"获取最近{days}天计数失败: {e}")
             return {"match": 0, "analyze": 0}
 
+    def count_today_anonymous(self, action_type: str = "match") -> int:
+        """统计今天全站匿名（user_id 为空）的指定操作次数。
+
+        安全审计 M1（2026-09-08）：作为 /api/match 匿名每日总量闸门的持久化计数，
+        重启不清零，防换 IP 绕过。故障时调用方 fail-open（按 0 处理）。
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT COUNT(*) as count
+                    FROM usage_logs
+                    WHERE action_type = ?
+                      AND user_id IS NULL
+                      AND date(created_at) = date('now', 'localtime')
+                """, (action_type,))
+                row = cursor.fetchone()
+                return int(row["count"]) if row else 0
+        except Exception as e:
+            logger.error(f"统计今日匿名{action_type}次数失败: {e}")
+            return 0
+
     def get_daily_trends(self, days: int = 5, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         获取最近 N 天的每日操作趋势

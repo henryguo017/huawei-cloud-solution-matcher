@@ -58,12 +58,17 @@ CSP_POLICY = (
     "object-src 'none'"
 )
 
+# API 文档开关（安全加固 2026-09-08，审计 R1）：默认关闭公网 /docs /redoc /openapi.json，
+# 防止 Swagger UI 暴露完整 API 结构供攻击者枚举。本地调试在 .env 设 ENABLE_API_DOCS=1。
+_ENABLE_API_DOCS = os.getenv("ENABLE_API_DOCS", "0") == "1"
+
 app = FastAPI(
     title=APP_NAME,
     version=APP_VERSION,
     description="华为云解决方案智能匹配系统 RESTful API",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url="/docs" if _ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if _ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if _ENABLE_API_DOCS else None
 )
 
 app.add_middleware(

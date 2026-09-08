@@ -190,6 +190,11 @@
         html = html.replace(/\n\n/g, '<br><br>');
         html = html.replace(/\n/g, '<br>');
         codeBlocks.forEach(function (block, idx) { html = html.replace('___CODEBLOCK_' + idx + '___', block); });
+        // 纵深防御（安全审计 M2，2026-09-08）：本渲染器虽先转义原文，最终 HTML 再过一次
+        // DOMPurify 白名单清洗，防未来渲染改动破坏"先转义"不变量。库缺失时优雅回退。
+        if (window.DOMPurify) {
+            html = DOMPurify.sanitize(html, { ADD_ATTR: ['target'] });
+        }
         return html;
     }
 

@@ -4,6 +4,7 @@ from api.models import ExportRequest
 from app.models.export_models import ExportResult, TaskStatus
 from app.services.report_generator import ReportGeneratorService, get_report_generator
 from api.dependencies import rate_limit
+from api.auth_dependencies import get_current_user
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ report_generator = get_report_generator()
 async def export_report(
     request: ExportRequest,
     _: None = Depends(rate_limit(30, 60)),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     导出报告

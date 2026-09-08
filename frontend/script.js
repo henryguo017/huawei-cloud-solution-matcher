@@ -1620,7 +1620,8 @@ const API = {
 
     async exportReport(request) {
         const headers = { 'Content-Type': 'application/json' };
-        if (AuthManager.isLoggedIn() && !State.isQuickDemo) {
+        // 导出为登录专属（安全审计 M1，2026-09-08）：始终带 token，快速体验也不例外
+        if (AuthManager.isLoggedIn()) {
             headers['Authorization'] = `Bearer ${AuthManager.getToken()}`;
         }
         const response = await fetch(`${Config.API_BASE_URL}/export/report`, {
@@ -2746,7 +2747,10 @@ const UI = {
             return '<p style="color: var(--text-secondary);">（无内容）</p>';
         }
         try {
-            return this.simpleMarkdown(content);
+            const html = this.simpleMarkdown(content);
+            // 纵深防御（安全审计 M2，2026-09-08）：最终 HTML 过 DOMPurify 白名单清洗，
+            // 防未来渲染改动破坏 simpleMarkdown 的"先转义"不变量。库缺失时优雅回退。
+            return window.DOMPurify ? DOMPurify.sanitize(html, { ADD_ATTR: ['target'] }) : html;
         } catch (e) {
             console.warn('[UI] Markdown渲染失败:', e);
             const escaped = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -7337,6 +7341,11 @@ function initEventListeners() {
     // PPTX 走后端华为红 12 页引擎管线（DeepSeek 两段式 + 门禁 + 降级 legacy）。
     async function triggerExportSolutionBook(format = 'word') {
         const isPptx = format === 'pptx';
+        // 导出为登录专属（后端 /export/report 已强制鉴权）：未登录引导注册/登录
+        if (!AuthManager.isLoggedIn()) {
+            UI.showToast('导出前请先登录（右上角登录）', 'warning');
+            return;
+        }
         const cached = State.resultCache.solution;
         if (!cached || !cached.answer) {
             UI.showToast('请先生成方案再导出', 'warning');

@@ -41,6 +41,55 @@ def rate_limit(limit: int = 120, window: int = 60):
     return dependency
 
 
+def anon_rate_limit(limit: int = 10, window: int = 60):
+    """仅限未登录请求的限流（安全审计 M1，2026-09-08）。
+
+    登录用户（带有效 Bearer token）直接放行，由端点原有的 rate_limit 管；
+    未登录按 IP 计数。匿名匹配消耗 DeepSeek token，配额远严于登录用户。
+    """
+    from app.utils.auth_utils import decode_access_token
+
+    async def dependency(request: Request):
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+            if token and decode_access_token(token):
+                return  # 登录用户：不占匿名配额
+        now = time.time()
+        key = "anon:" + _rate_limit_key(request)
+        bucket = _ratelimit_buckets.setdefault(key, [])
+        bucket[:] = [t for t in bucket if t > now - window]
+        if len(bucket) >= limit:
+            raise HTTPException(status_code=429, detail="未登录请求过于频繁，请登录后使用或稍后再试")
+        bucket.append(now)
+    return dependency
+
+
+def anon_daily_cap(cap: int = 300, action: str = "match"):
+    """匿名请求的全站每日总量闸门（安全审计 M1，2026-09-08）。
+
+    基于 usage_logs 持久化计数（重启不清零，防换 IP 绕过）：当天匿名(action_type=action
+    且 user_id 为空)请求数达到 cap 后，所有匿名请求一律 429。登录用户不受影响。
+    """
+    async def dependency(request: Request):
+        auth = request.headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+            if token and decode_access_token(token):
+                return
+        from app.services.usage_logger import get_usage_logger
+        try:
+            used = get_usage_logger().count_today_anonymous(action)
+        except Exception:
+            used = 0  # 计数故障不阻断主链路（fail-open），另有每 IP 限流兜底
+        if used >= cap:
+            raise HTTPException(
+                status_code=429,
+                detail="今日免登录体验额度已用完，请注册/登录后使用"
+            )
+    return dependency
+
+
 # ===== 解决方案匹配服务（无状态，每次创建新实例或共享） =====
 def get_solution_matcher_for_user(user_id: int = 0) -> SolutionMatcherService:
     """获取解决方案匹配服务（传入 user_id 以便使用用户知识库）"""

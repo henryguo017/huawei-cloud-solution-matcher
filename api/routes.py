@@ -35,6 +35,8 @@ from api.dependencies import (
     get_solution_matcher_for_user,
     get_competitor_analyzer_for_user,
     rate_limit,
+    anon_rate_limit,
+    anon_daily_cap,
 )
 from app.models.llm import get_llm_response, get_embedding_vectors
 from app.services.knowledge_base import KnowledgeBaseService, set_kb_user_context, clear_kb_search_cache, reset_global_kb_cache, evict_user_kb_cache
@@ -957,6 +959,13 @@ async def _build_match_response(result: dict, user, request, original_demand: st
                 )
             except Exception as ach_err:
                 logger.warning(f"成就检测失败: {ach_err}")
+    else:
+        # 匿名匹配也记录用量（安全审计 M1，2026-09-08）：既是审计数据，
+        # 也是 /api/match 匿名每日总量闸门（anon_daily_cap）的计数来源
+        try:
+            get_usage_logger().log_match(original_demand or "", user_id=None, mode=request.mode)
+        except Exception:
+            pass
 
     return {
         "answer": result["answer"],
@@ -976,7 +985,9 @@ async def _build_match_response(result: dict, user, request, original_demand: st
 async def match_solution(
     request: MatchRequest,
     user: Optional[dict] = Depends(get_current_user_optional),
-    _: None = Depends(rate_limit(120, 60))
+    _: None = Depends(rate_limit(120, 60)),
+    __: None = Depends(anon_rate_limit(10, 60)),
+    ___: None = Depends(anon_daily_cap(300, "match")),
 ):
     """
     解决方案智能匹配接口（匿名可用）
@@ -1040,7 +1051,9 @@ async def match_solution(
 async def match_solution_stream(
     request: MatchRequest,
     user: Optional[dict] = Depends(get_current_user_optional),
-    _: None = Depends(rate_limit(120, 60))
+    _: None = Depends(rate_limit(120, 60)),
+    __: None = Depends(anon_rate_limit(10, 60)),
+    ___: None = Depends(anon_daily_cap(300, "match")),
 ):
     """
     标准/向导模式 SSE 流式匹配接口（匿名可用，与 /match 同源）。

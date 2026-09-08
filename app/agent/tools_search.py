@@ -82,14 +82,54 @@ class TavilyProvider(WebSearchProvider):
             })
         return out
 
+    @staticmethod
+    def _is_public_http_url(url: str) -> bool:
+        """校验 URL 指向公网 http(s) 地址（安全审计 M3，2026-09-08）。
+
+        抓取方是 Tavily 的服务器（本服务不出网抓取），但内网地址仍会被
+        泄露给第三方并可能被解析到内网段——统一拒绝：非 http(s) scheme、
+        localhost/裸域名伪造、私网/环回/链路本地/metadata IP 段。
+        """
+        from urllib.parse import urlparse
+
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return False
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return False
+        host = parsed.hostname.lower().strip(".")
+        if host in ("localhost",) or host.endswith(".localhost") or host.endswith(".local") or host.endswith(".internal"):
+            return False
+        if not host.replace(".", "").isdigit():
+            return True  # 正常域名（含公网 IP 形式以外的）放行
+        # 裸 IP：拒绝私网/环回/链路本地/CGNAT/云 metadata 段
+        import ipaddress
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            return True
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return False
+        # CGNAT 100.64.0.0/10：新版 Python 的 is_private 不覆盖，但阿里云
+        # metadata 服务（100.100.100.200）等云内部端点在此段，必须显式拦截
+        if ip in ipaddress.ip_network("100.64.0.0/10"):
+            return False
+        return True
+
     def extract(self, url: str, max_chars: int = 2000) -> List[Dict[str, str]]:
         """Tavily /extract：抽取指定 URL 的干净正文（去广告/导航等噪音）。
 
         返回 [{"domain", "title", "url", "content"}]；抽取失败的 URL 在 failed 日志体现，不抛异常。
         max_chars 截断正文，控制注入 LLM 的 token 量。
+        内网/非公网地址直接拒绝（安全审计 M3，2026-09-08），不外发给第三方。
         """
         import json
         import urllib.request
+
+        if not self._is_public_http_url(url):
+            logger.warning(f"[tavily-extract] 拒绝非公网/内网地址: {url}")
+            return []
 
         payload = {"api_key": self.api_key, "urls": [url]}
         req = urllib.request.Request(

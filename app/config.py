@@ -330,12 +330,13 @@ _PLACEHOLDER_JWT_KEYS = {
     "change-in-production-please-set-a-random-secret-key",
 }
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", _DEFAULT_JWT_KEY)
-if JWT_SECRET_KEY in _PLACEHOLDER_JWT_KEYS:
-    import warnings
-    warnings.warn(
-        "[SECURITY] JWT_SECRET_KEY 正在使用默认/占位密钥，登录令牌可被伪造！"
-        "请在 .env 中设置随机强密钥（例如: python -c \"import secrets;print(secrets.token_urlsafe(48))\"）。",
-        stacklevel=2,
+if JWT_SECRET_KEY in _PLACEHOLDER_JWT_KEYS or len(JWT_SECRET_KEY) < 32:
+    # 安全审计 R2（2026-09-08）：占位/默认/过短密钥直接拒绝启动，不再仅 warning。
+    # 占位 key 公开在 GitHub 仓库里，继续运行 = 任何人可伪造任意用户（含 admin）的登录令牌。
+    raise SystemExit(
+        "[FATAL] JWT_SECRET_KEY 未配置强随机密钥，拒绝启动。\n"
+        "生成方法：python -c \"import secrets; print(secrets.token_urlsafe(48))\"\n"
+        "把输出写入 .env 的 JWT_SECRET_KEY= 后重启服务。"
     )
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "360"))  # 6小时
