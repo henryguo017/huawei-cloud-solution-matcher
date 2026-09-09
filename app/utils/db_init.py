@@ -340,6 +340,24 @@ def init_database():
                     import time as _t
                     _t.sleep(2)
 
+    # ==================== L4-P2/T2.4 打法库（playbook 提炼） ====================
+    # 从 agent_episodes 的成功经验中离线蒸馏可复用打法；BGE 向量供按需检索注入。
+    # 幂等全量重建（refresh 时 DELETE+INSERT），量小（每用户 ≤3 条）无需版本化。
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agent_playbooks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            pattern TEXT NOT NULL,
+            trigger TEXT DEFAULT '',
+            steps TEXT DEFAULT '[]',
+            source_count INTEGER DEFAULT 0,
+            embedding_json TEXT,
+            created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+            updated_at DATETIME DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_playbooks_user ON agent_playbooks(user_id)")
+
     # ==================== 情报订阅（定时自动化，2026-09-09） ====================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS subscriptions (

@@ -153,6 +153,10 @@ def build_memory_context(user_id: int, query: str,
         )
     block = "【相关历史任务经验（含做法与教训，供参考复用）】\n" + "\n".join(lines)
 
+    # 截断预算分段（L4-P2/T2.4 修复）：经验块、教训、打法各自独立预算。
+    # 此前整体截断 [:900] 会把排在最后的打法块切掉（本地全链测试实锤）。
+    block = block[:MAX_INJECT_CHARS]
+
     # 失败教训附录：最近一条明确点踩的同域经验（与当前需求相似度不要求高，警示价值优先）
     try:
         conn = get_db_connection()
@@ -173,7 +177,15 @@ def build_memory_context(user_id: int, query: str,
     except Exception as e:
         logger.warning(f"[memory] 教训检索失败(忽略): {e}")
 
-    return block[:MAX_INJECT_CHARS + 300]
+    # L4-P2/T2.4：可复用打法注入（从成功经验蒸馏，相似度门控，独立预算 400 字）
+    try:
+        pb = build_playbooks_block(user_id, query)
+        if pb:
+            block += "\n" + pb[:400]
+    except Exception as e:
+        logger.warning(f"[memory] 打法注入失败(忽略): {e}")
+
+    return block
 
 
 def build_profile_context(user_id: int) -> str:
@@ -250,3 +262,208 @@ def count_episodes(user_id: int) -> int:
     except Exception as e:
         logger.warning(f"[memory] count_episodes 失败(忽略): {e}")
         return 0
+
+
+# ==================== L4-P2/T2.4 打法库（playbook 提炼与注入） ====================
+
+PLAYBOOK_TOP_K = 2
+PLAYBOOK_MIN_SIM = 0.60
+_PLAYBOOK_MIN_EPISODES = 3   # 少于 3 条成功经验不提炼（样本不足，防 LLM 编造）
+_PLAYBOOK_MAX_EPISODES = 40  # 每次蒸馏最多读取的最近成功经验条数（控 token）
+
+
+async def refresh_playbooks(user_id: int) -> dict:
+    """从该用户最近的**成功**经验中蒸馏可复用打法（全量重建，幂等）。
+
+    流程：拉最近 N 条 success=1 的 episode → LLM 提炼 0~3 条打法（JSON）→
+    逐条 BGE 编码（pattern+trigger）→ DELETE+INSERT 全量重建。
+    任何异常只记日志不抛出（best-effort，不影响主链路）。
+
+    返回: {"status": "ok"|"skip"|"error", "playbooks": n, "episodes": m, "reason": str}
+    """
+    try:
+        conn = get_db_connection()
+        try:
+            rows = conn.execute(
+                "SELECT demand, summary, rerun_count FROM agent_episodes "
+                "WHERE user_id = ? AND success = 1 "
+                "ORDER BY id DESC LIMIT ?",
+                (user_id, _PLAYBOOK_MAX_EPISODES),
+            ).fetchall()
+        finally:
+            conn.close()
+        if not rows or len(rows) < _PLAYBOOK_MIN_EPISODES:
+            return {"status": "skip", "playbooks": 0, "episodes": len(rows or []),
+                    "reason": f"成功经验不足 {_PLAYBOOK_MIN_EPISODES} 条，暂不提炼（防编造）"}
+
+        # 经验清单（截断控 token：每条 需求 60 字 + 做法 150 字）
+        items = []
+        for i, r in enumerate(rows, 1):
+            rerun = r["rerun_count"] if "rerun_count" in r.keys() else 0
+            items.append(
+                f"{i}. 需求：{(r['demand'] or '')[:60]}\n"
+                f"   做法：{(r['summary'] or '')[:150]}{'（重跑' + str(rerun) + '次）' if rerun else ''}"
+            )
+        from app.models.llm import get_llm_response
+        prompt = (
+            "你是售前打法提炼器。以下是同一位售前近期成功完成的经验摘要。"
+            "请提炼 0~3 条**可复用的打法**（确实重复出现或具普适性的有效工作模式），"
+            "每条格式：\n"
+            '{"pattern": "打法名(不超过20字)", "trigger": "什么需求时适用(不超过40字)", '
+            '"steps": ["步骤1", "步骤2", "…"]}\n'
+            "只输出一个 JSON 数组，最多 3 条；没有值得提炼的就输出 []。不要编造、不要泛泛而谈。\n\n"
+            "经验清单：\n" + "\n".join(items)
+        )
+        raw = await get_llm_response(prompt)
+        playbooks = _extract_json_array(raw)
+        if not isinstance(playbooks, list):
+            return {"status": "error", "playbooks": 0, "episodes": len(rows),
+                    "reason": "LLM 输出解析失败"}
+        # 清洗：最多 3 条，字段齐全且非空
+        cleaned = []
+        for p in playbooks[:3]:
+            if not isinstance(p, dict):
+                continue
+            pattern = str(p.get("pattern", "")).strip()
+            steps = p.get("steps") or []
+            if not pattern or not isinstance(steps, list) or not steps:
+                continue
+            cleaned.append({
+                "pattern": pattern[:30],
+                "trigger": str(p.get("trigger", "")).strip()[:80],
+                "steps": [str(s)[:60] for s in steps[:6]],
+            })
+        if not cleaned:
+            return {"status": "skip", "playbooks": 0, "episodes": len(rows),
+                    "reason": "LLM 判定无可提炼的重复模式"}
+
+        # 全量重建（幂等）
+        conn = get_db_connection()
+        try:
+            conn.execute("DELETE FROM agent_playbooks WHERE user_id = ?", (user_id,))
+            for p in cleaned:
+                text = f"{p['pattern']} {p['trigger']}"
+                vec = get_embedding_vector(text)
+                conn.execute(
+                    "INSERT INTO agent_playbooks "
+                    "(user_id, pattern, trigger, steps, source_count, embedding_json) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (user_id, p["pattern"], p["trigger"],
+                     json.dumps(p["steps"], ensure_ascii=False), len(rows),
+                     json.dumps(vec, ensure_ascii=False)),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        logger.info(f"[memory] playbooks refreshed user_id={user_id} n={len(cleaned)} "
+                    f"from {len(rows)} episodes")
+        return {"status": "ok", "playbooks": len(cleaned), "episodes": len(rows)}
+    except Exception as e:
+        logger.warning(f"[memory] refresh_playbooks 失败(忽略): {e}")
+        return {"status": "error", "playbooks": 0, "episodes": 0, "reason": str(e)[:120]}
+
+
+def _extract_json_array(raw: str):
+    """从 LLM 输出中稳健提取 JSON 数组（容忍 ```json 围栏 / 前后缀文本）。"""
+    if not raw:
+        return None
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except Exception:  # noqa: BLE001
+        pass
+    # 去掉 markdown 代码围栏后再试
+    import re as _re
+    m = _re.search(r"```(?:json)?\s*(\[.*?\])\s*```", raw, _re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except Exception:  # noqa: BLE001
+            pass
+    # 首个 [ 到最后一个 ] 之间
+    i, j = raw.find("["), raw.rfind("]")
+    if 0 <= i < j:
+        try:
+            return json.loads(raw[i:j + 1])
+        except Exception:  # noqa: BLE001
+            return None
+    return None
+
+
+def build_playbooks_block(user_id: int, query: str,
+                          top_k: int = PLAYBOOK_TOP_K) -> str:
+    """检索可复用打法（BGE 相似度 ≥0.60，top-2），返回注入块（无则空串）。"""
+    if not user_id or not query:
+        return ""
+    try:
+        conn = get_db_connection()
+        try:
+            rows = conn.execute(
+                "SELECT pattern, trigger, steps, source_count, embedding_json "
+                "FROM agent_playbooks WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+        if not rows:
+            return ""
+        qvec = get_embedding_vector(query)
+        scored = []
+        for r in rows:
+            try:
+                ev = json.loads(r["embedding_json"]) if r["embedding_json"] else None
+            except Exception:
+                ev = None
+            if not ev:
+                continue
+            sim = _cosine(qvec, ev)
+            if sim >= PLAYBOOK_MIN_SIM:
+                scored.append((sim, r))
+        if not scored:
+            return ""
+        scored.sort(key=lambda x: x[0], reverse=True)
+        lines = []
+        for _, r in scored[:top_k]:
+            try:
+                steps = json.loads(r["steps"] or "[]")
+            except Exception:
+                steps = []
+            step_str = "→".join(steps) if steps else ""
+            lines.append(
+                f"- 打法「{r['pattern']}」（适用：{r['trigger'] or '同类需求'}）"
+                + (f"：{step_str}" if step_str else "")
+                + f"（源自{r['source_count']}次成功经验）"
+            )
+        return "【可复用打法（从你的历史成功经验中提炼，可直接套用或变通）】\n" + "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"[memory] build_playbooks_block 失败(忽略): {e}")
+        return ""
+
+
+def list_playbooks(user_id: int) -> List[dict]:
+    """列出该用户全部打法（管理/前端展示用，不含向量）。"""
+    try:
+        conn = get_db_connection()
+        try:
+            rows = conn.execute(
+                "SELECT id, pattern, trigger, steps, source_count, created_at "
+                "FROM agent_playbooks WHERE user_id = ? ORDER BY id",
+                (user_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+        out = []
+        for r in rows:
+            try:
+                steps = json.loads(r["steps"] or "[]")
+            except Exception:
+                steps = []
+            out.append({
+                "id": r["id"], "pattern": r["pattern"], "trigger": r["trigger"],
+                "steps": steps, "source_count": r["source_count"],
+                "created_at": r["created_at"],
+            })
+        return out
+    except Exception as e:
+        logger.warning(f"[memory] list_playbooks 失败(忽略): {e}")
+        return []

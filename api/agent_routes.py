@@ -194,6 +194,31 @@ async def agent_episode_feedback(
     return {"status": "ok" if ok else "empty", "message": "反馈已记录" if ok else "该会话暂无可反馈的方案记忆"}
 
 
+@router.post("/agent/playbooks/refresh", tags=["Agent 经验记忆"])
+async def agent_playbooks_refresh(user: dict = Depends(get_current_user)):
+    """L4-P2/T2.4：从该用户最近的成功经验中蒸馏可复用打法（全量重建，幂等）。
+
+    成功经验不足 3 条时返回 skip（防 LLM 编造）。前端可在方案完成后引导用户点"提炼打法"。
+    """
+    user_id = user.get("id") or user.get("user_id")
+    if not isinstance(user_id, int) or user_id <= 0:
+        raise HTTPException(status_code=401, detail="请先登录")
+    from app.agent.memory_profiles import refresh_playbooks
+    result = await refresh_playbooks(user_id)
+    return result
+
+
+@router.get("/agent/playbooks", tags=["Agent 经验记忆"])
+async def agent_playbooks_list(user: dict = Depends(get_current_user)):
+    """列出该用户全部可复用打法（不含向量，供前端展示）。"""
+    user_id = user.get("id") or user.get("user_id")
+    if not isinstance(user_id, int) or user_id <= 0:
+        raise HTTPException(status_code=401, detail="请先登录")
+    from app.agent.memory_profiles import list_playbooks
+    items = await asyncio.to_thread(list_playbooks, user_id)
+    return {"status": "ok", "count": len(items), "playbooks": items}
+
+
 @router.post("/agent/chat", tags=["Agent 对话"])
 async def agent_chat(
     request: Request,
