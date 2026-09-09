@@ -481,6 +481,8 @@ class AgentHarness:
         plan = self._plan or []
         if not plan:
             return None
+        # L4-P1/T1.2：自主模式下动作步开放动态工具元能力（注册元工具 + 已注册 dyn_* 工具）
+        _is_high = getattr(self, "_autonomy", "standard") == "high"
         try:
             step_outputs = []
             for idx, step in enumerate(plan):
@@ -508,6 +510,12 @@ class AgentHarness:
                 # 权限弹窗，无人值守时逐个 60s 超时拒绝直至整体超时。
                 if toolset and self._remote_tool_names:
                     toolset = toolset + self._remote_tool_names
+                # L4-P1/T1.2：自主模式下，动作步追加动态工具元能力——
+                # 注册元工具 + 当前已注册的 dyn_* 工具（每步重算：本步注册的工具下一步即可用）。
+                # 仅追加到非空动作步（末步综合生成步不动，沿用 P2-3 的边界教训）。
+                if _is_high and toolset:
+                    _dyn_names = [t.name for t in self.tools.list_tools() if t.name.startswith("dyn_")]
+                    toolset = toolset + ["register_dynamic_tool"] + _dyn_names
                 # P2-Skills：角色提示词追加行业技能包块（仅提示词注入，不动工具集；无包/异常为空串）
                 role_prompt = role["prompt"] if role else None
                 if role_prompt and getattr(self, "_active_pack", None):
@@ -630,6 +638,16 @@ class AgentHarness:
             f"- 若信息仍不足 → 继续调用工具（仅限本步工具）\n"
             f"- 若前置信息严重不足需要向用户提问（仅第 1 步允许）→ 输出 Clarify: [问题]\n"
         )
+        # L4-P1/T1.2：动作步开放动态工具时补充 DSL 速查（步级提示只有工具名，无参数 schema）
+        if "register_dynamic_tool" in toolset:
+            step_prompt += (
+                "\n【动态工具（可选优化）】若本步检索流程预计需要重复 ≥2 次，可先注册再调用：\n"
+                'Action: register_dynamic_tool\nAction Input: {"name": "dyn_xxx", '
+                '"description": "组合工具用途", "params": {"topic": "参数说明"}, '
+                '"pipeline": [{"tool": "search_kb", "args": {"query": "$topic"}, "as": "kb"}]}\n'
+                "注册成功后即可随时调用该 dyn_ 工具（引用语法：$参数名 / $别名.字段 / $别名）。"
+                "仅可组合 analyze_demand/search_kb/search_competitor/list_dir。\n"
+            )
 
         step_iter = 0
         obs_lines: list = []
@@ -700,7 +718,10 @@ class AgentHarness:
                 # 顺序路径（单 action，或含非只读工具 / 超上限 / 不在步级工具集 → 兼容旧行为）
                 tool_name = parse_result["tool_name"]
                 tool_input = parse_result["tool_input"]
-                if tool_name not in toolset:
+                # L4-P1/T1.2：dyn_* 动态工具按注册表实时放行（本步刚注册的即可调用；
+                # dyn_* 仅由白名单只读原语组合而成，绕过步级快照无安全风险）
+                _dyn_live = tool_name.startswith("dyn_") and self.tools.get(tool_name) is not None
+                if tool_name not in toolset and not _dyn_live:
                     hint = f"（本步不允许工具 {tool_name}，仅可使用：{tools_desc}）"
                     obs_lines.append(hint)
                     step_prompt += "\n" + hint
