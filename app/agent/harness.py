@@ -1097,6 +1097,20 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             # 保留权限闸门、反思重规划、澄清（_plan_and_execute 内 clar 返回 None 落回常规流程）。
             # 降级协议：本次自主尝试失败（None 或 success=False）→ 落回下方 standard 流程重跑，
             # 即"第一次自主、第二次标准流水线"的两段式兜底，产品价值不归零。
+            #
+            # 【意图预判闸门（2026-09-09 线上体感反馈修复）】自主≠把闲聊上纲上线：
+            # 首版 high 块无条件 _intent="solution"，"你会玩王者荣耀吗？"也产出 14 章游戏行业
+            # 方案书（线上实锤）。明确非方案诉求（闲聊/问候/账户/知识问答）保留标准自然对话，
+            # 自主模式只接管 solution/competitor/file_ops 等真正需要自主打法的任务。
+            if self._autonomy == "high":
+                _pre = classify_intent(intent_text or user_input)
+                if _pre.get("intent") in ("general", "greeting", "account", "knowledge_q"):
+                    self._log("system", f"[AUTONOMY] 意图预判={_pre.get('intent')}，非方案诉求 → 保留自然对话")
+                    await self._emit(event_callback, {
+                        "type": "thought", "step": 0,
+                        "text": "这是对话/问答类问题，我直接回答（不启动方案流水线）",
+                    })
+                    self._autonomy = "standard"  # 落回标准路由：自然对话/知识问答分支全量复用
             if self._autonomy == "high":
                 await self._emit(event_callback, {
                     "type": "thought", "step": 0,
