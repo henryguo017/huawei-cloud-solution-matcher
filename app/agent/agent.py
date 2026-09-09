@@ -107,6 +107,7 @@ class SolutionAgent:
         disable_web_search: bool = False,
         client_id: Optional[int] = None,
         intent_text: Optional[str] = None,
+        images_meta: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         运行 Agent
@@ -150,6 +151,7 @@ class SolutionAgent:
             disable_web_search=disable_web_search,
             client_id=client_id,
             intent_text=intent_text,
+            images_meta=images_meta,
         )
 
     async def run_with_competitor(
