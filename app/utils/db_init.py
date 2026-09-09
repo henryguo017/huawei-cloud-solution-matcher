@@ -316,6 +316,30 @@ def init_database():
                 _t.sleep(2)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_episodes_client ON agent_episodes(user_id, client_id)")
 
+    # 幂等迁移（2026-09-09 L4-P1/T2.1）：质量信号扩展列——
+    # success=合成成功信号 / feedback=用户点赞1点踩-1 / rerun_count=重跑次数 /
+    # plan_json+trajectory_json=计划与工具轨迹快照（经验注入与 A2 指标统计的数据源）
+    for _col_def in (
+        ("success", "INTEGER NOT NULL DEFAULT 1"),
+        ("feedback", "INTEGER NOT NULL DEFAULT 0"),
+        ("rerun_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("plan_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("trajectory_json", "TEXT NOT NULL DEFAULT '[]'"),
+    ):
+        _c, _ddl = _col_def
+        if _c not in cols:
+            for _attempt in range(3):
+                try:
+                    cursor.execute(f"ALTER TABLE agent_episodes ADD COLUMN {_c} {_ddl}")
+                    logger.info(f"[OK] agent_episodes migrated: added {_c} column")
+                    break
+                except Exception as e:
+                    if "duplicate column" in str(e).lower():
+                        break
+                    logger.warning(f"[MIGRATE] agent_episodes 加列 {_c} 第{_attempt+1}次失败（将重试）: {e}")
+                    import time as _t
+                    _t.sleep(2)
+
     # ==================== 情报订阅（定时自动化，2026-09-09） ====================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS subscriptions (

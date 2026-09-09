@@ -396,6 +396,11 @@
                                     '<span class="ws-tool-btn-label">联网</span>' +
                                     '<span class="ws-tool-badge">ON</span>' +
                                 '</button>' +
+                                '<button class="ws-tool-btn" id="ws-autonomy-toggle" type="button" title="自主模式：跳过固定流程，由 Agent 全自主规划执行（失败自动回退标准流水线）" aria-label="自主模式开关">' +
+                                    '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg></span>' +
+                                    '<span class="ws-tool-btn-label">自主</span>' +
+                                    '<span class="ws-tool-badge">OFF</span>' +
+                                '</button>' +
                                 '<button class="ws-tool-btn" id="ws-perm-settings" type="button" title="工具权限设置" aria-label="工具权限设置">' +
                                     '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">权限</span>' +
@@ -474,6 +479,7 @@
                 ctxUsageBtn: this.root.querySelector('#ws-ctx-usage'),
                 enhanceBtn: this.root.querySelector('#ws-enhance'),
                 webToggleBtn: this.root.querySelector('#ws-web-toggle'),
+                autonomyToggleBtn: this.root.querySelector('#ws-autonomy-toggle'),
                 permSettingsBtn: this.root.querySelector('#ws-perm-settings'),
                 notifySettingsBtn: this.root.querySelector('#ws-notify-settings')
             };
@@ -602,6 +608,7 @@
             // ===== Agent 工具栏能力（#1 上下文用量 / #2 提示词优化 / #6 联网开关 / #3 工具权限）=====
             self._loadToolbarPrefs();
             self._applyWebSearchUI();
+            self._applyAutonomyUI();  // L4-P1/T1.4：自主模式开关初始态
 
             if (this.els.ctxUsageBtn) {
                 this.els.ctxUsageBtn.addEventListener('click', function () { self._showContextUsage(); });
@@ -615,6 +622,16 @@
                     self._applyWebSearchUI();
                     self._saveToolbarPrefs();
                     // 静默：active 态 + ON 徽章本身就是反馈，不要再弹窗
+                });
+            }
+            if (this.els.autonomyToggleBtn) {
+                this.els.autonomyToggleBtn.addEventListener('click', function () {
+                    self.autonomyHigh = !self.autonomyHigh;
+                    self._applyAutonomyUI();
+                    self._saveToolbarPrefs();
+                    self._toast(self.autonomyHigh
+                        ? '自主模式已开启：Agent 将跳过固定流程全自主规划执行'
+                        : '自主模式已关闭：恢复标准流程', self.autonomyHigh ? 'success' : 'info');
                 });
             }
             if (this.els.permSettingsBtn) {
@@ -2122,6 +2139,7 @@
                     client_id: self.selectedClient ? self.selectedClient.id : null,
                     tool_permissions: self.toolPermissions || {},
                     disable_web_search: !!self.webSearchDisabled,
+                    autonomy: self.autonomyHigh ? 'high' : 'standard',
                     images: (self._outgoingImages && self._outgoingImages.length) ? self._outgoingImages : null,
                     image_meta: (self._outgoingImageMeta && self._outgoingImageMeta.length) ? self._outgoingImageMeta : null,
                     customer_files: (self.pendingDocs && self.pendingDocs.length) ? self.pendingDocs.map(function (p) { return p.path; }) : null
@@ -2301,6 +2319,54 @@
                     self._regenerate(shell);
                 });
             }
+            // L4-P1/T2.2：经验反馈 👍/👎（回写 agent_episodes.feedback，驱动经验记忆信任度）
+            if (!actions.querySelector('.ws-fb-group')) {
+                var fbGroup = document.createElement('span');
+                fbGroup.className = 'ws-fb-group';
+                fbGroup.style.cssText = 'display:inline-flex;gap:6px;margin-left:8px;vertical-align:middle;';
+                var mkFb = function (val, icon, tip, color) {
+                    var f = document.createElement('button');
+                    f.type = 'button';
+                    f.className = 'ws-regen-btn ws-fb-btn';
+                    f.setAttribute('data-fb', String(val));
+                    f.title = tip;
+                    f.innerHTML = icon;
+                    f.style.padding = '4px 8px';
+                    f.addEventListener('click', function () {
+                        // 已反馈过则忽略重复点击
+                        if (fbGroup.getAttribute('data-voted')) return;
+                        fbGroup.setAttribute('data-voted', String(val));
+                        f.style.color = color;
+                        f.style.borderColor = color;
+                        self._sendEpisodeFeedback(val);
+                    });
+                    return f;
+                };
+                fbGroup.appendChild(mkFb(1, '<svg class="icon" aria-hidden="true"><use href="#i-hand"></use></svg>', '有帮助（Agent 会记住这类好经验）', 'var(--success, #16a34a)'));
+                fbGroup.appendChild(mkFb(-1, '<svg class="icon" aria-hidden="true"><use href="#i-triangle-alert"></use></svg>', '没帮上忙（下次同类任务 Agent 会避开这个做法）', 'var(--error, #dc2626)'));
+                actions.appendChild(fbGroup);
+            }
+        },
+        /* L4-P1/T2.2：把本会话最近一条方案经验的反馈回写给后端（best-effort） */
+        _sendEpisodeFeedback: function (value) {
+            var self = this;
+            var token = this.userToken();
+            if (!token) { this._toast('请先登录后再反馈', 'warning'); return; }
+            if (!this.sessionId) return;
+            fetch('/api/agent/episode/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ session_id: this.sessionId, value: value })
+            }).then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+            .then(function (d) {
+                if (d && d.status === 'empty') {
+                    self._toast('该会话暂无可反馈的方案记忆', 'info');
+                } else {
+                    self._toast(value === 1 ? '已记录：这次经验会优先复用' : '已记录：Agent 会吸取这次教训', 'success');
+                }
+            }).catch(function () {
+                self._toast('反馈提交失败', 'warning');
+            });
         },
         /* 方案 A：结果气泡内小字提示 —— 本次匹配是否参考了某客户背景与历史方案
            与经典模式 script.js:6565 对齐；仅 Agent 模式渲染，经典模式字节级不变 */
@@ -2331,6 +2397,7 @@
                     if (d && typeof d === 'object') {
                         this.webSearchDisabled = !!d.webSearchDisabled;
                         this.toolPermissions = (d.toolPermissions && typeof d.toolPermissions === 'object') ? d.toolPermissions : {};
+                        this.autonomyHigh = !!d.autonomyHigh;  // L4-P1/T1.4：自主模式偏好（默认关）
                     }
                 }
             } catch (e) { /* ignore */ }
@@ -2339,7 +2406,8 @@
             try {
                 localStorage.setItem('hwcloud_agent_toolbar_v2', JSON.stringify({
                     webSearchDisabled: !!this.webSearchDisabled,
-                    toolPermissions: this.toolPermissions || {}
+                    toolPermissions: this.toolPermissions || {},
+                    autonomyHigh: !!this.autonomyHigh
                 }));
             } catch (e) { /* ignore */ }
         },
@@ -2353,6 +2421,17 @@
             if (label) label.textContent = '联网';
             var badge = btn.querySelector('.ws-tool-badge');
             if (badge) badge.textContent = 'ON';
+        },
+        /* L4-P1/T1.4：自主模式开关 UI（active 态 + ON/OFF 徽章） */
+        _applyAutonomyUI: function () {
+            var btn = this.els.autonomyToggleBtn;
+            if (!btn) return;
+            btn.classList.toggle('active', !!this.autonomyHigh);
+            btn.title = this.autonomyHigh
+                ? '自主模式（已开启：Agent 全自主规划执行，点击关闭）'
+                : '自主模式：跳过固定流程，由 Agent 全自主规划执行（失败自动回退标准流水线）';
+            var badge = btn.querySelector('.ws-tool-badge');
+            if (badge) badge.textContent = this.autonomyHigh ? 'ON' : 'OFF';
         },
         /* #1 上下文用量：GET /agent/context-usage → 浮层展示 token 占比条 */
         _showContextUsage: function () {

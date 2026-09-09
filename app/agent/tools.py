@@ -79,6 +79,11 @@ class Tool:
             sig = inspect.signature(self.func)
         except (TypeError, ValueError):
             return kwargs
+        # **kwargs 型函数（如 L4-P1 动态组合工具的闭包）接受任意参数名，跳过对齐，
+        # 否则所有参数会被下面的白名单过滤误丢弃
+        for p in sig.parameters.values():
+            if p.kind is inspect.Parameter.VAR_KEYWORD:
+                return kwargs
         accepted = set(sig.parameters.keys())
         # 仅当目标参数未被显式传入时才做别名映射，避免覆盖真实参数
         alias_map = {"query": "competitor", "path": "dir"}
@@ -116,6 +121,13 @@ class ToolRegistry:
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
         logger.info(f"Registered tool: {tool.name}")
+
+    def remove(self, name: str) -> bool:
+        """移除工具（L4-P1/T1.2 动态工具单任务 TTL 清理用）。返回是否确实移除了。"""
+        removed = self._tools.pop(name, None) is not None
+        if removed:
+            logger.info(f"Removed tool: {name}")
+        return removed
 
     def get(self, name: str) -> Optional[Tool]:
         return self._tools.get(name)
@@ -656,6 +668,51 @@ def create_default_tools() -> ToolRegistry:
             "required": ["code"]
         },
         func=_sandbox_run_python,
+    ))
+
+    # 10. register_dynamic_tool — 元工具（L4-P1/T1.2）：按需组合只读原语为动态工具
+    #     安全边界：pipeline DSL 仅组合 SAFE_BASE_TOOLS 白名单（本地只读检索类），
+    #     dyn_* 工具由 harness.run() 每轮启动时清除（单任务 TTL），不污染注册表。
+    from app.agent.dynamic_tools import make_register_func
+    registry.register(Tool(
+        name="register_dynamic_tool",
+        description="（元工具）把现有只读检索工具按流水线组合成一个新工具（dyn_ 前缀），"
+                    "本任务内可反复调用以减少步骤。适用于：同一套「分析→检索」流程需重复执行、"
+                    "或需要把多步检索固化为一键调用的场景。仅支持组合白名单原语："
+                    "analyze_demand/search_kb/search_competitor/list_dir。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "新工具名，必须以 dyn_ 开头的小写下划线命名，如 dyn_kb_deep_search",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "这个组合工具解决什么问题（3-500 字）",
+                },
+                "params": {
+                    "type": "object",
+                    "description": "输入参数定义 {参数名: 说明}，如 {\"topic\": \"要检索的主题\"}",
+                },
+                "pipeline": {
+                    "type": "array",
+                    "description": "执行流水线，每步 {\"tool\": 原语名, \"args\": {参数: 字面量或 \"$引用\"}, \"as\": 结果别名}。"
+                                   "引用语法：$参数名 取输入参数；$别名.字段 取上游结果字段；$别名 取上游完整结果。",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "tool": {"type": "string"},
+                            "args": {"type": "object"},
+                            "as": {"type": "string"},
+                        },
+                        "required": ["tool", "args", "as"],
+                    },
+                },
+            },
+            "required": ["name", "description", "pipeline"],
+        },
+        func=make_register_func(registry),
     ))
 
     return registry

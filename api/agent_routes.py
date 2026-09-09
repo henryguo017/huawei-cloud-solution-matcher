@@ -144,6 +144,7 @@ class AgentChatRequest(BaseModel):
     images: Optional[List[str]] = None       # 2026-09-09 图片输入：customer_uploads 内的相对路径，≤4 张
     image_meta: Optional[List[dict]] = None  # 2026-09-09 图片元数据 [{path,name}]：随消息落库，跨设备恢复历史徽标
     customer_files: Optional[List[str]] = None  # 2026-09-09 文档附件：customer_uploads 内的相对路径，≤5 个，随对话每轮携带
+    autonomy: Optional[str] = None  # L4-P1/T1.4：自主模式开关（"high"=跳过固定路由纯自主规划，失败自动回退 standard）
 
 
 @router.get("/agent/tools", tags=["Agent 工具发现"])
@@ -164,6 +165,33 @@ async def agent_tools(user: dict = Depends(get_current_user)):
         "remote_tool_names": remote,
         "mcp_enabled": (os.getenv("AGENT_MCP_CLIENT", "0") or "0").strip() == "1",
     }
+
+
+class EpisodeFeedbackRequest(BaseModel):
+    """L4-P1/T2.2：情景记忆反馈（👍/👎）。value：1 点赞 / -1 点踩 / 0 清除。"""
+    session_id: str
+    value: int
+
+
+@router.post("/agent/episode/feedback", tags=["Agent 经验记忆"])
+async def agent_episode_feedback(
+    body: EpisodeFeedbackRequest,
+    user: dict = Depends(get_current_user),
+):
+    """回写用户对本会话最近一条方案经验的反馈，驱动经验记忆的信任度权重。
+
+    点踩的经验后续以「教训警示」参与注入（帮 Agent 避坑），点赞的经验优先注入。
+    """
+    user_id = user.get("id") or user.get("user_id")
+    if not isinstance(user_id, int) or user_id <= 0:
+        raise HTTPException(status_code=401, detail="请先登录")
+    if not (body.session_id or "").strip():
+        raise HTTPException(status_code=400, detail="session_id 不能为空")
+    if body.value not in (1, -1, 0):
+        raise HTTPException(status_code=400, detail="value 只能为 1 / -1 / 0")
+    from app.agent.memory_profiles import set_episode_feedback
+    ok = await asyncio.to_thread(set_episode_feedback, user_id, body.session_id.strip(), body.value)
+    return {"status": "ok" if ok else "empty", "message": "反馈已记录" if ok else "该会话暂无可反馈的方案记忆"}
 
 
 @router.post("/agent/chat", tags=["Agent 对话"])
@@ -304,6 +332,7 @@ async def agent_chat(
                         client_id=(body.client_id if isinstance(body.client_id, int) and body.client_id > 0 else None),
                         intent_text=message,  # 意图分类只看用户原话，不看不带图片描述的增强文本（2026-09-09）
                         images_meta=body.image_meta,  # 图片元数据随用户消息落库（跨设备同步 2026-09-09）
+                        autonomy=(body.autonomy if body.autonomy in ("standard", "high") else None),  # L4-P1/T1.4
                     ),
                     timeout=480.0,
                 )

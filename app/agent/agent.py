@@ -108,6 +108,7 @@ class SolutionAgent:
         client_id: Optional[int] = None,
         intent_text: Optional[str] = None,
         images_meta: Optional[list] = None,
+        autonomy: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         运行 Agent
@@ -152,6 +153,7 @@ class SolutionAgent:
             client_id=client_id,
             intent_text=intent_text,
             images_meta=images_meta,
+            autonomy=autonomy,
         )
 
     async def run_with_competitor(

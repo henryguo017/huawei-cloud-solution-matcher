@@ -106,6 +106,9 @@ Clarify: [{{"question": "这个项目的主要业务领域是？", "options": ["
 - 如果工具返回错误，尝试调整参数重试一次，再失败就基于已有信息回答
 - 最多执行 {max_steps} 步
 - 不要调用 generate_report 工具——你直接用 Final Answer 输出报告即可
+- 【动态工具】当同一套多步检索流程需要重复执行 ≥2 次时，先用 register_dynamic_tool 把
+  它们组合成一个 dyn_ 工具，之后每轮直接调用该工具，减少步数。仅可组合白名单原语；
+  注册失败时按返回的错误信息修正后重试，最多尝试 1 次注册（失败就按常规分步调用）
 - 【智能跳过澄清】如果用户原始需求已经包含以下 **全部 3 项**信息，说明需求足够详细，**请直接调用工具链（analyze_demand → search_kb → Final Answer），不要再用 Clarify 提问**：
   ① 行业或业务领域（如「制造」「政务」「零售」等大类即可，不需要精确到细分）
   ② 核心业务场景或目标（如「设备预测性维护」「数据上云」「智慧园区管理」）
@@ -538,7 +541,9 @@ class AgentHarness:
             # 模型在多步编排中稳定漏掉定价工具（只调 reference_list、不链 cost_calc，
             # 即便工具集仅限成本工具也停住）。改为由 harness 确定性驱动：
             # 取 SKU 目录 → 结构化抽取 items → 直接调用 cost_calc，确保「项目能力 → MCP → Agent 可调用」闭环。
-            if self._remote_tool_names and self._PRICING_RE.search(self._plan_original_input or user_input or ""):
+            # L4-P1/T1.4：autonomy=high 自主模式下跳过确定性强制步（策略归模型），失败由外层降级兜底。
+            _is_high = getattr(self, "_autonomy", "standard") == "high"
+            if (not _is_high) and self._remote_tool_names and self._PRICING_RE.search(self._plan_original_input or user_input or ""):
                 if not any(t.get("tool") == "mcp__cost__cost_calc" for t in tool_calls_log):
                     self._log("system", "[强制成本步] 定价意图命中且 cost_calc 未调用，确定性补专用成本步")
                     forced_obs = await self._force_cost_step(event_callback, session_id, tool_calls_log, user_input)
@@ -549,7 +554,7 @@ class AgentHarness:
             # 用户明确要建档/更新客户，但整轮没调对应写入工具时，由 harness 确定性补步：
             # LLM 抽 op+字段 → 直接调 mcp__crm__client_add / client_update
             # （穿过权限闸门 ask，需用户在弹窗点"允许执行"才落库；拒绝/超时则不写，杜绝脏档案）。
-            if self._remote_tool_names and self._crm_intent_hit(self._plan_original_input or user_input or ""):
+            if (not _is_high) and self._remote_tool_names and self._crm_intent_hit(self._plan_original_input or user_input or ""):
                 if not any(t.get("tool") in ("mcp__crm__client_add", "mcp__crm__client_update") for t in tool_calls_log):
                     self._log("system", "[强制CRM步] 客户建档/更新意图命中且写入工具未调用，确定性补CRM步")
                     forced_crm = await self._force_crm_step(event_callback, session_id, tool_calls_log, user_input)
@@ -584,8 +589,9 @@ class AgentHarness:
                 "elapsed": round(time.time() - self._start_time, 2),
                 "plan_index": last_idx,
             })
-            # P2-2：成功完成方案 → 存入情景记忆
-            self._maybe_save_episode(session_id, user_input, final)
+            # P2-2：成功完成方案 → 存入情景记忆（L4-P1/T2.1：带计划/轨迹/重跑质量信号）
+            self._maybe_save_episode(session_id, user_input, final,
+                                     success=1, plan=plan, tool_calls_log=tool_calls_log)
             return self._make_result(final, tool_calls_log, success=True)
         except Exception as e:
             self._log("error", f"两阶段执行异常，降级: {e}")
@@ -796,8 +802,13 @@ class AgentHarness:
 
     # ───────────────────────── P2-2：长程记忆 ─────────────────────────
 
-    def _maybe_save_episode(self, session_id: str, demand: str, answer: str) -> None:
-        """方案类意图成功完成时，把 (需求, 终稿) 存入情景记忆（best-effort，不阻塞）。"""
+    def _maybe_save_episode(self, session_id: str, demand: str, answer: str,
+                            success: int = 1, plan=None, tool_calls_log=None) -> None:
+        """任务完成时把 (需求, 终稿) 存入情景记忆（best-effort，不阻塞）。
+
+        L4-P1/T2.1：带质量信号（success/rerun_count/计划与轨迹快照），
+        供 build_memory_context 区分"成功做法"与"失败教训"注入。
+        """
         try:
             if not answer or len(answer) < 300:
                 return
@@ -806,12 +817,16 @@ class AgentHarness:
             uid = self._user_id if isinstance(self._user_id, int) and self._user_id > 0 else None
             if not uid:
                 return
+            import json as _sj
             from app.agent.memory_profiles import save_episode
+            plan_json = _sj.dumps(plan or [], ensure_ascii=False, default=str)[:6000]
+            traj_json = _sj.dumps(tool_calls_log or [], ensure_ascii=False, default=str)[:6000]
             # 后台执行编码+落库，避免拖慢响应
             loop = asyncio.get_running_loop()
             loop.create_task(asyncio.to_thread(
                 save_episode, uid, session_id, demand[:200], answer[:400],
                 getattr(self, "_client_id", None),
+                int(bool(success)), self._replan_count or 0, plan_json, traj_json,
             ))
         except Exception as e:
             self._log("warn", f"保存情景记忆失败（忽略）: {e}")
@@ -928,6 +943,7 @@ class AgentHarness:
         client_id: Optional[int] = None,
         intent_text: Optional[str] = None,
         images_meta: Optional[list] = None,
+        autonomy: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         运行 ReAct 循环
@@ -973,6 +989,17 @@ class AgentHarness:
         self._active_pack = None
         # P1-B：能力包复位（按"动作"维度挂载，与行业包正交、可同时生效）
         self._active_capability = None
+        # L4-P1/T1.4：自主模式标记（high=跳过意图路由与确定性强制步；默认 standard）
+        self._autonomy = (autonomy or "standard").strip() if isinstance(autonomy, str) else "standard"
+        # L4-P1/T2.1：反思重规划计数复位（_maybe_save_episode 用作质量信号；
+        # 此前只有 +=1 无初始化，首轮保存会 AttributeError 静默失败）
+        self._replan_count = 0
+        # L4-P1/T1.2：动态工具单任务 TTL——上一任务残留的 dyn_ 工具一律清除，防注册表污染
+        try:
+            for _dn in [t.name for t in self.tools.list_tools() if t.name.startswith("dyn_")]:
+                self.tools.remove(_dn)
+        except Exception:
+            pass
 
         # P2-D5：Plan 单步重跑 —— 复用上一次的 plan / 各步原参数，重跑指定步并重新汇总
         if rerun_plan_index is not None:
@@ -1033,6 +1060,52 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             reset_web_search_budget()
 
             tools_desc = self.tools.get_tools_prompt()
+
+            # ── L4-P1/T1.4 自主模式（autonomy=high）──
+            # 跳过意图路由/轻量直答/确定性强制步，直接自主规划+两阶段执行；
+            # 保留权限闸门、反思重规划、澄清（_plan_and_execute 内 clar 返回 None 落回常规流程）。
+            # 降级协议：本次自主尝试失败（None 或 success=False）→ 落回下方 standard 流程重跑，
+            # 即"第一次自主、第二次标准流水线"的两段式兜底，产品价值不归零。
+            if self._autonomy == "high":
+                await self._emit(event_callback, {
+                    "type": "thought", "step": 0,
+                    "text": "自主模式：跳过固定路由，由我自主规划并执行（失败会自动回退标准流水线）",
+                })
+                self._intent = "solution"
+                self._format_mode = "solution"
+                self._client_context = extra_context
+                # 长程记忆/经验注入照常（不受意图门控——自主模式本就目标驱动）
+                try:
+                    uid = user_id if isinstance(user_id, int) and user_id > 0 else None
+                    if uid and not getattr(self, "_memory_context_injected", False):
+                        from app.agent.memory_profiles import build_memory_context, build_profile_context
+                        mem_block = build_memory_context(uid, user_input, client_id=getattr(self, "_client_id", None))
+                        profile_block = build_profile_context(uid)
+                        if mem_block or profile_block:
+                            extra_context = (extra_context or "") + "\n\n" + mem_block + "\n" + profile_block
+                            self._client_context = extra_context
+                        self._memory_context_injected = True
+                except Exception as _me:
+                    self._log("warn", f"自主模式记忆注入失败（忽略）: {_me}")
+                high_result = None
+                try:
+                    await self._emit_plan(event_callback, user_input, "solution")
+                    high_result = await self._plan_and_execute(
+                        user_input, "solution", event_callback, session_id, tool_calls_log,
+                    )
+                except Exception as _he:
+                    self._log("error", f"[AUTONOMY] 自主执行异常: {_he}")
+                    high_result = None
+                if high_result is not None and high_result.get("success"):
+                    return high_result
+                if high_result is not None and high_result.get("paused"):
+                    return high_result   # 澄清暂停属正常交互，原样交还
+                self._log("system", "[AUTONOMY] 自主尝试未成功 → 降级 standard 流程")
+                self._autonomy = "standard"   # 降级后本轮强制步恢复生效
+                await self._emit(event_callback, {
+                    "type": "thought", "step": 0,
+                    "text": "自主尝试未达预期，已回退标准流水线继续处理",
+                })
 
             # ── 意图路由（A 方案）：首轮先识别意图，非方案类直接轻量回复，不进 ReAct/14章流水线 ──
             # intent_text（2026-09-09 E2E 实测）：意图只看用户原话——图片/附件预处理会把大段
@@ -1767,7 +1840,10 @@ Final Answer: [完整方案]）"""
             return gate
         tool = self.tools.get(tool_name)
         if not tool:
-            return f"错误：工具 '{tool_name}' 不存在。可用工具：{self.tools.get_tool_names()}"
+            return (
+                f"错误：工具 '{tool_name}' 不存在。可用工具：{self.tools.get_tool_names()}。"
+                "若需要把多步检索固化为一键调用，可先调用 register_dynamic_tool 注册动态工具（仅限白名单原语）。"
+            )
 
         try:
             return await tool.execute(**tool_input)
@@ -2162,6 +2238,9 @@ Final Answer: [完整方案]）"""
         "web_search": "allow",
         "web_extract": "allow",
         "run_python": "ask",    # L4 P0：沙箱代码执行默认弹窗确认（会话内可放行）
+        # L4 P1/T1.2：元工具默认放行——注册动作本身无副作用（纯校验 + 组合白名单只读原语，
+        # dyn_* 单任务 TTL 自动清除），执行动态工具时的实际风险已在白名单层拦截
+        "register_dynamic_tool": "allow",
     }
 
     async def _gate_tool(self, tool_name: str, tool_input: dict, event_callback=None) -> Optional[str]:
