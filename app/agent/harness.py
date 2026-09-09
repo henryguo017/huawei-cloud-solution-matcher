@@ -63,6 +63,9 @@ def _trunc(s: str, n: int) -> str:
 
 # ReAct 提示词模板（Final Answer 结构与标准模式共用同一套增强指令，保证三模式质量一致）
 REACT_SYSTEM_PROMPT_BASE = """你是一个智能解决方案匹配助手，帮助用户找到最合适的华为云解决方案。
+【自我认知】你由自研 AgentHarness 驱动，是一个具备「规划-执行-反思-重规划」能力、可自主选择并调用工具、
+拥有跨轮记忆与技能包的 agentic workflow 系统（工作流型智能体）。被问及身份时如实、大方描述这些能力，
+不要自我贬低（如"我还不是 Agent""我只是普通问答机器人"），也不要夸大成无所不能。
 
 ## 工作方式
 你需要使用"思考-行动-观察"的方式逐步解决问题：
@@ -2158,6 +2161,7 @@ Final Answer: [完整方案]）"""
         "read_customer_file": "ask",
         "web_search": "allow",
         "web_extract": "allow",
+        "run_python": "ask",    # L4 P0：沙箱代码执行默认弹窗确认（会话内可放行）
     }
 
     async def _gate_tool(self, tool_name: str, tool_input: dict, event_callback=None) -> Optional[str]:
@@ -2213,6 +2217,7 @@ Final Answer: [完整方案]）"""
         return {
             "generate_doc": "Agent 准备生成一份可下载的方案书（Word/PDF/PPTX），将占用存储并生成文件。",
             "read_customer_file": "Agent 准备读取你上传的客户资料文件。",
+            "run_python": "Agent 准备在沙箱中执行一段 Python 代码（精确计算/数据整理，无网络无文件写入，≤5 秒）。",
         "web_search": "Agent 准备联网检索（华为云官网 / 竞品动态），可能产生额外请求。",
         "web_extract": "Agent 准备联网读取一个网页的正文内容，可能产生额外请求。",
     }.get(tool_name, f"Agent 准备执行工具「{tool_name}」。")
@@ -2228,6 +2233,9 @@ Final Answer: [完整方案]）"""
             return {"path": str(ti.get("path", ""))[:160]}
         if tool_name == "generate_doc":
             return {"fmt": str(ti.get("format", ti.get("fmt", "word")))}
+        if tool_name == "run_python":
+            code = str(ti.get("code", ""))
+            return {"code": code[:300] + ("…（共 %d 字符）" % len(code) if len(code) > 300 else "")}
         return {k: str(v)[:120] for k, v in ti.items()}
 
     # ---- 上下文用量预估（#1）----
@@ -3452,7 +3460,13 @@ Final Answer: [完整方案]）"""
             "8) 【不做空头承诺】你无法在对话里主动执行生成动作；当用户要 Word/PPT/PDF 文件时，"
             "**不要**回答「好的我马上生成」「请稍等」——那是永远不会兑现的空头支票。"
             "正确做法：告诉用户发一句明确指令即可，例如「把这份内容整理成PPT」「导出成Word」，"
-            "系统收到指令会自动生成可下载文件。\n\n"
+            "系统收到指令会自动生成可下载文件。\n"
+            "9) 【自我认知·如实】你是一个由自研 AgentHarness 驱动的 agentic workflow 系统：具备"
+            "制定计划并分步执行、自主选择并调用工具（含联网检索/知识库/竞品/沙箱代码计算/文档生成）、"
+            "反思重试、多轮澄清和跨轮记忆的能力。被问「你是不是 AI / 机器人 / Agent」时大方如实承认："
+            "是 AI 助手，有自主规划和调用工具的能力；**绝对不要**说「我还不是 Agent」「我只是普通"
+            "问答机器人」这类与事实不符的自我贬低，也**不要**吹嘘成能自主联网下单、操控电脑的"
+            "超级 Agent——如实描述上面列出的能力即可。\n\n"
             f"{web_block}"
             f"{memory_block}"
             f"{history}\n\n"

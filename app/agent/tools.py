@@ -636,4 +636,26 @@ def create_default_tools() -> ToolRegistry:
         func=_tool_web_extract,
     ))
 
+    # 9. run_python — 沙箱代码执行（L4 P0-T1.1，默认 ask 权限走弹窗）
+    from app.agent.sandbox import run_python as _sandbox_run_python
+    registry.register(Tool(
+        name="run_python",
+        description="在受限沙箱中执行 Python 代码片段，print 输出即结果。用于精确计算（复利/统计/单位换算）、"
+                    "数据整理（CSV/JSON 变换）、把知识库检索结果做二次计算等现有工具覆盖不到的任务。"
+                    "代码经安全预检后在隔离子进程中运行（无网络、无文件写入、≤5 秒），只能 import "
+                    "json/re/math/statistics/datetime/itertools/collections/csv 等纯计算标准库。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": "要执行的 Python 代码（≤8000 字符）。用 print() 输出结果；"
+                                   "不要请求用户输入；不要访问文件系统或网络（会被拒绝）。"
+                }
+            },
+            "required": ["code"]
+        },
+        func=_sandbox_run_python,
+    ))
+
     return registry

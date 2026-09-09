@@ -2466,9 +2466,10 @@
                 ['web_search', '联网搜索', 'Tavily / Serper 实时检索'],
                 ['web_extract', '读取网页正文', 'Tavily 抽取链接正文全文'],
                 ['generate_doc', '生成文档', '导出 Word / PDF / PPTX'],
-                ['read_customer_file', '读取客户文件', '访问上传的 PPT / DOC / XLS']
+                ['read_customer_file', '读取客户文件', '访问上传的 PPT / DOC / XLS'],
+                ['run_python', '沙箱代码执行', '受限 Python 计算（无网络无写入，≤5 秒）']
             ];
-            var def = { web_search: 'allow', web_extract: 'allow', generate_doc: 'ask', read_customer_file: 'ask' };
+            var def = { web_search: 'allow', web_extract: 'allow', generate_doc: 'ask', read_customer_file: 'ask', run_python: 'ask' };
             var rows = tools.map(function (t) {
                 var cur = self.toolPermissions[t[0]] || def[t[0]] || 'allow';
                 var segs = [['allow', '允许'], ['ask', '询问'], ['deny', '禁止']].map(function (o) {
