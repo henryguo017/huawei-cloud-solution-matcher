@@ -648,6 +648,16 @@ class AgentHarness:
                 "注册成功后即可随时调用该 dyn_ 工具（引用语法：$参数名 / $别名.字段 / $别名）。"
                 "仅可组合 analyze_demand/search_kb/search_competitor/list_dir。\n"
             )
+        # L4-P1/T1.4+T1.2：自主模式下执行步注入用户原始需求——两阶段步级 prompt 此前
+        # 只有 planner 生成的步骤目标，用户对执行方式的明确指令（如"先注册工具再检索"）
+        # 对执行者不可见，导致自主模式无法真正"按用户意图自主执行"（线上 E2E 二次实锤）。
+        # 仅 high 模式注入，standard 流水线提示词字节级不变（回归风险为零）。
+        if getattr(self, "_autonomy", "standard") == "high":
+            _orig = str(getattr(self, "_plan_original_input", "") or "")[:400]
+            if _orig:
+                step_prompt += (
+                    f"\n【用户原始需求（自主模式，请据此决定如何完成本步，含执行方式偏好）】\n{_orig}\n"
+                )
 
         step_iter = 0
         obs_lines: list = []
