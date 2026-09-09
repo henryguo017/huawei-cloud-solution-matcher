@@ -142,6 +142,7 @@ class AgentChatRequest(BaseModel):
     tool_permissions: Optional[dict] = None  # #3 工具权限策略 {tool: "allow"|"ask"|"deny"}，None 走 harness 默认
     disable_web_search: bool = False         # #6 联网搜索开关：True 时 Agent 不调用 web_search
     images: Optional[List[str]] = None       # 2026-09-09 图片输入：customer_uploads 内的相对路径，≤4 张
+    image_meta: Optional[List[dict]] = None  # 2026-09-09 图片元数据 [{path,name}]：随消息落库，跨设备恢复历史徽标
     customer_files: Optional[List[str]] = None  # 2026-09-09 文档附件：customer_uploads 内的相对路径，≤5 个，随对话每轮携带
 
 
