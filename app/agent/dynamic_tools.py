@@ -212,12 +212,31 @@ def make_register_func(registry: ToolRegistry):
 
     async def _tool_register_dynamic(name: str = "", description: str = "",
                                      params: Optional[dict] = None,
-                                     pipeline: Optional[list] = None) -> str:
-        spec = {
+                                     pipeline: Optional[list] = None,
+                                     spec: Optional[dict] = None,
+                                     query: Optional[str] = None) -> str:
+        # L4-P1 兼容层：模型偶发把整个 spec 包在 {"query": "<json串>"} 或 {"spec": {...}} 里
+        # （沿用 search_kb 的参数习惯 / 兜底残串路径）。此处统一解包，不给模型徒增重试。
+        src: Any = None
+        if isinstance(spec, dict):
+            src = spec
+        elif isinstance(query, str) and query.strip().startswith("{"):
+            try:
+                src = json.loads(query)
+            except json.JSONDecodeError:
+                src = None
+        elif isinstance(query, dict):
+            src = query
+        if isinstance(src, dict):
+            name = src.get("name", name)
+            description = src.get("description", description)
+            params = src.get("params", params if params is not None else {})
+            pipeline = src.get("pipeline", pipeline if pipeline is not None else [])
+        spec_obj = {
             "name": name, "description": description,
             "params": params or {}, "pipeline": pipeline or [],
         }
-        ok, msg = register_dynamic_tool(registry, spec)
+        ok, msg = register_dynamic_tool(registry, spec_obj)
         return json.dumps({
             "status": "ok" if ok else "error",
             "message": msg,

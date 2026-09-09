@@ -2405,6 +2405,46 @@ Final Answer: [完整方案]）"""
 
     # ---- 输出解析 ----
 
+    @staticmethod
+    def _extract_action_input_json(text: str):
+        """L4-P1：从 'Action Input:' 之后提取第一个括号深度平衡的 JSON 对象。
+
+        支持：嵌套对象 / 多行 pretty-print / 字符串字面量内的大括号与转义引号。
+        提取失败（无 JSON 或残缺）返回 None，由调用方走旧兜底。
+        """
+        m = re.search(r'Action\s*Input\s*[*]*\s*[:：]', text, re.IGNORECASE)
+        if not m:
+            return None
+        s = text[m.end():]
+        i = s.find("{")
+        if i < 0:
+            return None
+        depth = 0
+        in_str = False
+        esc = False
+        for j in range(i, len(s)):
+            ch = s[j]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(s[i:j + 1])
+                    except json.JSONDecodeError:
+                        return None
+        return None
+
     def _parse_react_output(self, text: str) -> Dict[str, Any]:
         """
         解析 LLM 的 ReAct 格式输出
@@ -2461,25 +2501,30 @@ Final Answer: [完整方案]）"""
         if action_match:
             tool_name = action_match.group(1).strip()
 
-            # 尝试解析 Action Input（JSON 格式）
-            input_match = re.search(
-                r'Action\s*Input\s*[*]*\s*[:：]\s*.*?(\{.*?\})',
-                text,
-                re.DOTALL | re.IGNORECASE,
-            )
-            tool_input = {}
-            if input_match:
-                try:
-                    tool_input = json.loads(input_match.group(1).strip())
-                except json.JSONDecodeError:
-                    # JSON 解析失败，尝试提取纯文本作为 query
-                    tool_input = {"query": input_match.group(1).strip()}
-            else:
-                # 没有 Action Input，尝试从整段文本推断
-                # 可能 LLM 把参数直接写在了 Action 行后面
-                raw_input = text[action_match.end():].strip()
-                if raw_input:
-                    tool_input = {"query": raw_input[:200]}
+            # L4-P1：优先用括号深度平衡提取（支持嵌套对象/多行/字符串内大括号）。
+            # 旧正则 (\{.*?\}) 非贪婪匹配到第一个内层 } 就截断（动态工具 E2E 实锤：
+            # 嵌套 spec 被切成残串后落进 {"query": "<残串>"} 兜底，元工具全部误报"名称不合法"）。
+            tool_input = self._extract_action_input_json(text)
+            if tool_input is None:
+                # 兜底：旧行为（单行 JSON / 纯文本 query）
+                input_match = re.search(
+                    r'Action\s*Input\s*[*]*\s*[:：]\s*.*?(\{.*?\})',
+                    text,
+                    re.DOTALL | re.IGNORECASE,
+                )
+                tool_input = {}
+                if input_match:
+                    try:
+                        tool_input = json.loads(input_match.group(1).strip())
+                    except json.JSONDecodeError:
+                        # JSON 解析失败，尝试提取纯文本作为 query
+                        tool_input = {"query": input_match.group(1).strip()}
+                else:
+                    # 没有 Action Input，尝试从整段文本推断
+                    # 可能 LLM 把参数直接写在了 Action 行后面
+                    raw_input = text[action_match.end():].strip()
+                    if raw_input:
+                        tool_input = {"query": raw_input[:200]}
 
             # 提取思考过程（宽松匹配 + 兜底）
             thought_match = re.search(
