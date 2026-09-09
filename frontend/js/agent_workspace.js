@@ -26,9 +26,11 @@
     var DRAWER_BREAKPOINT = 1400;
     var MAX_INPUT = 2000;
     var MAX_CONVOS = 50;
-    /* 草稿保存：按对话隔离的未发送输入（2026-09-09） */
+    /* 草稿保存：按对话隔离的未发送输入（2026-09-09），仅本机、不跨设备同步 */
     var DRAFT_KEY = 'agent_drafts_v1';
     var DRAFT_MAX = 50;
+    /* 跨设备同步（2026-09-09 方案A'）：已迁移会话标记（1=成功，-1=服务端确认过无需迁移） */
+    var MIG_KEY = 'agent_conv_migrated_v1';
 
     /* 方案预览解析词库（v1 前端轻量解析，后续可由后端 structured 字段替代） */
     var PRODUCT_DB = {
@@ -251,6 +253,7 @@
             this._loadClients();
             this._loadStats();
             this._updateDrawerState();
+            this._syncFromServer();   // 跨设备历史同步：每次进入 Agent 视图都拉一次服务端会话列表（幂等）
         },
 
         _render: function () {
@@ -930,6 +933,21 @@
             }).catch(function () {
                 self._toast('已本地生效，服务端同步失败', 'warning');
             });
+        },
+        /* 会话元数据服务端推送（2026-09-09 跨设备同步）：
+           建对话（首条消息）/ 附件变更时调用，title/cap/client/docs 供其他设备恢复。
+           失败静默——本地已生效，服务端 list 接口的孤儿恢复可兜底消息，
+           元数据缺失只影响其他设备看到的标题/附件，不影响消息本体。 */
+        _convMetaSync: function (sessionId, fields) {
+            var token = this.userToken();
+            if (!token || !sessionId) return;
+            var body = { session_id: sessionId };
+            if (fields) { for (var k in fields) { body[k] = fields[k]; } }
+            fetch('/api/agent/conv/meta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify(body)
+            }).catch(function () { /* 静默 */ });
         },
         /* 归档当前打开的对话（chat-header 右上"归档"按钮调用） */
         _archive: function (id) {
@@ -2105,6 +2123,7 @@
                     tool_permissions: self.toolPermissions || {},
                     disable_web_search: !!self.webSearchDisabled,
                     images: (self._outgoingImages && self._outgoingImages.length) ? self._outgoingImages : null,
+                    image_meta: (self._outgoingImageMeta && self._outgoingImageMeta.length) ? self._outgoingImageMeta : null,
                     customer_files: (self.pendingDocs && self.pendingDocs.length) ? self.pendingDocs.map(function (p) { return p.path; }) : null
                 }),
                 signal: signal
@@ -3077,6 +3096,97 @@
         _loadConvos: function () {
             try { var v = localStorage.getItem(STORE_KEY); return v ? JSON.parse(v) : []; } catch (e) { return []; }
         },
+
+        /* ---------------- 跨设备历史同步（2026-09-09 方案A'） ----------------
+           服务端为唯一事实源，localStorage 降级为缓存：
+           1) 登录后每次进入 Agent 视图拉 /agent/conv/list 与本地合并
+              （服务端独有 → 新增条目，消息懒加载；标题/归档态服务端优先）；
+           2) 本地独有的会话（同步上线前的历史）一次性迁移上传 /agent/conv/import，
+              服务端 append-only 幂等，失败不标记、下次进入自动重试；
+           3) 消息正文懒加载在 _openConvo → _repairHistoryFromServer（按条数比对回填）；
+           4) 草稿（DRAFT_KEY）仅本机，不参与同步；
+           5) 匿名模式无 token 直接跳过，行为与旧版完全一致。 */
+        _syncFromServer: function () {
+            var self = this, token = this.userToken();
+            if (!token) return;
+            fetch('/api/agent/conv/list', { headers: { 'Authorization': 'Bearer ' + token } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                    if (!d || !d.ok || !Array.isArray(d.convs)) return;
+                    var list = self._loadConvos(), byId = {}, i;
+                    for (i = 0; i < list.length; i++) byId[list[i].id] = list[i];
+                    var serverIds = {}, changed = false;
+                    d.convs.forEach(function (s) {
+                        serverIds[s.session_id] = true;
+                        var local = byId[s.session_id];
+                        if (!local) {
+                            // 服务端独有（另一台设备的会话 / 本机清过缓存）：消息留空，打开时懒加载
+                            list.push({
+                                id: s.session_id, title: s.title || '未命名对话',
+                                cap: s.cap || '',
+                                clientId: (s.client_id != null ? s.client_id : null),
+                                clientName: s.client_name || null,
+                                docs: Array.isArray(s.docs) ? s.docs : [],
+                                archived: !!s.archived,
+                                updatedAt: s.updated_ts || Date.now(),
+                                messages: []
+                            });
+                            changed = true;
+                        } else {
+                            // 两边都有：元数据服务端优先（归档态/标题以服务端为准），消息保留本地
+                            if (s.title) local.title = s.title;
+                            local.archived = !!s.archived;
+                            if (Array.isArray(s.docs) && s.docs.length && !(local.docs && local.docs.length)) local.docs = s.docs;
+                            if (s.updated_ts && s.updated_ts > (local.updatedAt || 0)) local.updatedAt = s.updated_ts;
+                            changed = true;
+                        }
+                    });
+                    if (changed) { self._saveConvos(list); self._renderTasks(); }
+                    // 一次性迁移：本地独有 + 有消息 + 未成功迁移过（每轮最多 10 条防风暴）
+                    var migrated = self._migratedAll(), batch = 0;
+                    for (i = 0; i < list.length && batch < 10; i++) {
+                        var c = list[i];
+                        if (serverIds[c.id] || migrated[c.id] === 1) continue;
+                        if (!c.messages || !c.messages.length) continue;
+                        self._importConvo(c); batch++;
+                    }
+                })
+                .catch(function () { /* 静默：同步失败不影响本地使用 */ });
+        },
+        _migratedAll: function () {
+            try { var v = localStorage.getItem(MIG_KEY); return v ? JSON.parse(v) : {}; } catch (e) { return {}; }
+        },
+        _markMigrated: function (convoId) {
+            if (!convoId) return;
+            var all = this._migratedAll();
+            all[convoId] = 1;
+            try { localStorage.setItem(MIG_KEY, JSON.stringify(all)); } catch (e) {}
+        },
+        _importConvo: function (c) {
+            var self = this, token = this.userToken();
+            if (!token || !c || !c.id) return;
+            var msgs = (c.messages || []).slice(0, 200).map(function (m) {
+                return {
+                    role: m.role === 'user' ? 'user' : 'agent',
+                    content: String(m.content || '').slice(0, 4000),
+                    images: Array.isArray(m.images) ? m.images : []
+                };
+            });
+            if (!msgs.length) { self._markMigrated(c.id); return; }
+            fetch('/api/agent/conv/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({
+                    session_id: c.id, title: c.title || '', messages: msgs,
+                    cap: c.cap || '',
+                    client_id: (c.clientId != null ? c.clientId : null),
+                    client_name: c.clientName || '',
+                    docs: Array.isArray(c.docs) ? c.docs : []
+                })
+            }).then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (d) { if (d && d.ok) self._markMigrated(c.id); })
+              .catch(function () { /* 失败不标记：下次进入视图重试，服务端幂等 */ });
+        },
         /* ---------------- 草稿保存（按对话隔离，2026-09-09） ---------------- */
         _draftAll: function () {
             try { var v = localStorage.getItem(DRAFT_KEY); return v ? JSON.parse(v) : {}; } catch (e) { return {}; }
@@ -3320,6 +3430,8 @@
                 if (list[i].id === this.currentConvoId) { list[i].docs = (this.pendingDocs || []).slice(); break; }
             }
             this._saveConvos(list);
+            // 附件变更同步服务端（2026-09-09 跨设备同步）
+            this._convMetaSync(this.currentConvoId, { docs: (this.pendingDocs || []).slice() });
         },
         /* 发送前取走待发图片路径（所有权转移给本次请求） */
         _takeOutgoingImages: function () {
@@ -3581,16 +3693,20 @@
             this._repairHistoryFromServer(id);
         },
 
-        /* 历史补全：老对话曾因"每轮覆写最后一条 agent 消息"的 bug 丢失多轮回答，
-           打开时与后端 agent_memory 比对——服务端 agent 消息更全则回填本地并重渲染。
-           每条对话只修一次（_histRepaired 标记）；单条内容受后端 500 字截断限制。 */
+        /* 历史补全 + 跨设备消息懒加载（2026-09-09 方案A' 升级）：
+           打开对话时与后端比对消息条数——服务端更全（另一台设备续聊过 /
+           本机曾丢失 / 服务端独有会话首次打开）则用服务端全量回填并重渲染。
+           数据源为 /agent/conv/messages（agent_memory 主表 + 归档表并集，
+           30 天/窗口外的旧消息不丢，优于旧 /agent/history 的内存窗口）。
+           本机图片徽标按下标就地保留（服务端消息正文含图片描述，徽标是本机显示增强）。
+           每条对话每页面生命周期只拉一次（_histRepaired 标记）。 */
         _repairHistoryFromServer: function (id) {
             var self = this;
             var token = this.userToken();
             if (!token || !id) return;
             this._histRepaired = this._histRepaired || {};
             if (this._histRepaired[id]) return;
-            fetch('/api/agent/history?session_id=' + encodeURIComponent(id), {
+            fetch('/api/agent/conv/messages?session_id=' + encodeURIComponent(id), {
                 headers: { 'Authorization': 'Bearer ' + token }
             }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
                 self._histRepaired[id] = true;
@@ -3598,16 +3714,17 @@
                 var list = self._loadConvos(), found = null;
                 for (var i = 0; i < list.length; i++) { if (list[i].id === id) { found = list[i]; break; } }
                 if (!found) return;
-                var localAgents = (found.messages || []).filter(function (m) { return m.role === 'agent'; }).length;
-                var serverAgents = d.messages.filter(function (m) { return m.role === 'agent'; }).length;
-                if (serverAgents > localAgents) {
-                    found.messages = d.messages.map(function (m) {
-                        return { role: (m.role === 'user' ? 'user' : 'agent'), content: String(m.content || '') };
-                    });
-                    found.updatedAt = Date.now();
-                    self._saveConvos(list);
-                    if (self.currentConvoId === id) self._openConvo(id);  // 正打开这条则重渲染（已标记不再递归拉取）
-                }
+                var localMsgs = found.messages || [];
+                if (d.messages.length <= localMsgs.length) return;   // 本地不落后则不动（保留本地完整正文与徽标）
+                found.messages = d.messages.map(function (m, idx) {
+                    var msg = { role: (m.role === 'user' ? 'user' : 'agent'), content: String(m.content || '') };
+                    var old = localMsgs[idx];
+                    if (old && old.role === msg.role && Array.isArray(old.images) && old.images.length) msg.images = old.images;
+                    return msg;
+                });
+                found.updatedAt = Date.now();
+                self._saveConvos(list);
+                if (self.currentConvoId === id) self._openConvo(id);  // 正打开这条则重渲染（已标记不再递归拉取）
             }).catch(function () { /* 静默：补全失败不影响本地历史展示 */ });
         },
 

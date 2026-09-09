@@ -12,6 +12,7 @@
 """
 
 import time
+import json
 import logging
 from typing import Any, Dict, List
 from dataclasses import dataclass, field
@@ -155,11 +156,11 @@ class ConversationMemory:
 
     # ---- 长期记忆（跨轮次历史，内存 + SQLite 双写） ----
 
-    def add_user_message(self, session_id: str, content: str) -> None:
+    def add_user_message(self, session_id: str, content: str, images: Any = None) -> None:
         self._ensure_loaded(session_id)
         session = self._get_or_create_session(session_id)
         session["long_term"].append(MemoryEntry(role="user", content=content))
-        self._persist(session_id, "user", content)
+        self._persist(session_id, "user", content, images=images)
         self._trim_long_term(session_id)
         self._trim_and_archive(session_id)
 
@@ -171,25 +172,53 @@ class ConversationMemory:
         self._trim_long_term(session_id)
         self._trim_and_archive(session_id)
 
-    def _persist(self, session_id: str, role: str, content: str) -> None:
+    def _persist(self, session_id: str, role: str, content: str, images: Any = None) -> None:
         """单条长期记忆落库（截断 2000 字，写失败降级内存仅记日志）。
 
         边界审计（2026-09-07）：原 500 字截断会把方案/文档类回答砍得只剩开头，
         重启后"方案里的成本明细给我列一下"这类追问无法从历史恢复上下文。
         方案正文通常 3~8k 字，2000 字可保住章节骨架与成本表；DB 体积可忽略。
+
+        images（2026-09-09 跨设备同步）：用户消息的图片元数据 [{path,name}]，
+        JSON 落 agent_memory.images 列，供另一台设备恢复历史时显示图片徽标。
         """
         try:
             conn = self._db_conn()
             cur = conn.cursor()
             uid = self._parse_user_id(session_id)
             cur.execute(
-                "INSERT INTO agent_memory (user_id, session_id, role, content) VALUES (?, ?, ?, ?)",
-                (uid, session_id, role, content[:2000]),
+                "INSERT INTO agent_memory (user_id, session_id, role, content, images) VALUES (?, ?, ?, ?, ?)",
+                (uid, session_id, role, content[:2000], self._dump_json(images)),
             )
             conn.commit()
             conn.close()
         except Exception as e:
             logger.warning(f"[memory] 长期记忆落库失败 session={session_id}: {e}")
+
+    # ---- JSON / 时间戳辅助（2026-09-09 跨设备同步） ----
+
+    @staticmethod
+    def _dump_json(v: Any) -> str:
+        try:
+            return json.dumps(v or [], ensure_ascii=False)
+        except Exception:
+            return "[]"
+
+    @staticmethod
+    def _load_json(s: Any) -> List[Any]:
+        try:
+            v = json.loads(s) if s else []
+            return v if isinstance(v, list) else []
+        except Exception:
+            return []
+
+    @staticmethod
+    def _local_ts(s: Any) -> int:
+        """'YYYY-MM-DD HH:MM:SS' → 毫秒时间戳（前端 relTime 用 ms）。解析失败返回 0。"""
+        try:
+            return int(time.mktime(time.strptime(str(s), "%Y-%m-%d %H:%M:%S")) * 1000)
+        except Exception:
+            return 0
 
     def get_history_messages(self, session_id: str, limit: int = 60) -> List[Dict[str, str]]:
         """结构化历史（[{role, content}]，时间正序）——供前端历史补全接口使用。
@@ -266,6 +295,229 @@ class ConversationMemory:
         self._sessions.pop(session_id, None)
         self._loaded.discard(session_id)
         return deleted
+
+    # ---- 跨设备历史同步（2026-09-09 方案A'：服务端为唯一事实源） ----
+    # 背景：消息本就落 agent_memory，但无列表/消息读取接口，前端只读 localStorage，
+    # 导致换设备后历史全部"消失"。以下方法补齐 服务端读侧 + 元数据 upsert + 一次性迁移。
+
+    def upsert_session_meta(self, session_id: str, title: Any = None, cap: Any = None,
+                            client_id: Any = None, client_name: Any = None,
+                            docs: Any = None) -> bool:
+        """会话元数据 upsert：只更新传入的字段（None = 保持原值），行不存在则创建。
+
+        前端在建对话（首条消息）/附件变更时推送；rename/archive 走原 setter。
+        """
+        try:
+            conn = self._db_conn()
+            conn.execute("""
+                INSERT INTO agent_sessions (user_id, session_id, title, updated_at)
+                VALUES (?, ?, ?, datetime('now', 'localtime'))
+                ON CONFLICT(session_id) DO UPDATE SET
+                    updated_at=datetime('now', 'localtime')
+            """, (self._session_uid(session_id), session_id, (str(title) if title else '')[:80]))
+            sets, args = [], []
+            if title is not None:
+                sets.append("title=?"); args.append(str(title)[:80])
+            if cap is not None:
+                sets.append("cap=?"); args.append(str(cap)[:80])
+            if client_id is not None:
+                sets.append("client_id=?"); args.append(int(client_id))
+            if client_name is not None:
+                sets.append("client_name=?"); args.append(str(client_name)[:80])
+            if docs is not None:
+                sets.append("docs=?"); args.append(self._dump_json(docs))
+            if sets:
+                args.append(session_id)
+                conn.execute(
+                    f"UPDATE agent_sessions SET {', '.join(sets)} WHERE session_id=?", args
+                )
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            logger.warning(f"[memory] 会话元数据落库失败 session={session_id}: {e}")
+            return False
+
+    def list_sessions(self, user_id: int, limit: int = 200) -> List[Dict[str, Any]]:
+        """该用户全部会话元数据（跨设备列表接口的数据源）。
+
+        两层数据源：
+        1) agent_sessions —— 有元数据真身的会话（含 cap/client/docs 扩展列）；
+        2) 孤儿恢复 —— agent_memory 里有消息但没有 agent_sessions 行的会话
+           （2026-09-08 管理端点上线前的历史），title 用首条用户消息兜底，
+           并回填 agent_sessions 让后续 rename/archive 有落点。
+        按 updated_ts 毫秒降序返回。
+        """
+        uid = int(user_id or 0)
+        out: Dict[str, Dict[str, Any]] = {}
+        try:
+            conn = self._db_conn()
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    """SELECT session_id, title, archived, cap, client_id, client_name,
+                              docs, updated_at
+                       FROM agent_sessions WHERE user_id=?
+                       ORDER BY updated_at DESC LIMIT ?""",
+                    (uid, limit),
+                )
+                for r in cur.fetchall():
+                    keys = set(r.keys())
+                    out[r["session_id"]] = {
+                        "session_id": r["session_id"],
+                        "title": r["title"] or "",
+                        "archived": bool(r["archived"]),
+                        "cap": r["cap"] if "cap" in keys else "",
+                        "client_id": r["client_id"],
+                        "client_name": (r["client_name"] if "client_name" in keys else "") or "",
+                        "docs": self._load_json(r["docs"]) if "docs" in keys else [],
+                        "updated_ts": self._local_ts(r["updated_at"]),
+                        "msg_count": 0,
+                    }
+            except Exception:
+                # 旧库缺扩展列时降级为基础列（正常情况走不到：db_init 启动时已 ALTER）
+                cur.execute(
+                    """SELECT session_id, title, archived, updated_at
+                       FROM agent_sessions WHERE user_id=? ORDER BY updated_at DESC LIMIT ?""",
+                    (uid, limit),
+                )
+                for r in cur.fetchall():
+                    out[r["session_id"]] = {
+                        "session_id": r["session_id"], "title": r["title"] or "",
+                        "archived": bool(r["archived"]), "cap": "", "client_id": None,
+                        "client_name": "", "docs": [],
+                        "updated_ts": self._local_ts(r["updated_at"]), "msg_count": 0,
+                    }
+            # 孤儿恢复：有消息但无元数据行的会话
+            cur.execute(
+                """SELECT session_id,
+                          MIN(CASE WHEN role='user' THEN content END) AS first_user,
+                          MAX(created_at) AS last_at,
+                          COUNT(*) AS msg_count
+                   FROM agent_memory
+                   WHERE user_id=? AND session_id NOT IN
+                         (SELECT session_id FROM agent_sessions)
+                   GROUP BY session_id ORDER BY last_at DESC LIMIT ?""",
+                (uid, limit),
+            )
+            orphans = cur.fetchall()
+            if orphans:
+                for r in orphans:
+                    sid = r["session_id"]
+                    title = (r["first_user"] or "").strip()[:80] or "未命名对话"
+                    out[sid] = {
+                        "session_id": sid, "title": title, "archived": False,
+                        "cap": "", "client_id": None, "client_name": "", "docs": [],
+                        "updated_ts": self._local_ts(r["last_at"]),
+                        "msg_count": r["msg_count"] or 0,
+                    }
+                    try:
+                        conn.execute(
+                            """INSERT OR IGNORE INTO agent_sessions
+                               (user_id, session_id, title, created_at, updated_at)
+                               VALUES (?, ?, ?, ?, ?)""",
+                            (uid, sid, title, r["last_at"], r["last_at"]),
+                        )
+                    except Exception:
+                        pass
+                conn.commit()
+            # 消息计数（前端可比对本地条数决定是否懒加载）
+            if out:
+                sids = list(out.keys())
+                marks = ",".join("?" * len(sids))
+                cur.execute(
+                    f"SELECT session_id, COUNT(*) AS c FROM agent_memory "
+                    f"WHERE session_id IN ({marks}) GROUP BY session_id",
+                    sids,
+                )
+                for r in cur.fetchall():
+                    if r["session_id"] in out:
+                        out[r["session_id"]]["msg_count"] = r["c"] or 0
+            conn.close()
+        except Exception as e:
+            logger.warning(f"[memory] 会话列表读取失败 user_id={user_id}: {e}")
+        return sorted(out.values(), key=lambda x: x["updated_ts"], reverse=True)
+
+    def get_session_messages(self, session_id: str, user_id: int, limit: int = 400) -> List[Dict[str, Any]]:
+        """会话全量消息（跨设备懒加载读侧）：agent_memory 与 agent_memory_archive
+        的并集按时间正序（归档迁移保留原 created_at，30 天/窗口外消息不丢）。
+
+        归属校验由路由层完成，这里再按 user_id 过滤一次双保险。
+        images 列存在时一并返回；旧库缺列降级为内存窗口历史。
+        """
+        uid = int(user_id or 0)
+        try:
+            conn = self._db_conn()
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT role, content, images FROM (
+                       SELECT role, content, images, created_at, id, 0 AS pri FROM agent_memory
+                        WHERE user_id=? AND session_id=? AND role IN ('user','agent')
+                       UNION ALL
+                       SELECT role, content, '' AS images, created_at, id, 1 AS pri
+                         FROM agent_memory_archive
+                        WHERE user_id=? AND session_id=? AND role IN ('user','agent')
+                   ) ORDER BY created_at ASC, pri ASC, id ASC LIMIT ?""",
+                (uid, session_id, uid, session_id, limit),
+            )
+            rows = cur.fetchall()
+            conn.close()
+            msgs = []
+            for r in rows:
+                m = {"role": r["role"], "content": r["content"]}
+                imgs = self._load_json(r["images"] if "images" in r.keys() else "")
+                if imgs:
+                    m["images"] = imgs
+                msgs.append(m)
+            return msgs
+        except Exception as e:
+            logger.warning(f"[memory] 会话消息读取失败 session={session_id}: {e}，降级内存窗口")
+            try:
+                return self.get_history_messages(session_id, limit=limit)
+            except Exception:
+                return []
+
+    def import_session(self, session_id: str, title: str, messages: List[Dict[str, Any]],
+                       cap: str = "", client_id: Any = None, client_name: str = "",
+                       docs: Any = None) -> Dict[str, Any]:
+        """一次性迁移（方案A'）：把纯本地会话的消息补插落库。
+
+        幂等策略 append-only：服务端已有 N 条则只补插第 N 条之后的尾部，
+        重复调用不产生重复消息、不覆盖已有内容。返回 {imported, existing}。
+        """
+        uid = self._session_uid(session_id)
+        inserted, existing = 0, 0
+        try:
+            conn = self._db_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT COUNT(*) FROM agent_memory WHERE user_id=? AND session_id=?",
+                (uid, session_id),
+            )
+            existing = cur.fetchone()[0] or 0
+            tail = messages[existing:] if existing < len(messages) else []
+            for m in tail:
+                role = "user" if m.get("role") == "user" else "agent"
+                cur.execute(
+                    "INSERT INTO agent_memory (user_id, session_id, role, content, images) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (uid, session_id, role, str(m.get("content") or "")[:4000],
+                     self._dump_json(m.get("images"))),
+                )
+                inserted += 1
+            # 先提交关闭本连接再写元数据：upsert_session_meta 会另开连接，
+            # 持有未提交事务时嵌套开连会 database is locked（Windows/低并发同样会踩）
+            conn.commit()
+            conn.close()
+            if inserted or not existing:
+                self.upsert_session_meta(
+                    session_id, title=title, cap=cap, client_id=client_id,
+                    client_name=client_name, docs=docs,
+                )
+        except Exception as e:
+            logger.warning(f"[memory] 会话迁移落库失败 session={session_id}: {e}")
+        return {"imported": inserted, "existing": existing}
+
 
     def get_conversation_history(self, session_id: str) -> str:
         self._ensure_loaded(session_id)

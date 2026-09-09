@@ -243,6 +243,22 @@ def init_database():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_sessions_user ON agent_sessions(user_id, session_id)")
 
+    # ===== 2026-09-09 跨设备历史同步（方案A'）：扩列 =====
+    # 已有库 CREATE TABLE IF NOT EXISTS 不会补新列，必须 ALTER TABLE；
+    # 列已存在时 ALTER 报 duplicate column，直接吞掉（幂等）。
+    def _add_column(table, col, ddl):
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+        except Exception:
+            pass
+
+    _add_column("agent_sessions", "cap", "TEXT NOT NULL DEFAULT ''")
+    _add_column("agent_sessions", "client_id", "INTEGER")
+    _add_column("agent_sessions", "client_name", "TEXT NOT NULL DEFAULT ''")
+    _add_column("agent_sessions", "docs", "TEXT NOT NULL DEFAULT '[]'")
+    _add_column("agent_memory", "images", "TEXT NOT NULL DEFAULT '[]'")
+
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS agent_memory_archive (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

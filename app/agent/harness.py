@@ -924,6 +924,7 @@ class AgentHarness:
         disable_web_search: bool = False,
         client_id: Optional[int] = None,
         intent_text: Optional[str] = None,
+        images_meta: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         运行 ReAct 循环
@@ -1018,7 +1019,9 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
         else:
             # ── 首轮：清空短期记忆，记录用户输入，构建初始 Prompt ──
             self.memory.clear_short_term(session_id)
-            self.memory.add_user_message(session_id, user_input)
+            # images_meta（2026-09-09 跨设备同步）：图片元数据随用户消息落库，
+            # 另一台设备恢复历史时可显示图片徽标（路径为服务端 customer_uploads 相对路径）
+            self.memory.add_user_message(session_id, user_input, images=images_meta)
             self._client_context = extra_context  # B修复：首轮注入客户背景，供最终增强管线使用
             # 联网检索预算每轮重置（2026-09-08 线上实测根因修复）：
             # reset_web_search_budget 此前定义了但从未被调用，_count 为进程级只增不清，

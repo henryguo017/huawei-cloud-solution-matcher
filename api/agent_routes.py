@@ -302,6 +302,7 @@ async def agent_chat(
                         disable_web_search=body.disable_web_search,
                         client_id=(body.client_id if isinstance(body.client_id, int) and body.client_id > 0 else None),
                         intent_text=message,  # 意图分类只看用户原话，不看不带图片描述的增强文本（2026-09-09）
+                        images_meta=body.image_meta,  # 图片元数据随用户消息落库（跨设备同步 2026-09-09）
                     ),
                     timeout=480.0,
                 )
@@ -617,6 +618,118 @@ async def agent_conv_delete(body: ConvManageRequest, user: dict = Depends(get_cu
     from app.agent.memory import ConversationMemory
     deleted = ConversationMemory().delete_session(body.session_id)
     return {"ok": True, "session_id": body.session_id, "deleted_messages": deleted}
+
+
+# ===== 跨设备历史同步（2026-09-09 方案A'：服务端为唯一事实源 + localStorage 缓存） =====
+# 背景：消息早已落 agent_memory，但没有读侧接口，前端只读 localStorage，
+# 换设备后历史全部"消失"。以下三个读/写端点 + /agent/conv/rename|archive|delete
+# 构成完整的会话服务端真身。匿名模式不走这些接口（前端匿名仍纯 localStorage）。
+
+class ConvMetaRequest(BaseModel):
+    session_id: str = ""
+    title: Optional[str] = None
+    cap: Optional[str] = None
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
+    docs: Optional[list] = None
+
+
+def _conv_meta_guard(session_id: str, user: dict) -> int:
+    """元数据/迁移写入的归属校验：比 _conv_manage_guard 更严——
+    session_id 解析出的 uid 必须等于当前用户（guest 会话不允许跨设备同步写入）。"""
+    from fastapi import HTTPException
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id 必填")
+    uid = user.get("id") or user.get("user_id") or 0
+    from app.agent.memory import ConversationMemory
+    sid_uid = ConversationMemory._parse_user_id(session_id)
+    if not uid or sid_uid != uid:
+        raise HTTPException(status_code=403, detail="无权操作该会话")
+    return uid
+
+
+@router.get("/agent/conv/list", tags=["Agent 对话"])
+async def agent_conv_list(user: dict = Depends(get_current_user)):
+    """跨设备同步读侧①：返回当前用户全部会话元数据（含孤儿恢复）。
+
+    孤儿恢复：agent_memory 里有消息但没有 agent_sessions 元数据行的会话
+    （2026-09-08 之前的历史）自动补齐 title/updated_at 并回填元数据表。
+    """
+    uid = user.get("id") or user.get("user_id") or 0
+    if not uid:
+        raise HTTPException(status_code=403, detail="匿名模式不支持跨设备同步")
+    from app.agent.memory import ConversationMemory
+    try:
+        convs = ConversationMemory().list_sessions(uid)
+        return {"ok": True, "convs": convs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取会话列表失败: {e}")
+
+
+@router.get("/agent/conv/messages", tags=["Agent 对话"])
+async def agent_conv_messages(session_id: str = "", user: dict = Depends(get_current_user)):
+    """跨设备同步读侧②：懒加载会话全量消息（主表+归档表并集，时间正序）。
+
+    前端打开对话时按条数比对决定是否回填；归属校验沿用会话管理口径。
+    """
+    uid = _conv_manage_guard(session_id, user)
+    from app.agent.memory import ConversationMemory
+    msgs = ConversationMemory().get_session_messages(session_id, uid)
+    return {"ok": True, "session_id": session_id, "messages": msgs}
+
+
+@router.post("/agent/conv/meta", tags=["Agent 对话"])
+async def agent_conv_meta(body: ConvMetaRequest, user: dict = Depends(get_current_user)):
+    """跨设备同步写侧①：会话元数据 upsert（建对话/附件变更时前端推送）。
+
+    只更新传入字段；rename/archive 仍走 /agent/conv/rename|archive。
+    """
+    uid = _conv_meta_guard(body.session_id, user)
+    from app.agent.memory import ConversationMemory
+    ok = ConversationMemory().upsert_session_meta(
+        body.session_id,
+        title=body.title, cap=body.cap,
+        client_id=body.client_id, client_name=body.client_name,
+        docs=body.docs,
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail="会话元数据落库失败")
+    return {"ok": True, "session_id": body.session_id}
+
+
+class ConvImportRequest(BaseModel):
+    session_id: str = ""
+    title: str = ""
+    messages: List[dict] = []
+    cap: str = ""
+    client_id: Optional[int] = None
+    client_name: str = ""
+    docs: Optional[list] = None
+
+
+@router.post("/agent/conv/import", tags=["Agent 对话"])
+async def agent_conv_import(body: ConvImportRequest, user: dict = Depends(get_current_user)):
+    """跨设备同步写侧②：一次性迁移——把纯本地会话（同步上线前的历史）上传服务端。
+
+    幂等 append-only：服务端已有 N 条则只补插尾部，重复调用不产生重复消息。
+    上限 200 条/次、单条 4000 字（超出部分由服务端截断）。
+    """
+    uid = _conv_meta_guard(body.session_id, user)
+    from app.agent.memory import ConversationMemory
+    msgs = [
+        m for m in (body.messages or [])
+        if isinstance(m, dict) and str(m.get("content") or "").strip()
+    ][:200]
+    if not msgs:
+        raise HTTPException(status_code=400, detail="messages 为空")
+    res = ConversationMemory().import_session(
+        body.session_id, (body.title or "")[:80], msgs,
+        cap=(body.cap or "")[:80],
+        client_id=body.client_id,
+        client_name=(body.client_name or "")[:80],
+        docs=body.docs,
+    )
+    return {"ok": True, "session_id": body.session_id, **res}
 
 
 class EnhancePromptRequest(BaseModel):
