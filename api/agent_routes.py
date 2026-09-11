@@ -390,6 +390,7 @@ async def agent_chat(
                 "plan_status": result.get("plan_status") or [],       # P1-1：plan 每步终态（result 后保留面板点亮）
                 "reflexion_used": result.get("reflexion_used", False),     # P1-3：是否触发过反思
                 "reflexion_success": result.get("reflexion_success", False),  # P1-3：反思是否成功注入
+                "runtime": result.get("runtime", "legacy"),  # L4-P2：本轮真实产出终稿的引擎（fc/legacy，FC 失败回退后为 legacy）
             })
 
             # P1 飞书/钉钉群机器人通知（按用户推送，默认关；仅 success 时触发；失败吞掉，不阻塞主链路）
