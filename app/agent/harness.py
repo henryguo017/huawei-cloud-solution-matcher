@@ -47,7 +47,7 @@ from app.config import (
     MATCH_LLM_MODEL, SUPPORTED_COMPETITORS, AGENT_TWO_PHASE, AGENT_MULTI_AGENT, AGENT_CONTEXT_WINDOW,
     AGENT_SELF_CHECK, SELF_CHECK_PASS, SELF_CHECK_MAX_ITERS,
     AGENT_REFLEXION_REPLAN, REFLEXION_MAX_REPLANS, AGENT_PARALLEL_TOOLS, MAX_PARALLEL,
-    AGENT_SKILL_PACKS,
+    AGENT_SKILL_PACKS, AGENT_RUNTIME,
 )
 
 logger = logging.getLogger(__name__)
@@ -467,6 +467,150 @@ class AgentHarness:
 
     # 每步子循环内最多允许的 LLM 迭代次数（防单步无限循环）
     _STEP_MAX_ITER = 3
+
+    # ───────────────────── L4-P2：原生 function calling 运行时 ─────────────────────
+
+    async def _run_fc_runtime(
+        self, user_input: str, session_id: str, event_callback, tool_calls_log: list,
+        intent: dict,
+    ) -> Optional[Dict[str, Any]]:
+        """model-in-the-loop 执行引擎：让模型通过原生 tool_calls 自选工具、自决终止。
+
+        返回：成功 → 与 `_make_result` 同构的 result；无法产出终稿 → None（上层回退 legacy）。
+
+        宿主职责边界（对齐架构文档 §1.1，绝不替模型做任务决策）：
+          ① 能力供给：全量工具 schema + `update_plan` 一次性下发，不按步切分；
+          ② 安全与预算：权限闸门复用 `_gate_tool`；轮次/预算/时长由 RunGuards 硬熔断；
+          ③ 上下文管理：system 装配 + 窗口压缩（均在 runtime 内实现）；
+          ④ 非委托计算：金额仍由程序化成本表产出（工具层保证，不在本层）；
+          ⑤ 交付质量门：完成态核验（verify）+ 自检 Gate（**降级为仅告警不重写**）。
+        """
+        from app.agent.runtime import run_loop
+        from app.agent.runtime import events as ev
+
+        self._format_mode = "competitor" if self._intent == "competitor" else "solution"
+        # 运行时状态复位（Agent 是进程级单例，上一轮残留会污染本轮指标与记忆注入判定）
+        self._consecutive_tool_failures = 0
+        self._reflexion_count = 0
+        self._reflexion_success = False
+        self._quality_warn = False
+        self._last_replanned = False
+        self._last_trajectory = ""
+        self._plan = []
+        self._plan_status = []
+
+        blocks: list = []
+
+        # ① 长程记忆 + 用户画像（仅首轮注入一次，与 legacy 同口径）
+        if not getattr(self, "_memory_context_injected", False):
+            try:
+                uid = self._user_id if isinstance(self._user_id, int) and self._user_id > 0 else None
+                if uid:
+                    from app.agent.memory_profiles import build_memory_context, build_profile_context
+                    mem_block = build_memory_context(uid, user_input, client_id=getattr(self, "_client_id", None))
+                    profile_block = build_profile_context(uid)
+                    if mem_block:
+                        blocks.append(mem_block)
+                    if profile_block:
+                        blocks.append(profile_block)
+                self._memory_context_injected = True
+            except Exception as e:  # noqa: BLE001 - 记忆注入失败不阻断任务
+                self._log("warn", f"[FC] 长程记忆注入失败（忽略）: {e}")
+                self._memory_context_injected = True
+
+        # ② 技能包（行业包 + 能力包，两维度正交可叠加；只注入提示词，不改工具集）
+        if (AGENT_SKILL_PACKS or "0").strip() == "1":
+            try:
+                from app.agent.skill_packs import match_pack, match_capability, pack_synthesize_block
+                _pack = match_pack(intent.get("industries") or [])
+                if _pack:
+                    self._active_pack = _pack
+                    await ev.emit_skill_pack(self, event_callback, _pack)
+                    self._log("system", f"[FC][SKILL_PACK] 行业包 {_pack.get('industry')} (v{_pack.get('version', 'n/a')})")
+                    blk = pack_synthesize_block(_pack)
+                    if blk:
+                        blocks.append(blk)
+                _cap = match_capability(self._intent, user_input)
+                if _cap:
+                    self._active_capability = _cap
+                    await ev.emit_skill_pack(self, event_callback, _cap, kind="capability")
+                    self._log("system", f"[FC][SKILL_PACK] 能力包 {_cap.get('industry')} (v{_cap.get('version', 'n/a')})")
+                    blk = pack_synthesize_block(_cap)
+                    if blk:
+                        blocks.append(blk)
+            except Exception as _pe:  # noqa: BLE001
+                self._log("warn", f"[FC] 技能包挂载失败（忽略）: {_pe}")
+
+        # ③ 客户上下文 / 文档附件块（路由注入，按需采用）
+        if self._client_context:
+            blocks.append(
+                "【客户上下文（可能与本次需求相关，按需采用，勿强行套用）】\n"
+                + str(self._client_context).strip()[:4000]
+            )
+
+        # ④ 进入 model-in-the-loop 主循环
+        loop_res = await run_loop(
+            harness=self,
+            user_input=user_input,
+            session_id=session_id,
+            event_callback=event_callback,
+            tool_calls_log=tool_calls_log,
+            extra_blocks=blocks,
+            model=getattr(self, "_run_model", None),
+        )
+        if loop_res is None:
+            return None
+
+        draft = (loop_res.get("final") or "").strip()
+        if not draft:
+            self._log("warn", "[FC] 运行时返回空终稿 → 回退 legacy")
+            return None
+
+        # ⑤ 交付质量门：自检 Gate **降级为仅告警不重写**（决策 D1-B：终稿归模型所有，
+        #    宿主不得二次合成把控制权收回代码）。完成态核验已在 runtime 内完成。
+        try:
+            draft, _qw = await self._self_check_gate(
+                draft, user_input, event_callback, tool_calls_log, warn_only=True,
+            )
+        except Exception as _sce:  # noqa: BLE001 - 自检永不阻断
+            self._log("warn", f"[FC] 自检 Gate 异常（忽略）: {_sce}")
+
+        # ⑥ 终稿缓存 + 流式交付（分片推送的是模型**已产出的正文**，不是重新生成）
+        self._last_draft = draft
+        try:
+            self.memory.add_agent_response(session_id, draft)
+        except Exception:  # noqa: BLE001
+            pass
+        await ev.emit_delta_chunks(self, event_callback, draft)
+
+        # ⑦ 待导出文档：终稿产出后由宿主落文件（导出模板是产品要求，与内容自主不冲突）
+        _pend = loop_res.get("pending_export")
+        if _pend:
+            try:
+                await self._intercept_generate_doc(_pend, event_callback)
+            except Exception as _de:  # noqa: BLE001 - 导出失败不阻断终稿交付
+                self._log("warn", f"[FC] 导出文档失败（忽略）: {_de}")
+
+        # ⑧ 学习闭环：情景记忆落库（best-effort，后台线程）
+        self._maybe_save_episode(
+            session_id, user_input, draft, success=1,
+            plan=self._plan, tool_calls_log=tool_calls_log,
+        )
+
+        # ⑨ final 事件 + 结果组装
+        self._step_count = int(loop_res.get("turns") or self._step_count)
+        await ev.emit_final(self, event_callback, self._step_count, time.time() - self._start_time)
+        _g = loop_res.get("guards") or {}
+        self._log(
+            "system",
+            f"[FC] 交付完成 轮次={_g.get('turns')} 终止={_g.get('stopped_by')} "
+            f"压缩={(loop_res.get('trace') or {}).get('compactions', 0)}",
+        )
+        return self._make_result(
+            draft, tool_calls_log, success=True,
+            plan=self._plan, plan_status=self._plan_status,
+            format_mode=self._format_mode,
+        )
 
     async def _plan_and_execute(
         self, user_input: str, intent: str,
@@ -975,6 +1119,7 @@ class AgentHarness:
         intent_text: Optional[str] = None,
         images_meta: Optional[list] = None,
         autonomy: Optional[str] = None,
+        runtime: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         运行 ReAct 循环
@@ -1022,6 +1167,12 @@ class AgentHarness:
         self._active_capability = None
         # L4-P1/T1.4：自主模式标记（high=跳过意图路由与确定性强制步；默认 standard）
         self._autonomy = (autonomy or "standard").strip() if isinstance(autonomy, str) else "standard"
+        # L4-P2：执行引擎选择（"fc"=原生 function calling 运行时 / "legacy"=老两阶段文本管线）。
+        # 端点隔离铁律：经典模式端点显式传 runtime="legacy"，不受服务端 AGENT_RUNTIME 默认值影响。
+        _rt = (runtime or "").strip().lower()
+        if _rt not in ("fc", "legacy"):
+            _rt = (AGENT_RUNTIME or "legacy").strip().lower()
+        self._runtime = _rt if _rt in ("fc", "legacy") else "legacy"
         # L4-P1/T2.1：反思重规划计数复位（_maybe_save_episode 用作质量信号；
         # 此前只有 +=1 无初始化，首轮保存会 AttributeError 静默失败）
         self._replan_count = 0
@@ -1091,6 +1242,55 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             reset_web_search_budget()
 
             tools_desc = self.tools.get_tools_prompt()
+
+            # ── L4-P2：原生 function calling 运行时（model-in-the-loop）──
+            # 与 legacy 的根本区别：**控制流 / 工具选择 / 失败恢复 / 计划全部归模型**，
+            # 宿主只做能力供给、权限闸门、预算熔断、上下文管理、非委托计算与交付门
+            # （详见 docs/agent-architecture-fc-2026-09-11.md §1.1）。
+            #
+            # 端点隔离铁律：只有 Agent 工作区端点可能进入本分支（runtime 由请求参数或
+            # AGENT_RUNTIME 默认值决定）；经典模式端点显式传 runtime="legacy"，零影响。
+            #
+            # 双闸门：runtime=fc（引擎可用）且 autonomy=high（用户要自主）。
+            # autonomy 开关因此同时充当 FC ↔ 标准流水线的回滚闸
+            # （架构文档 §7 回滚方式二：前端 ⚡ 关闭 → 立即回到今天的两阶段管线）。
+            #
+            # 失败协议：运行时未产出终稿（LLM 异常 / 收口失败）→ 落回下方 legacy 标准流水线，
+            # 与 autonomy=high 同构的两段式兜底，产品价值不归零。
+            if self._runtime == "fc" and self._autonomy != "high":
+                self._log("system", "[FC] runtime=fc 但自主开关关闭 → 走 legacy 标准流水线")
+                self._runtime = "legacy"   # 归一化为真实引擎：result.runtime / plan 事件须如实反映
+            if self._runtime == "fc":
+                _fc_intent = classify_intent(intent_text or user_input)
+                _fc_kind = _fc_intent.get("intent", "solution")
+                if _fc_kind in ("solution", "competitor"):
+                    self._intent = _fc_kind
+                    self._format_mode = "competitor" if _fc_kind == "competitor" else "solution"
+                    self._log("system", f"[FC] 原生运行时接管 intent={_fc_kind}")
+                    await self._emit(event_callback, {
+                        "type": "thought", "step": 0,
+                        "text": "自主引擎已启动（原生工具调用）：由我自行规划与执行，失败会自动回退标准流水线",
+                    })
+                    fc_result = None
+                    try:
+                        fc_result = await self._run_fc_runtime(
+                            user_input, session_id, event_callback, tool_calls_log, _fc_intent,
+                        )
+                    except Exception as _fce:
+                        self._log("error", f"[FC] 运行时异常: {_fce}")
+                        fc_result = None
+                    if fc_result is not None:
+                        return fc_result
+                    self._log("system", "[FC] 未产出终稿 → 回退 legacy 标准流水线")
+                    self._autonomy = "standard"   # 已尝试过自主引擎，直接走标准流水线，避免三层重跑
+                    self._runtime = "legacy"      # 真实产出终稿的是 legacy，result.runtime 必须如实反映
+                    await self._emit(event_callback, {
+                        "type": "thought", "step": 0,
+                        "text": "自主引擎未能完成，已回退标准流水线继续处理",
+                    })
+                else:
+                    self._log("system", f"[FC] 意图={_fc_kind} 非方案诉求 → 走 legacy 自然对话")
+                    self._runtime = "legacy"      # 该轮由 legacy 确定性分支产出，如实归一
 
             # ── L4-P1/T1.4 自主模式（autonomy=high）──
             # 跳过意图路由/轻量直答/确定性强制步，直接自主规划+两阶段执行；
@@ -2889,6 +3089,7 @@ Final Answer: [完整方案]）"""
     # ─────────────────── P3-3：自检 Gate（质量闸门） ───────────────────
     async def _self_check_gate(
         self, answer: str, user_input: str, event_callback=None, tool_calls: list = None,
+        warn_only: bool = False,
     ) -> tuple:
         """P3-3 硬质量闸门：critic LLM 按 rubric 验收终稿（draft 阶段，finalize 之前）。
 
@@ -2896,10 +3097,15 @@ Final Answer: [完整方案]）"""
         「是否调用过某工具/数据是否有据可查」按真实记录判定，消除"工具已调用但正文没提工具名
         就被判未调用"的误判。
 
+        warn_only（L4-P2 决策 D1-B）：FC 运行时下终稿归模型所有，宿主不得二次合成把控制权
+        收回代码。此模式下**只诊断、不改稿**：不通过仅推 self_check 事件 + 置 quality_warn，
+        原稿原样返回。
+
         返回 (answer, quality_warn)：
           - 通过 → 原 answer，quality_warn=False；
           - 不通过且在迭代上限内 → 用 patch_hint 二次合成（不重跑工具、不流式），返回修订稿，quality_warn=False；
           - 达上限仍不过 → 返回最后一次稿，quality_warn=True（不阻断用户，稳定性铁律）。
+          - warn_only=True → 不通过也原样返回，quality_warn=True（绝不重写）。
         异常 → 静默返回原 answer，quality_warn=False（自检永不阻断）。
         """
         self._quality_warn = False
@@ -2963,6 +3169,16 @@ Final Answer: [完整方案]）"""
                 if passed:
                     self._log("system", f"[P3-3 自检] 通过 score={verdict.get('score')}")
                     return current, False
+                # warn_only（FC 运行时）：只诊断不改稿，终稿归属模型（决策 D1-B）
+                if warn_only:
+                    self._quality_warn = True
+                    await self._emit(event_callback, {
+                        "type": "self_check", "gate": "warn", "score": verdict.get("score", 0),
+                        "gaps": verdict.get("gaps", []), "iter": it, "max_iters": SELF_CHECK_MAX_ITERS,
+                        "warn_only": True,
+                    })
+                    self._log("system", f"[P3-3 自检] warn_only 模式：score={verdict.get('score')} 仅告警不重写")
+                    return current, True
                 # 不通过 → 二次合成（非流式、不重跑工具）
                 self._log("system", f"[P3-3 自检] 第{it}次未过 score={verdict.get('score')}，二次合成")
                 hint = verdict.get("patch_hint", "") or "；".join(verdict.get("gaps", []))
@@ -3706,6 +3922,9 @@ Final Answer: [完整方案]）"""
             "reflexion_success": self._reflexion_success,  # P1-3：反思是否成功注入
             "replanned": getattr(self, "_last_replanned", False),  # P3-1：本次是否触发真重规划
             "quality_warn": getattr(self, "_quality_warn", False),  # P3-3：自检 Gate 达上限仍不过时标记
+            # L4-P2：本次实际产出终稿的引擎（legacy=两阶段文本管线 / fc=原生 function calling 运行时）。
+            # 用途：S4 对照评估、线上灰度观测、排障时判断是否发生了 FC→legacy 回退。
+            "runtime": getattr(self, "_runtime", "legacy"),
         }
 
     # ---- 日志 ----

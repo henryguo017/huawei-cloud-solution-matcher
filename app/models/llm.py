@@ -52,6 +52,26 @@ class LLMProvider(ABC):
         result = await self.chat(prompt, temperature, model)
         yield result
 
+    async def chat_with_tools(
+        self,
+        messages: list,
+        tools: list,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        thinking: Optional[str] = None,
+        tool_choice: str = "auto",
+    ) -> dict:
+        """原生 function calling 单轮调用（默认未实现 → 由具体 provider 覆写）。
+
+        L4-P2 Agent Runtime 的传输底座：模型通过结构化 tool_calls 表达决策，
+        宿主不再从文本里解析工具调用。
+
+        返回统一结构（见 DeepSeekProvider 实现）：
+            {"content": str, "tool_calls": list, "reasoning_content": str,
+             "finish_reason": str, "usage": dict}
+        """
+        raise NotImplementedError("当前 provider 未实现原生 function calling（chat_with_tools）")
+
     @abstractmethod
     async def test_connection(self) -> bool:
         """测试连接是否正常"""
@@ -143,12 +163,105 @@ class DeepSeekProvider(LLMProvider):
                     except Exception:
                         continue
 
+    async def chat_with_tools(
+        self,
+        messages: list,
+        tools: list,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        thinking: Optional[str] = None,
+        tool_choice: str = "auto",
+    ) -> dict:
+        """原生 function calling 单轮调用（L4-P2 Agent Runtime 的传输底座）。
+
+        - 传入 tools → 模型返回结构化 tool_calls；不传 tools → 退化为普通单轮对话。
+        - thinking 按轮分档（决策轮 enabled / 终稿轮 disabled），None 时走 DEEPSEEK_THINKING；
+          实测依据：thinking=tools 兼容（flash 44 reasoning tokens / 1.7s），
+          但"无 tools + thinking"生成方案要 31s / 3830 reasoning tokens，故终稿轮必须关。
+        - 4xx（400/422 等）视为请求构造错误 → **不重试**，直接抛给上层定位；
+          5xx / 429 / 网络异常 → 重试（沿用 MAX_RETRIES / RETRY_INTERVAL）。
+        """
+        temp = temperature if temperature is not None else DEEPSEEK_TEMPERATURE
+        model_name = model or DEEPSEEK_MODEL_NAME
+        think = thinking if thinking in ("enabled", "disabled") else DEEPSEEK_THINKING
+        url = f"{DEEPSEEK_BASE_URL}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        data = {
+            "model": model_name,
+            "messages": messages,
+            "temperature": temp,
+            "thinking": {"type": think},
+            "max_tokens": LLM_MAX_TOKENS,
+        }
+        if tools:
+            data["tools"] = tools
+            data["tool_choice"] = tool_choice or "auto"
+
+        async def _request() -> dict:
+            async with _http_client_cm() as client:
+                response = await client.post(url, headers=headers, json=data)
+                if response.status_code >= 400 and response.status_code < 500 and response.status_code != 429:
+                    # 请求侧错误不重试，但把响应正文带出来便于定位（脱敏：只截断）
+                    raise RuntimeError(
+                        f"DeepSeek chat_with_tools HTTP {response.status_code}: {response.text[:500]}"
+                    )
+                response.raise_for_status()
+                payload = response.json()
+                choice = (payload.get("choices") or [{}])[0]
+                msg = choice.get("message") or {}
+                return {
+                    "content": msg.get("content") or "",
+                    "tool_calls": _normalize_tool_calls(msg.get("tool_calls")),
+                    "reasoning_content": msg.get("reasoning_content") or "",
+                    "finish_reason": choice.get("finish_reason") or "",
+                    "usage": payload.get("usage") or {},
+                }
+
+        return await self._retry_request(_request)
+
     async def test_connection(self) -> bool:
         try:
             await self.chat("你好", temperature=0.1)
             return True
         except:
             return False
+
+
+def _normalize_tool_calls(raw: list) -> list:
+    """把 provider 返回的 tool_calls 规范化为统一结构，供运行时无差别消费。
+
+    OpenAI / DeepSeek 均为 {"id","type":"function","function":{"name","arguments"(str)}}。
+    这里只做「字段兜底 + 形状校验」，不做语义改写；arguments 保持**字符串**形态，
+    由运行时负责 json.loads（失败时按结构化错误回填给模型，而非抛异常）。
+    """
+    out = []
+    for i, tc in enumerate(raw or []):
+        if not isinstance(tc, dict):
+            continue
+        fn = tc.get("function") or {}
+        if not isinstance(fn, dict):
+            fn = {}
+        name = fn.get("name") or ""
+        if not name:
+            continue
+        args = fn.get("arguments")
+        if args is None:
+            args = "{}"
+        elif not isinstance(args, str):
+            # 少数实现会直接给 dict → 统一回字符串，保持下游单一形态
+            try:
+                args = json.dumps(args, ensure_ascii=False)
+            except Exception:
+                args = "{}"
+        out.append({
+            "id": tc.get("id") or f"call_{i}",
+            "type": "function",
+            "function": {"name": name, "arguments": args},
+        })
+    return out
 
 
 class AliyunProvider(LLMProvider):
@@ -320,6 +433,28 @@ async def get_llm_response_stream(prompt: str = "你好", provider: str = None, 
     provider_instance = LLMFactory.create(provider)
     async for token in provider_instance.chat_stream(prompt, model=model):
         yield token
+
+
+async def get_llm_with_tools(
+    messages: list,
+    tools: list,
+    provider: str = None,
+    model: Optional[str] = None,
+    temperature: Optional[float] = None,
+    thinking: Optional[str] = None,
+    tool_choice: str = "auto",
+) -> dict:
+    """原生 function calling 单轮调用（L4-P2 Agent Runtime 用）。
+
+    与 get_llm_response 并列的**传输层**入口：只负责一次 request/response，
+    不含任何循环、重试策略（除 provider 内建重试）或任务决策。
+    返回 {"content","tool_calls","reasoning_content","finish_reason","usage"}。
+    """
+    provider_instance = LLMFactory.create(provider)
+    return await provider_instance.chat_with_tools(
+        messages, tools, model=model, temperature=temperature,
+        thinking=thinking, tool_choice=tool_choice,
+    )
 
 
 async def test_llm_connection(provider: str = None) -> bool:

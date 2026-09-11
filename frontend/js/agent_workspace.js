@@ -22,6 +22,10 @@
 
     var ROOT_ID = 'workspace-solution';
     var AGENT_ENDPOINT = '/api/agent/chat';
+    /* L4-P2 执行引擎：'fc'=原生 function calling 运行时（模型自选工具/自决终止）／'legacy'=老两阶段文本管线。
+       Agent 工作区默认走 fc；失败时后端自动回退 legacy，产品价值不归零。
+       经典模式（script.js）不经过本文件，由后端端点显式锁定 legacy，互不影响。 */
+    var AGENT_RUNTIME_ENGINE = 'fc';
     var STORE_KEY = 'agent_convos_v1';
     var DRAWER_BREAKPOINT = 1400;
     var MAX_INPUT = 2000;
@@ -224,6 +228,7 @@
         selectedClient: null,          // 方案 B：当前客户上下文 {id, name, industry}
         clients: [],                   // /clients 缓存
         webSearchDisabled: true,       // #6 联网搜索开关（默认关闭省额度/保知识库纯度，持久化到 localStorage）
+        autonomyHigh: true,            // L4-P2：自主引擎开关（默认开=原生 function calling 运行时 true-agent；关=标准流水线）
         toolPermissions: {},          // #3 工具权限策略 {tool: "allow"|"ask"|"deny"}（持久化到 localStorage）
         _permModalOpen: false,        // #3 权限确认弹窗是否打开（防止重复弹）
         capOpen: true,                 // 能力面板是否展开（默认展开，进入 Agent 模式即展开能力入口）
@@ -396,10 +401,10 @@
                                     '<span class="ws-tool-btn-label">联网</span>' +
                                     '<span class="ws-tool-badge">ON</span>' +
                                 '</button>' +
-                                '<button class="ws-tool-btn" id="ws-autonomy-toggle" type="button" title="自主模式：跳过固定流程，由 Agent 全自主规划执行（失败自动回退标准流水线）" aria-label="自主模式开关">' +
+                                '<button class="ws-tool-btn" id="ws-autonomy-toggle" type="button" title="自主引擎：模型原生工具调用、自选工具、自决终止（关闭则走标准流水线）" aria-label="自主引擎开关">' +
                                     '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-zap"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">自主</span>' +
-                                    '<span class="ws-tool-badge">OFF</span>' +
+                                    '<span class="ws-tool-badge">ON</span>' +
                                 '</button>' +
                                 '<button class="ws-tool-btn" id="ws-perm-settings" type="button" title="工具权限设置" aria-label="工具权限设置">' +
                                     '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-lock"></use></svg></span>' +
@@ -630,8 +635,8 @@
                     self._applyAutonomyUI();
                     self._saveToolbarPrefs();
                     self._toast(self.autonomyHigh
-                        ? '自主模式已开启：Agent 将跳过固定流程全自主规划执行'
-                        : '自主模式已关闭：恢复标准流程', self.autonomyHigh ? 'success' : 'info');
+                        ? '自主引擎已开启：Agent 原生工具调用，自选工具、自决终止'
+                        : '自主引擎已关闭：回退标准流水线（固定流程）', self.autonomyHigh ? 'success' : 'info');
                 });
             }
             if (this.els.permSettingsBtn) {
@@ -1737,11 +1742,14 @@
             }
         },
         /* P0 Plan 面板：渲染执行计划（Devin 式，执行前展示"它打算怎么做"） */
-        _renderPlan: function (shell, steps, statusList) {
+        _renderPlan: function (shell, steps, statusList, runtime) {
             if (!shell || !shell.plan || !shell.planList) return;
             var list = Array.isArray(steps) ? steps : [];
             if (!list.length) return;
             var status = Array.isArray(statusList) ? statusList : [];
+            /* L4-P2：FC 引擎的计划由模型自由维护，无“步 ↔ 工具/步结果”绑定，
+               "重跑本步"依赖 legacy 的 _step_results，故 FC 下不提供该按钮 */
+            var canRerun = (runtime !== 'fc');
             var self = this;
             shell.planList.innerHTML = '';
             list.forEach(function (s, i) {
@@ -1751,7 +1759,7 @@
                 item.setAttribute('data-index', String(i));
                 item.innerHTML = '<span class="ws-plan-check"></span>' +
                     '<span class="ws-plan-text">' + escHtml(String(s)) + '</span>' +
-                    '<button type="button" class="ws-plan-rerun" title="重跑本步" data-index="' + i + '">↻ 重跑</button>';
+                    (canRerun ? '<button type="button" class="ws-plan-rerun" title="重跑本步" data-index="' + i + '">↻ 重跑</button>' : '');
                 shell.planList.appendChild(item);
             });
             // P2-D5：Plan 单步重跑（点击行内"重跑"按钮 → 复用 SSE 通道发 rerun_plan_index）
@@ -1971,7 +1979,8 @@
                 var t = ev.type;
                 if (t === 'plan') {
                     // P1-1 Plan 面板：渲染执行计划（带初始 plan_status：pending/running/done），随思考面板折叠/展开
-                    self._renderPlan(shell, ev.steps || [], ev.plan_status || []);
+                    // L4-P2：ev.runtime==='fc' 时隐藏"重跑本步"（该功能依赖 legacy 的步结果绑定）
+                    self._renderPlan(shell, ev.steps || [], ev.plan_status || [], ev.runtime);
                 } else if (t === 'agent_phase') {
                     // P2-1-B：多智能体阶段徽标（需求分析师→方案架构师→质量校验官）
                     self._appendThinkingStep('进入阶段：' + (ev.label || ev.phase || '执行'), 'phase');
@@ -2140,6 +2149,7 @@
                     tool_permissions: self.toolPermissions || {},
                     disable_web_search: !!self.webSearchDisabled,
                     autonomy: self.autonomyHigh ? 'high' : 'standard',
+                    runtime: AGENT_RUNTIME_ENGINE,  // L4-P2：执行引擎（fc=原生工具调用运行时）
                     images: (self._outgoingImages && self._outgoingImages.length) ? self._outgoingImages : null,
                     image_meta: (self._outgoingImageMeta && self._outgoingImageMeta.length) ? self._outgoingImageMeta : null,
                     customer_files: (self.pendingDocs && self.pendingDocs.length) ? self.pendingDocs.map(function (p) { return p.path; }) : null
@@ -2389,22 +2399,26 @@
         },
         /* ===== 工具栏能力方法（#1/#2/#6/#3） ===== */
         _loadToolbarPrefs: function () {
+            // 默认值（先于 localStorage 覆盖生效）：L4-P2 自主引擎默认开
+            this.autonomyHigh = true;
             try {
-                // v2：联网搜索默认翻转为关闭（2026-09-07），升键名让老用户的一次性拿到新默认
-                var raw = localStorage.getItem('hwcloud_agent_toolbar_v2');
+                // v3（2026-09-11）：自主引擎（原生 function calling）默认翻转为开，
+                // 升键名让老用户一次性拿到新默认；开关同时充当 FC ↔ 标准流水线的回滚闸
+                // （架构文档 §7 回滚方式二：前端 ⚡ 关闭）。
+                var raw = localStorage.getItem('hwcloud_agent_toolbar_v3');
                 if (raw) {
                     var d = JSON.parse(raw);
                     if (d && typeof d === 'object') {
                         this.webSearchDisabled = !!d.webSearchDisabled;
                         this.toolPermissions = (d.toolPermissions && typeof d.toolPermissions === 'object') ? d.toolPermissions : {};
-                        this.autonomyHigh = !!d.autonomyHigh;  // L4-P1/T1.4：自主模式偏好（默认关）
+                        this.autonomyHigh = (typeof d.autonomyHigh === 'boolean') ? d.autonomyHigh : true;
                     }
                 }
             } catch (e) { /* ignore */ }
         },
         _saveToolbarPrefs: function () {
             try {
-                localStorage.setItem('hwcloud_agent_toolbar_v2', JSON.stringify({
+                localStorage.setItem('hwcloud_agent_toolbar_v3', JSON.stringify({
                     webSearchDisabled: !!this.webSearchDisabled,
                     toolPermissions: this.toolPermissions || {},
                     autonomyHigh: !!this.autonomyHigh
@@ -2422,14 +2436,16 @@
             var badge = btn.querySelector('.ws-tool-badge');
             if (badge) badge.textContent = 'ON';
         },
-        /* L4-P1/T1.4：自主模式开关 UI（active 态 + ON/OFF 徽章） */
+        /* L4-P2：自主引擎开关 UI（active 态 + ON/OFF 徽章）。
+           语义：ON=原生 function calling 运行时（模型自选工具/自决终止）；OFF=标准流水线。
+           同时充当生产回滚闸（架构文档 §7 回滚方式二）。 */
         _applyAutonomyUI: function () {
             var btn = this.els.autonomyToggleBtn;
             if (!btn) return;
             btn.classList.toggle('active', !!this.autonomyHigh);
             btn.title = this.autonomyHigh
-                ? '自主模式（已开启：Agent 全自主规划执行，点击关闭）'
-                : '自主模式：跳过固定流程，由 Agent 全自主规划执行（失败自动回退标准流水线）';
+                ? '自主引擎（已开启：模型原生工具调用、自选工具、自决终止；点击关闭回退标准流水线）'
+                : '自主引擎已关闭：走标准流水线（点击开启原生工具调用运行时）';
             var badge = btn.querySelector('.ws-tool-badge');
             if (badge) badge.textContent = this.autonomyHigh ? 'ON' : 'OFF';
         },

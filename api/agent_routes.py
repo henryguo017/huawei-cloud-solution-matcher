@@ -145,6 +145,7 @@ class AgentChatRequest(BaseModel):
     image_meta: Optional[List[dict]] = None  # 2026-09-09 图片元数据 [{path,name}]：随消息落库，跨设备恢复历史徽标
     customer_files: Optional[List[str]] = None  # 2026-09-09 文档附件：customer_uploads 内的相对路径，≤5 个，随对话每轮携带
     autonomy: Optional[str] = None  # L4-P1/T1.4：自主模式开关（"high"=跳过固定路由纯自主规划，失败自动回退 standard）
+    runtime: Optional[str] = None   # L4-P2：执行引擎（"fc"=原生 function calling 运行时 / "legacy"=老两阶段文本管线）；None 走服务端 AGENT_RUNTIME 默认
 
 
 @router.get("/agent/tools", tags=["Agent 工具发现"])
@@ -358,6 +359,7 @@ async def agent_chat(
                         intent_text=message,  # 意图分类只看用户原话，不看不带图片描述的增强文本（2026-09-09）
                         images_meta=body.image_meta,  # 图片元数据随用户消息落库（跨设备同步 2026-09-09）
                         autonomy=(body.autonomy if body.autonomy in ("standard", "high") else None),  # L4-P1/T1.4
+                        runtime=(body.runtime if body.runtime in ("fc", "legacy") else None),  # L4-P2：引擎选择（None→AGENT_RUNTIME）
                     ),
                     timeout=480.0,
                 )
@@ -1018,6 +1020,7 @@ async def agent_match_solution(
             extra_context=extra_context,
             user_id=user.get('id') if user else None,
             user_info=user,
+            runtime="legacy",  # L4-P2 端点隔离：经典模式端点显式锁老引擎，不受 AGENT_RUNTIME 默认值影响
         )
 
         # 阶段2：后台异步更新用户画像（best-effort，不阻断主响应）
@@ -1172,6 +1175,7 @@ async def agent_match_stream(
                     event_callback=event_callback,
                     user_id=user.get('id') if user else None,
                     user_info=user,
+                    runtime="legacy",  # L4-P2 端点隔离：经典模式流式端点显式锁老引擎，保证零影响
                 )
 
                 # 阶段2：后台异步更新用户画像（best-effort，不阻断流式响应）
@@ -1281,6 +1285,7 @@ async def agent_clarify(
                     answers=request.answers,
                     user_id=user.get('id') if user else None,
                     user_info=user,
+                    runtime="legacy",  # L4-P2 端点隔离：经典模式澄清续跑显式锁老引擎（与首次请求同引擎）
                 )
 
                 logger.info(f"[Agent Clarify] agent.run 返回 success={result.get('success')} paused={result.get('paused')} expired={result.get('expired')}")

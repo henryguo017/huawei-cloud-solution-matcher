@@ -171,6 +171,42 @@ AGENT_MCP_CLIENT = os.getenv("AGENT_MCP_CLIENT", "0")
 # label 仅允许 [A-Za-z0-9_-]，用于工具名前缀 mcp__<label>__<tool>，避免重名冲突。
 MCP_SERVERS = os.getenv("MCP_SERVERS", "")
 
+# ==================== L4-P2 Agent Runtime：原生 Function Calling 引擎 ====================
+# 背景：原两阶段管线把「调用哪些工具 / 几步 / 何时停」写死在代码里（PLAN_STEP_TOOL_MAP），
+# 属 agentic workflow。本组开关启用 model-in-the-loop 运行时（app/agent/runtime/）：
+# 决策权归模型，宿主只负责能力供给、安全与预算、上下文管理、不可委托计算、交付质量门。
+# 设计文档：docs/agent-architecture-fc-2026-09-11.md
+#
+# AGENT_RUNTIME：服务端默认引擎（"fc"=原生运行时 / "legacy"=老两阶段文本管线）。
+#   默认 legacy —— 任何未显式声明 runtime 的调用方（如经典模式 /agent/match*）行为与今天完全一致。
+#   Agent 工作台（/agent/chat）由前端显式下发 runtime 覆盖，故翻此默认值不会波及经典模式。
+AGENT_RUNTIME = os.getenv("AGENT_RUNTIME", "legacy")
+
+# 运行时守卫（guards）：只做硬边界保护，不替模型做任务决策。
+AGENT_MAX_TURNS = int(os.getenv("AGENT_MAX_TURNS", "16"))          # 模型轮次硬上限（熔断）
+AGENT_TOKEN_BUDGET = int(os.getenv("AGENT_TOKEN_BUDGET", "60000"))  # 本任务累计 token 预算
+AGENT_WALL_BUDGET = int(os.getenv("AGENT_WALL_BUDGET", "420"))      # 本任务墙钟预算（秒）
+AGENT_ADVISORY_AT = float(os.getenv("AGENT_ADVISORY_AT", "0.8"))    # 预算消耗达此比例 → 注入"请收口"提示（仍由模型决策）
+
+# thinking 按轮分档（实测依据 .workbuddy/Temp/fc_thinking_probe.py）：
+#   决策轮开 thinking → 拿到 reasoning_content 作为真实推理上屏（flash 44 tokens/1.7s）；
+#   终稿轮必须关 —— 无 tools + thinking 生成方案实测 31.0s / 3830 reasoning tokens。
+AGENT_THINKING_DECISION = os.getenv("AGENT_THINKING_DECISION", "enabled")
+AGENT_THINKING_FINAL = os.getenv("AGENT_THINKING_FINAL", "disabled")
+
+# AGENT_PARALLEL_READONLY=1：模型一次响应返回多个「只读」tool_calls 时用 asyncio.gather 并发执行
+# （实测模型天然并行发起；仅只读工具放行，高风险工具一律串行以逐个走权限弹窗）。
+AGENT_PARALLEL_READONLY = os.getenv("AGENT_PARALLEL_READONLY", "1")
+
+# AGENT_COMPACT_AT：messages 估算 token 占窗口比例达此值 → 触发上下文压缩（早期轮次摘要化）。
+# FC 循环 messages 会持续增长，老管线不需要、新运行时必须解决。
+AGENT_COMPACT_AT = float(os.getenv("AGENT_COMPACT_AT", "0.75"))
+AGENT_COMPACT_KEEP_TURNS = int(os.getenv("AGENT_COMPACT_KEEP_TURNS", "3"))  # 压缩时保留最近 N 轮原文
+
+# AGENT_FINAL_OWNED_BY：终稿归属。model=模型最终消息即终稿，宿主只做来源标注后处理 + 完成态核验
+# （不重写，避免把控制权收回代码）；pipeline=沿用统一增强管线重写（旧行为，可一键切回）。
+AGENT_FINAL_OWNED_BY = os.getenv("AGENT_FINAL_OWNED_BY", "model")
+
 # ==================== P1 飞书/钉钉群机器人通知（默认关） =================
 # 群自定义机器人 webhook + 加签 secret。留空 "" 表示关闭该平台推送（零副作用）。
 # 飞书：webhook 形如 https://open.feishu.cn/open-apis/bot/v2/hook/xxxx；secret 为安全设置里的签名校验密钥。
