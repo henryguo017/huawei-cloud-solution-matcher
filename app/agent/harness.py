@@ -498,6 +498,7 @@ class AgentHarness:
         self._last_trajectory = ""
         self._plan = []
         self._plan_status = []
+        self._plan_update_count = 0   # L4-P2：update_plan 调用次数（A9 计划自治度）
 
         blocks: list = []
 
@@ -606,6 +607,16 @@ class AgentHarness:
             f"[FC] 交付完成 轮次={_g.get('turns')} 终止={_g.get('stopped_by')} "
             f"压缩={(loop_res.get('trace') or {}).get('compactions', 0)}",
         )
+        # L4-P2 运行元数据（S4 评估 A7/A9/A10 的数据源；stop_reason=model 即模型自主终止）
+        self._fc_meta = {
+            "turns": _g.get("turns"),
+            "stopped_by": _g.get("stopped_by"),
+            "compactions": (loop_res.get("trace") or {}).get("compactions", 0),
+            "plan_updates": int(getattr(self, "_plan_update_count", 0) or 0),
+            "plan_steps": len(self._plan or []),
+            "tokens": _g.get("tokens"),
+            "pending_export": loop_res.get("pending_export"),
+        }
         return self._make_result(
             draft, tool_calls_log, success=True,
             plan=self._plan, plan_status=self._plan_status,
@@ -1173,6 +1184,9 @@ class AgentHarness:
         if _rt not in ("fc", "legacy"):
             _rt = (AGENT_RUNTIME or "legacy").strip().lower()
         self._runtime = _rt if _rt in ("fc", "legacy") else "legacy"
+        # L4-P2：FC 运行元数据（轮次/终止原因/压缩次数/计划改写次数），供 S4 评估 A7/A9/A10 与线上观测。
+        # 非 FC 路径保持 None；_make_result 如实透出，避免上一轮残留。
+        self._fc_meta: Optional[dict] = None
         # L4-P1/T2.1：反思重规划计数复位（_maybe_save_episode 用作质量信号；
         # 此前只有 +=1 无初始化，首轮保存会 AttributeError 静默失败）
         self._replan_count = 0
@@ -3925,6 +3939,8 @@ Final Answer: [完整方案]）"""
             # L4-P2：本次实际产出终稿的引擎（legacy=两阶段文本管线 / fc=原生 function calling 运行时）。
             # 用途：S4 对照评估、线上灰度观测、排障时判断是否发生了 FC→legacy 回退。
             "runtime": getattr(self, "_runtime", "legacy"),
+            # L4-P2：FC 运行元数据（轮次/终止原因/压缩次数/计划改写次数）；legacy 路径为 None。
+            "fc_meta": getattr(self, "_fc_meta", None),
         }
 
     # ---- 日志 ----

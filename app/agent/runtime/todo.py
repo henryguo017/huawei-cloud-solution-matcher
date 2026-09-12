@@ -120,6 +120,12 @@ async def handle_update_plan(harness, event_callback, args: Optional[Dict[str, A
 
     harness._plan = steps
     harness._plan_status = list(statuses)
+    # L4-P2 观测：计划改写次数（供 A9 计划自治度评估——>1 证明模型执行中确实改了计划，
+    # 而不是像老管线那样一次铸死）。计数归 _run_fc_runtime 复位。
+    try:
+        harness._plan_update_count = int(getattr(harness, "_plan_update_count", 0) or 0) + 1
+    except (TypeError, ValueError):
+        harness._plan_update_count = 1
     reason = str((args or {}).get("reason") or "").strip()
     await emit_plan(harness, event_callback, steps, statuses, intent=getattr(harness, "_intent", "solution"))
 

@@ -184,7 +184,11 @@ AGENT_RUNTIME = os.getenv("AGENT_RUNTIME", "legacy")
 
 # 运行时守卫（guards）：只做硬边界保护，不替模型做任务决策。
 AGENT_MAX_TURNS = int(os.getenv("AGENT_MAX_TURNS", "16"))          # 模型轮次硬上限（熔断）
-AGENT_TOKEN_BUDGET = int(os.getenv("AGENT_TOKEN_BUDGET", "60000"))  # 本任务累计 token 预算
+# AGENT_TOKEN_BUDGET：本任务**累计** token 预算（FC 循环每轮都要重发完整历史，故累计值随轮次超线性增长）。
+# 标定依据（S4 30 例对照，2026-09-13）：初值 60000 ≈ 一次 5 轮正常检索任务的总成本，
+# 导致 10/22 次运行被宿主提前熔断（A7 自主终止率仅 0.545，是**配置假阴性**而非设计缺陷）。
+# 改为 200000（≈ 典型运行成本的 3 倍），使预算只兜住失控循环，不打断正常任务。
+AGENT_TOKEN_BUDGET = int(os.getenv("AGENT_TOKEN_BUDGET", "200000"))
 AGENT_WALL_BUDGET = int(os.getenv("AGENT_WALL_BUDGET", "420"))      # 本任务墙钟预算（秒）
 AGENT_ADVISORY_AT = float(os.getenv("AGENT_ADVISORY_AT", "0.8"))    # 预算消耗达此比例 → 注入"请收口"提示（仍由模型决策）
 
