@@ -458,3 +458,44 @@ async def shutdown_all() -> None:
 
 def get_registered_names() -> List[str]:
     return list(_REGISTERED_NAMES)
+
+
+# ---------- L4-P3-4 按需挂载（mcp_on_demand 用） ----------
+
+def get_clients_by_label(label: str) -> List["MCPClient"]:
+    """取指定命名空间的存活 client（stdio/HTTP 一律按 label 匹配）。"""
+    return [c for c in _CLIENTS if getattr(c, "label", "") == label]
+
+
+async def close_clients_by_label(label: str) -> int:
+    """关闭并移除指定命名空间的 client（卸载远端工具后回收进程/会话）。返回关闭数。"""
+    targets = get_clients_by_label(label)
+    for c in targets:
+        await c.close()
+        try:
+            _CLIENTS.remove(c)
+        except ValueError:
+            pass
+    if targets:
+        logger.info("[MCP] 已关闭 Server「%s」的 %d 个 client", label, len(targets))
+    return len(targets)
+
+
+def registered_labels() -> List[str]:
+    """从已注册工具名集合推导已挂载的 label 集合（mcp__<label>__<tool>）。"""
+    out: List[str] = []
+    for n in _REGISTERED_NAMES:
+        if n.startswith("mcp__") and "__" in n[5:]:
+            label = n[5:].split("__", 1)[0]
+            if label not in out:
+                out.append(label)
+    return out
+
+
+def drop_registered_names_by_label(label: str) -> int:
+    """从注册名清单里移除某 label 的所有条目（registry 工具由调用方移除）。"""
+    prefix = f"mcp__{label}__"
+    keep = [n for n in _REGISTERED_NAMES if not n.startswith(prefix)]
+    removed = len(_REGISTERED_NAMES) - len(keep)
+    _REGISTERED_NAMES[:] = keep
+    return removed

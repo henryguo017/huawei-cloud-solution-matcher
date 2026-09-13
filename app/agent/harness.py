@@ -47,7 +47,7 @@ from app.config import (
     MATCH_LLM_MODEL, SUPPORTED_COMPETITORS, AGENT_TWO_PHASE, AGENT_MULTI_AGENT, AGENT_CONTEXT_WINDOW,
     AGENT_SELF_CHECK, SELF_CHECK_PASS, SELF_CHECK_MAX_ITERS,
     AGENT_REFLEXION_REPLAN, REFLEXION_MAX_REPLANS, AGENT_PARALLEL_TOOLS, MAX_PARALLEL,
-    AGENT_SKILL_PACKS, AGENT_RUNTIME,
+    AGENT_SKILL_PACKS, AGENT_RUNTIME, AGENT_AUTO_TOOLS,
 )
 
 logger = logging.getLogger(__name__)
@@ -1240,6 +1240,26 @@ class AgentHarness:
                 self.tools.remove(_dn)
         except Exception:
             pass
+        # L4-P3-1：AGENT_AUTO_TOOLS=1 时加载该用户的持久化自建工具（每条重新过静态检查）
+        if (AGENT_AUTO_TOOLS or "0").strip() == "1" and isinstance(user_id, int) and user_id > 0:
+            try:
+                from app.agent.auto_tools import autoload_user_tools
+                autoload_user_tools(self.tools, user_id)
+            except Exception as _at:  # noqa: BLE001
+                self._log("warn", f"[run] 自建工具加载失败（忽略）: {_at}")
+        # L4-P3-4：回收上一任务按需挂载的 MCP Server（启动期静态挂载的不受影响）
+        try:
+            from app.agent.mcp_on_demand import unload_all_mounted as _unload_mod
+            await _unload_mod(self.tools)
+        except Exception as _um:  # noqa: BLE001
+            self._log("warn", f"[run] 按需 MCP 回收失败（忽略）: {_um}")
+        # L4-P3-3：绑定父引用（spawn_subagent 工具函数经槽取 harness）+ 每任务子体计数复位
+        try:
+            from app.agent import subagents as _sub
+            _sub.parent_slot["harness"] = self
+            _sub.reset_counter()
+        except Exception as _se:  # noqa: BLE001
+            self._log("warn", f"[run] 子体槽绑定失败（忽略）: {_se}")
 
         # P2-D5：Plan 单步重跑 —— 复用上一次的 plan / 各步原参数，重跑指定步并重新汇总
         if rerun_plan_index is not None:
@@ -2560,6 +2580,19 @@ Final Answer: [完整方案]）"""
         # L4 P2-4：自写记忆 —— 写操作弹窗确认（防误记/越权记录），检索只读放行
         "memory_write": "ask",
         "memory_search": "allow",
+        # L4 P3-1：自建工具元工具默认放行——注册动作无副作用（静态检查+沙箱试跑通过才生效，
+        # 执行风险在沙箱层拦截；persist 只写 data/user_tools/ 用户级文件）
+        "create_tool": "allow",
+        # L4 P3-4：按需挂 MCP —— mount 是外联动作必须弹窗确认；查询/卸载只读放行
+        "mcp_list_servers": "allow",
+        "mcp_mount": "ask",
+        "mcp_unmount": "allow",
+        # L4 P3-3：子体派生默认放行——派生动作本身无副作用（子体写操作在子体侧仍逐个过闸门；
+        # 预算/数量/深度三重上限防套娃烧钱）
+        "spawn_subagent": "allow",
+        # L4 P3-2：自建技能 —— 落盘持久文件，必须弹窗确认；删除自建包放行（有 user_ 前缀保护）
+        "save_skill_pack": "ask",
+        "delete_skill_pack": "allow",
     }
 
     async def _gate_tool(self, tool_name: str, tool_input: dict, event_callback=None) -> Optional[str]:

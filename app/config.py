@@ -231,6 +231,27 @@ AGENT_RUN_HARD_TIMEOUT = int(os.getenv("AGENT_RUN_HARD_TIMEOUT", "1800"))
 # 语义：宿主只给信号不决策（换工具/换参数/如实说明缺口由模型自决）。
 AGENT_TOOL_HEAL_STREAK = int(os.getenv("AGENT_TOOL_HEAL_STREAK", "2"))
 
+# AGENT_AUTO_TOOLS=1：开放 create_tool 元工具 —— 模型可写受限 Python 函数体自建 dyn_ 工具
+#（执行一律走 run_python 子进程沙箱，进程内永不执行模型代码；用户级持久化到 data/user_tools/）。
+# 回退：置 0 重启（已持久化工具不再自动加载，dyn_* TTL 照常清除）。
+AGENT_AUTO_TOOLS = os.getenv("AGENT_AUTO_TOOLS", "0")
+
+# AGENT_MCP_ONDEMAND=1：开放 mcp_list_servers / mcp_mount / mcp_unmount —— Agent 运行中
+# 从服务端白名单（MCP_SERVERS env + data/mcp_servers.json）**按需**挂载 MCP Server，
+# 用完卸载（下一任务启动时自动回收）。挂载是 ask 闸门动作；模型不能创建 server。
+AGENT_MCP_ONDEMAND = os.getenv("AGENT_MCP_ONDEMAND", "0")
+
+# AGENT_SUBAGENTS=1：开放 spawn_subagent —— 父体派生独立上下文/预算的真子体（同一个
+# run_loop + 影子 harness；深度=1 禁止套娃；写操作仍走 ask 闸门）。
+# 回退：置 0 重启。
+AGENT_SUBAGENTS = os.getenv("AGENT_SUBAGENTS", "0")
+AGENT_SUBAGENT_MAX = int(os.getenv("AGENT_SUBAGENT_MAX", "4"))   # 单任务累计子体数上限（防套娃烧钱）
+
+# AGENT_AUTO_SKILLS=1：开放 save_skill_pack —— 模型把成功工作流固化为自建能力包
+#（user_ 前缀，永不覆盖预置包；热加载，下一命中任务自动挂载）。
+# 回退：置 0 重启 / 删 data/skill_packs/user_*.json。
+AGENT_AUTO_SKILLS = os.getenv("AGENT_AUTO_SKILLS", "0")
+
 # 计划闭合门（L4-P0，通用底座能力，与行业无关）：
 #   语义：终稿交付前，**模型自己发布的计划**里每一步都必须处于 done 或 skipped(带原因)。
 #   有未闭合项 → 宿主不接收终稿，把未闭合项交回模型自决（补做 / 标 skipped+原因）。

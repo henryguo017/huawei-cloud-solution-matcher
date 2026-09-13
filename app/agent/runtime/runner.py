@@ -124,9 +124,12 @@ async def run_loop(
     tool_calls_log: list,
     extra_blocks: Optional[List[str]] = None,
     model: Optional[str] = None,
+    budget_override: Optional[Dict[str, int]] = None,
 ) -> Optional[Dict[str, Any]]:
     """执行 model-in-the-loop 主循环。
 
+    budget_override（L4-P3-3 子体用）：{"turns_max", "token_budget", "wall_budget"}，
+    键缺省走全局默认。父体不受影响。
     返回：成功 → {"final", "turns", "guards", "trace", "pending_export"}；
           无法产出终稿（LLM 异常等）→ None，由上层回退 legacy 管线。
     """
@@ -136,10 +139,11 @@ async def run_loop(
     # 预算按意图分档（L4-P1）：轻意图窄档控成本，重工具链意图宽档防掐断；未列出的意图取基线宽档。
     _budget_intent = (getattr(harness, "_intent", "") or "").strip()
     _token_budget = AGENT_TOKEN_BUDGET_BY_INTENT.get(_budget_intent, AGENT_TOKEN_BUDGET)
+    _bo = budget_override or {}
     guards = RunGuards(
-        turns_max=AGENT_MAX_TURNS,
-        token_budget=_token_budget,
-        wall_budget=AGENT_WALL_BUDGET,
+        turns_max=int(_bo.get("turns_max", AGENT_MAX_TURNS)),
+        token_budget=int(_bo.get("token_budget", _token_budget)),
+        wall_budget=int(_bo.get("wall_budget", AGENT_WALL_BUDGET)),
         advisory_at=AGENT_ADVISORY_AT,
         start_time=t0,
     )
@@ -554,11 +558,14 @@ async def _execute_calls(
             normal.append({"tc": tc, "name": fn.get("name"), "args": args})
 
     # ③ 并行分流：全部只读且开关开启 → gather；否则串行（高风险工具逐个走权限弹窗）
+    # L4-P3-3：spawn_subagent 也可并行——子体写独立影子实例，不触碰共享可变状态；
+    # 多子体并行正是 A16 编排判据的执行路径。
+    _PARALLEL_OK_EXTRA = {"spawn_subagent"}
     can_parallel = (
         (AGENT_PARALLEL_READONLY or "1").strip() == "1"
         and len(normal) >= 2
         and len(normal) <= MAX_PARALLEL
-        and all(is_readonly(item["name"]) for item in normal)
+        and all(is_readonly(item["name"]) or item["name"] in _PARALLEL_OK_EXTRA for item in normal)
     )
     if can_parallel:
         harness._log("system", f"[FC] 并发执行 {len(normal)} 个只读工具")

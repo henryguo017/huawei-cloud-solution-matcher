@@ -804,4 +804,163 @@ def create_default_tools() -> ToolRegistry:
         func=_tool_memory_search,
     ))
 
+    # 12. create_tool — 自建工具元工具（L4-P3-1，AGENT_AUTO_TOOLS=1 才开放）
+    #     语义：模型写受限 Python 函数体造新工具；执行一律走子进程沙箱（进程内零执行），
+    #     注册时静态检查 + 试跑验证；用户级持久化，后续任务自动加载。
+    from app.config import AGENT_AUTO_TOOLS
+    if (AGENT_AUTO_TOOLS or "0").strip() == "1":
+        from app.agent.auto_tools import make_create_tool_func
+
+        async def _tool_create_tool_wrapper(**kwargs) -> str:
+            from app.agent.agent_notes import get_run_context as _grc
+            uid = (kwargs.pop("user_id", None) or _grc()["user_id"])
+            fn = make_create_tool_func(registry, user_id=uid)
+            return await fn(**kwargs)
+
+        registry.register(Tool(
+            name="create_tool",
+            description="（自建工具）把一段受限 Python 函数体注册为可复用工具（仅限纯计算/文本处理："
+                        "无网络、无文件读写、≤5 秒，白名单标准库）。函数体必须在顶层定义 "
+                        "def run(params): 并 return 可 JSON 序列化的结果；注册前会用样例参数试跑验证，"
+                        "通过后本任务即可调用，并持久化为用户级工具供后续任务复用。"
+                        "适合：固定的换算/试算/格式化逻辑（如 TCO 公式、单位换算、字段抽取）。",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "工具名，dyn_ 前缀，如 dyn_tco_calc"},
+                    "description": {"type": "string", "description": "工具用途说明（3-500 字）"},
+                    "params": {"type": "object", "description": "{参数名: 说明}，调用时按名传入（全部字符串）"},
+                    "body": {"type": "string", "description": "Python 函数体（顶层 def run(params): ... return 结果）"},
+                    "sample_params": {"type": "object", "description": "试跑用的样例参数（推荐提供）"},
+                    "persist": {"type": "boolean", "description": "是否持久化为用户级工具，默认 true"},
+                },
+                "required": ["name", "description", "params", "body"],
+            },
+            func=_tool_create_tool_wrapper,
+        ))
+
+    # 13. mcp_list_servers / mcp_mount / mcp_unmount — 按需挂 MCP（L4-P3-4，AGENT_MCP_ONDEMAND=1 才开放）
+    #     语义：从服务端白名单按需挂载/卸载 MCP Server（模型不能创建 server）；mount 为 ask 闸门动作。
+    from app.config import AGENT_MCP_ONDEMAND
+    if (AGENT_MCP_ONDEMAND or "0").strip() == "1":
+        from app.agent import mcp_on_demand as _mod
+
+        async def _tool_mcp_list_servers() -> str:
+            return _mod.fmt_servers_json(_mod.list_servers_state(registry))
+
+        async def _tool_mcp_mount(label: str = "") -> str:
+            ok, msg = await _mod.mount_server(registry, label)
+            return json.dumps({"status": "ok" if ok else "error", "message": msg}, ensure_ascii=False)
+
+        async def _tool_mcp_unmount(label: str = "") -> str:
+            ok, msg = await _mod.unmount_server(registry, label)
+            return json.dumps({"status": "ok" if ok else "error", "message": msg}, ensure_ascii=False)
+
+        registry.register(Tool(
+            name="mcp_list_servers",
+            description="（按需挂 MCP·只读）列出服务端允许清单中的全部 MCP Server 及挂载状态。"
+                        "当任务需要某类外部能力（如成本精算）而当前工具集没有时，先查这里。",
+            parameters={"type": "object", "properties": {}},
+            func=_tool_mcp_list_servers,
+        ))
+        registry.register(Tool(
+            name="mcp_mount",
+            description="（按需挂 MCP）把允许清单中的一个 MCP Server 挂载进工具集（下一轮即可调用其工具）。"
+                        "只能挂载清单内已有的 server——调用前先用 mcp_list_servers 查看可选项。"
+                        "任务结束后会自动卸载。",
+            parameters={"type": "object",
+                        "properties": {"label": {"type": "string", "description": "server 标识（来自清单）"}},
+                        "required": ["label"]},
+            func=_tool_mcp_mount,
+        ))
+        registry.register(Tool(
+            name="mcp_unmount",
+            description="（按需挂 MCP）提前卸载一个已挂载的 MCP Server（移除其工具并断开连接）。",
+            parameters={"type": "object",
+                        "properties": {"label": {"type": "string", "description": "server 标识"}},
+                        "required": ["label"]},
+            func=_tool_mcp_unmount,
+        ))
+
+    # 14. spawn_subagent — 真子体派生（L4-P3-3，AGENT_SUBAGENTS=1 才开放）
+    from app.config import AGENT_SUBAGENTS
+    if (AGENT_SUBAGENTS or "0").strip() == "1":
+        from app.agent.subagents import make_spawn_func, parent_slot, SUBAGENT_TOOL_NAME
+
+        registry.register(Tool(
+            name=SUBAGENT_TOOL_NAME,
+            description="（子体派生）把一个**自包含**的子任务交给独立运行的子代理：它有自己的"
+                        "上下文与预算，看不到你们的对话，只拿到 goal。适合可并行的独立子任务"
+                        "（如「分别调研 A/B/C 三家竞品」「对三个候选方案各算一版 TCO」）。"
+                        "goal 必须写清：要做什么、依据什么、交付什么。子任务结果以摘要返回，"
+                        "由你汇总为最终交付物。一轮内可同时派生多个子任务。",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string", "description": "子任务目标（自包含，含背景与要求）"},
+                    "deliverable": {"type": "string", "description": "交付要求，如「300 字内对比结论，含 3 条关键差异」"},
+                    "budget_turns": {"type": "integer", "description": "子任务轮次预算，默认 8"},
+                    "budget_tokens": {"type": "integer", "description": "子任务 token 预算，默认 300000"},
+                },
+                "required": ["goal"],
+            },
+            func=make_spawn_func(parent_slot),
+        ))
+
+    # 15. save_skill_pack / delete_skill_pack — 自建技能（L4-P3-2，AGENT_AUTO_SKILLS=1 才开放）
+    from app.config import AGENT_AUTO_SKILLS
+    if (AGENT_AUTO_SKILLS or "0").strip() == "1":
+        from app.agent import auto_skills as _ask
+
+        async def _tool_save_skill_pack(slug: str = "", display_name: str = "",
+                                        trigger_intents: list = None,
+                                        trigger_keywords: list = None,
+                                        role_blocks: dict = None,
+                                        playbook: list = None,
+                                        source_summary: str = "") -> str:
+            ok, msg = _ask.save_pack(slug, display_name, trigger_intents or [],
+                                     trigger_keywords or [], role_blocks or {},
+                                     playbook or [], source_summary)
+            return json.dumps({"status": "ok" if ok else "error", "message": msg,
+                               "hint": "" if ok else "请按错误信息修正后重试（技能包未保存）"},
+                              ensure_ascii=False)
+
+        async def _tool_delete_skill_pack(slug: str = "") -> str:
+            ok, msg = _ask.delete_pack(slug)
+            return json.dumps({"status": "ok" if ok else "error", "message": msg}, ensure_ascii=False)
+
+        registry.register(Tool(
+            name="save_skill_pack",
+            description="（自建技能）把本次任务验证有效的**工作流方法论**固化为能力包：声明触发条件"
+                        "（意图/关键词）+ 四段提示词（需求分析/方案架构/质量校验/终稿口径，至少两段非空）"
+                        "+ 终稿必备要点（≥2 条）。保存后热加载——后续命中触发条件的任务自动挂载。"
+                        "只沉淀**可复用的口径与要点**，不要保存一次性内容或过程记录。",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string", "description": "包标识，user_ 前缀，如 user_bidding_checklist（同名即更新）"},
+                    "display_name": {"type": "string", "description": "展示名，如「投标检查清单」"},
+                    "trigger_intents": {"type": "array", "items": {"type": "string"},
+                                        "description": "触发意图列表（可选值：solution/competitor/knowledge_q/general/file_ops/export）"},
+                    "trigger_keywords": {"type": "array", "items": {"type": "string"},
+                                         "description": "触发关键词列表（用户原文含其一即命中，≤12 个）"},
+                    "role_blocks": {"type": "object",
+                                    "description": "四段提示词：demand_analyst/solution_architect/quality_reviewer/synthesize，至少两段非空"},
+                    "playbook": {"type": "array", "items": {"type": "string"},
+                                 "description": "终稿必备要点（≥2 条，≤20 条）"},
+                    "source_summary": {"type": "string", "description": "一句话说明该技能源自哪类任务"},
+                },
+                "required": ["slug", "display_name", "role_blocks", "playbook"],
+            },
+            func=_tool_save_skill_pack,
+        ))
+        registry.register(Tool(
+            name="delete_skill_pack",
+            description="（自建技能·维护）删除一个自建能力包（仅 user_ 前缀，预置包受保护）。",
+            parameters={"type": "object",
+                        "properties": {"slug": {"type": "string", "description": "包标识（user_ 前缀）"}},
+                        "required": ["slug"]},
+            func=_tool_delete_skill_pack,
+        ))
+
     return registry
