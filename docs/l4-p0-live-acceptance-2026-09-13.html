@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>L4-P0 计划闭合门 · 活测验收记录</title>
+<style>
+:root{--red:#C7000B;--ink:#1a1a1a;--mut:#5b6470;--bd:#e3e6ea;--bg:#f6f7f9;--card:#fff;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:15px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;}
+.wrap{max-width:1080px;margin:0 auto;padding:40px 32px 80px;background:var(--card);
+ box-shadow:0 1px 3px rgba(0,0,0,.06);min-height:100vh;}
+h1{font-size:26px;line-height:1.35;margin:0 0 6px;padding-bottom:16px;border-bottom:3px solid var(--red);}
+h2{font-size:20px;margin:38px 0 12px;padding-left:12px;border-left:4px solid var(--red);}
+h3{font-size:16.5px;margin:26px 0 10px;color:#222;}
+p{margin:10px 0;}
+ul,ol{margin:10px 0;padding-left:26px;}
+li{margin:5px 0;}
+code{background:#f0f2f5;border:1px solid var(--bd);border-radius:4px;padding:1px 6px;
+ font-family:ui-monospace,Consolas,"Courier New",monospace;font-size:13px;color:#b4000a;}
+strong{color:#111;}
+hr{border:0;border-top:1px solid var(--bd);margin:26px 0;}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px;}
+th,td{border:1px solid var(--bd);padding:8px 11px;text-align:left;vertical-align:top;}
+th{background:#f2f4f7;font-weight:600;white-space:nowrap;}
+tbody tr:nth-child(even){background:#fafbfc;}
+blockquote{margin:16px 0;padding:12px 16px;background:#fff8f8;border-left:4px solid var(--red);
+ border-radius:0 6px 6px 0;color:#333;}
+blockquote table{font-size:13.5px;background:#fff;}
+blockquote p{margin:6px 0;}
+</style></head><body><div class="wrap">
+<h1>L4-P0 计划闭合门 · 活测验收记录（2026-09-13）</h1>
+<blockquote><p>目的：回答两个离线脚本答不了的问题 —— ① 真模型会不会<strong>自己</strong>把计划闭合（还是只会一路检索到底）？② 出现未闭合时，宿主拦截后模型能不能<strong>自己</strong>补救？ 结论：<strong>纪律成立</strong>（模型自主终止的样本 3/3 全部自行闭合计划），主口径未达标的原因在<strong>宿主预算熔断</strong>，不在模型纪律。本轮另发现并修复熔断路径的收口缺口。</p></blockquote>
+<hr>
+<h2>1. 方法</h2>
+<table><thead><tr><th>项</th><th>值</th></tr></thead><tbody><tr><td>脚本</td><td><code>.workbuddy/Temp/p0_closure_live.py</code>（5 例：3 × solution + 2 × competitor）</td></tr><tr><td>端点</td><td><code>POST /api/agent/chat</code>，<code>runtime=fc</code> + <code>autonomy=high</code>（双门禁）</td></tr><tr><td>模型</td><td>DeepSeek（真实调用，非 mock）</td></tr><tr><td>观测</td><td>SSE <code>plan</code> / <code>tool_start</code> / <code>result</code> 事件；<code>fc_meta.{turns,stopped_by,drift_rejections,plan_open_at_final,plan_steps}</code></td></tr><tr><td>原始日志</td><td><code>.workbuddy/Temp/p0_live.log</code></td></tr></tbody></table>
+<p>指标口径：</p>
+<ul><li><strong>A11 主口径</strong> ＝ 交付时计划全闭合的 FC 运行 ÷ 发布过计划（≥2 步）的 FC 运行（含被宿主熔断的样本，<strong>不剔除、不粉饰</strong>）</li><li><strong>A11 参考口径</strong> ＝ 同式，但<strong>只统计模型自主终止</strong>（<code>stopped_by=model</code>）的样本 —— 用于区分「模型不做」与「宿主没让它做完」</li></ul>
+<hr>
+<h2>2. 逐例结果</h2>
+<table><thead><tr><th>#</th><th>类别</th><th>任务</th><th>引擎</th><th>耗时</th><th>轮次</th><th>终止</th><th>计划步数</th><th>交付时未闭合</th><th>闭合门拦截</th></tr></thead><tbody><tr><td>1</td><td>solution</td><td>300 人跨境电商上云方案</td><td><strong>legacy</strong></td><td>88.4s</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr><tr><td>2</td><td>solution</td><td>智慧水务（担心数据安全）</td><td>fc</td><td>30.3s</td><td>5</td><td>model</td><td>5</td><td>0</td><td>0</td></tr><tr><td>3</td><td>solution</td><td>高校一卡通 + 机房改造规划</td><td>fc</td><td>29.6s</td><td>6</td><td>model</td><td>6</td><td>0</td><td>0</td></tr><tr><td>4</td><td>competitor</td><td>华为云 vs 阿里云（制造业物联网）</td><td>fc</td><td>46.8s</td><td>9</td><td><strong>tokens</strong></td><td>4</td><td><strong>1</strong></td><td><strong>1</strong></td></tr><tr><td>5</td><td>competitor</td><td>腾讯云智慧医疗动态调研</td><td>fc</td><td>31.5s</td><td>8</td><td>model</td><td>4</td><td>0</td><td>0</td></tr></tbody></table>
+<p>未进入 FC 的 1 例（#1）由范围门按意图分流至老管线 —— 属既定设计（D5），不计入 A11。</p>
+<hr>
+<h2>3. A11 结论</h2>
+<p>``` 有效运行 5  |  进入 FC 4  |  宿主熔断 1 发布计划(≥2步) 4  |  交付时计划全闭合 3 闭合门累计拦截 1 次</p>
+<p>A11 计划收敛率（主口径·全部 FC 运行） = 0.750（目标 ≥0.90） → FAIL ❌ A11（参考·仅模型自主终止）          = 1.000（3/3）  ← 仅参考，不替代主口径 ```</p>
+<p><strong>怎么读这个 0.750：</strong></p>
+<ul><li>参考口径 <strong>1.000</strong> 是本次最重要的发现：模型<strong>自发</strong>发布计划、自发闭合（含<strong>如实标 <code>skipped</code></strong>，例 5 把「联网检索」「抽取网页正文」两步标 skipped 并在终稿说明）。<strong>不是提示词逼出来的</strong>。</li><li>主口径唯一的失败样本（#4）终止原因是 <code>stopped_by=tokens</code> —— 模型在 9 轮 / 13 次工具调用后<strong>被宿主预算掐断</strong>，客观上没机会闭合最后一步。<strong>这是宿主容量问题，不是模型的纪律问题。</strong></li><li>闭合门<strong>实证生效</strong>：#4 <code>drift_rejections=1</code> —— 模型曾试图带着未闭合步交付，被宿主拦下、退回自决。</li></ul>
+<hr>
+<h2>4. 活测发现并已修复的缺口：熔断路径绕过闭合门</h2>
+<p><strong>问题</strong>：熔断（预算/轮次到顶）走的是「宿主索要终稿」分支，该分支此前<strong>不经过闭合门</strong> → 模型可能带着未闭合步直接出终稿，且<strong>宣称已完成</strong>。</p>
+<p><strong>修法</strong>（<code>app/agent/runtime/runner.py</code>，提交 <code>3b872b0</code>）：熔断收口时若 <code>open_steps(harness._plan_status)</code> 非空，则在收口指令后追加：</p>
+<blockquote><p>（宿主补充）注意：你计划里仍有未闭合的步骤（…）。本次因预算/轮次已到上限无法继续执行，请务必在答案中<strong>如实说明</strong>哪些部分尚未完成或未核实，不要谎称已经完成。</p></blockquote>
+<p><strong>边界（关键）</strong>：不改 A11 口径（该样本<strong>如实算失败</strong>）、不改执行顺序、不做「工具属于哪一步」的步归属推导 —— 宿主只做核验，不替模型粉饰。</p>
+<p><strong>验证</strong>：</p>
+<ul><li>离线：<code>fc_runtime_smoke.py</code> <strong>48/48</strong>（新增 T10c 断言注入文本 + 终稿如实说明；T10b 断言超限后不死锁）。</li><li>活测：定向探针 <code>.workbuddy/Temp/p0_fuse_probe.py</code> 复跑同题 → <code>stopped_by=tokens</code> + <code>plan_open_at_final=2</code> → 终稿出现<strong>「七、待补充与未核实事项（如实说明）」</strong>小节，列出 4 条<strong>真实</strong>缺口（联网通道关闭 / 未调成本工具 / 未写入客户档案 / 阿里云侧颗粒度弱）。逻辑闭环：熔断 + <code>open&gt;0</code> ⟹ 必然注入。</li></ul>
+<hr>
+<h2>5. 验证边界（诚实口径）</h2>
+<p>本轮<strong>无法</strong>从服务器日志直接取证「注入文本」。原因（已读码确认，非猜测）：</p>
+<ol><li><code>app/agent/agent.py:44</code> 默认 <code>verbose=False</code> → <code>harness._log()</code> 只写入内存 <code>self._logs</code>，不落盘（试过 <code>--log-level info</code> 也无效 —— 卡点是 verbose，不是日志级别）。</li><li><code>api/agent_routes.py:381-395</code> 的 <code>result</code> SSE 事件是<strong>字段白名单</strong>，<strong>不含 <code>logs</code></strong>。</li></ol>
+<p>因此证据链为：<strong>白名单内的 <code>fc_meta</code>（<code>stopped_by</code> + <code>plan_open_at_final</code> + <code>drift_rejections</code>）＋ 离线 T10c ＋ 终稿正文</strong>。三者互证，足以判定修补生效。</p>
+<hr>
+<h2>6. 结论与待决</h2>
+<ul><li><strong>P0 达成核心目标</strong>：计划从「叙述性」变成「有齿的待办」，且<strong>齿是模型自己咬合的</strong>（参考口径 3/3）。闭合门在真实条件下可拦截。</li><li><strong>A11 主口径 0.750 未过线</strong>，根因是 <code>AGENT_TOKEN_BUDGET=200000</code> 对「13 次工具调用的竞品对比」这类长任务仍偏紧。</li><li>可选处置（待定）：</li><ul><li>(a) 抬高预算（如 300k），或按意图分档；</li><li>(b) 熔断时若计划未闭合则<strong>有界</strong>延期（须防死锁）；</li><li>建议先扩测到 n≥10 再定论，避免小样本误判。</li></ul><li>回退：<code>AGENT_PLAN_CLOSE_ENFORCE=0</code>（闭合门整体关）；FC 本身仍可用 <code>AGENT_RUNTIME=legacy</code> 或前端 ⚡ 开关双门关闭。</li></ul>
+</div></body></html>
