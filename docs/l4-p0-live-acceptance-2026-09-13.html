@@ -75,6 +75,6 @@ blockquote p{margin:6px 0;}
 <p>设计意图：让<strong>轮次</strong>（<code>AGENT_MAX_TURNS=16</code>）成为真正的约束，token 预算退化为「只兜住病态单轮膨胀」的最后一道闸 —— 这样熔断行为可预测，不会再随机掐断正常长任务。</p>
 <blockquote><p>备注：本次复验在 400k 下已完成且 0 熔断（模型在 ≤316k 处自行停手）；升到 500k 只是把天花板抬到<strong>必然高于</strong>任何合法运行，无需重复消耗复验 —— 模型自主终止的样本不受天花板抬高影响。</p></blockquote>
 <hr>
-<h2>7. 结论与待决</h2>
+<h2>7. 结论与后续选项</h2>
 <ul><li>✅ <strong>P0 目标达成</strong>：计划从「叙述性」变成「有齿的待办」，且<strong>齿是模型自己咬合的</strong> —— 扩测后 <code>A11 主口径 1.000（8/8）</code>，样本充足时宿主<strong>无需介入</strong>（0 次拦截）。</li><li>✅ <strong>熔断根因已消除</strong>：A11 首轮 0.750 的唯一失败＝预算过紧掐断长任务；已重标定 200k → <strong>500k</strong>，扩测 <strong>0 熔断</strong>。曾经的失败样本（#7）在放宽预算后跑完全程并自主闭合。</li><li>⚠️ <strong>仍未做的（诚实边界）</strong>：① 样本仍限于 <code>solution</code>/<code>competitor</code> 两类意图（范围门未开，属 P1）；② 4 例分流 legacy 的样本不计入 A11，故 A11 尚未覆盖全部意图；③ 天花板抬到 500k 后需留意账单。</li><li>可选后续（<strong>未做</strong>，供决策）：</li><ul><li><strong>按意图分档</strong>：实测 solution ≤95k、competitor ≤316k，两档差异显著。若要收紧成本，可让 solution 用 200k、competitor 用 500k（<code>run_loop</code> 可直读 <code>harness._intent</code>，无需改函数签名）。当前取<strong>单一 500k</strong> 是为少一条代码路径、行为可预测 —— 代价是轻量任务也拿到高天花板。</li><li>(b) 熔断时若计划未闭合则<strong>有界</strong>延期（须防死锁）—— 在预算已不轻易触发的前提下优先级下降。</li></ul><li>回退：<code>AGENT_TOKEN_BUDGET=200000</code>（回到旧档）；<code>AGENT_PLAN_CLOSE_ENFORCE=0</code>（闭合门整体关）；FC 本身仍可用 <code>AGENT_RUNTIME=legacy</code> 或前端 ⚡ 开关双门关闭。</li><li><strong>成本提示</strong>：500k 是天花板不是均值 —— 实测中位数仅 83k，故典型任务成本不变；仅长尾任务（如 #7 的 316k）会比旧档多用约 1.6 倍 token。</li></ul>
 </div></body></html>
