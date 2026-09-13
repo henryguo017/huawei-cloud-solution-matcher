@@ -221,7 +221,8 @@ class AgentHarness:
         self._plan: list = []              # P0：执行计划（_emit_plan 写入，前端 Plan 面板渲染）
         self._plan_original_input: str = ""  # P2-D5：plan 对应的原始用户需求（Plan 单步重跑重新汇总用）
         self._plan_status: list = []       # P1-1：plan 每步状态 pending/running/done
-        self._last_draft: str = ""         # P1-2：终稿缓存，供 generate_doc 拦截导出（跨轮保留）
+        self._session_drafts: Dict[str, str] = {}  # P1-2：终稿缓存，按 user:session 隔离（防跨会话/跨用户泄漏）
+        self._draft_key: str = "0:default"        # 当前 run 的终稿键 = user_id:session_id（run 入口盖章）
         self._web_search_count: int = 0    # P1-2：本会话联网检索次数（限流）
         self._consecutive_tool_failures: int = 0   # P1-3：连续工具失败计数（触发反思）
         self._reflexion_count: int = 0     # P1-3：反思触发次数
@@ -604,7 +605,7 @@ class AgentHarness:
             self._log("warn", f"[FC] 自检 Gate 异常（忽略）: {_sce}")
 
         # ⑥ 终稿缓存 + 流式交付（分片推送的是模型**已产出的正文**，不是重新生成）
-        self._last_draft = draft
+        self._session_drafts[self._draft_key] = draft
         try:
             self.memory.add_agent_response(session_id, draft)
         except Exception:  # noqa: BLE001
@@ -780,7 +781,7 @@ class AgentHarness:
             # 保证前端流式内容即闸门后的终稿。
             final, _ = await self._self_check_gate(final, user_input, event_callback, tool_calls_log)
             final = await self._finalize_answer(user_input, final, tool_calls_log, event_callback=event_callback)
-            self._last_draft = final
+            self._session_drafts[self._draft_key] = final
             self.memory.add_agent_response(session_id, final)
 
             # 点亮最后一步（综合生成步）并收尾
@@ -1141,7 +1142,7 @@ class AgentHarness:
         # 注意实参顺序：(answer, user_input)；此处曾误传成 (user_input文本, 终稿)，导致 critic 拿错数据评审
         final, self._quality_warn = await self._self_check_gate(final, self._plan_original_input or "", event_callback, tool_calls_log)
         final = await self._finalize_answer(self._plan_original_input or "", final, tool_calls_log, event_callback=event_callback)
-        self._last_draft = final
+        self._session_drafts[self._draft_key] = final
         self.memory.add_agent_response(session_id, final)
         await self._emit(event_callback, {
             "type": "final",
@@ -1196,6 +1197,10 @@ class AgentHarness:
         tool_calls_log = []
         self._clarify_round = 0
         self._user_id = user_id
+        # 安全修复（2026-09-13）：终稿缓存按 用户+会话 隔离。此前 _last_draft 是单例级
+        # 跨轮保留 → 用户 A 生成的方案会被用户 B 的「导出成 Word」拿走（跨账号泄漏，
+        # 生产 E2E 实测复现）。键 = user_id:session_id，同会话跨轮语义不变。
+        self._draft_key = f"{user_id if isinstance(user_id, int) else 0}:{session_id}"
         # 修复：记忆注入标记必须每轮 run 重置——Agent 是进程级单例，__init__ 只执行一次，
         # 不重置会导致进程内第一次对话之后所有对话都不再注入长程记忆（P2-2 名存实亡）。
         # 设计语义是"每个对话的首轮注入一次"（对话内澄清轮不重复注入）。
@@ -1763,7 +1768,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     if article and len(article.strip()) > 200:
                         # 复用导出链路：_intercept_generate_doc 吃 _last_draft
                         # （report_type 非 competitor 即 solution 模板，封面/章节骨架通用）
-                        self._last_draft = article
+                        self._session_drafts[self._draft_key] = article
                         self._format_mode = "solution"
                         obs = await self._intercept_generate_doc(fmt, event_callback)
                         try:
@@ -1935,7 +1940,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     # 统一增强管线：基于已检索资料重写最终答案（与标准模式一致）
                     final_answer = await self._finalize_answer(user_input, final_answer, tool_calls_log, event_callback=event_callback)
                     # P1-2：缓存增强后终稿，供后续 generate_doc 拦截导出（跨轮保留，不重置）
-                    self._last_draft = final_answer
+                    self._session_drafts[self._draft_key] = final_answer
                     self.memory.add_agent_response(session_id, final_answer)
                     # P2-2：成功完成方案 → 存入情景记忆（旧 ReAct 路径同样保留）
                     self._maybe_save_episode(session_id, user_input, final_answer)
@@ -3432,11 +3437,12 @@ Final Answer: [完整方案]）"""
     async def _intercept_generate_doc(self, fmt: str, event_callback=None) -> str:
         """P1-2：导出文档工具的实际执行（generate_doc 拦截 / export 意图复用）。
 
-        直接取 self._last_draft（增强后终稿）+ self._format_mode（决定 report_type），
+        直接取 self._session_drafts[self._draft_key]（当前 用户+会话 的终稿）+ self._format_mode（决定 report_type），
         复用 ReportGeneratorService 生成 Word/PDF，返回 JSON 字符串（与工具 observation 一致）。
         无终稿时返回友好提示（不报错，不阻断）。
         """
-        draft = getattr(self, "_last_draft", "")
+        # 安全修复（2026-09-13）：只取当前 用户+会话 的终稿，杜绝跨会话/跨用户泄漏
+        draft = (self._session_drafts.get(self._draft_key, "") or "")
         if not draft or len(draft.strip()) < 30:
             return json.dumps({
                 "status": "no_draft",
@@ -4009,7 +4015,10 @@ Final Answer: [完整方案]）"""
         if success and answer and isinstance(answer, str) and self._intent in (
             "solution", "competitor", "knowledge_q", "file_ops",
         ):
-            self._last_draft = answer
+            self._session_drafts[self._draft_key] = answer
+            # 内存上限保护：单例常驻，只保留最近 50 个 会话 的终稿
+            while len(self._session_drafts) > 50:
+                self._session_drafts.pop(next(iter(self._session_drafts)))
         return {
             "answer": answer,
             "solution_json": parse_markdown_to_chapters(answer) if answer else [],
