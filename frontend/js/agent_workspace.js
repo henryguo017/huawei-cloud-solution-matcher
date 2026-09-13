@@ -1862,7 +1862,7 @@
                             self._updatePlanStatus(shell, ev.plan_index, 'done');
                         }
                         if (fullAnswer && fullAnswer.trim()) {
-                            self._appendExportActions(shell, fullAnswer, ev.format_mode || 'solution');
+                            self._appendExportActions(shell, fullAnswer, ev.format_mode);
                         }
                     } else if (t === 'result') {
                         self._finishThinking();
@@ -1873,7 +1873,7 @@
                             });
                         }
                         if (fullAnswer && fullAnswer.trim()) {
-                            self._appendExportActions(shell, fullAnswer, ev.format_mode || 'solution');
+                            self._appendExportActions(shell, fullAnswer, ev.format_mode);
                         }
                         // 方案 A：渲染客户背景上下文参考提示（与经典对齐）
                         self._renderClientContextHint(shell, ev);
@@ -2037,7 +2037,7 @@
                     self._renderTasks();
                     // P0：流式结束时同样追加导出操作行（避免只有 result 事件才出现）
                     if (fullAnswer && fullAnswer.trim()) {
-                        self._appendExportActions(shell, fullAnswer, ev.format_mode || 'solution');
+                        self._appendExportActions(shell, fullAnswer, ev.format_mode);
                     }
                 } else if (t === 'doc_generated') {
                     // P1-2：后端已生成可下载文档 → 渲染下载 chip（与导出按钮共存）
@@ -2100,7 +2100,7 @@
                     self._renderTasks();
                     // P0：答案就绪后追加导出操作行（模板在导出时应用，对话侧保持自主结构）
                     if (fullAnswer && fullAnswer.trim()) {
-                        self._appendExportActions(shell, fullAnswer, ev.format_mode || 'solution');
+                        self._appendExportActions(shell, fullAnswer, ev.format_mode);
                     }
                     // 方案 A：渲染客户背景上下文参考提示（与经典对齐）
                     self._renderClientContextHint(shell, ev);
@@ -2284,10 +2284,13 @@
             this.els.previewCostList.innerHTML = '';
         },
         /* P0：答案就绪后追加导出操作行（模板在导出时应用，对话侧保持自主结构）
-           format_mode: solution=方案书 / competitor=竞品对比；导出复用经典 /api/export/report 链路 */
+           format_mode 白名单：仅 solution=方案书 / competitor=竞品对比 渲染导出按钮；
+           chat/闲聊/问答/账户/联网成文（doc chip 已自带下载）一律不出按钮。
+           2026-09-13：FC final 事件不带 format_mode → 此前 `|| 'solution'` 兜底把
+           闲聊也当方案书（误出导出按钮），改为缺省不渲染、由 result 事件定夺。 */
         _appendExportActions: function (shell, answer, formatMode) {
             if (!shell || !shell.actions) return;
-            if (formatMode === 'general') return;  // 闲聊/问候/账户类不出现导出按钮（保持自然对话感）
+            if (formatMode !== 'solution' && formatMode !== 'competitor') return;  // 白名单
             var actions = shell.actions;
             if (actions.querySelector('.ws-export-btn')) return;  // 幂等：不重复追加
             actions.style.display = '';

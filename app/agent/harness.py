@@ -3232,11 +3232,28 @@ Final Answer: [完整方案]）"""
             mention_competitor = bool(SUPPORTED_COMPETITORS and any(
                 c.lower() in (user_input or "").lower() for c in SUPPORTED_COMPETITORS
             ))
-            rubric = (
-                "1. 需求/痛点覆盖\n2. 方案思路或架构\n3. 推荐产品组合"
-                + ("\n4. 竞品对比（用户提到了友商，必须含华为云 vs 友商对比）" if mention_competitor else "")
-                + "\n5. 无幻觉/有据可查\n6. 结构完整可执行"
-            )
+            # L4 灰度实测修复（2026-09-13）：自检按意图分档。此前 rubric 固定方案导向，
+            # 闲聊（如"你有自己的思想吗"）也被拿"需求覆盖/推荐产品组合"打分 → 评分 30、
+            # 白烧一轮 critic 调用 + 前端"待补方案架构"误导横幅。
+            try:
+                from app.agent.intent import classify_intent
+                _sc_intent = (classify_intent(user_input or "").get("intent") or "general")
+            except Exception:  # noqa: BLE001 - 分类失败按通用轻量清单处理
+                _sc_intent = "general"
+            if _sc_intent in ("greeting", "account"):
+                return answer, False  # 纯礼节/账户操作无实质内容可查
+            if _sc_intent in ("solution", "competitor"):
+                rubric = (
+                    "1. 需求/痛点覆盖\n2. 方案思路或架构\n3. 推荐产品组合"
+                    + ("\n4. 竞品对比（用户提到了友商，必须含华为云 vs 友商对比）" if mention_competitor else "")
+                    + "\n5. 无幻觉/有据可查\n6. 结构完整可执行"
+                )
+            else:
+                rubric = (
+                    "1. 如实回应了用户的问题（不答非所问）\n"
+                    "2. 无编造/无幻觉（涉数据有依据，或明确说明不确定）\n"
+                    "3. 语气得体、不强行推销"
+                )
             # 真实工具调用记录：让 critic 按系统记录核对，而非凭正文里有没有工具名瞎猜
             tool_block = ""
             if tool_calls:
@@ -3253,21 +3270,29 @@ Final Answer: [完整方案]）"""
                     "则该维度视为达标，不得据此判 fail。"
                 )
             current = answer
+            _is_doc = _sc_intent in ("solution", "competitor")
             for it in range(1, SELF_CHECK_MAX_ITERS + 1):
                 critic_prompt = (
-                    "你是售前方案质量审查员，按以下 rubric 逐维度判断方案是否覆盖要点。\n"
-                    f"Rubric：\n{rubric}\n\n"
-                    "评分原则（重要）：\n"
+                    ("你是售前方案质量审查员，按以下 rubric 逐维度判断方案是否覆盖要点。\n" if _is_doc
+                     else "你是回答质量审查员，按以下 rubric 逐维度判断这段回答是否达标。\n")
+                    + f"Rubric：\n{rubric}\n\n"
+                    + ("评分原则（重要）：\n"
                     "- 评分依据『维度要点是否被覆盖』，而非篇幅长短。一份结构完整、各维度要点均已体现的方案"
                     "（即使表述简练）应判 pass=true，score 给 80-95。\n"
                     "- 仅当存在明确缺失的维度（如完全没提推荐产品、或用户提了友商却无任何对比）时才判"
                     "pass=false，并在 gaps 中列出具体缺失维度。\n"
-                    "只输出 JSON（不要其它文字）：\n"
+                    if _is_doc else
+                    "评分原则（重要）：\n"
+                    "- 这是普通问答/闲聊，不是方案——**不要**用『方案/产品组合/架构』等维度去要求它。\n"
+                    "- 仅当回答明显答非所问、编造事实、或语气失当时才判 pass=false。\n"
+                    "正常回答应判 pass=true，score 给 85-95。\n")
+                    + "只输出 JSON（不要其它文字）：\n"
                     '{"pass": true|false, "score": 0-100, "gaps": ["缺失维度1", ...], '
                     '"patch_hint": "如何补强的简要指引"}\n\n'
-                    f"用户需求：{user_input}\n\n"
-                    f"待审查方案：\n{current[:6000]}\n\n"
-                    f"{tool_block}\n\n"
+                    f"用户输入：{user_input}\n\n"
+                    + (f"待审查方案：\n{current[:6000]}\n\n" if _is_doc
+                       else f"待审查回答：\n{current[:6000]}\n\n")
+                    + f"{tool_block}\n\n"
                     "审查结果 JSON："
                 )
                 raw = await get_llm_response(critic_prompt, model=MATCH_LLM_MODEL)
@@ -4008,6 +4033,15 @@ Final Answer: [完整方案]）"""
         format_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         elapsed = time.time() - self._start_time
+        # L4 灰度实测修复（2026-09-13）：format_mode 白名单化——只有方案/竞品是"可导出
+        # 文档"，其余（闲聊/问答/账户/联网成文等）一律归一为 "chat"，前端据此不渲染
+        # 导出按钮（此前 FC final 事件不带 format_mode → 前端兜底 'solution' →
+        # 闲聊答案下面也出"导出方案书/PPT"按钮）。None 回填实例默认，保持 legacy
+        # 方案/竞品管线按钮行为不变。
+        if format_mode is None:
+            format_mode = self._format_mode
+        if format_mode not in ("solution", "competitor"):
+            format_mode = "chat"
         # P1-2：集中缓存终稿，供后续 export 意图 / generate_doc 拦截导出（跨轮保留）。
         # 仅对真正产出方案内容的意图且在成功时缓存；account/greeting/general/export 不缓存，
         # 避免把轻量回复当作方案终稿导出。覆盖 final_answer 主路径与解析失败兜底路径，
