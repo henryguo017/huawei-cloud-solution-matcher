@@ -14,6 +14,12 @@ from app.services.knowledge_base import (  # noqa: F401
     get_user_knowledge_base,
 )
 
+# 模块级导入（2026-09-13 修 bug）：此前只在 `anon_rate_limit` 内部 import，`anon_daily_cap`
+# 直接使用了这个名字 → 只要请求带 Bearer token 就 `NameError` → 500。
+# 影响面：/api/match 与 /api/match/stream（经典标准模式主链路）对**登录用户**全线 500，
+# 自 b5028e9(2026-09-08) 起潜伏（匿名请求因短路判断 `token and ...` 不触发，故未被发现）。
+from app.utils.auth_utils import decode_access_token
+
 
 _ratelimit_buckets: Dict[str, list] = {}
 
@@ -23,6 +29,25 @@ def _rate_limit_key(request: Request) -> str:
     if forwarded:
         return forwarded.split(",", 1)[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def _is_authenticated(request: Request) -> bool:
+    """请求是否携带**有效** Bearer token（用于给登录用户豁免匿名配额）。
+
+    失败即视为未登录（fail-safe）：这是"配额豁免"的判定，出错时最差的后果只是
+    给一个登录用户多算一次匿名配额；反过来若在此抛异常，就会把主链路变成 500
+    —— 这正是本函数存在的原因（见上方模块级 import 的说明）。
+    """
+    auth = request.headers.get("authorization", "")
+    if not auth.lower().startswith("bearer "):
+        return False
+    token = auth[7:].strip()
+    if not token:
+        return False
+    try:
+        return bool(decode_access_token(token))
+    except Exception:  # noqa: BLE001 - 配额判定绝不允许把主链路打成 500
+        return False
 
 
 def rate_limit(limit: int = 120, window: int = 60):
@@ -49,14 +74,9 @@ def anon_rate_limit(limit: int = 10, window: int = 60):
     登录用户（带有效 Bearer token）直接放行，由端点原有的 rate_limit 管；
     未登录按 IP 计数。匿名匹配消耗 DeepSeek token，配额远严于登录用户。
     """
-    from app.utils.auth_utils import decode_access_token
-
     async def dependency(request: Request):
-        auth = request.headers.get("authorization", "")
-        if auth.lower().startswith("bearer "):
-            token = auth[7:].strip()
-            if token and decode_access_token(token):
-                return  # 登录用户：不占匿名配额
+        if _is_authenticated(request):
+            return  # 登录用户：不占匿名配额
         now = time.time()
         key = "anon:" + _rate_limit_key(request)
         bucket = _ratelimit_buckets.setdefault(key, [])
@@ -74,11 +94,8 @@ def anon_daily_cap(cap: int = 300, action: str = "match"):
     且 user_id 为空)请求数达到 cap 后，所有匿名请求一律 429。登录用户不受影响。
     """
     async def dependency(request: Request):
-        auth = request.headers.get("authorization", "")
-        if auth.lower().startswith("bearer "):
-            token = auth[7:].strip()
-            if token and decode_access_token(token):
-                return
+        if _is_authenticated(request):
+            return
         from app.services.usage_logger import get_usage_logger
         try:
             used = get_usage_logger().count_today_anonymous(action)
