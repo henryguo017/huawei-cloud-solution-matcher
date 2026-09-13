@@ -218,3 +218,37 @@
 | 28 | mixed | legacy | 3 | 3 | 0 | 6065 | 119.6 |
 | 29 | mixed | legacy | 3 | 2 | 0 | 7881 | 131.8 |
 | 30 | mixed | legacy | 0 | 0 | 0 | 871 | 4.3 |
+
+## 8. 补验（2026-09-13 晚）：A8/A13 证据缺口已闭（`a8a13_suite.py`，7 例真 DeepSeek）
+
+**方法**：in-process FC 运行时（`runtime=fc` + `autonomy=high`），工具层确定性故障注入
+（包装 registry 函数，按额度返回 `Error: 模拟检索服务抖动`），真 DeepSeek 决策。
+脚本 `.workbuddy/temp/a8a13_suite.py`（gitignore），明细 `a8a13_result.json`。
+
+| 用例 | 注入模式 | 结果 | heal 注入 | 模型响应证据（工具序列摘要） |
+| --- | --- | --- | --- | --- |
+| C1 | search_kb 2连败→恢复 | ✅ 26s | 1 次 | 连败 2 后换 web_search/list_dir/memory_search |
+| C2 | search_kb 2连败→恢复 | ✅ 31s | 1 次 | **自建 dyn_edu_kb_search 工具**绕过故障 |
+| C3 | search_competitor 2连败→恢复 | ✅ 26s | 1 次 | 换 search_kb + web_search 交叉 |
+| C4 | search_kb 3连败（超阈值1次） | ✅ 38s | 1 次 | 换路+自建工具，收敛 |
+| C5 | 双工具各 2 连败 | ✅ 151s | **2 次**（kb+competitor 各一） | 双 heal 后换 web_search 等多路 |
+| C6 | analyze_demand 注入 | ✅ 18s | 0 次 | 首败即换 search_kb（未撞到连败阈值，heal 不触发——正确行为） |
+| C7 | **search_kb 永久失败** | ✅ 62s | 1 次 | 换 web_search + **自建 dyn_kb_search** + spawn_subagent + 转攻 search_competitor |
+
+### A8 裁决
+**错误自愈率 = 7/7 = 1.000，n=7≥6，≥0.60 门禁 PASS**（§7.1 的「样本不足」解除）。
+
+### A13 裁决
+**6 个真实样本**（heal_events 非空且最终收敛）：C1/C2/C3/C4/C5/C7。注入判据
+`同工具连败 2` 均如实记录（含 turn/tool/fails/reason），注入后模型全部换了策略
+（换工具 / 自建动态工具 / 子体 / 改攻竞品库），无一例空撞同一故障至超时。
+§3「活测 3/3 未触发 heal」的定性（模型首败即换路）被 C6 再次印证。
+
+### 诚实边界
+1. 故障是确定性包装注入，非真实服务宕机；但失败语义（`Error: ...` 观察文本）与真实工具报错一致。
+2. C4 中模型对 deny 工具（read_customer_file）连击多次被立即拒绝—— Permission 边界行为正常，未计入自愈率分子分母以外的结论。
+3. **A10 证据现状**：本套件未覆盖压缩；现有证据仍是 l34_live T2（配置驱动强制压缩，compactions=4 后 7 轮收敛），属「配置驱动」而非真实窗口触发——维持原口径。
+4. **A1 提示词修复（3 例真漏压制）仍待 S4 30 例复跑验证**——转默认前最后一项本地验证。
+
+### 对 §7 结论的更新
+原「只剩 A8/A10 两个证据缺口」：**A8 已闭**；A10 维持配置驱动证据（真实窗口典型任务不触发，S4 30 例 0 次即为佐证）。转默认前剩余：**A1 复跑验证 + 生产灰度 5%×7 天**。
