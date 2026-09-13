@@ -19,6 +19,34 @@ for key in list(os.environ.keys()):
         del os.environ[key]
 
 
+class NonRetryableLLMError(RuntimeError):
+    """请求侧错误（4xx 等）：重试无意义，必须**立即**抛出。
+
+    存在的理由：`_retry_request` 是 `except Exception` 的宽口重试器，会把任何异常（含
+    我们自己为 4xx 抛出的 RuntimeError）无差别重试 MAX_RETRIES 次。2026-09-13 活测实锤：
+    格式非法的请求被重试 2 次、白烧 2s + 2 倍计费，且第 2 次同样 400 ——
+    与 `chat_with_tools` 文档里"4xx 不重试"的承诺完全相反。用显式类型把它与可重试的
+    5xx/429/网络异常区分开。
+    """
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """网络异常 / 5xx / 429 → 可重试；NonRetryableLLMError / 4xx → 不可重试。
+
+    用**鸭子类型**读 `response.status_code`（而非 `isinstance(httpx.HTTPStatusError)`）：
+    provider 包装层可能抛出自定义异常但仍自带 response，硬判具体类型会漏判 → 白烧重试。
+    """
+    if isinstance(exc, NonRetryableLLMError):
+        return False
+    code = getattr(getattr(exc, "response", None), "status_code", 0) or 0
+    if code:
+        return code == 429 or code >= 500
+    if isinstance(exc, (httpx.TransportError, httpx.TimeoutException)):
+        return True
+    # 其他异常（无状态码的自定义异常）保守视为可重试，保持既有行为不变
+    return True
+
+
 # 进程级共享 httpx 异步客户端（懒初始化，复用 TCP 连接池）
 # 避免每次请求都重建 AsyncClient + 连接池；limits 限制并发连接数，防高并发耗尽文件描述符
 _llm_http_client = None
@@ -87,6 +115,9 @@ class LLMProvider(ABC):
                 return await func()
             except Exception as e:
                 last_error = e
+                # 请求侧错误（4xx）重试无意义：立刻抛出，别烧时间与计费
+                if not _is_retryable(e):
+                    raise
                 if i < max_retries - 1:
                     await asyncio.sleep(interval)
 
@@ -204,8 +235,8 @@ class DeepSeekProvider(LLMProvider):
             async with _http_client_cm() as client:
                 response = await client.post(url, headers=headers, json=data)
                 if response.status_code >= 400 and response.status_code < 500 and response.status_code != 429:
-                    # 请求侧错误不重试，但把响应正文带出来便于定位（脱敏：只截断）
-                    raise RuntimeError(
+                    # 请求侧错误**不重试**，把响应正文带出来便于定位（脱敏：只截断）
+                    raise NonRetryableLLMError(
                         f"DeepSeek chat_with_tools HTTP {response.status_code}: {response.text[:500]}"
                     )
                 response.raise_for_status()

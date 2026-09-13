@@ -196,6 +196,19 @@ AGENT_MAX_TURNS = int(os.getenv("AGENT_MAX_TURNS", "16"))          # 模型轮�
 #     语义上让**轮次**成为真正的约束，token 预算退化为"只兜住病态单轮膨胀"的最后一道闸。
 # 语义提醒：这是**天花板**不是目标 —— 模型自主收口时远用不到；抬高只影响长任务/失控循环。
 AGENT_TOKEN_BUDGET = int(os.getenv("AGENT_TOKEN_BUDGET", "500000"))
+# 按意图分档（L4-P1）：窄天花板给轻意图（成本可控），宽天花板给重工具链意图（别掐断长任务）。
+# 实测依据（2026-09-13，全部 stopped_by=model 的自然消耗，即未被熔断截断）：
+#   solution   峰值 133,921（n=18）  → 给 200k（≈1.5 × 峰值）
+#   competitor 峰值 384,311（n=4）   → 给 500k（≈1.3 × 峰值）
+# 口径提醒：分档最初基于 reasoning_content 未回传时的偏低数据（solution ≤95k / competitor 316k）；
+# 修好 thinking 回传后 reasoning 随每轮入上下文，峰值上抬约 +41% / +22%，已在 n=30 复验下重新核对——
+# 两档仍有余量，故不调档。改动本档前请重跑 .workbuddy/Temp/p0_closure_12q.py --all。
+# 未列出的意图（knowledge_q / general / file_ops 等）回落 AGENT_TOKEN_BUDGET（宽档）——
+# 这些意图刚由 P1 放开进入 FC，**先测量再收紧**，不以猜测定值。
+AGENT_TOKEN_BUDGET_BY_INTENT = {
+    "solution": int(os.getenv("AGENT_TOKEN_BUDGET_SOLUTION", "200000")),
+    "competitor": int(os.getenv("AGENT_TOKEN_BUDGET_COMPETITOR", "500000")),
+}
 AGENT_WALL_BUDGET = int(os.getenv("AGENT_WALL_BUDGET", "420"))      # 本任务墙钟预算（秒）
 AGENT_ADVISORY_AT = float(os.getenv("AGENT_ADVISORY_AT", "0.8"))    # 预算消耗达此比例 → 注入"请收口"提示（仍由模型决策）
 

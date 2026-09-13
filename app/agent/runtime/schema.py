@@ -129,11 +129,25 @@ def parse_tool_arguments(raw: Any) -> Tuple[Optional[Dict[str, Any]], Optional[s
     return val, None
 
 
-def to_assistant_message(content: str, tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """构造 assistant 消息（含 tool_calls）。content 统一为字符串，避免部分实现要求非 null。"""
+def to_assistant_message(
+    content: str,
+    tool_calls: List[Dict[str, Any]],
+    reasoning_content: str = "",
+) -> Dict[str, Any]:
+    """构造 assistant 消息（含 tool_calls）。content 统一为字符串，避免部分实现要求非 null。
+
+    `reasoning_content` **必须保留**（哪怕是空串）：DeepSeek 在 thinking 模式下有一条硬校验 ——
+    历史里每个 assistant 消息都要带回 reasoning_content，**缺字段**就 400
+    （"The `reasoning_content` in the thinking mode must be passed back to the API."）；
+    值本身允许为空串（2026-09-13 探针实测，见 .workbuddy/Temp/reasoning_probe*.py：
+    空串 ✅ / 有值 ✅ / 缺字段 ❌）。此前本函数剥掉该字段，是 FC 运行随机 400 →
+    run_loop_none → 静默回退 legacy（约 27%）的真因。
+    """
     return {
         "role": "assistant",
         "content": content or "",
+        # 空串是刻意的：不是"没推理"，而是"字段必须在场"
+        "reasoning_content": reasoning_content or "",
         "tool_calls": [
             {
                 "id": tc.get("id"),
@@ -156,6 +170,43 @@ def to_tool_message(call_id: str, observation: str, max_chars: int = OBSERVATION
     return {"role": "tool", "tool_call_id": call_id or "", "content": obs}
 
 
+def message_shape(messages: List[Dict[str, Any]], max_items: int = 40) -> str:
+    """把消息序列压成一行**形状签名**，用于 400 排障（不含正文，可安全落日志）。
+
+    形如：`system,user,assistant+tc(2),tool,tool,system,assistant+tc(1),tool`
+    尾部的 `!orphan@idx` 标记出「有 tool_calls 但没有足量 tool 回填」的位置 ——
+    这正是 DeepSeek 返回 400（insufficient tool messages following tool_calls）的唯一成因
+    （2026-09-13 实测：见 .workbuddy/Temp/llm_400_probe.py 的 E/F/I 三例）。
+    """
+    parts: List[str] = []
+    orphans: List[int] = []
+    n = len(messages or [])
+    for i, m in enumerate(messages or []):
+        if not isinstance(m, dict):
+            parts.append("?"); continue
+        role = m.get("role") or "?"
+        if role == "assistant" and m.get("tool_calls"):
+            want = len(m["tool_calls"])
+            got = 0
+            j = i + 1
+            while j < n and isinstance(messages[j], dict) and messages[j].get("role") == "tool":
+                got += 1
+                j += 1
+            parts.append(f"assistant+tc({want})")
+            if got < want:
+                orphans.append(i)
+        else:
+            parts.append(role)
+    if len(parts) > max_items:
+        head = parts[: max_items // 2]
+        tail = parts[-(max_items // 2):]
+        parts = head + [f"…(+{len(parts) - max_items} 条)…"] + tail
+    sig = ",".join(parts)
+    if orphans:
+        sig += f"  !!orphan_tool_calls@{orphans}"
+    return sig
+
+
 def sanitize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """发送前兜底：保证每条消息具备协议必需字段（防止 400 不重试的请求侧错误）。"""
     out = []
@@ -164,7 +215,13 @@ def sanitize_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             continue
         role = m.get("role") or ""
         if role == "assistant":
-            m2 = {"role": "assistant", "content": m.get("content") or ""}
+            m2 = {
+                "role": "assistant",
+                "content": m.get("content") or "",
+                # thinking 模式下 DeepSeek 硬校验：字段必须在场（值可为空串）。
+                # 这里兜底补齐，避免上游构造遗漏导致整轮 400。
+                "reasoning_content": m.get("reasoning_content") or "",
+            }
             if m.get("tool_calls"):
                 m2["tool_calls"] = m["tool_calls"]
             out.append(m2)

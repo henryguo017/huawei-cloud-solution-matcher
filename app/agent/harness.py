@@ -61,6 +61,19 @@ def _trunc(s: str, n: int) -> str:
     return s[:n] + f"\n…（已截断，保留前 {n} 字）"
 
 
+def _format_mode_for(intent: str) -> str:
+    """交付格式档位（result.format_mode）：决定前端是否出导出按钮 / 报告类型。
+
+    solution / competitor 是**方案交付物**（前端可导出）；
+    其余意图（knowledge_q / general / file_ops）是对话性应答 → "general"，不出导出按钮。
+    """
+    if intent == "competitor":
+        return "competitor"
+    if intent == "solution":
+        return "solution"
+    return "general"
+
+
 # ReAct 提示词模板（Final Answer 结构与标准模式共用同一套增强指令，保证三模式质量一致）
 REACT_SYSTEM_PROMPT_BASE = """你是一个智能解决方案匹配助手，帮助用户找到最合适的华为云解决方案。
 【自我认知】你由自研 AgentHarness 驱动，是一个具备「规划-执行-反思-重规划」能力、可自主选择并调用工具、
@@ -488,7 +501,7 @@ class AgentHarness:
         from app.agent.runtime import run_loop
         from app.agent.runtime import events as ev
 
-        self._format_mode = "competitor" if self._intent == "competitor" else "solution"
+        self._format_mode = _format_mode_for(self._intent)
         # 运行时状态复位（Agent 是进程级单例，上一轮残留会污染本轮指标与记忆注入判定）
         self._consecutive_tool_failures = 0
         self._reflexion_count = 0
@@ -499,6 +512,8 @@ class AgentHarness:
         self._plan = []
         self._plan_status = []
         self._plan_update_count = 0   # L4-P2：update_plan 调用次数（A9 计划自治度）
+        self._fc_meta = None          # P1：本轮观测复位（防上一轮残留污染失败判定）
+        self._fc_fail_info = None     # P1：失败诊断（run_loop 在失败时写入）
 
         blocks: list = []
 
@@ -560,11 +575,18 @@ class AgentHarness:
             model=getattr(self, "_run_model", None),
         )
         if loop_res is None:
+            # P1 排障：失败也留观测（否则 legacy 结果的 fc_meta 为空，无法区分
+            # "从未进 FC" 与 "进了 FC 但失败回退"）。前端据此不受影响（读法见文档）。
+            self._fc_meta = {"attempted": True, "failed": True, "reason": "run_loop_none",
+                             "intent": self._intent,
+                             **(getattr(self, "_fc_fail_info", None) or {})}
             return None
 
         draft = (loop_res.get("final") or "").strip()
         if not draft:
             self._log("warn", "[FC] 运行时返回空终稿 → 回退 legacy")
+            self._fc_meta = {"attempted": True, "failed": True, "reason": "empty_draft",
+                             "intent": self._intent}
             return None
 
         # ⑤ 交付质量门：自检 Gate **降级为仅告警不重写**（决策 D1-B：终稿归模型所有，
@@ -623,6 +645,7 @@ class AgentHarness:
             "plan_updates": int(getattr(self, "_plan_update_count", 0) or 0),
             "plan_steps": len(self._plan or []),
             "tokens": _g.get("tokens"),
+            "token_budget": _g.get("token_budget"),   # P1：本轮实际生效的预算档（按意图分档后可观测）
             "pending_export": loop_res.get("pending_export"),
             "drift_rejections": int(_trace.get("plan_drift_rejections", 0) or 0),
             "plan_open_at_final": _open_at_final,
@@ -1287,9 +1310,14 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             if self._runtime == "fc":
                 _fc_intent = classify_intent(intent_text or user_input)
                 _fc_kind = _fc_intent.get("intent", "solution")
-                if _fc_kind in ("solution", "competitor"):
+                # L4-P1：**范围门已放开** —— 除确定性/瞬时意图（greeting/account/export）外，
+                # 全部意图（solution/competitor/knowledge_q/general/file_ops）都交由原生运行时接管。
+                # 安全前提＝交付姿态随意图切换（context.build_policy_prompt）：闲聊/问答拿到的是
+                # "直接作答、不要套方案模板"的契约，故不会重犯"闲聊被套成 14 章方案书"的历史 bug。
+                from app.agent.runtime.context import fc_takes_over
+                if fc_takes_over(_fc_kind):
                     self._intent = _fc_kind
-                    self._format_mode = "competitor" if _fc_kind == "competitor" else "solution"
+                    self._format_mode = _format_mode_for(_fc_kind)
                     self._log("system", f"[FC] 原生运行时接管 intent={_fc_kind}")
                     await self._emit(event_callback, {
                         "type": "thought", "step": 0,
@@ -1313,7 +1341,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                         "text": "自主引擎未能完成，已回退标准流水线继续处理",
                     })
                 else:
-                    self._log("system", f"[FC] 意图={_fc_kind} 非方案诉求 → 走 legacy 自然对话")
+                    self._log("system", f"[FC] 意图={_fc_kind} 属确定性/瞬时路径 → 走 legacy")
                     self._runtime = "legacy"      # 该轮由 legacy 确定性分支产出，如实归一
 
             # ── L4-P1/T1.4 自主模式（autonomy=high）──

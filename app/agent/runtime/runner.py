@@ -30,7 +30,8 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import (
-    AGENT_MAX_TURNS, AGENT_TOKEN_BUDGET, AGENT_WALL_BUDGET, AGENT_ADVISORY_AT,
+    AGENT_MAX_TURNS, AGENT_TOKEN_BUDGET, AGENT_TOKEN_BUDGET_BY_INTENT,
+    AGENT_WALL_BUDGET, AGENT_ADVISORY_AT,
     AGENT_THINKING_DECISION, AGENT_THINKING_FINAL, AGENT_PARALLEL_READONLY,
     AGENT_COMPACT_AT, AGENT_COMPACT_KEEP_TURNS, MAX_PARALLEL, AGENT_CONTEXT_WINDOW,
     AGENT_PLAN_CLOSE_ENFORCE, AGENT_PLAN_CLOSE_MAX_RETRY,
@@ -41,7 +42,7 @@ from app.agent.runtime.context import compose_system_prompt, messages_tokens, co
 from app.agent.runtime.guards import RunGuards
 from app.agent.runtime.schema import (
     build_tool_schemas, is_readonly, parse_tool_arguments, sanitize_messages,
-    to_assistant_message, to_tool_message,
+    to_assistant_message, to_tool_message, message_shape,
 )
 from app.agent.runtime.todo import (
     TODO_TOOL_NAME, TODO_TOOL_SCHEMA, handle_update_plan, normalize_items,
@@ -115,9 +116,12 @@ async def run_loop(
     from app.models.llm import get_llm_with_tools
 
     t0 = time.time()
+    # 预算按意图分档（L4-P1）：轻意图窄档控成本，重工具链意图宽档防掐断；未列出的意图取基线宽档。
+    _budget_intent = (getattr(harness, "_intent", "") or "").strip()
+    _token_budget = AGENT_TOKEN_BUDGET_BY_INTENT.get(_budget_intent, AGENT_TOKEN_BUDGET)
     guards = RunGuards(
         turns_max=AGENT_MAX_TURNS,
-        token_budget=AGENT_TOKEN_BUDGET,
+        token_budget=_token_budget,
         wall_budget=AGENT_WALL_BUDGET,
         advisory_at=AGENT_ADVISORY_AT,
         start_time=t0,
@@ -125,7 +129,9 @@ async def run_loop(
 
     blocks = list(extra_blocks or [])
     blocks.append(vf.build_fact_block([]))          # 初始事实块：明确"尚无写操作"
-    system_prompt = compose_system_prompt(blocks)
+    # 政策块按意图切姿态（L4-P1）：solution/competitor 出方案，general/knowledge_q 直接作答 ——
+    # 否则"你会玩王者荣耀吗？"会被套成 14 章方案书（2026-09-09 线上实锤）。
+    system_prompt = compose_system_prompt(blocks, getattr(harness, "_intent", "solution"))
     messages: List[Dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_input},
@@ -169,7 +175,26 @@ async def run_loop(
             )
         except Exception as e:  # noqa: BLE001
             harness._log("error", f"[FC] 第{turn}轮 LLM 调用失败，运行时放弃: {e}")
+            # P1 诊断：harness._log 受 verbose 门控**不落盘**，主循环失败（run_loop_none 的主因）
+            # 此前在磁盘上完全不可见。此处独立 WARNING 出口，把真实异常文本（含 4xx 响应正文）留痕。
+            logger.warning(
+                "[FC] 主循环 LLM 调用失败（诊断）：turn=%s thinking=%s msgs=%s tools=%s "
+                "plan_all_done=%s safe_len=%s shape=%s err=%s",
+                turn, thinking, len(messages), len(schemas), plan_all_done,
+                len(sanitize_messages(messages)), message_shape(messages), e,
+            )
             trace["stopped_by"] = "llm_error"
+            try:
+                harness._fc_fail_info = {
+                    "reason": "llm_error",
+                    "turn": turn,
+                    "msgs": len(messages),
+                    "tools": len(schemas),
+                    "shape": message_shape(messages)[:400],
+                    "error": f"{type(e).__name__}: {e}",
+                }
+            except Exception:  # noqa: BLE001 - 诊断失败绝不影响回退
+                pass
             return None
 
         guards.add_usage(resp.get("usage"))
@@ -206,7 +231,12 @@ async def run_loop(
                         f"{closure_summary(harness._plan, harness._plan_status)} → 交回模型自决",
                     )
                     if content:
-                        messages.append({"role": "assistant", "content": content})
+                        # reasoning 必须随 assistant 回传（thinking 模式硬校验，见 schema.to_assistant_message）
+                        messages.append({
+                            "role": "assistant",
+                            "content": content,
+                            "reasoning_content": reasoning or "",
+                        })
                     messages.append({
                         "role": "system",
                         "content": build_close_instruction(harness._plan, harness._plan_status),
@@ -219,7 +249,8 @@ async def run_loop(
 
         if content:
             await ev.emit_thought(harness, event_callback, content, step=turn)
-        messages.append(to_assistant_message(content, calls))
+        # reasoning 必须随 assistant 回传（thinking 模式硬校验，缺失 → 400 → run_loop_none）
+        messages.append(to_assistant_message(content, calls, reasoning))
         plan_all_done = False   # 只要还在调工具，就不算收口
 
         # ── 执行工具 ──
@@ -243,6 +274,7 @@ async def run_loop(
         guards.stopped_by = guards.stopped_by or "turns"
 
     # ── 熔断收口：给模型一次产出终稿的机会（宿主索要终稿 → thinking 关闭）──
+    _close_err = ""
     if not draft:
         try:
             # L4-P0 缺口修补（活测 2026-09-13 发现）：熔断路径绕过了闭合门 —— 计划可能仍有
@@ -264,18 +296,57 @@ async def run_loop(
                     "→ 已要求模型如实说明缺口",
                 )
             close_msgs = messages + [{"role": "system", "content": _close_txt}]
-            resp = await get_llm_with_tools(
-                sanitize_messages(close_msgs), [], model=model, thinking=AGENT_THINKING_FINAL,
-            )
-            guards.add_usage(resp.get("usage"))
-            draft = (resp.get("content") or "").strip()
-            if draft:
-                harness._log("system", f"[FC] 宿主收口产出终稿（{len(draft)} 字）")
+            # 收口重试（P1 活测发现）：模型跑满轮次时对话末尾是 tool 消息，且本次不声明任何
+            # 工具 schema —— DeepSeek 偶尔会返回**空 content**。这是可恢复的偶发态，故重试一次；
+            # 仍为空才判定失败（交上层回退 legacy），并把诊断信息留在 harness 上供排障。
+            for _attempt in (1, 2):
+                try:
+                    resp = await get_llm_with_tools(
+                        sanitize_messages(close_msgs), [], model=model,
+                        thinking=AGENT_THINKING_FINAL,
+                    )
+                    guards.add_usage(resp.get("usage"))
+                    draft = (resp.get("content") or "").strip()
+                except Exception as e:  # noqa: BLE001
+                    _close_err = f"{type(e).__name__}: {e}"
+                    draft = ""
+                if draft:
+                    harness._log(
+                        "system",
+                        f"[FC] 宿主收口产出终稿（{len(draft)} 字，第 {_attempt} 次尝试）",
+                    )
+                    break
+                harness._log("warn", f"[FC] 收口返回空（第 {_attempt} 次）")
         except Exception as e:  # noqa: BLE001
             harness._log("warn", f"[FC] 收口失败: {e}")
 
     if not draft:
         harness._log("system", "[FC] 运行时未产出终稿 → 交回上层回退")
+        # P1 诊断：把失败时的真实运行态留痕（否则只知道"失败了"，不知道"为什么"）。
+        # 双通道：① 结构化 fail_info 交给 harness 的 fc_meta（供前端/测试读取）；
+        #        ② 直接 WARNING 落盘（harness._log 受 verbose 门控不落盘，此处必须有独立出口）。
+        _fail = {
+            "reason": "no_draft_after_close",
+            "turns": guards.turns,
+            "tokens": guards.tokens,
+            "token_budget": guards.token_budget,
+            "stopped_by": guards.stopped_by,
+            "compactions": int((trace or {}).get("compactions", 0) or 0),
+            "plan_steps": len(harness._plan or []),
+            "open_at_fail": len(open_steps(harness._plan_status)),
+            "close_error": _close_err,
+        }
+        logger.warning(
+            "[FC] 未产出终稿（诊断）：turns=%s tokens=%s/%s stopped_by=%s compactions=%s "
+            "plan_steps=%s open=%s close_error=%s",
+            _fail["turns"], _fail["tokens"], _fail["token_budget"], _fail["stopped_by"],
+            _fail["compactions"], _fail["plan_steps"], _fail["open_at_fail"],
+            _fail["close_error"] or "(空)",
+        )
+        try:
+            harness._fc_fail_info = _fail
+        except Exception:  # noqa: BLE001 - 诊断失败绝不能影响回退
+            pass
         return None
 
     # ── 完成态核验：不符时把修正权交回模型（一次）──
