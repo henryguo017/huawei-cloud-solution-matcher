@@ -8,7 +8,8 @@
   C1 控制流在模型 → 无工具白名单、无步序约束；终止条件 = 模型不再请求工具
   C2 工具接口结构化 → schema.build_tool_schemas + tool_calls（无文本解析）
   C3 失败恢复在模型 → 工具错误结构化回填，模型自行调整；宿主只做预算熔断
-  C4 计划所有权   → todo.update_plan 由模型调用，宿主不据此约束执行
+  C4 计划所有权   → todo.update_plan 由模型调用；L4-P0 加「闭合门」：终稿前计划须每步闭合
+                     （宿主只查计划状态，**不做**步归属推导、**不改**顺序）
 
 宿主边界（不越界）：
   - 权限闸门复用 harness._gate_tool（human-in-the-loop）
@@ -18,7 +19,7 @@
 
 thinking 按轮分档（实测依据见 config 注释）：
   - 决策轮 → AGENT_THINKING_DECISION（enabled），拿 reasoning_content 上屏
-  - 模型已用 update_plan 把全部步骤标记 done → 下一次调用按 AGENT_THINKING_FINAL（disabled），
+  - 模型已用 update_plan 把计划**全部闭合**（done/skipped）→ 下一次调用按 AGENT_THINKING_FINAL（disabled），
     **这是模型自己给出的"要收口了"信号**，不是宿主猜测
   - 宿主主动索要终稿（预算收口 / 完成态自纠）→ AGENT_THINKING_FINAL
 """
@@ -32,6 +33,7 @@ from app.config import (
     AGENT_MAX_TURNS, AGENT_TOKEN_BUDGET, AGENT_WALL_BUDGET, AGENT_ADVISORY_AT,
     AGENT_THINKING_DECISION, AGENT_THINKING_FINAL, AGENT_PARALLEL_READONLY,
     AGENT_COMPACT_AT, AGENT_COMPACT_KEEP_TURNS, MAX_PARALLEL, AGENT_CONTEXT_WINDOW,
+    AGENT_PLAN_CLOSE_ENFORCE, AGENT_PLAN_CLOSE_MAX_RETRY,
 )
 from app.agent.runtime import events as ev
 from app.agent.runtime import verify as vf
@@ -41,7 +43,10 @@ from app.agent.runtime.schema import (
     build_tool_schemas, is_readonly, parse_tool_arguments, sanitize_messages,
     to_assistant_message, to_tool_message,
 )
-from app.agent.runtime.todo import TODO_TOOL_NAME, TODO_TOOL_SCHEMA, handle_update_plan, normalize_items
+from app.agent.runtime.todo import (
+    TODO_TOOL_NAME, TODO_TOOL_SCHEMA, handle_update_plan, normalize_items,
+    open_steps, closure_summary, build_close_instruction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -126,11 +131,12 @@ async def run_loop(
         {"role": "user", "content": user_input},
     ]
 
-    trace: Dict[str, Any] = {"turns": [], "compactions": 0, "stopped_by": ""}
+    trace: Dict[str, Any] = {"turns": [], "compactions": 0, "stopped_by": "", "plan_drift_rejections": 0}
     draft = ""
     active_step = -1
     pending_export: Optional[str] = None
     plan_all_done = False
+    plan_close_retries = 0    # L4-P0：闭合门交回模型的次数（上限防死锁）
     closed_by = "model"        # model=模型自主终止 / turns|tokens|wall=宿主熔断
 
     for _ in range(guards.turns_max):
@@ -184,8 +190,28 @@ async def run_loop(
         if reasoning:
             await ev.emit_thought(harness, event_callback, reasoning, step=turn)
 
-        # ── 终止条件：模型不再请求工具 → 这条消息就是终稿 ──
+        # ── 终止条件：模型不再请求工具 → 这条消息本来要作为终稿 ──
         if not calls:
+            # L4-P0 计划闭合门：终稿前，**模型自己发布的计划**必须每步闭合（done/skipped）。
+            # 有未闭合项 → 不接收终稿，把未闭合项交回模型自决（补做 / 标 skipped+原因）。
+            # 边界：宿主只看计划状态，不做"工具属于哪步"的归属推导，也不改顺序 —— 控制权仍在模型。
+            if AGENT_PLAN_CLOSE_ENFORCE and plan_close_retries < AGENT_PLAN_CLOSE_MAX_RETRY:
+                _open = open_steps(harness._plan_status)
+                if _open:
+                    plan_close_retries += 1
+                    trace["plan_drift_rejections"] += 1
+                    harness._log(
+                        "system",
+                        f"[FC][P0] 计划闭合门拦截（第 {plan_close_retries} 次）："
+                        f"{closure_summary(harness._plan, harness._plan_status)} → 交回模型自决",
+                    )
+                    if content:
+                        messages.append({"role": "assistant", "content": content})
+                    messages.append({
+                        "role": "system",
+                        "content": build_close_instruction(harness._plan, harness._plan_status),
+                    })
+                    continue
             draft = content
             closed_by = "model"
             harness._log("system", f"[FC] 模型自主终止于第 {turn} 轮（终稿 {len(content)} 字）")
@@ -313,7 +339,7 @@ async def _execute_calls(
       results        → [(call_id, observation), ...]，供回填 messages（顺序与 calls 一致）
       active_step    → update_plan 声明的"进行中"步索引（供 Plan 面板点亮）
       pending_export → 待终稿产出后执行的导出格式（None 表示无）
-      plan_all_done  → 模型是否已把所有步骤标记为 done（收口信号）
+      plan_all_done  → 模型是否已把计划**全部闭合**（done/skipped），作为收口信号
       wrote          → 本轮是否发生写操作（触发事实块刷新）
     """
     results: List[Tuple[str, str]] = []
@@ -332,7 +358,8 @@ async def _execute_calls(
                 continue
             obs, idx = await handle_update_plan(harness, event_callback, args)
             _, statuses, _ = normalize_items(args)
-            plan_all_done = bool(statuses) and all(s == "done" for s in statuses)
+            # L4-P0：闭合即收口信号 —— done 与 skipped 都算闭合（skipped 是模型显式放弃）
+            plan_all_done = bool(statuses) and not open_steps(statuses)
             if idx >= 0:
                 active_step = idx
             results.append((tc.get("id"), obs))

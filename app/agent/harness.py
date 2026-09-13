@@ -608,14 +608,24 @@ class AgentHarness:
             f"压缩={(loop_res.get('trace') or {}).get('compactions', 0)}",
         )
         # L4-P2 运行元数据（S4 评估 A7/A9/A10 的数据源；stop_reason=model 即模型自主终止）
+        # L4-P0 增：drift_rejections（闭合门拦截次数）+ plan_open_at_final（交付时未闭合步数）
+        #          → A11 计划收敛率 = plan_open_at_final == 0 的 FC 运行占比
+        _trace = loop_res.get("trace") or {}
+        try:
+            from app.agent.runtime.todo import open_steps
+            _open_at_final = len(open_steps(self._plan_status)) if self._plan else 0
+        except Exception:  # noqa: BLE001 - 观测字段失败不影响交付
+            _open_at_final = 0
         self._fc_meta = {
             "turns": _g.get("turns"),
             "stopped_by": _g.get("stopped_by"),
-            "compactions": (loop_res.get("trace") or {}).get("compactions", 0),
+            "compactions": _trace.get("compactions", 0),
             "plan_updates": int(getattr(self, "_plan_update_count", 0) or 0),
             "plan_steps": len(self._plan or []),
             "tokens": _g.get("tokens"),
             "pending_export": loop_res.get("pending_export"),
+            "drift_rejections": int(_trace.get("plan_drift_rejections", 0) or 0),
+            "plan_open_at_final": _open_at_final,
         }
         return self._make_result(
             draft, tool_calls_log, success=True,

@@ -192,6 +192,15 @@ AGENT_TOKEN_BUDGET = int(os.getenv("AGENT_TOKEN_BUDGET", "200000"))
 AGENT_WALL_BUDGET = int(os.getenv("AGENT_WALL_BUDGET", "420"))      # 本任务墙钟预算（秒）
 AGENT_ADVISORY_AT = float(os.getenv("AGENT_ADVISORY_AT", "0.8"))    # 预算消耗达此比例 → 注入"请收口"提示（仍由模型决策）
 
+# 计划闭合门（L4-P0，通用底座能力，与行业无关）：
+#   语义：终稿交付前，**模型自己发布的计划**里每一步都必须处于 done 或 skipped(带原因)。
+#   有未闭合项 → 宿主不接收终稿，把未闭合项交回模型自决（补做 / 标 skipped+原因）。
+#   ⚠️ 边界：宿主**不做**"某工具属于某步"的归属推导（那正是架构文档 §8 要删的 _tool_to_plan_index），
+#      只查「模型自己的计划有没有未闭合项」这一个事实 —— 顺序、步骤、做不做，仍全在模型。
+#   上限防死锁：最多交回 N 次，超过则接受终稿并打告警标记（宁可告警，不可卡死）。
+AGENT_PLAN_CLOSE_ENFORCE = os.getenv("AGENT_PLAN_CLOSE_ENFORCE", "1").strip() == "1"
+AGENT_PLAN_CLOSE_MAX_RETRY = int(os.getenv("AGENT_PLAN_CLOSE_MAX_RETRY", "2"))
+
 # thinking 按轮分档（实测依据 .workbuddy/Temp/fc_thinking_probe.py）：
 #   决策轮开 thinking → 拿到 reasoning_content 作为真实推理上屏（flash 44 tokens/1.7s）；
 #   终稿轮必须关 —— 无 tools + thinking 生成方案实测 31.0s / 3830 reasoning tokens。
