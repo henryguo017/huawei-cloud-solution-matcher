@@ -26,6 +26,7 @@ thinking 按轮分档（实测依据见 config 注释）：
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -158,6 +159,34 @@ async def run_loop(
         {"role": "user", "content": user_input},
     ]
 
+    # ── 业务闭环 E2E 修复（2026-09-13）：FC 多轮会话上下文丢失 ──
+    # 此前 messages 只含 system + 当前用户消息 → 同会话前几轮的上下文（"基于这些情况
+    # 出方案"的"这些情况"）完全落空，模型只能去历史经验块里抓场景——真实场景实测：
+    # 用户本轮明确在谈汽车零部件，产出却是历史会话的"3 园区 380 家企业"方案。
+    # 修复 = 把本会话最近几轮真实对话（user/assistant）插到 system 之后、当前消息之前。
+    try:
+        _hist = harness.memory.get_history_messages(session_id, limit=12)
+        # 去掉当前这条用户消息（调用方已写入会话历史；超长入库只留前 500 字，用前缀匹配）
+        while _hist and _hist[-1].get("role") == "user":
+            _c = (_hist[-1].get("content") or "").strip()
+            if _c and (user_input or "").strip().startswith(_c[:100]):
+                _hist.pop()
+            else:
+                break
+        _hist = _hist[-6:]   # 最近 6 轮足够锚定场景，控制 token
+        if _hist:
+            _hist_msgs = [
+                {"role": "user" if h.get("role") == "user" else "assistant",
+                 "content": str(h.get("content") or "")[:800]}
+                for h in _hist if (h.get("content") or "").strip()
+            ]
+            if _hist_msgs:
+                messages = messages[:1] + _hist_msgs + messages[1:]
+                trace["session_history_turns"] = len(_hist_msgs)
+                harness._log("system", f"[FC] 已注入本会话前 {len(_hist_msgs)} 轮对话作为上下文")
+    except Exception as e:  # noqa: BLE001 - 历史注入失败不阻断任务
+        harness._log("warn", f"[FC] 会话历史注入失败（忽略）: {e}")
+
     trace: Dict[str, Any] = {"turns": [], "compactions": 0, "stopped_by": "", "plan_drift_rejections": 0}
     draft = ""
     active_step = -1
@@ -171,6 +200,11 @@ async def run_loop(
     tool_fail_streak: Dict[str, int] = {}
     tool_fail_reason: Dict[str, str] = {}
     tool_heal_advised: set = set()
+    # 业务闭环 E2E 修复（2026-09-13）：终稿缩水保护——记录本轮 loop 中最长的正文消息。
+    # 真实场景实测：模型在中间轮流式输出了完整方案正文（带 tool_calls 的消息），最后一轮
+    # 只说"终稿已在上一条交付"→ result.answer 变成缩水回顾，用户看到的最终内容严重缺斤短两。
+    _best_content = ""
+    _META_DRAFT_RE = re.compile(r"(已在上一条|上一条正文|交付要点回顾|计划已全部闭合|方案终稿已在|上文已完整)")
 
     for _ in range(guards.turns_max):
         state, advisory = guards.check()
@@ -256,6 +290,9 @@ async def run_loop(
         rec.content_chars = len(content)
         rec.tool_calls = [(c.get("function") or {}).get("name", "") for c in calls]
         trace["turns"].append(rec.as_dict())
+        # 终稿缩水保护：记录本轮内最长的正文消息（含带 tool_calls 的中间轮）
+        if len(content) > len(_best_content):
+            _best_content = content
 
         # 真实推理上屏（思考面板不再是"模型写的台词"，而是模型自己的推理）
         if reasoning:
@@ -406,6 +443,19 @@ async def run_loop(
         except Exception:  # noqa: BLE001 - 诊断失败绝不能影响回退
             pass
         return None
+
+    # ── 终稿缩水保护（业务闭环 E2E 2026-09-13）：最终消息是"回顾/已在上一条交付"
+    # 类元话语、且本轮存在明显更长的正文 → 用长正文作终稿，杜绝交付物缺斤短两。
+    # 双条件防误伤：draft 明显更短（<50%）+ draft 命中元话语特征。
+    if draft and _best_content and len(draft) < len(_best_content) * 0.5 \
+            and len(_best_content) >= 600 and _META_DRAFT_RE.search(draft):
+        harness._log(
+            "system",
+            f"[FC] 终稿缩水保护生效：最终消息 {len(draft)} 字为回顾性元话语，"
+            f"回填本轮最长正文 {len(_best_content)} 字作为终稿",
+        )
+        trace["final_from"] = "longest_content"
+        draft = _best_content
 
     # ── 完成态核验：不符时把修正权交回模型（一次）──
     facts = _collect_facts(tool_calls_log, pending_export)
