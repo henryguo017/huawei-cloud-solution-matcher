@@ -245,7 +245,25 @@ async def run_loop(
     # ── 熔断收口：给模型一次产出终稿的机会（宿主索要终稿 → thinking 关闭）──
     if not draft:
         try:
-            close_msgs = messages + [{"role": "system", "content": _CLOSE_INSTRUCTION}]
+            # L4-P0 缺口修补（活测 2026-09-13 发现）：熔断路径绕过了闭合门 —— 计划可能仍有
+            # 未闭合步，而预算/轮次已到上限、不允许再来一轮。此时**不改指标口径**（该样本
+            # 在 A11 里如实算失败），但要求模型在终稿里**如实说明缺口**，避免"计划没做完却
+            # 看起来完成了"。这正是"宿主只做核验、不替模型粉饰"的边界。
+            _close_txt = _CLOSE_INSTRUCTION
+            _open_now = open_steps(harness._plan_status)
+            if _open_now:
+                _close_txt += (
+                    "\n\n（宿主补充）注意：你计划里仍有未闭合的步骤（"
+                    + closure_summary(harness._plan, harness._plan_status)
+                    + "）。本次因预算/轮次已到上限无法继续执行，"
+                    "请务必在答案中**如实说明**哪些部分尚未完成或未核实，不要谎称已经完成。"
+                )
+                harness._log(
+                    "system",
+                    f"[FC][P0] 熔断收口时计划未闭合（{closure_summary(harness._plan, harness._plan_status)}）"
+                    "→ 已要求模型如实说明缺口",
+                )
+            close_msgs = messages + [{"role": "system", "content": _close_txt}]
             resp = await get_llm_with_tools(
                 sanitize_messages(close_msgs), [], model=model, thinking=AGENT_THINKING_FINAL,
             )
