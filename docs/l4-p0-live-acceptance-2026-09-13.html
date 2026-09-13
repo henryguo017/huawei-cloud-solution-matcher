@@ -29,18 +29,18 @@ blockquote table{font-size:13.5px;background:#fff;}
 blockquote p{margin:6px 0;}
 </style></head><body><div class="wrap">
 <h1>L4-P0 计划闭合门 · 活测验收记录（2026-09-13）</h1>
-<blockquote><p>目的：回答两个离线脚本答不了的问题 —— ① 真模型会不会<strong>自己</strong>把计划闭合（还是只会一路检索到底）？② 出现未闭合时，宿主拦截后模型能不能<strong>自己</strong>补救？ 结论：<strong>纪律成立</strong>（模型自主终止的样本 3/3 全部自行闭合计划），主口径未达标的原因在<strong>宿主预算熔断</strong>，不在模型纪律。本轮另发现并修复熔断路径的收口缺口。</p></blockquote>
+<blockquote><p>目的：回答两个离线脚本答不了的问题 —— ① 真模型会不会<strong>自己</strong>把计划闭合（还是只会一路检索到底）？② 出现未闭合时，宿主拦截后模型能不能<strong>自己</strong>补救？ 结论：<strong>纪律成立</strong>；首轮（n=5）主口径 0.750 的唯一失败源于<strong>宿主预算熔断</strong>而非模型纪律 → 据此重标定 token 预算并扩测到 <strong>n=12 复验，主口径 1.000（8/8）达标</strong>。本轮另发现并修复熔断路径的收口缺口。</p></blockquote>
 <hr>
 <h2>1. 方法</h2>
-<table><thead><tr><th>项</th><th>值</th></tr></thead><tbody><tr><td>脚本</td><td><code>.workbuddy/Temp/p0_closure_live.py</code>（5 例：3 × solution + 2 × competitor）</td></tr><tr><td>端点</td><td><code>POST /api/agent/chat</code>，<code>runtime=fc</code> + <code>autonomy=high</code>（双门禁）</td></tr><tr><td>模型</td><td>DeepSeek（真实调用，非 mock）</td></tr><tr><td>观测</td><td>SSE <code>plan</code> / <code>tool_start</code> / <code>result</code> 事件；<code>fc_meta.{turns,stopped_by,drift_rejections,plan_open_at_final,plan_steps}</code></td></tr><tr><td>原始日志</td><td><code>.workbuddy/Temp/p0_live.log</code></td></tr></tbody></table>
+<table><thead><tr><th>项</th><th>值</th></tr></thead><tbody><tr><td>脚本</td><td>首轮 <code>.workbuddy/Temp/p0_closure_live.py</code>（n=5）；扩测 <code>.workbuddy/Temp/p0_closure_12q.py</code>（n=12）；定向探针 <code>p0_fuse_probe.py</code></td></tr><tr><td>端点</td><td><code>POST /api/agent/chat</code>，<code>runtime=fc</code> + <code>autonomy=high</code>（双门禁）</td></tr><tr><td>模型</td><td>DeepSeek（真实调用，非 mock）</td></tr><tr><td>观测</td><td>SSE <code>plan</code> / <code>tool_start</code> / <code>result</code> 事件；<code>fc_meta.{turns,stopped_by,drift_rejections,plan_open_at_final,plan_steps}</code></td></tr><tr><td>原始日志</td><td><code>.workbuddy/Temp/p0_live.log</code></td></tr></tbody></table>
 <p>指标口径：</p>
 <ul><li><strong>A11 主口径</strong> ＝ 交付时计划全闭合的 FC 运行 ÷ 发布过计划（≥2 步）的 FC 运行（含被宿主熔断的样本，<strong>不剔除、不粉饰</strong>）</li><li><strong>A11 参考口径</strong> ＝ 同式，但<strong>只统计模型自主终止</strong>（<code>stopped_by=model</code>）的样本 —— 用于区分「模型不做」与「宿主没让它做完」</li></ul>
 <hr>
-<h2>2. 逐例结果</h2>
+<h2>2. 逐例结果（首轮 n=5；扩测见 §6）</h2>
 <table><thead><tr><th>#</th><th>类别</th><th>任务</th><th>引擎</th><th>耗时</th><th>轮次</th><th>终止</th><th>计划步数</th><th>交付时未闭合</th><th>闭合门拦截</th></tr></thead><tbody><tr><td>1</td><td>solution</td><td>300 人跨境电商上云方案</td><td><strong>legacy</strong></td><td>88.4s</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr><tr><td>2</td><td>solution</td><td>智慧水务（担心数据安全）</td><td>fc</td><td>30.3s</td><td>5</td><td>model</td><td>5</td><td>0</td><td>0</td></tr><tr><td>3</td><td>solution</td><td>高校一卡通 + 机房改造规划</td><td>fc</td><td>29.6s</td><td>6</td><td>model</td><td>6</td><td>0</td><td>0</td></tr><tr><td>4</td><td>competitor</td><td>华为云 vs 阿里云（制造业物联网）</td><td>fc</td><td>46.8s</td><td>9</td><td><strong>tokens</strong></td><td>4</td><td><strong>1</strong></td><td><strong>1</strong></td></tr><tr><td>5</td><td>competitor</td><td>腾讯云智慧医疗动态调研</td><td>fc</td><td>31.5s</td><td>8</td><td>model</td><td>4</td><td>0</td><td>0</td></tr></tbody></table>
 <p>未进入 FC 的 1 例（#1）由范围门按意图分流至老管线 —— 属既定设计（D5），不计入 A11。</p>
 <hr>
-<h2>3. A11 结论</h2>
+<h2>3. A11 结论（首轮 n=5，扩测见 §6）</h2>
 <p>``` 有效运行 5  |  进入 FC 4  |  宿主熔断 1 发布计划(≥2步) 4  |  交付时计划全闭合 3 闭合门累计拦截 1 次</p>
 <p>A11 计划收敛率（主口径·全部 FC 运行） = 0.750（目标 ≥0.90） → FAIL ❌ A11（参考·仅模型自主终止）          = 1.000（3/3）  ← 仅参考，不替代主口径 ```</p>
 <p><strong>怎么读这个 0.750：</strong></p>
@@ -59,6 +59,22 @@ blockquote p{margin:6px 0;}
 <ol><li><code>app/agent/agent.py:44</code> 默认 <code>verbose=False</code> → <code>harness._log()</code> 只写入内存 <code>self._logs</code>，不落盘（试过 <code>--log-level info</code> 也无效 —— 卡点是 verbose，不是日志级别）。</li><li><code>api/agent_routes.py:381-395</code> 的 <code>result</code> SSE 事件是<strong>字段白名单</strong>，<strong>不含 <code>logs</code></strong>。</li></ol>
 <p>因此证据链为：<strong>白名单内的 <code>fc_meta</code>（<code>stopped_by</code> + <code>plan_open_at_final</code> + <code>drift_rejections</code>）＋ 离线 T10c ＋ 终稿正文</strong>。三者互证，足以判定修补生效。</p>
 <hr>
-<h2>6. 结论与待决</h2>
-<ul><li><strong>P0 达成核心目标</strong>：计划从「叙述性」变成「有齿的待办」，且<strong>齿是模型自己咬合的</strong>（参考口径 3/3）。闭合门在真实条件下可拦截。</li><li><strong>A11 主口径 0.750 未过线</strong>，根因是 <code>AGENT_TOKEN_BUDGET=200000</code> 对「13 次工具调用的竞品对比」这类长任务仍偏紧。</li><li>可选处置（待定）：</li><ul><li>(a) 抬高预算（如 300k），或按意图分档；</li><li>(b) 熔断时若计划未闭合则<strong>有界</strong>延期（须防死锁）；</li><li>建议先扩测到 n≥10 再定论，避免小样本误判。</li></ul><li>回退：<code>AGENT_PLAN_CLOSE_ENFORCE=0</code>（闭合门整体关）；FC 本身仍可用 <code>AGENT_RUNTIME=legacy</code> 或前端 ⚡ 开关双门关闭。</li></ul>
+<h2>6. 预算重标定与扩测复验（n=12）</h2>
+<p><strong>动机</strong>：首轮 n=5 的 A11 主口径 0.750 只有 4 个 FC 样本，1 例熔断就能让比率剧烈跳动 —— 样本量不足以下判，且熔断根因需要数据而非估算来定位。</p>
+<p><strong>做法</strong>：把 FC 可进入的两类意图跑满（solution 6 + competitor 6 = 12 例），并把每例真实 <code>fc_meta.tokens</code> 打出来，用<strong>实测消耗分布</strong>定预算档位。</p>
+<h3>6.1 结果（预算 400k）</h3>
+<p>``` 有效运行 12  |  进入 FC 8  |  宿主熔断 0 发布计划(≥2步) 8  |  交付时计划全闭合 8 闭合门累计拦截 0 次</p>
+<p>A11 计划收敛率（主口径·全部 FC 运行） = 1.000（8/8） → PASS ✅ A11（参考·仅模型自主终止）          = 1.000（8/8） ```</p>
+<table><thead><tr><th>#</th><th>类别</th><th>引擎</th><th>轮</th><th>终止</th><th>tokens</th><th>计划步</th><th>未闭合</th><th>工具</th></tr></thead><tbody><tr><td>1</td><td>solution</td><td>legacy</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>14</td></tr><tr><td>2</td><td>solution</td><td>fc</td><td>5</td><td>model</td><td>85,464</td><td>4</td><td>0</td><td>8</td></tr><tr><td>3</td><td>solution</td><td>fc</td><td>6</td><td>model</td><td>95,465</td><td>5</td><td>0</td><td>6</td></tr><tr><td>4</td><td>solution</td><td>legacy</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>0</td></tr><tr><td>5</td><td>solution</td><td>legacy</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>6</td></tr><tr><td>6</td><td>solution</td><td>fc</td><td>5</td><td>model</td><td>63,464</td><td>5</td><td>0</td><td>4</td></tr><tr><td>7</td><td>competitor</td><td>fc</td><td>12</td><td>model</td><td><strong>316,417</strong></td><td>4</td><td>0</td><td><strong>17</strong></td></tr><tr><td>8</td><td>competitor</td><td>fc</td><td>8</td><td>model</td><td>81,385</td><td>4</td><td>0</td><td>9</td></tr><tr><td>9</td><td>competitor</td><td>fc</td><td>5</td><td>model</td><td>78,673</td><td>5</td><td>0</td><td>6</td></tr><tr><td>10</td><td>competitor</td><td>legacy</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>15</td></tr><tr><td>11</td><td>competitor</td><td>fc</td><td>5</td><td>model</td><td>78,909</td><td>4</td><td>0</td><td>6</td></tr><tr><td>12</td><td>competitor</td><td>fc</td><td>5</td><td>model</td><td>94,262</td><td>5</td><td>0</td><td>10</td></tr></tbody></table>
+<p>（4 例分流至 legacy：范围门按意图判定，属既定设计 D5，不计入 A11。）</p>
+<h3>6.2 关键观察</h3>
+<ol><li><strong>曾经的失败样本（#7，制造业物联网竞品对比）这次跑完了</strong> —— 12 轮 / 17 次工具调用 / <strong>316,417</strong> tokens，<strong>模型自主终止</strong>、计划全闭合。它正是上一轮在 200k 被掐断的那一例。<strong>熔断根因确认为预算过紧，非模型能力。</strong></li><li><strong>自然消耗分布</strong>（全部 <code>stopped_by=model</code>，未受截断）：solution 63k–95k；competitor 78k–<strong>316k</strong>。中位数仅 83k —— 绝大多数任务离 200k 很远，<strong>预算是长尾任务才碰得到的天花板</strong>。</li><li><strong>闭合门 0 次拦截</strong>：样本充足时模型自发闭合，宿主无需介入（对比首轮 n=5 曾拦截 1 次）。</li></ol>
+<h3>6.3 预算定档（数据驱动）</h3>
+<p><code>AGENT_TOKEN_BUDGET</code>：200000 → <strong>500000</strong>。</p>
+<table><thead><tr><th>依据</th><th>值</th></tr></thead><tbody><tr><td>实测峰值（#7）</td><td>316,417</td></tr><tr><td>轮次上限推算（16 轮 × 实测 ~26k/轮）</td><td>≈ 420,000</td></tr><tr><td>选定值</td><td><strong>500,000</strong>（高于峰值 58%，对齐轮次上限）</td></tr></tbody></table>
+<p>设计意图：让<strong>轮次</strong>（<code>AGENT_MAX_TURNS=16</code>）成为真正的约束，token 预算退化为「只兜住病态单轮膨胀」的最后一道闸 —— 这样熔断行为可预测，不会再随机掐断正常长任务。</p>
+<blockquote><p>备注：本次复验在 400k 下已完成且 0 熔断（模型在 ≤316k 处自行停手）；升到 500k 只是把天花板抬到<strong>必然高于</strong>任何合法运行，无需重复消耗复验 —— 模型自主终止的样本不受天花板抬高影响。</p></blockquote>
+<hr>
+<h2>7. 结论与待决</h2>
+<ul><li>✅ <strong>P0 目标达成</strong>：计划从「叙述性」变成「有齿的待办」，且<strong>齿是模型自己咬合的</strong> —— 扩测后 <code>A11 主口径 1.000（8/8）</code>，样本充足时宿主<strong>无需介入</strong>（0 次拦截）。</li><li>✅ <strong>熔断根因已消除</strong>：A11 首轮 0.750 的唯一失败＝预算过紧掐断长任务；已重标定 200k → <strong>500k</strong>，扩测 <strong>0 熔断</strong>。曾经的失败样本（#7）在放宽预算后跑完全程并自主闭合。</li><li>⚠️ <strong>仍未做的（诚实边界）</strong>：① 样本仍限于 <code>solution</code>/<code>competitor</code> 两类意图（范围门未开，属 P1）；② 4 例分流 legacy 的样本不计入 A11，故 A11 尚未覆盖全部意图；③ 天花板抬到 500k 后需留意账单。</li><li>可选后续（<strong>未做</strong>，供决策）：</li><ul><li><strong>按意图分档</strong>：实测 solution ≤95k、competitor ≤316k，两档差异显著。若要收紧成本，可让 solution 用 200k、competitor 用 500k（<code>run_loop</code> 可直读 <code>harness._intent</code>，无需改函数签名）。当前取<strong>单一 500k</strong> 是为少一条代码路径、行为可预测 —— 代价是轻量任务也拿到高天花板。</li><li>(b) 熔断时若计划未闭合则<strong>有界</strong>延期（须防死锁）—— 在预算已不轻易触发的前提下优先级下降。</li></ul><li>回退：<code>AGENT_TOKEN_BUDGET=200000</code>（回到旧档）；<code>AGENT_PLAN_CLOSE_ENFORCE=0</code>（闭合门整体关）；FC 本身仍可用 <code>AGENT_RUNTIME=legacy</code> 或前端 ⚡ 开关双门关闭。</li><li><strong>成本提示</strong>：500k 是天花板不是均值 —— 实测中位数仅 83k，故典型任务成本不变；仅长尾任务（如 #7 的 316k）会比旧档多用约 1.6 倍 token。</li></ul>
 </div></body></html>

@@ -185,10 +185,17 @@ AGENT_RUNTIME = os.getenv("AGENT_RUNTIME", "legacy")
 # 运行时守卫（guards）：只做硬边界保护，不替模型做任务决策。
 AGENT_MAX_TURNS = int(os.getenv("AGENT_MAX_TURNS", "16"))          # 模型轮次硬上限（熔断）
 # AGENT_TOKEN_BUDGET：本任务**累计** token 预算（FC 循环每轮都要重发完整历史，故累计值随轮次超线性增长）。
-# 标定依据（S4 30 例对照，2026-09-13）：初值 60000 ≈ 一次 5 轮正常检索任务的总成本，
-# 导致 10/22 次运行被宿主提前熔断（A7 自主终止率仅 0.545，是**配置假阴性**而非设计缺陷）。
-# 改为 200000（≈ 典型运行成本的 3 倍），使预算只兜住失控循环，不打断正常任务。
-AGENT_TOKEN_BUDGET = int(os.getenv("AGENT_TOKEN_BUDGET", "200000"))
+# 标定依据（2026-09-13，全部为实测，非估算）：
+#   ① S4 30 例对照 → 初值 60000 ≈ 一次 5 轮正常检索任务的总成本，导致 10/22 次运行被宿主提前熔断
+#      （A7 自主终止率仅 0.545，是**配置假阴性**而非设计缺陷）→ 改 200000。
+#   ② P0 活测 n=12（solution 6 + competitor 6）→ 200000 仍会掐断"重工具链"任务：
+#      典型失控样本＝竞品对比（12 轮 / 17 次工具调用 / **316417** tokens），被掐断时计划无法闭合，
+#      是 A11 主口径 0.750 的唯一失败来源。
+#   ③ 实测自然消耗（全部 stopped_by=model，未受截断）：solution 63k~95k；competitor 78k~316k。
+#   → 定 500000：高于实测峰值 316k 约 58%，并与轮次上限对齐（AGENT_MAX_TURNS=16 × 实测 ~26k/轮 ≈ 420k）。
+#     语义上让**轮次**成为真正的约束，token 预算退化为"只兜住病态单轮膨胀"的最后一道闸。
+# 语义提醒：这是**天花板**不是目标 —— 模型自主收口时远用不到；抬高只影响长任务/失控循环。
+AGENT_TOKEN_BUDGET = int(os.getenv("AGENT_TOKEN_BUDGET", "500000"))
 AGENT_WALL_BUDGET = int(os.getenv("AGENT_WALL_BUDGET", "420"))      # 本任务墙钟预算（秒）
 AGENT_ADVISORY_AT = float(os.getenv("AGENT_ADVISORY_AT", "0.8"))    # 预算消耗达此比例 → 注入"请收口"提示（仍由模型决策）
 
