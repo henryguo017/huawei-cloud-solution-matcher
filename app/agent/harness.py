@@ -654,6 +654,8 @@ class AgentHarness:
             "pending_export": loop_res.get("pending_export"),
             "drift_rejections": int(_trace.get("plan_drift_rejections", 0) or 0),
             "plan_open_at_final": _open_at_final,
+            # P2-3 错误自愈事件（A13 数据源）：同工具连败→宿主注入换策略信号的记录
+            "heal_events": list(_trace.get("heal_events") or []),
         }
         return self._make_result(
             draft, tool_calls_log, success=True,

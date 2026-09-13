@@ -96,6 +96,11 @@ def validate_tool_def(name: str, description: str, params: Any, body: str) -> Tu
     return True, ""
 
 
+def _placeholder_params(params: Dict[str, str]) -> Dict[str, str]:
+    """占位试跑参数：每个声明参数填 "1"（数字可 float、文本可 str，覆盖绝大多数纯计算工具）。"""
+    return {k: "1" for k in (params or {})}
+
+
 async def dry_run(body: str, sample_params: Any) -> Tuple[bool, str]:
     """在子进程沙箱试跑一次。返回 (ok, 输出或错误)。"""
     code = build_wrapper(body, sample_params)
@@ -106,7 +111,13 @@ async def dry_run(body: str, sample_params: Any) -> Tuple[bool, str]:
         return False, f"试跑未通过静态检查：{err}"
     res = await sandbox.run_python(code)
     if not res.get("ok"):
-        return False, f"试跑失败：{str(res.get('stderr') or res.get('stdout') or '')[:400]}"
+        stderr = str(res.get("stderr") or "")
+        hint = ""
+        low = stderr.lower()
+        if "keyerror" in low or "missing" in low or "indexerror" in low:
+            hint = ("（你的 run() 直接按键取值，但试跑参数里没有该键——"
+                    "请在调用时提供 sample_params，或把取值改成 params.get('键名', 默认值) 防御式写法）")
+        return False, f"试跑失败：{stderr[:300]}{hint}"
     out = str(res.get("stdout") or "").strip()
     try:
         json.loads(out)
@@ -217,8 +228,12 @@ def make_create_tool_func(registry: ToolRegistry, user_id: Optional[int] = None)
         if not ok:
             return json.dumps({"status": "error", "message": err,
                                "hint": "请修正后重新调用 create_tool"}, ensure_ascii=False)
-        # 试跑验证：空参数 + 模型给的样例参数各跑一次（样例优先）
-        samples = [sample_params or {}, {}] if (sample_params or {}) else [{}]
+        # 试跑验证：模型给了样例参数 → 只试样例；没给 → 用占位参数（每键 "1"），
+        # 消除「run() 直接按键取值导致空参 KeyError」的假失败（活测 T4 实证：曾引发 10 次重试）。
+        if sample_params:
+            samples = [sample_params]
+        else:
+            samples = [_placeholder_params(params or {})]
         seen: set = set()
         for s in samples:
             key = json.dumps(s, sort_keys=True, ensure_ascii=False, default=str)
