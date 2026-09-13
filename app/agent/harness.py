@@ -1393,8 +1393,12 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             # 方案书（线上实锤）。明确非方案诉求（闲聊/问候/账户/知识问答）保留标准自然对话，
             # 自主模式只接管 solution/competitor/file_ops 等真正需要自主打法的任务。
             if self._autonomy == "high":
+                # 业务闭环 E2E 实测（2026-09-13）："把方案整理成PPT" 命中 export 后被本块
+                # 截胡当 solution 重跑（模型只能手写 PPT 大纲文本，真 PPT 引擎永远到不了）。
+                # export 必须与 general 等同列降级——落回标准意图路由的确定性导出分支
+                # （_intercept_generate_doc），从 _session_drafts 取上一轮终稿真出文件。
                 _pre = classify_intent(intent_text or user_input)
-                if _pre.get("intent") in ("general", "greeting", "account", "knowledge_q"):
+                if _pre.get("intent") in ("general", "greeting", "account", "knowledge_q", "export"):
                     self._log("system", f"[AUTONOMY] 意图预判={_pre.get('intent')}，非方案诉求 → 保留自然对话")
                     await self._emit(event_callback, {
                         "type": "thought", "step": 0,
