@@ -183,7 +183,14 @@ MCP_SERVERS = os.getenv("MCP_SERVERS", "")
 AGENT_RUNTIME = os.getenv("AGENT_RUNTIME", "legacy")
 
 # 运行时守卫（guards）：只做硬边界保护，不替模型做任务决策。
-AGENT_MAX_TURNS = int(os.getenv("AGENT_MAX_TURNS", "16"))          # 模型轮次硬上限（熔断）
+# L4-P2（2026-09-13 长程化）：轮次 16 → **64**。依据：L3 判据要求"跑通一个 ≥30 轮的任务"，
+# 16 轮在该判据下**必然熔断**，谈不到长程；64 给 ≥30 轮留一倍余量。
+# ⚠️ 三条"配套约束"必须同时满足，否则抬轮次是假的（2026-09-13 排查确认，此前无人注意）：
+#   ① 墙钟：AGENT_WALL_BUDGET 必须 < ② 路由硬超时 AGENT_RUN_HARD_TIMEOUT；
+#   ② 路由硬超时 < ③ nginx proxy_read_timeout **不是总时长**而是"两次读之间"的超时
+#      —— 故还必须保证 SSE **有事件/心跳**，否则静默期一过连接就被网关掐断（后端仍在烧 token）。
+#      `/agent/chat` 的 SSE 生成器此前 `await queue.get()` 无超时 → 无心跳，已修为 15s 心跳。
+AGENT_MAX_TURNS = int(os.getenv("AGENT_MAX_TURNS", "64"))          # 模型轮次硬上限（熔断）
 # AGENT_TOKEN_BUDGET：本任务**累计** token 预算（FC 循环每轮都要重发完整历史，故累计值随轮次超线性增长）。
 # 标定依据（2026-09-13，全部为实测，非估算）：
 #   ① S4 30 例对照 → 初值 60000 ≈ 一次 5 轮正常检索任务的总成本，导致 10/22 次运行被宿主提前熔断
@@ -195,22 +202,34 @@ AGENT_MAX_TURNS = int(os.getenv("AGENT_MAX_TURNS", "16"))          # 模型轮�
 #   → 定 500000：高于实测峰值 316k 约 58%，并与轮次上限对齐（AGENT_MAX_TURNS=16 × 实测 ~26k/轮 ≈ 420k）。
 #     语义上让**轮次**成为真正的约束，token 预算退化为"只兜住病态单轮膨胀"的最后一道闸。
 # 语义提醒：这是**天花板**不是目标 —— 模型自主收口时远用不到；抬高只影响长任务/失控循环。
-AGENT_TOKEN_BUDGET = int(os.getenv("AGENT_TOKEN_BUDGET", "500000"))
+# L4-P2（2026-09-13 长程化）：本值同时是「未列入分档的意图」的回落档。turns_max 已 16→64，
+# 回落档按最宽档（competitor）对齐，避免新放开的意图被一个比它更早定档的旧值掐断。
+AGENT_TOKEN_BUDGET = int(os.getenv("AGENT_TOKEN_BUDGET", "2000000"))
 # 按意图分档（L4-P1）：窄天花板给轻意图（成本可控），宽天花板给重工具链意图（别掐断长任务）。
-# 实测依据（2026-09-13，全部 stopped_by=model 的自然消耗，即未被熔断截断）：
-#   solution   峰值 133,921（n=18）  → 给 200k（≈1.5 × 峰值）
-#   competitor 峰值 384,311（n=4）   → 给 500k（≈1.3 × 峰值）
-# 口径提醒：分档最初基于 reasoning_content 未回传时的偏低数据（solution ≤95k / competitor 316k）；
-# 修好 thinking 回传后 reasoning 随每轮入上下文，峰值上抬约 +41% / +22%，已在 n=30 复验下重新核对——
-# 两档仍有余量，故不调档。改动本档前请重跑 .workbuddy/Temp/p0_closure_12q.py --all。
+# 定档方法（沿用 c0a5d53 已确立的口径，不是拍脑袋）：**天花板 ≈ 轮次上限 × 单轮实测 p95 消耗**，
+# 语义是"让轮次成为真约束，token 退化为只兜病态单轮膨胀的最后一道闸"。
+#   L4-P2 长程化后 turns_max=64（原 16）→ 档位必须同步按同一公式重算，否则长任务中途被 token 掐断：
+#   solution   p95/轮 ≈ 133921/6  ≈ 22.3k → 64 × 22.3k ≈ 1.43M → **1,500,000**
+#   competitor p95/轮 ≈ 384311/12 ≈ 32.0k → 64 × 32.0k ≈ 2.05M → **2,000,000**
+# 成本口径（诚实）：这是**天花板**不是均值 —— 实测中位数仍 ~87k，典型任务成本不变；
+# 只有病态循环（一直不收口）才会逼近天花板，且 ADVISORY_AT=0.8 会先软收敛。
+# 改动本档前请重跑 .workbuddy/Temp/p0_closure_12q.py --all 取新的单轮分布。
 # 未列出的意图（knowledge_q / general / file_ops 等）回落 AGENT_TOKEN_BUDGET（宽档）——
 # 这些意图刚由 P1 放开进入 FC，**先测量再收紧**，不以猜测定值。
 AGENT_TOKEN_BUDGET_BY_INTENT = {
-    "solution": int(os.getenv("AGENT_TOKEN_BUDGET_SOLUTION", "200000")),
-    "competitor": int(os.getenv("AGENT_TOKEN_BUDGET_COMPETITOR", "500000")),
+    "solution": int(os.getenv("AGENT_TOKEN_BUDGET_SOLUTION", "1500000")),
+    "competitor": int(os.getenv("AGENT_TOKEN_BUDGET_COMPETITOR", "2000000")),
 }
-AGENT_WALL_BUDGET = int(os.getenv("AGENT_WALL_BUDGET", "420"))      # 本任务墙钟预算（秒）
+# L4-P2 长程化：墙钟预算（秒）。420 → **1500**（25 分钟）。
+# 不变式（必须满足，否则长任务会在网关/路由层被掐）：AGENT_WALL_BUDGET < AGENT_RUN_HARD_TIMEOUT。
+AGENT_WALL_BUDGET = int(os.getenv("AGENT_WALL_BUDGET", "1500"))
 AGENT_ADVISORY_AT = float(os.getenv("AGENT_ADVISORY_AT", "0.8"))    # 预算消耗达此比例 → 注入"请收口"提示（仍由模型决策）
+# 路由级硬超时（秒）：`/agent/chat` 的 asyncio.wait_for 上限，兜住"某个无超时 await 卡死"的病态情况。
+# 必须严格大于 AGENT_WALL_BUDGET（给守卫留出"软收敛 + 收口 + 交付"的时间），否则守卫还没来得及收口就被路由杀掉。
+AGENT_RUN_HARD_TIMEOUT = int(os.getenv("AGENT_RUN_HARD_TIMEOUT", "1800"))
+# L4-P2-3 错误自愈阈值：同一工具**连续**失败达到该次数 → 注入一次"换策略"建议（每工具每次运行只注入一次）。
+# 语义：宿主只给信号不决策（换工具/换参数/如实说明缺口由模型自决）。
+AGENT_TOOL_HEAL_STREAK = int(os.getenv("AGENT_TOOL_HEAL_STREAK", "2"))
 
 # 计划闭合门（L4-P0，通用底座能力，与行业无关）：
 #   语义：终稿交付前，**模型自己发布的计划**里每一步都必须处于 done 或 skipped(带原因)。
@@ -330,7 +349,39 @@ RAG_THRESHOLD = float(os.getenv("RAG_THRESHOLD", "0.0"))    # 融合后低于该
 # SSE 流式连接治理
 SSE_HEARTBEAT_ENABLED = os.getenv("SSE_HEARTBEAT_ENABLED", "true").lower() == "true"  # 生产已开启：发心跳+超时清理
 SSE_HEARTBEAT_INTERVAL = int(os.getenv("SSE_HEARTBEAT_INTERVAL", "30"))  # 心跳间隔（秒）
-SSE_TIMEOUT = int(os.getenv("SSE_TIMEOUT", "300"))          # 单次流式最长时长（秒），超时主动结束
+# 单次流式最长时长（秒），超时主动结束。
+# 🔴 L4-P2 长程化（2026-09-13）：原 300s 是**整条流的总时长上限**（不是两次读之间的间隔），
+# 会在 5 分钟处把任何长任务强杀 —— 而这正是 FC 长程（≥30 轮，约 13~25 分钟）的必经区间，
+# 且 nginx `proxy_read_timeout 300s` 只是"两次读之间"的超时（有心跳就不会触发），二者语义极易混淆。
+# 修正：SSE 总时长上限必须 > 路由硬超时（AGENT_RUN_HARD_TIMEOUT）+ 60s 余量，
+# 顺序不变式：AGENT_WALL_BUDGET < AGENT_RUN_HARD_TIMEOUT < SSE_TIMEOUT。
+SSE_TIMEOUT = int(os.getenv("SSE_TIMEOUT", str(AGENT_RUN_HARD_TIMEOUT + 60)))
+
+# ── 超时链自洽性兜底（L4-P2 长程化，2026-09-13）──
+# 上面三个值来自独立 env，用户可能只改其中一个而破坏「wall < hard < sse」的不变式。
+# 与其让长任务在网关/路由层被莫名其妙地掐死（且后端继续烧 token），不如在导入期**归一化**并留 WARNING。
+def _normalize_timeout_chain() -> None:
+    """强制 wall < hard_timeout < sse_timeout；被改动的值落到合法区间并告警。"""
+    global AGENT_WALL_BUDGET, AGENT_RUN_HARD_TIMEOUT, SSE_TIMEOUT
+    problems = []
+    if AGENT_WALL_BUDGET >= AGENT_RUN_HARD_TIMEOUT:
+        problems.append(
+            f"AGENT_WALL_BUDGET({AGENT_WALL_BUDGET}) >= AGENT_RUN_HARD_TIMEOUT({AGENT_RUN_HARD_TIMEOUT})"
+            " → 守卫还没来得及软收敛/收口就会被路由硬杀，已把墙钟下调为 hard_timeout 的 80%"
+        )
+        AGENT_WALL_BUDGET = max(60, int(AGENT_RUN_HARD_TIMEOUT * 0.8))
+    if AGENT_RUN_HARD_TIMEOUT >= SSE_TIMEOUT:
+        problems.append(
+            f"AGENT_RUN_HARD_TIMEOUT({AGENT_RUN_HARD_TIMEOUT}) >= SSE_TIMEOUT({SSE_TIMEOUT})"
+            " → SSE 会在任务仍在运行时强断，已把 SSE_TIMEOUT 上调为 hard_timeout + 60"
+        )
+        SSE_TIMEOUT = AGENT_RUN_HARD_TIMEOUT + 60
+    for p in problems:
+        import logging as _lg
+        _lg.getLogger(__name__).warning("[config] 超时链不变式被环境变量破坏：%s", p)
+
+
+_normalize_timeout_chain()
 
 # ==================== 知识库配置 ====================
 KNOWLEDGE_BASE_DIRECTORY = _resolve_data_path(os.getenv("KNOWLEDGE_BASE_DIRECTORY", os.path.join(BASE_DIR, "data", "sample_solutions")))

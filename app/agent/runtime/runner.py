@@ -34,7 +34,7 @@ from app.config import (
     AGENT_WALL_BUDGET, AGENT_ADVISORY_AT,
     AGENT_THINKING_DECISION, AGENT_THINKING_FINAL, AGENT_PARALLEL_READONLY,
     AGENT_COMPACT_AT, AGENT_COMPACT_KEEP_TURNS, MAX_PARALLEL, AGENT_CONTEXT_WINDOW,
-    AGENT_PLAN_CLOSE_ENFORCE, AGENT_PLAN_CLOSE_MAX_RETRY,
+    AGENT_PLAN_CLOSE_ENFORCE, AGENT_PLAN_CLOSE_MAX_RETRY, AGENT_TOOL_HEAL_STREAK,
 )
 from app.agent.runtime import events as ev
 from app.agent.runtime import verify as vf
@@ -57,6 +57,23 @@ _CLOSE_INSTRUCTION = (
     "请立即基于你已经获得的信息输出最终答案，不要再调用任何工具；"
     "若某些信息确实缺失，请在答案中如实说明缺口。"
 )
+
+
+def build_heal_instruction(tool_name: str, fail_count: int, last_reason: str) -> str:
+    """P2-3 错误自愈：同工具连续失败后给模型的**建议性**信号。
+
+    宿主边界：只陈述事实（连败次数 + 最近一次报错）并给出可选路径，
+    **不指定**必须换哪个工具、也不替模型判断该不该放弃 —— 决策权归模型。
+    """
+    reason = (last_reason or "").strip().replace("\n", " ")[:200] or "（无报错详情）"
+    return (
+        f"【宿主自愈提示】工具 `{tool_name}` 已连续失败 {fail_count} 次。最近一次报错：{reason}\n"
+        "同一个调用方式大概率还会失败。请考虑：\n"
+        "1) 修正参数后重试（例如换更精确的关键词 / 缩小范围）；\n"
+        "2) 改用其他工具获得同等信息（例如 search_kb 换 web_search，或用 run_python 处理数据）；\n"
+        "3) 若确认没有可用路径，请**如实**在最终答案中说明该信息缺口，不要编造结果。\n"
+        "选择哪条路由你决定；宿主只提醒你不要重复同一动作。"
+    )
 
 
 def _collect_facts(tool_calls_log: List[Dict[str, Any]], pending_export: Optional[str] = None) -> List[Dict[str, str]]:
@@ -144,6 +161,12 @@ async def run_loop(
     plan_all_done = False
     plan_close_retries = 0    # L4-P0：闭合门交回模型的次数（上限防死锁）
     closed_by = "model"        # model=模型自主终止 / turns|tokens|wall=宿主熔断
+    # L4-P2-3 错误自愈（2026-09-13）：按**工具名**记连续失败次数与最近一次原因。
+    # 语义：宿主不判断"该怎么修"，只把"你已经撞同一面墙 N 次"这个事实**作为信号**交给模型；
+    # 换工具/换参数/如实说明缺口，全部由模型自决（与 guards.advisory 同构，符合宿主边界）。
+    tool_fail_streak: Dict[str, int] = {}
+    tool_fail_reason: Dict[str, str] = {}
+    tool_heal_advised: set = set()
 
     for _ in range(guards.turns_max):
         state, advisory = guards.check()
@@ -152,6 +175,25 @@ async def run_loop(
             break
         if advisory:
             messages.append({"role": "system", "content": advisory})
+
+        # ── P2-3 错误自愈信号：同一工具连续失败 ≥ 阈值 → 注入一次换策略建议（每工具只注入一次）──
+        if tool_fail_streak:
+            for _hname, _hcnt in tool_fail_streak.items():
+                if _hcnt < AGENT_TOOL_HEAL_STREAK or _hname in tool_heal_advised:
+                    continue
+                tool_heal_advised.add(_hname)
+                _hreason = tool_fail_reason.get(_hname, "")
+                trace.setdefault("heal_events", []).append({
+                    "turn": guards.turns, "tool": _hname, "fails": _hcnt, "reason": _hreason[:200],
+                })
+                messages.append({
+                    "role": "system",
+                    "content": build_heal_instruction(_hname, _hcnt, _hreason),
+                })
+                harness._log(
+                    "system",
+                    f"[FC] 工具 {_hname} 连续失败 {_hcnt} 次 → 已注入换策略建议（决策权归模型）",
+                )
 
         # ── 窗口保护：超阈值先压缩早期轮次 ──
         if messages_tokens(messages) >= int(AGENT_CONTEXT_WINDOW * AGENT_COMPACT_AT):
@@ -254,7 +296,7 @@ async def run_loop(
         plan_all_done = False   # 只要还在调工具，就不算收口
 
         # ── 执行工具 ──
-        results, active_step, pend, plan_done, wrote = await _execute_calls(
+        results, active_step, pend, plan_done, wrote, tool_outcomes = await _execute_calls(
             harness, calls, event_callback, session_id, tool_calls_log, active_step,
         )
         if pend:
@@ -262,6 +304,18 @@ async def run_loop(
         plan_all_done = plan_done
         for call_id, obs in results:
             messages.append(to_tool_message(call_id, obs))
+
+        # ── P2-3 自愈统计：按工具名累计连续失败（成功即清零）──
+        for _tname, _tok, _tobs in tool_outcomes:
+            if not _tname:
+                continue
+            if _tok:
+                tool_fail_streak.pop(_tname, None)
+                tool_fail_reason.pop(_tname, None)
+            else:
+                tool_fail_streak[_tname] = tool_fail_streak.get(_tname, 0) + 1
+                tool_fail_reason[_tname] = _tobs
+
         # 写操作发生后刷新事实块，避免模型基于过时认知做完成态表述
         if wrote:
             messages.append({
@@ -418,20 +472,28 @@ async def _exec_one(
     return observation
 
 
+def _is_error_obs(observation: str) -> bool:
+    """判定一次工具产出是否为**失败**（P2-3 自愈统计口径，与 _exec_one 的既有判定保持一致）。"""
+    text = observation or ""
+    return ("Error:" in text) or text.startswith("错误") or text.startswith("Error")
+
+
 async def _execute_calls(
     harness, calls: List[Dict[str, Any]], event_callback, session_id: str,
     tool_calls_log: list, active_step: int,
-) -> Tuple[List[Tuple[str, str]], int, Optional[str], bool, bool]:
+) -> Tuple[List[Tuple[str, str]], int, Optional[str], bool, bool, List[Tuple[str, bool, str]]]:
     """按模型给出的 tool_calls 逐个/并发执行。
 
-    返回 (results, active_step, pending_export, plan_all_done, wrote)：
+    返回 (results, active_step, pending_export, plan_all_done, wrote, tool_outcomes)：
       results        → [(call_id, observation), ...]，供回填 messages（顺序与 calls 一致）
       active_step    → update_plan 声明的"进行中"步索引（供 Plan 面板点亮）
       pending_export → 待终稿产出后执行的导出格式（None 表示无）
       plan_all_done  → 模型是否已把计划**全部闭合**（done/skipped），作为收口信号
       wrote          → 本轮是否发生写操作（触发事实块刷新）
+      tool_outcomes  → [(工具名, 是否成功, observation), ...]（P2-3 自愈统计用，顺序与 results 一致）
     """
     results: List[Tuple[str, str]] = []
+    tool_outcomes: List[Tuple[str, bool, str]] = []
     pending_export: Optional[str] = None
     plan_all_done = False
     wrote = False
@@ -444,6 +506,7 @@ async def _execute_calls(
             args, err = parse_tool_arguments(fn.get("arguments"))
             if err:
                 results.append((tc.get("id"), f"错误：{err}"))
+                tool_outcomes.append((TODO_TOOL_NAME, False, f"错误：{err}"))
                 continue
             obs, idx = await handle_update_plan(harness, event_callback, args)
             _, statuses, _ = normalize_items(args)
@@ -452,6 +515,7 @@ async def _execute_calls(
             if idx >= 0:
                 active_step = idx
             results.append((tc.get("id"), obs))
+            tool_outcomes.append((TODO_TOOL_NAME, not _is_error_obs(obs), obs))
         else:
             deferred.append(tc)
 
@@ -463,24 +527,29 @@ async def _execute_calls(
             args, err = parse_tool_arguments(fn.get("arguments"))
             if err:
                 results.append((tc.get("id"), f"错误：{err}"))
+                tool_outcomes.append(("generate_doc", False, f"错误：{err}"))
                 continue
             gate = await harness._gate_tool("generate_doc", args, event_callback)
             if gate is not None:
                 results.append((tc.get("id"), gate))
+                tool_outcomes.append(("generate_doc", False, str(gate)))
                 continue
             fmt = str((args or {}).get("format") or (args or {}).get("fmt") or "word").lower()
             if fmt not in ("word", "pdf", "pptx"):
                 fmt = "word"
             pending_export = fmt
-            results.append((
-                tc.get("id"),
-                f"导出请求已受理（格式 {fmt}）：宿主会在终稿产出后生成文件并给出下载链接。",
-            ))
+            _gd_obs = (
+                f"导出请求已受理（格式 {fmt}）：宿主会在终稿产出后生成文件并给出下载链接。"
+            )
+            results.append((tc.get("id"), _gd_obs))
+            tool_outcomes.append(("generate_doc", True, _gd_obs))
         else:
             # 参数解析失败也要回填结构化错误（不让模型拿到空参数静默失败）
             args, err = parse_tool_arguments(fn.get("arguments"))
             if err:
-                results.append((tc.get("id"), f"错误：工具 {fn.get('name')} {err}"))
+                _pe_obs = f"错误：工具 {fn.get('name')} {err}"
+                results.append((tc.get("id"), _pe_obs))
+                tool_outcomes.append((str(fn.get("name") or ""), False, _pe_obs))
                 continue
             normal.append({"tc": tc, "name": fn.get("name"), "args": args})
 
@@ -500,6 +569,7 @@ async def _execute_calls(
         ])
         for item, obs in zip(normal, obs_list):
             results.append((item["tc"].get("id"), obs))
+            tool_outcomes.append((str(item["name"] or ""), not _is_error_obs(obs), obs))
     else:
         for item in normal:
             obs = await _exec_one(
@@ -507,6 +577,7 @@ async def _execute_calls(
                 event_callback, session_id, tool_calls_log, active_step,
             )
             results.append((item["tc"].get("id"), obs))
+            tool_outcomes.append((str(item["name"] or ""), not _is_error_obs(obs), obs))
 
     wrote = any(item["name"] in vf.FACT_KIND_BY_TOOL for item in normal)
-    return results, active_step, pending_export, plan_all_done, wrote
+    return results, active_step, pending_export, plan_all_done, wrote, tool_outcomes

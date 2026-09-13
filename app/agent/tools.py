@@ -715,4 +715,93 @@ def create_default_tools() -> ToolRegistry:
         func=make_register_func(registry),
     ))
 
+    # 11. memory_write / memory_search — 自写记忆（L4-P2-4）
+    #     语义：模型在任务**进行中**主动记录/检索"它决定要记住的东西"。
+    #     memory_write 是写操作 → DEFAULT_TOOL_POLICY 设为 ask（弹窗确认）+ 纳入完成态核验；
+    #     memory_search 是只读 → allow。返回值一律是**宿主确认的落库/检索结果**（反幻觉）。
+    from app.agent import agent_notes as _notes
+
+    async def _tool_memory_write(scope: str = "session", title: str = "", content: str = "",
+                                 tags: str = "", **_kw) -> str:
+        # 上下文来源：harness.run() 设置的 contextvar 为主（Tool.execute 不传 kwargs），
+        # _kw 兜底（将来若分发路径显式注入则自动优先级生效——同名键在 _kw 里覆盖）。
+        from app.agent.agent_notes import get_run_context as _grc
+        ctx = _grc()
+        user_id = _kw.get("user_id") or ctx["user_id"] or 0
+        session_id = _kw.get("session_id") or ctx["session_id"] or ""
+        client_id = _kw.get("client_id") or ctx["client_id"]
+        if not (isinstance(user_id, int) and user_id > 0):
+            return "错误：无法确定当前用户身份（user_id 缺失），笔记未保存。请登录后重试。"
+        tag_list = [t for t in (tags or "").replace("，", ",").split(",") if t.strip()]
+        res = _notes.save_note(int(user_id), str(session_id), scope, title, content,
+                               tag_list, client_id if isinstance(client_id, int) else None)
+        if not res.get("ok"):
+            # 失败必须如实上报 —— 绝不让模型以为"已记住"（与"声称已建档实则没落库"同类事故）
+            return f"错误：笔记未保存。{res.get('message', '')}"
+        return (
+            f"{res['message']}。该笔记已可被后续任务检索（scope={scope}）。"
+            "请勿在正文里宣称超出此范围的记忆能力。"
+        )
+
+    async def _tool_memory_search(query: str = "", scope: str = "", top_k: int = 5, **_kw) -> str:
+        from app.agent.agent_notes import get_run_context as _grc
+        ctx = _grc()
+        user_id = _kw.get("user_id") or ctx["user_id"] or 0
+        session_id = _kw.get("session_id") or ctx["session_id"] or ""
+        client_id = _kw.get("client_id") or ctx["client_id"]
+        if not (isinstance(user_id, int) and user_id > 0):
+            return "错误：无法确定当前用户身份（user_id 缺失），无法检索笔记。"
+        rows = _notes.search_notes(
+            int(user_id), query,
+            scope=(scope or None) or None,
+            client_id=client_id if isinstance(client_id, int) else None,
+            session_id=session_id or None,
+            top_k=top_k,
+        )
+        if not rows:
+            return "（没有检索到相关笔记。可先用 memory_write 记录本次的关键结论。）"
+        lines = []
+        for r in rows:
+            tags = "、".join(r.get("tags") or [])
+            tag_s = f"（{tags}）" if tags else ""
+            lines.append(f"[#{r['note_id']}|{r['scope']}|相关度{r['score']}] {r['title']}{tag_s}：{r['content']}")
+        return "检索到以下笔记（引用时请注明「据我的记录」）：\n" + "\n".join(lines)
+
+    registry.register(Tool(
+        name="memory_write",
+        description="（自写记忆）把**可复用**的结论 / 客户事实 / 方法论口径写入你的长期笔记，"
+                    "后续任务（含新会话）可检索复用。只在确有复用价值时使用 —— 不要记录过程性噪音"
+                    "（如「我检索了一次知识库」）。scope 取值：session=仅本会话；"
+                    "client=绑定客户档案（必须提供 client_id，否则拒绝）；global=用户级口径（跨会话生效）。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "scope": {"type": "string", "enum": ["session", "client", "global"],
+                          "description": "笔记可见范围"},
+                "title": {"type": "string", "description": "一句话标题（≤120 字），如「该客户要求报价含 3 年维保」"},
+                "content": {"type": "string", "description": "笔记正文（≤4000 字），写成可直接复用的事实/结论，不要写过程"},
+                "tags": {"type": "string", "description": "逗号分隔的标签，便于归类，如 \"制造业,报价口径\""},
+            },
+            "required": ["scope", "title", "content"],
+        },
+        func=_tool_memory_write,
+    ))
+
+    registry.register(Tool(
+        name="memory_search",
+        description="（自写记忆·只读）按语义检索你此前用 memory_write 记下的笔记。"
+                    "在开始新任务、或怀疑此前记录过相关口径/客户事实时先检索一次，避免重复询问用户。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "要检索的主题/问题"},
+                "scope": {"type": "string", "enum": ["session", "client", "global"],
+                          "description": "可选；不填则跨 scope 检索（client/session 笔记仍按当前客户/会话过滤）"},
+                "top_k": {"type": "integer", "description": "返回条数，默认 5"},
+            },
+            "required": ["query"],
+        },
+        func=_tool_memory_search,
+    ))
+
     return registry

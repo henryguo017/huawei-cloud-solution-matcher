@@ -298,6 +298,28 @@ def init_database():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_episodes_user ON agent_episodes(user_id, created_at)")
 
+    # L4-P2-4 自写记忆（2026-09-13）：模型在任务进行中用 memory_write 工具主动记录的
+    # 结论/事实/口径。与 agent_episodes（宿主事后自动编码的"经历"）互补：
+    #   scope=session 仅同会话可见 / scope=client 绑定客户（防多客户串味）/ scope=global 用户级口径。
+    # ⚠️ schema 变更（新增表）—— 按部署铁律：此改动**需用户确认后才部署**。
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agent_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            session_id TEXT NOT NULL,
+            scope TEXT NOT NULL DEFAULT 'session',
+            client_id INTEGER,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            tags_json TEXT NOT NULL DEFAULT '[]',
+            embedding_json TEXT,
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_notes_user ON agent_notes(user_id, scope, created_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_notes_client ON agent_notes(user_id, client_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_agent_notes_session ON agent_notes(user_id, session_id)")
+
     # 幂等迁移：老库补 client_id 列（2026-09-07 客户级记忆隔离）——必须先于下方 client_id 索引
     # 注意：不能用裸 except pass——若被其他常驻进程（IM 机器人）持锁导致 "database is locked"，
     # 静默吞掉会让 client_id 列缺失、后续 INSERT 全部失败且难排查。PRAGMA 预检 + 锁重试。

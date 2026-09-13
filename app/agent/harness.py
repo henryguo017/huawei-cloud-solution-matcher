@@ -523,12 +523,17 @@ class AgentHarness:
                 uid = self._user_id if isinstance(self._user_id, int) and self._user_id > 0 else None
                 if uid:
                     from app.agent.memory_profiles import build_memory_context, build_profile_context
+                    from app.agent.agent_notes import build_notes_context
                     mem_block = build_memory_context(uid, user_input, client_id=getattr(self, "_client_id", None))
                     profile_block = build_profile_context(uid)
                     if mem_block:
                         blocks.append(mem_block)
                     if profile_block:
                         blocks.append(profile_block)
+                    # P2-4：注入「我的笔记」（global + 本客户 + 本会话）
+                    notes_block = build_notes_context(uid, session_id, client_id=getattr(self, "_client_id", None))
+                    if notes_block:
+                        blocks.append(notes_block)
                 self._memory_context_injected = True
             except Exception as e:  # noqa: BLE001 - 记忆注入失败不阻断任务
                 self._log("warn", f"[FC] 长程记忆注入失败（忽略）: {e}")
@@ -1195,6 +1200,12 @@ class AgentHarness:
         self._memory_context_injected = False
         # 客户上下文：情景记忆按 客户 隔离（save_episode/build_memory_context 共用）
         self._client_id = client_id if isinstance(client_id, int) and client_id > 0 else None
+        # P2-4 自写记忆：把 session/client 上下文放进 contextvar，供 memory_write/search 工具无参读取
+        try:
+            from app.agent.agent_notes import set_run_context
+            set_run_context(session_id, self._client_id)
+        except Exception as e:  # noqa: BLE001 - 上下文设置失败不阻断任务（工具会如实报"未保存"）
+            self._log("warn", f"[run] 笔记运行上下文设置失败（忽略）: {e}")
         # P1-3：反思注入标记（防重复反思死循环）+ 执行轨迹（供 reflexion 用）
         self._reflexion_injected = False
         self._last_trajectory = ""
@@ -1376,10 +1387,14 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     uid = user_id if isinstance(user_id, int) and user_id > 0 else None
                     if uid and not getattr(self, "_memory_context_injected", False):
                         from app.agent.memory_profiles import build_memory_context, build_profile_context
+                        from app.agent.agent_notes import build_notes_context
                         mem_block = build_memory_context(uid, user_input, client_id=getattr(self, "_client_id", None))
                         profile_block = build_profile_context(uid)
-                        if mem_block or profile_block:
+                        notes_block = build_notes_context(uid, session_id, client_id=getattr(self, "_client_id", None))
+                        if mem_block or profile_block or notes_block:
                             extra_context = (extra_context or "") + "\n\n" + mem_block + "\n" + profile_block
+                            if notes_block:
+                                extra_context = extra_context + "\n\n" + notes_block
                             self._client_context = extra_context
                         self._memory_context_injected = True
                 except Exception as _me:
@@ -1428,11 +1443,15 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
             ):
                 try:
                     from app.agent.memory_profiles import build_memory_context, build_profile_context
+                    from app.agent.agent_notes import build_notes_context
                     uid = user_id if isinstance(user_id, int) and user_id > 0 else None
                     mem_block = build_memory_context(uid, user_input, client_id=getattr(self, "_client_id", None)) if uid else ""
                     profile_block = build_profile_context(uid) if uid else ""
-                    if mem_block or profile_block:
+                    notes_block = build_notes_context(uid, session_id, client_id=getattr(self, "_client_id", None)) if uid else ""
+                    if mem_block or profile_block or notes_block:
                         extra_context = (extra_context or "") + "\n\n" + mem_block + "\n" + profile_block
+                        if notes_block:
+                            extra_context = extra_context + "\n\n" + notes_block
                         self._client_context = extra_context
                     self._memory_context_injected = True
                 except Exception as e:
@@ -2538,6 +2557,9 @@ Final Answer: [完整方案]）"""
         # L4 P1/T1.2：元工具默认放行——注册动作本身无副作用（纯校验 + 组合白名单只读原语，
         # dyn_* 单任务 TTL 自动清除），执行动态工具时的实际风险已在白名单层拦截
         "register_dynamic_tool": "allow",
+        # L4 P2-4：自写记忆 —— 写操作弹窗确认（防误记/越权记录），检索只读放行
+        "memory_write": "ask",
+        "memory_search": "allow",
     }
 
     async def _gate_tool(self, tool_name: str, tool_input: dict, event_callback=None) -> Optional[str]:
@@ -2596,6 +2618,7 @@ Final Answer: [完整方案]）"""
             "run_python": "Agent 准备在沙箱中执行一段 Python 代码（精确计算/数据整理，无网络无文件写入，≤5 秒）。",
         "web_search": "Agent 准备联网检索（华为云官网 / 竞品动态），可能产生额外请求。",
         "web_extract": "Agent 准备联网读取一个网页的正文内容，可能产生额外请求。",
+        "memory_write": "Agent 准备把一条结论/事实写入长期笔记（落库保存，后续会话可检索复用）。",
     }.get(tool_name, f"Agent 准备执行工具「{tool_name}」。")
 
     def _permission_safe_input(self, tool_name: str, tool_input: dict) -> dict:

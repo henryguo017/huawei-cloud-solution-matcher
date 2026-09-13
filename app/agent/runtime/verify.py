@@ -23,11 +23,13 @@ FACT_KIND_BY_TOOL: Dict[str, str] = {
     "mcp__crm__client_update": "crm_write",
     "mcp__crm__client_delete": "crm_write",
     "generate_doc": "doc_export",
+    "memory_write": "memory_write",   # L4 P2-4：自写记忆落库也是写操作，纳入完成态核验
 }
 
 KIND_LABEL = {
     "crm_write": "客户档案写入",
     "doc_export": "文档导出",
+    "memory_write": "笔记写入",
 }
 
 # 断言模式：(正则, 事实类别)。刻意收紧以降低误报 —— 误报会多花一轮模型自纠。
@@ -36,9 +38,15 @@ _CLAIM_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"已(?:为你|经|成功)?(?:保存|建档|录入|新增|创建|更新|修改)(?:了)?[^。；\n]{0,12}(?:客户|档案)"), "crm_write"),
     (re.compile(r"已(?:为你|经|成功)?(?:生成|导出)(?:了)?(?:一?份)?\s*(?:Word|PDF|PPTX?|pptx?|文档|方案书|文件)", re.IGNORECASE), "doc_export"),
     (re.compile(r"(?:Word|PDF|PPTX?|文档|方案书|文件)(?:已经|已)(?:生成|导出)完毕", re.IGNORECASE), "doc_export"),
+    # L4 P2-4：记忆完成态断言（刻意收紧 —— 只匹配明确的「写入笔记/记忆」语义，
+    # 避免把「已记录你的需求」这类对话性表述误判成落库断言）。把字句（把XX写入笔记）单独覆盖。
+    (re.compile(r"(?:已经|已)(?:为你|把它)?(?:把[^，。\n]{0,12})?(?:写入|记入|存入)(?:了)?(?:长期)?(?:笔记|记忆)"), "memory_write"),
+    (re.compile(r"已(?:经|为你)?(?:记住|记下)(?:了)?(?:这|该|此)[^。；\n]{0,12}(?:条|信息|口径|事实|偏好)"), "memory_write"),
+    (re.compile(r"(?:笔记)(?:已经|已)(?:保存|写入|落库)"), "memory_write"),
 ]
 
-_NEGATIVE_MARKERS = ("Error:", '"status": "error"', "你拒绝", "已跳过", "不允许", "参数不正确", "执行失败")
+_NEGATIVE_MARKERS = ("Error:", '"status": "error"', "你拒绝", "已跳过", "不允许", "参数不正确", "执行失败",
+                     "错误：", "未保存", "未落库")
 
 
 def _looks_success(observation: str) -> bool:
@@ -71,8 +79,8 @@ def build_fact_block(facts: List[Dict[str, str]]) -> str:
     """注入 system 的「宿主核验事实」块。空清单也要注入 —— 明确告诉模型"什么都还没执行"。"""
     if not facts:
         return (
-            "【宿主核验事实】本次运行**尚未**真实执行任何写操作（客户档案写入 / 文档导出均未发生）。\n"
-            "因此你**不得**在正文中表述「已保存」「已建档」「已生成文件」等完成态；"
+            "【宿主核验事实】本次运行**尚未**真实执行任何写操作（客户档案写入 / 文档导出 / 笔记写入均未发生）。\n"
+            "因此你**不得**在正文中表述「已保存」「已建档」「已生成文件」「已写入笔记/记忆」等完成态；"
             "如需这些动作，应调用对应工具（会请用户确认），或表述为「待你确认后执行」。"
         )
     lines = []

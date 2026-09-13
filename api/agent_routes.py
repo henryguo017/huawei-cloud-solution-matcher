@@ -37,7 +37,8 @@ from api.models import MatchRequest, MatchResponse, ClarifyRequest, SourceDocume
 from api.sse_utils import sse_json_default as _sse_json_default
 from api.routes import _build_client_context_block
 from app.agent import get_agent
-from app.config import SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT, MATCH_LLM_MODEL, USER_DOCS_BASE_DIR
+from app.config import (SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT, MATCH_LLM_MODEL,
+                        USER_DOCS_BASE_DIR, AGENT_RUN_HARD_TIMEOUT)
 from app.services.knowledge_base import set_kb_user_context
 
 logger = logging.getLogger(__name__)
@@ -339,9 +340,10 @@ async def agent_chat(
                     logger.info(f"[Agent/chat] 已注入文档附件 files={len(doc_rels)} session={session_id}")
             result = None
             try:
-                # 硬超时兜底：正常两阶段 ≤3 分钟；超 8 分钟必是某个无超时 await 卡死
-                # （线程池耗尽/底层调用挂起）。与其让 SSE 静默 600s，不如主动失败：
-                # 客户端拿到明确 error 事件，服务端留下 CRITICAL 日志指纹用于定位。
+                # 硬超时兜底（L4-P2 长程化改为配置项 AGENT_RUN_HARD_TIMEOUT，原写死 480s）：
+                # 语义是"超此值必是某个无超时 await 卡死（线程池耗尽/底层调用挂起）"，而非正常任务时长。
+                # 与守卫的关系（不变式，config 导入期已归一化保证）：AGENT_WALL_BUDGET < 本值 < SSE_TIMEOUT。
+                # 守卫先软收敛并收口；只有"守卫也收不了口"的病态卡死才轮到这里。
                 result = await asyncio.wait_for(
                     get_agent().run(
                         llm_message,
@@ -361,12 +363,13 @@ async def agent_chat(
                         autonomy=(body.autonomy if body.autonomy in ("standard", "high") else None),  # L4-P1/T1.4
                         runtime=(body.runtime if body.runtime in ("fc", "legacy") else None),  # L4-P2：引擎选择（None→AGENT_RUNTIME）
                     ),
-                    timeout=480.0,
+                    timeout=float(AGENT_RUN_HARD_TIMEOUT),
                 )
             except asyncio.TimeoutError:
                 logger.critical(
-                    "[agent/chat] 运行硬超时(480s) session=%s message=%s —— 存在无超时阻塞 await，"
+                    "[agent/chat] 运行硬超时(%ss) session=%s message=%s —— 存在无超时阻塞 await，"
                     "请结合 to_thread 硬超时日志定位卡点",
+                    AGENT_RUN_HARD_TIMEOUT,
                     session_id, message[:80],
                 )
                 await event_queue.put({
@@ -421,9 +424,28 @@ async def agent_chat(
 
     async def generate():
         task = asyncio.create_task(run_agent())
+        # L4-P2 长程化（2026-09-13）：本端点此前 `await queue.get()` **无超时 → 无心跳**。
+        # nginx 的 proxy_read_timeout 是"两次读之间"的超时（300s）：只要流里有字节就不会断；
+        # 但 FC 长程会出现静默期（单轮深度思考 / run_python 长执行），一旦 >300s 无字节，
+        # 网关掐断连接 —— 客户端看到网络错误，**后端却还在继续烧 token**。故与其他三个 SSE
+        # 端点对齐：30s 无事件就发 `: ping` 注释行保活，并受 SSE_TIMEOUT 总时长上限治理。
+        _start = time.time()
         try:
             while True:
-                event = await event_queue.get()
+                if SSE_HEARTBEAT_ENABLED:
+                    try:
+                        event = await asyncio.wait_for(event_queue.get(), timeout=SSE_HEARTBEAT_INTERVAL)
+                    except asyncio.TimeoutError:
+                        if time.time() - _start > SSE_TIMEOUT:
+                            yield (
+                                "event: error\n"
+                                f"data: {json.dumps({'type': 'error', 'message': '方案生成超时，请重试。'}, ensure_ascii=False)}\n\n"
+                            )
+                            break
+                        yield ": ping\n\n"  # SSE 注释行，客户端忽略，仅保活
+                        continue
+                else:
+                    event = await event_queue.get()
                 if event is None:
                     break
                 yield (

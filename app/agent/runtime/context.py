@@ -15,6 +15,8 @@
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from app.agent.runtime.schema import message_shape  # 压缩产物校验（孤儿 tool_calls 检测）
+
 logger = logging.getLogger(__name__)
 
 # ── 政策块：通用部分（自主性 + 工作准则）+ 按意图切换的「交付姿态」──
@@ -213,11 +215,18 @@ async def compact_messages(
 
     summary_text = ""
     try:
+        # L4-P2-2（2026-09-13）：摘要指令收紧。压缩最大的风险不是丢细节，而是**丢掉任务锚点** ——
+        # 一旦模型忘了"用户到底要什么 / 计划进行到哪"，压缩后就会跑偏或重新做已完成的步。
+        # 故强制保留：①用户原始诉求 ②计划各步状态 ③已完成步的结论与数据（含来源）④未完成事项。
         summary_text = await summarize(
             "下面是一段 agent 任务的执行过程记录。请把它压缩成「阶段性工作记忆」，"
-            "用于替换原始记录、继续完成任务。必须保留：①已获得的关键结论与数据（含来源文件名）；"
-            "②已经执行过的操作及其结果；③尚未完成的事项。丢弃过程性噪音。"
-            "直接输出压缩结果，200-500 字，不要客套话。\n\n" + transcript
+            "用于替换原始记录、继续完成任务。**必须逐项保留（缺一不可）**：\n"
+            "①【用户原始诉求】用户最初要什么（原话关键部分）；\n"
+            "②【计划进度】计划各步骤的当前状态（完成/进行中/未开始/已放弃及原因）；\n"
+            "③【已确认的结论与数据】已完成步骤得到的关键结论、数字与来源文件名 —— 这些是后续输出的依据；\n"
+            "④【尚未完成】还差什么。\n"
+            "丢弃过程性噪音（重复检索、失败尝试的具体报错等）。"
+            "直接输出压缩结果，200-600 字，按①②③④分点，不要客套话。\n\n" + transcript
         )
         summary_text = (summary_text or "").strip()
     except Exception as e:  # noqa: BLE001 - 压缩永不阻断任务
@@ -225,17 +234,39 @@ async def compact_messages(
         summary_text = ""
 
     if not summary_text:
+        # 硬截断兜底：即使摘要失败，**任务锚点也必须保留**（否则压缩后必然跑偏）。
         summary_text = (
-            "（早期执行过程因上下文压缩已丢弃，未能生成摘要。"
-            "如需其中信息，请重新检索或向用户确认。）"
+            "（早期执行过程因上下文压缩且摘要生成失败而丢弃。）\n"
+            "请立即重新确认：① 用户的原始诉求（见本轮 user 消息）；② 你的计划进行到哪一步；\n"
+            "③ 已完成步骤的结论需重新获取 —— 如需其中信息，请重新检索，不要凭空编造。"
         )
 
     note = {"role": "system", "content": "【阶段性工作记忆（由宿主压缩早期执行过程，供你继续任务）】\n" + summary_text}
     new_messages = [messages[0], note]
     for seg in keep:
         new_messages.extend(seg)
+
+    # ── L4-P2-2 压缩产物校验（fail-safe）：非法则**放弃本次压缩**，绝不腐蚀上下文 ──
+    # 两个必须成立的不变式：
+    #   ① messages[0] 仍是原 system 政策块（否则模型失去身份/契约/工具纪律）；
+    #   ② 无孤儿 tool_calls（assistant.tool_calls 必须紧跟足量 tool 回填，否则 DeepSeek 直接 400）。
+    if not isinstance(messages[0], dict) or messages[0].get("role") != "system":
+        logger.error(
+            "[runtime.context] 压缩产物校验失败：messages[0] 非 system（role=%r）→ 放弃本次压缩",
+            (messages[0] or {}).get("role") if isinstance(messages[0], dict) else type(messages[0]).__name__,
+        )
+        return messages, False
+    _shape = message_shape(new_messages)
+    if "orphan" in _shape:
+        logger.error(
+            "[runtime.context] 压缩产物校验失败：出现孤儿 tool_calls（shape=%s）→ 放弃本次压缩（宁可超窗不可 400）",
+            _shape[:400],
+        )
+        return messages, False
+
     logger.info(
-        "[runtime.context] 上下文已压缩: %d 段 → 保留 %d 段，摘要 %d 字",
+        "[runtime.context] 上下文已压缩: %d 段 → 保留 %d 段，摘要 %d 字，压缩前 %s → 压缩后 %s tokens",
         len(segs), len(keep), len(summary_text),
+        messages_tokens(messages), messages_tokens(new_messages),
     )
     return new_messages, True
