@@ -111,7 +111,7 @@ NEWS_FETCH_TIMEOUT = float(os.getenv("NEWS_FETCH_TIMEOUT", "8"))
 # 未配置时 Agent 自动降级、不报错；配置后在工具内限流（每会话最多 WEB_SEARCH_MAX_PER_SESSION 次）。
 WEB_SEARCH_PROVIDER = os.getenv("WEB_SEARCH_PROVIDER", "")
 WEB_SEARCH_API_KEY = os.getenv("WEB_SEARCH_API_KEY", "")
-WEB_SEARCH_MAX_PER_SESSION = int(os.getenv("WEB_SEARCH_MAX_PER_SESSION", "3"))
+WEB_SEARCH_MAX_PER_SESSION = int(os.getenv("WEB_SEARCH_MAX_PER_SESSION", "8"))
 
 # ==================== P2 多智能体执行开关 ====================
 # AGENT_TWO_PHASE=1：真·两阶段执行（plan 驱动工具调用顺序）；=0 回退旧 ReAct 自由循环。

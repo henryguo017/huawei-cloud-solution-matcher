@@ -402,11 +402,31 @@ async def _tool_web_search(query: str, topic: str = "general") -> str:
             "message": "当前未配置联网搜索，仅基于本地知识库作答。",
             "results": [],
         }, ensure_ascii=False)
-    # 限流：本会话联网检索次数上限（计数器由 harness.run() 每轮 reset，此前是进程级不重置的 bug）
-    if getattr(_tool_web_search, "_count", 0) >= int(WEB_SEARCH_MAX_PER_SESSION or 3):
+    # 2026-09-14 优化（用户实测反馈：单轮思考中 3 次预算被重复查询烧光后无法联网）：
+    # ① 查询去重——同一轮内相同查询词直接返回缓存结果，不消耗联网预算。
+    #    去重检查放在限流**之前**：预算烧光后模型重复旧查询仍能拿到已有结果，
+    #    避免陷入"limited→再试→limited"的死循环浪费轮次。
+    _q_norm = " ".join(re.split(r"\s+", (query or "").strip())).lower()
+    _qcache = getattr(_tool_web_search, "_query_cache", None)
+    if _qcache is None:
+        _qcache = _tool_web_search._query_cache = {}
+    if _q_norm and _q_norm in _qcache:
+        try:
+            cached = json.loads(_qcache[_q_norm])
+            cached["cached"] = True
+            cached["message"] = "（本轮已检索过相同查询词，以下为缓存结果，不消耗联网预算）"
+            return json.dumps(cached, ensure_ascii=False)
+        except Exception:
+            pass  # 缓存损坏则按新查询处理
+    # ② 限流：本轮联网检索次数上限（计数器由 harness.run() 每轮 reset）
+    if getattr(_tool_web_search, "_count", 0) >= int(WEB_SEARCH_MAX_PER_SESSION or 8):
         return json.dumps({
             "status": "limited",
-            "message": f"已达本会话联网检索上限（{WEB_SEARCH_MAX_PER_SESSION} 次）。",
+            "message": (
+                f"已达本轮联网检索上限（{WEB_SEARCH_MAX_PER_SESSION} 次）。"
+                "请基于已有检索结果与本地知识库（search_kb）作答，不要继续调用 web_search；"
+                "确有信息缺口则在最终答案中如实说明。"
+            ),
             "results": [],
         }, ensure_ascii=False)
     # 新闻语义判定：查询带时效词时走新闻索引（provider 侧映射为 topic=news + days=30）
@@ -428,20 +448,25 @@ async def _tool_web_search(query: str, topic: str = "general") -> str:
             "snippet": (r.get("snippet") or "")[:220],
             "published": r.get("published", ""),
         } for r in (results or [])]
-        return json.dumps({
+        _resp = json.dumps({
             "status": "ok",
             "count": len(slim),
             "results": slim,
         }, ensure_ascii=False)
+        if _q_norm:
+            _tool_web_search._query_cache[_q_norm] = _resp
+        return _resp
     except Exception as e:
         logger.warning(f"[web_search] 检索失败: {e}")
         return json.dumps({"status": "error", "message": str(e), "results": []}, ensure_ascii=False)
 
 
 def reset_web_search_budget():
-    """每轮 harness.run() 开始时重置联网检索计数（修复进程级不重置导致联网永久失效的 bug）。"""
+    """每轮 harness.run() 开始时重置联网检索计数（修复进程级不重置导致联网永久失效的 bug）。
+    2026-09-14：同时清空查询去重缓存（缓存只在本轮内有效，跨轮必须重新联网取新数据）。"""
     _tool_web_search._count = 0
     _tool_web_extract._count = 0
+    _tool_web_search._query_cache = {}
 
 
 async def _tool_web_extract(url: str) -> str:
