@@ -3479,8 +3479,18 @@ Final Answer: [完整方案]）"""
             }, ensure_ascii=False)
         from app.agent.tools import _tool_generate_doc
         try:
+            # 导出封面 metadata：客户名优先取本会话 CRM 写成功的客户（v2 闭环），
+            # 其次从客户背景上下文文本提取；都没有则留空（封面显示"未提供"）。
+            _cust = str((getattr(self, "_last_crm_clients", {}) or {}).get(self._draft_key, ""))[:30]
+            if not _cust and getattr(self, "_client_context", ""):
+                _m = (re.search(r'客户[名称名]?[:：]\s*([^\s，,。；;｜]{2,20})', self._client_context)
+                      or re.search(r'「([^\s」]{2,20})」', self._client_context))
+                if _m:
+                    _cust = _m.group(1)[:30]
+            _meta = {"customer": _cust} if _cust else {}
             # 把缓存终稿注入 content；report_type 由 _format_mode 决定（solution/competitor）
-            obs = await _tool_generate_doc(fmt, content=draft, report_type=self._format_mode)
+            obs = await _tool_generate_doc(fmt, content=draft, report_type=self._format_mode,
+                                           metadata=_meta or None)
         except Exception as e:
             logger.error(f"[generate_doc] 导出失败: {e}")
             return json.dumps({"status": "error", "message": f"方案书生成失败：{e}"}, ensure_ascii=False)
@@ -4064,8 +4074,16 @@ Final Answer: [完整方案]）"""
         # FC 与 legacy 拦截链两条 CRM 写路径都收口到 _make_result，此处天然全覆盖。
         if success and isinstance(answer, str) and answer:
             try:
-                from app.agent.next_actions import append_if_crm_saved
+                from app.agent.next_actions import append_if_crm_saved, client_name_from_tool_calls
                 answer = append_if_crm_saved(answer, tool_calls)
+                # 记录本轮 CRM 写成功的客户名（按 会话 隔离），供导出封面 metadata 用
+                _crm_name = client_name_from_tool_calls(tool_calls)
+                if _crm_name:
+                    if not isinstance(getattr(self, "_last_crm_clients", None), dict):
+                        self._last_crm_clients = {}
+                    self._last_crm_clients[self._draft_key] = _crm_name
+                    while len(self._last_crm_clients) > 50:
+                        self._last_crm_clients.pop(next(iter(self._last_crm_clients)))
             except Exception as _na_err:  # noqa: BLE001 - 建议块失败不影响主交付
                 self._log("warn", f"[推进建议] 生成失败（忽略）: {_na_err}")
         # L4 灰度观测（2026-09-14，task #228）：逐轮指标落库（fire-and-forget，失败不影响交付）。

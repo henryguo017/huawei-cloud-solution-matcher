@@ -135,3 +135,17 @@ def append_if_crm_saved(answer, tool_calls):
             return answer + "\n\n" + block
         return answer  # 最近一次 CRM 写操作未成功 → 诚信不追加
     return answer
+
+
+def client_name_from_tool_calls(tool_calls) -> str:
+    """从本轮工具调用里提取最近一次 CRM 写成功的客户名（导出封面用，取不到返回空串）。"""
+    for tc in reversed(tool_calls or []):
+        tool = str((tc or {}).get("tool") or "")
+        if tool not in ("mcp__crm__client_add", "mcp__crm__client_update"):
+            continue
+        result = str((tc or {}).get("result") or "")
+        if _CRM_ADD_OK in result or _CRM_UPDATE_OK in result:
+            inp = (tc or {}).get("input") or {}
+            return (str(inp.get("name") or "").strip()
+                    or _name_from_crm_result(result))
+    return ""

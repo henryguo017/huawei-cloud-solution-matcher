@@ -356,12 +356,14 @@ async def _tool_list_dir(dir: str = "") -> str:
         return f"Error: 列举失败: {e}"
 
 
-async def _tool_generate_doc(fmt: str = "word", content: str = "", report_type: str = "solution") -> str:
+async def _tool_generate_doc(fmt: str = "word", content: str = "", report_type: str = "solution",
+                             metadata: dict = None) -> str:
     """
     工具: generate_doc（P1-2）
     作用: 把当前 Agent 终稿导出为 Word/PDF 方案书（做成 Agent 工具，用户说「导出成 Word」时调用）。
     实现: 复用 ReportGeneratorService.generate_report（统一单例 get_report_generator，下载路由同源可查）。
     注意: content 由 harness._intercept_generate_doc 从 self._last_draft 注入（LLM 没有终稿文本，不靠它传参）。
+    metadata: harness 传入的封面元数据（如 customer 客户名，2026-09-14 v2 闭环补充）。
     """
     from app.services.report_generator import get_report_generator, ReportType, ExportFormat
     rg = get_report_generator()
@@ -372,7 +374,8 @@ async def _tool_generate_doc(fmt: str = "word", content: str = "", report_type: 
             ExportFormat.PPTX if str(fmt).lower() == "pptx" else ExportFormat.WORD
         )
         rt = ReportType.COMPETITOR if str(report_type).lower() == "competitor" else ReportType.SOLUTION
-        task = await to_thread_limited(rg.generate_report, rt, content, ef, {}, _timeout=180.0)
+        task = await to_thread_limited(rg.generate_report, rt, content, ef,
+                                       metadata or {}, None, _timeout=180.0)
         if getattr(task.status, "value", str(task.status)) != "completed":
             return json.dumps({"status": "error", "message": getattr(task, "error_message", "生成失败")}, ensure_ascii=False)
         return json.dumps({
