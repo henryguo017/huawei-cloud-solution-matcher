@@ -20,6 +20,7 @@ tool_end / final / final_answer / clarify）桥接为 SSE 流式推送，供前�
 """
 import json
 import os
+import re
 import base64
 import asyncio
 import logging
@@ -587,6 +588,23 @@ async def agent_memory_stats(user: dict = Depends(get_current_user)):
 
 
 # ========== Agent 工具栏能力（上下文用量 / 提示词优化 / 工具权限确认） ==========
+
+@router.get("/agent/gray-summary", tags=["Agent 灰度观测"])
+async def agent_gray_summary(date: str = "", user: dict = Depends(get_current_user)):
+    """L4 灰度观测（2026-09-14，task #228）：按天聚合 FC 指标。
+
+    返回：FC 运行数 / 回退率 / stopped_by 分布 / drift_rejections /
+    A11 计划收敛率 / 平均轮次与 token。date 为空=今天（YYYY-MM-DD）。
+    """
+    from fastapi import HTTPException
+    if date and not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+        raise HTTPException(status_code=422, detail="date 格式须为 YYYY-MM-DD")
+    try:
+        from app.agent.metrics import daily_summary
+        return {"ok": True, **daily_summary(date)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"灰度观测聚合失败: {e}")
+
 
 @router.get("/agent/context-usage", tags=["Agent 上下文"])
 async def agent_context_usage(session_id: str = "", client_id: str = "", user: dict = Depends(get_current_user)):

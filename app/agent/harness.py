@@ -4077,6 +4077,22 @@ Final Answer: [完整方案]）"""
                     except Exception as _na_err:  # noqa: BLE001 - 建议块失败不影响主交付
                         self._log("warn", f"[推进建议] 生成失败（忽略）: {_na_err}")
                 break
+        # L4 灰度观测（2026-09-14，task #228）：逐轮指标落库（fire-and-forget，失败不影响交付）。
+        # 挂在 _make_result 统一收口：FC / legacy / 拦截链全路径都过这里，天然全覆盖；
+        # legacy 行（fc_meta=None）用于计算灰度期总流量与「FC 尝试后回退率」。
+        try:
+            from app.agent.metrics import record_fc_gray_run
+            record_fc_gray_run(
+                user_id=getattr(self, "_user_id", None),
+                session_id=(getattr(self, "_draft_key", "") or "").split(":", 1)[-1],
+                intent=str(getattr(self, "_intent", "") or ""),
+                runtime=str(getattr(self, "_runtime", "legacy") or "legacy"),
+                success=bool(success and not paused),
+                elapsed_s=elapsed,
+                fc_meta=getattr(self, "_fc_meta", None),
+            )
+        except Exception:  # noqa: BLE001 - 观测绝不影响交付
+            pass
         return {
             "answer": answer,
             "solution_json": parse_markdown_to_chapters(answer) if answer else [],
