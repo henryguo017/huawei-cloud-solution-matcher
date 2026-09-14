@@ -196,8 +196,52 @@ _TOC_TEMPLATE = {
 _END_ACTIONS = ['确认方案范围', '商务细节洽谈', '12 周排期启动']
 
 
+_MISSING_COMMA_RE = re.compile(r'([\]}])\s*(?=[\[{])')   # 嵌套数组/对象间漏逗号："] ["→"],["
+
+
+def _autoclose_json(text: str) -> str:
+    """按未闭合栈补齐尾部缺失的引号/中括号/大括号（截断与漏闭合兜底）。
+
+    线上实锤（2026-09-14）：deepseek-v4-flash 填槽深层嵌套 JSON（root>pages>page>
+    子对象>rows 共 5 层）时随机漏尾部闭合（{16 vs }12，finish_reason=stop），
+    json.loads 报 "Expecting ',' delimiter" 且位置在串尾。逐字符扫描字符串状态与
+    未闭合栈，按序补齐即可救活。
+    """
+    stack: list = []
+    in_str = False
+    esc = False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in '{[':
+            stack.append(ch)
+        elif ch in '}]':
+            if stack:
+                stack.pop()
+    suffix = ''
+    if in_str:
+        suffix += '"'
+    suffix += ''.join('}' if c == '{' else ']' for c in reversed(stack))
+    return text + suffix
+
+
 def _extract_json(text: str) -> Any:
-    """剥 Markdown 围栏后解析 JSON；容忍前后杂讯"""
+    """剥 Markdown 围栏后解析 JSON；容忍前后杂讯。
+
+    2026-09-14 容错加固（线上复现实锤）：V4-flash 填槽时两种高频损坏——
+    ① 嵌套数组间漏逗号（"stats": [["60%","OEE"] ["240台","设备"]]）；
+    ② 深层嵌套漏尾部闭合（{16 vs }12，finish_reason=stop）。
+    严格解析失败后按序尝试修复组合（漏逗号 → 去尾逗号 → 全角引号 → 自动闭合），
+    全部失败才抛原始错误（保持报错语义不变）。修复仅用于兜底，正常输出零影响。
+    """
     text = text.strip()
     m = re.search(r'```(?:json)?\s*(.*?)```', text, re.S)
     if m:
@@ -206,7 +250,27 @@ def _extract_json(text: str) -> Any:
                 default=-1)
     if start > 0:
         text = text[start:]
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as first_err:
+        base = text.replace('“', '"').replace('”', '"')
+        no_tail = re.sub(r',\s*([}\]])', r'\1', base)                 # 去尾逗号
+        no_miss = _MISSING_COMMA_RE.sub(r'\1,', no_tail)              # 补漏逗号
+        candidates = [
+            _autoclose_json(base),
+            _autoclose_json(no_tail),
+            _autoclose_json(no_miss),
+            no_miss,
+            base,
+        ]
+        for cand in candidates:
+            if cand == text:
+                continue
+            try:
+                return json.loads(cand)
+            except json.JSONDecodeError:
+                continue
+        raise first_err  # 修复无效则抛原始错误（保持报错语义不变）
 
 
 async def _llm_json(prompt: str, batch_tag: str) -> Any:
@@ -238,6 +302,61 @@ def _source_text(solution_markdown: str,
         parts = [solution_markdown]
     text = '\n'.join(parts).strip()
     return text[:_MAX_SOURCE_CHARS]
+
+
+# ---------------- 客户关键数字提取（2026-09-14，定制感缺口修复） ----------------
+# 用户实测反馈：对话里收来的客户数字（240 台设备 / OEE 60% / 300 万预算）没进 PPT。
+# 做法：从素材按句提取「数字+单位 + 短标签」事实清单，硬性注入两段提示词，
+# 要求 background/pain_points/requirements 的 kpis/stats/cards 数字槽优先使用。
+# 只提取不推断：数值与单位原样保留，禁止 LLM 改写（区别于 cost 页的金额纪律，
+# 这里数字来自客户沟通素材，用途是展示客户现状，不改数值即无编造风险）。
+
+_FACT_SENT_SPLIT = re.compile(r'[。；;！!？?\n]+')
+# label 允许内部空格（真实素材常写「综合效率 OEE 仅 60%」），但首尾必须是实词
+_FACT_ITEM_RE = re.compile(
+    r'(?P<label>[A-Za-z\u4e00-\u9fa5](?:[A-Za-z\u4e00-\u9fa5 ]{0,12}[A-Za-z\u4e00-\u9fa5])?)[,，、]?\s*'
+    r'(?P<num>\d+(?:\.\d+)?(?:\s*(?:万|亿))?(?:\s*(?:台|套|座|家|人|名|条|个|厂|%|pct|万元|亿元|㎡|个月|月|周|年|天))?'
+    r'(?:以上|以内|左右|出头)?)'
+)
+# 标签尾部虚词/连接词剥除（避免「OEE仅」「控制在」这类脏标签）
+_LABEL_TAIL_TRIM = '的约仅为超达到有近在把将希望先需还共计划之中上'
+_STOP_LABELS = {'公司', '方案', '华为云', '项目', '我们', '建议', '如果',
+                '由于', '通过', '同时', '此外', '包括', '目前', '客户'}
+
+
+def _extract_client_facts(source: str, max_facts: int = 12) -> List[List[str]]:
+    """从方案素材提取客户量化事实清单 [[数字, 短标签], ...]（纯函数，只提取不推断）"""
+    facts: List[List[str]] = []
+    seen = set()
+    for sent in _FACT_SENT_SPLIT.split(source or ''):
+        s = sent.strip()
+        if not s or not re.search(r'\d', s):
+            continue
+        for m in _FACT_ITEM_RE.finditer(s):
+            label = re.sub(r'\s+', '', m.group('label')).rstrip(_LABEL_TAIL_TRIM)
+            num = re.sub(r'\s+', '', m.group('num'))
+            if len(label) < 2 or label in _STOP_LABELS or len(num) < 2:
+                continue
+            if len(label) > 8:
+                label = label[-8:]
+            key = num  # 同一数值只保留第一条事实（如「OEE从60%」与「综合效率OEE 60%」）
+            if key in seen:
+                continue
+            seen.add(key)
+            facts.append([num, label])
+            if len(facts) >= max_facts:
+                return facts
+    return facts
+
+
+def _facts_hint(facts: List[List[str]]) -> str:
+    """把事实清单渲染成提示词块（空清单返回空串）"""
+    if not facts:
+        return ''
+    lines = ['客户现状关键数字（从客户沟通素材提取，属客户事实，禁止改动数值与单位）：']
+    for num, label in facts:
+        lines.append(f'- {label}：{num}')
+    return '\n'.join(lines)
 
 
 def _program_cost_table(cost_reference: Dict[str, Any]) -> List[List[str]]:
@@ -350,11 +469,16 @@ async def _plan_outline(source: str, cost_ref: Optional[Dict[str, Any]],
         names = [r.get('product', '') for r in cost_ref['rows'][:8]]
         cost_hint = ('\n已有经核实的成本明细（成本页直接采用，不要另行编造）：'
                      + '、'.join(n for n in names if n))
+    facts_txt = _facts_hint(_extract_client_facts(source))
+    if facts_txt:
+        facts_txt += ('\n（大纲阶段的 headline/points/numbers 必须优先引用上述客户数字，'
+                      '这是方案的定制核心。）')
     prompt = f"""你是华为云售前解决方案专家。基于下面的方案素材，为一份 12 页售前 PPT 做内容大纲。
 
 素材：
 {source}
 {cost_hint}
+{facts_txt}
 
 12 页结构固定为：封面/目录/项目背景与建设目标/现状与核心痛点/需求分析/总体方案架构/方案对比分析/成本估算/安全合规设计/实施路线/服务保障体系/结尾。
 你只需为其中 10 个内容页（background、pain_points、requirements、architecture、compare、cost、security、roadmap、service，以及 toc 的 headline 摘要）各输出：
@@ -388,6 +512,11 @@ def _batch_prompt(layouts: List[str], outline: Dict[str, Any], source: str,
     if problems:
         prob_txt = ('\n上一轮以下页面未过校验，必须修正：\n'
                     + json.dumps(problems, ensure_ascii=False))
+    facts_txt = _facts_hint(_extract_client_facts(source))
+    if facts_txt:
+        facts_txt += ('\n【硬性要求】background/pain_points/requirements 三页的 kpis、'
+                      'header.stats、cards 数字槽必须优先使用上述客户数字'
+                      '（数值与单位原样保留，禁止改写）；素材中没有的数字才用定性表述。')
     return f"""你是华为云售前解决方案专家。按给定 JSON 模板，为 PPT 的 {layouts} 页填写内容。
 
 素材：
@@ -397,6 +526,7 @@ def _batch_prompt(layouts: List[str], outline: Dict[str, Any], source: str,
 {json.dumps(outline, ensure_ascii=False)}
 {prob_txt}
 {cost_note}
+{facts_txt}
 每页输出一个 data 对象，结构与下列模板完全一致（键名不得增删改，字符串槽不要超长）：
 {json.dumps(templates, ensure_ascii=False)}
 
