@@ -4057,26 +4057,17 @@ Final Answer: [完整方案]）"""
             # 内存上限保护：单例常驻，只保留最近 50 个 会话 的终稿
             while len(self._session_drafts) > 50:
                 self._session_drafts.pop(next(iter(self._session_drafts)))
-        # L4 商机推进闭环（2026-09-14）：本轮真实新建客户档案 → 终稿尾部追加确定性
-        # 推进建议（宿主程序生成，非 LLM：零幻觉零成本；阶段映射见 next_actions 模块）。
+        # L4 商机推进闭环 v2（2026-09-14）：client_add 真新建 / client_update 真更新
+        # 都追加确定性推进建议。判定逻辑抽到 next_actions.append_if_crm_saved 纯函数
+        # （取最近一次 CRM 写操作；失败/拒绝/已存在一律不追加，诚信口径）。
         # 挂在缓存判断之后：建议块只进前端 answer，不进 _session_drafts，防污染导出正文。
-        # 判定依据最近一次 client_add 的真实工具结果——"已新增客户档案"才是真新建；
-        # 重复建档（已存在）/拒绝/失败一律不追加（对应 _crm_save_answer 的诚实口径）。
-        # FC 与 legacy 拦截链两条建档路径都收口到 _make_result，此处天然全覆盖。
+        # FC 与 legacy 拦截链两条 CRM 写路径都收口到 _make_result，此处天然全覆盖。
         if success and isinstance(answer, str) and answer:
-            for _tc in reversed(tool_calls or []):
-                if _tc.get("tool") != "mcp__crm__client_add":
-                    continue
-                if "已新增客户档案" in str(_tc.get("result") or ""):
-                    _inp = _tc.get("input") or {}
-                    try:
-                        from app.agent.next_actions import build_next_actions
-                        answer = answer + "\n\n" + build_next_actions(
-                            str(_inp.get("name") or ""), str(_inp.get("stage") or ""),
-                        )
-                    except Exception as _na_err:  # noqa: BLE001 - 建议块失败不影响主交付
-                        self._log("warn", f"[推进建议] 生成失败（忽略）: {_na_err}")
-                break
+            try:
+                from app.agent.next_actions import append_if_crm_saved
+                answer = append_if_crm_saved(answer, tool_calls)
+            except Exception as _na_err:  # noqa: BLE001 - 建议块失败不影响主交付
+                self._log("warn", f"[推进建议] 生成失败（忽略）: {_na_err}")
         # L4 灰度观测（2026-09-14，task #228）：逐轮指标落库（fire-and-forget，失败不影响交付）。
         # 挂在 _make_result 统一收口：FC / legacy / 拦截链全路径都过这里，天然全覆盖；
         # legacy 行（fc_meta=None）用于计算灰度期总流量与「FC 尝试后回退率」。

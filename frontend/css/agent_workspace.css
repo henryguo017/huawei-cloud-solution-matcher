@@ -1946,6 +1946,35 @@ body.view-agent .theme-label { margin-bottom: 8px; }
     50%      { opacity: 1; }
 }
 
+/* 推进建议 v2「一键推进」锚点：建议 chip 行（点击把 Agent 指令预填进发送框） */
+.ws-next-actions {
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-top: 10px;
+}
+.ws-next-actions-title {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin-right: 2px;
+}
+.ws-next-action-chip {
+    font-size: var(--font-size-xs);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 4px 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.ws-next-action-chip:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: rgba(199, 0, 11, 0.05);
+}
+
 /* 工具调用芯片 */
 .ws-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
 .ws-tools-label { font-size: var(--font-size-xs); color: var(--text-muted); }

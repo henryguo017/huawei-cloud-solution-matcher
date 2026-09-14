@@ -1773,6 +1773,66 @@
             }
             this._silenceStep = null;
         },
+        /* 推进建议 v2「一键推进」锚点（2026-09-14）：终稿含【下一步推进建议】块时，
+           在答案下方渲染建议 chip，点击把对应的 Agent 指令预填进发送框——把建议从"读"
+           变成"点"。纯前端：解析答案文本、不回传后端、不改建议块正文（导出不受影响）。 */
+        _renderNextActionChips: function (shell, raw) {
+            if (!shell || !raw || typeof raw !== 'string') return;
+            var idx = raw.indexOf('【下一步推进建议】');
+            if (idx < 0) return;
+            var block = raw.slice(idx, idx + 900);
+            var name = (block.match(/客户「(.+?)」/) || [])[1] || '';
+            var items = [];
+            block.replace(/\r/g, '').split('\n').forEach(function (ln) {
+                var m = ln.match(/^\s*\d+\.\s+(.+?)\s*$/);
+                if (m) items.push(m[1].trim());
+            });
+            if (!items.length) return;
+            var host = shell.nextActions;
+            if (!host) {
+                host = document.createElement('div');
+                host.className = 'ws-next-actions';
+                if (shell.answer && shell.answer.parentNode) {
+                    shell.answer.parentNode.insertBefore(host, shell.answer.nextSibling);
+                    shell.nextActions = host;
+                } else { return; }
+            }
+            host.innerHTML = '<div class="ws-next-actions-title">一键推进 · 点击填入发送框：</div>';
+            var self = this;
+            items.forEach(function (it) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'ws-next-action-chip';
+                b.textContent = it.length > 26 ? it.slice(0, 26) + '…' : it;
+                b.title = it;
+                b.addEventListener('click', function () {
+                    var input = self._getActiveInput();
+                    if (!input) return;
+                    input.value = self._nextActionPrompt(name, it);
+                    input.style.height = 'auto';
+                    input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+                    self._updateCount();
+                    input.focus();
+                });
+                host.appendChild(b);
+            });
+            host.style.display = 'flex';
+        },
+        /* 建议条目 → Agent 指令的关键词映射（确定性，不调 LLM） */
+        _nextActionPrompt: function (name, item) {
+            var who = name ? '客户「' + name + '」' : '该客户';
+            if (/方案初稿|解决方案/.test(item)) return '为' + who + '生成一份正式的解决方案初稿，基于本轮对话里沟通到的需求与约束。';
+            if (/案例/.test(item)) return '帮我找适合发给' + who + '的华为云行业标杆案例，要能打动客户老板的那种。';
+            if (/POC|技术交流|实测/.test(item)) return '帮' + who + '设计一个 POC 测试方案框架，明确验证目标和成功标准。';
+            if (/预算|立项/.test(item)) return '帮我整理和' + who + '确认预算区间与立项时间窗的提问清单。';
+            if (/报价|商务|合同|折扣|付款/.test(item)) return '帮' + who + '梳理报价与商务谈判要点：折扣口径、付款节奏、合同时间表。';
+            if (/高层互访|背书/.test(item)) return '为' + who + '设计一次高层互访的议程与谈话要点。';
+            if (/交付|实施团队/.test(item)) return '帮' + who + '列出签约前需要对接的交付与实施资源清单。';
+            if (/增购|续约|转介绍/.test(item)) return '帮' + who + '梳理增购、续约与转介绍的机会点。';
+            if (/流失|触达/.test(item)) return '帮' + who + '起草一份低打扰的季度触达话术。';
+            if (/决策链|深聊|需求/.test(item)) return '帮' + who + '准备一次需求深聊的提纲：业务痛点、决策链、预算与时间窗。';
+            return '围绕' + who + '推进这一步：' + item;
+        },
         /* P0 Plan 面板：渲染执行计划（Devin 式，执行前展示"它打算怎么做"） */
         _renderPlan: function (shell, steps, statusList, runtime) {
             if (!shell || !shell.plan || !shell.planList) return;
@@ -2072,6 +2132,7 @@
                     // P0：流式结束时同样追加导出操作行（避免只有 result 事件才出现）
                     if (fullAnswer && fullAnswer.trim()) {
                         self._appendExportActions(shell, fullAnswer, ev.format_mode);
+                        self._renderNextActionChips(shell, fullAnswer);   // v2 一键推进锚点
                     }
                 } else if (t === 'doc_generated') {
                     // P1-2：后端已生成可下载文档 → 渲染下载 chip（与导出按钮共存）
@@ -2135,6 +2196,7 @@
                     // P0：答案就绪后追加导出操作行（模板在导出时应用，对话侧保持自主结构）
                     if (fullAnswer && fullAnswer.trim()) {
                         self._appendExportActions(shell, fullAnswer, ev.format_mode);
+                        self._renderNextActionChips(shell, fullAnswer);   // v2 一键推进锚点
                     }
                     // 方案 A：渲染客户背景上下文参考提示（与经典对齐）
                     self._renderClientContextHint(shell, ev);
