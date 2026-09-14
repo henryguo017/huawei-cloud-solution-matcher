@@ -1741,6 +1741,38 @@
                 if (spin) spin.outerHTML = '<span class="ws-think-check">✓</span>';
             }
         },
+        /* 首事件静默期占位（2026-09-14，#231）：请求发出到首个 SSE 事件之间（网络往返 +
+           LLM 首轮深度思考可达 5-20s），面板只有一条静止的"执行计划 0 步"，体感像卡死。
+           这里立即点亮 thinking 面板、放一条带秒表计时的占位步，并按等待时长升级文案；
+           首个真实事件到达即移除（_stopSilence），不污染思考流。 */
+        _startSilence: function (shell) {
+            var self = this;
+            if (!shell || !shell.thinkingBody) return;
+            this._stopSilence();
+            shell.thinking.classList.add('active');
+            var step = document.createElement('div');
+            step.className = 'ws-think-step ws-silence-step';
+            step.innerHTML = '<span class="ws-think-icon"><span class="ws-think-tool-spin"></span></span>' +
+                '<span class="ws-think-text ws-silence-text">已收到你的需求，正在思考…</span>';
+            shell.thinkingBody.appendChild(step);
+            var t0 = Date.now();
+            this._silenceTimer = setInterval(function () {
+                var el = step.querySelector('.ws-silence-text');
+                if (!el) { clearInterval(self._silenceTimer); self._silenceTimer = null; return; }
+                var sec = Math.round((Date.now() - t0) / 1000);
+                if (sec >= 12) el.textContent = '正在深度思考与规划（复杂任务约需 1-2 分钟）… ' + sec + 's';
+                else if (sec >= 5) el.textContent = '正在思考与检索规划… ' + sec + 's';
+            }, 1000);
+            this._silenceStep = step;
+            this._scrollBottom();
+        },
+        _stopSilence: function () {
+            if (this._silenceTimer) { clearInterval(this._silenceTimer); this._silenceTimer = null; }
+            if (this._silenceStep && this._silenceStep.parentNode) {
+                this._silenceStep.parentNode.removeChild(this._silenceStep);
+            }
+            this._silenceStep = null;
+        },
         /* P0 Plan 面板：渲染执行计划（Devin 式，执行前展示"它打算怎么做"） */
         _renderPlan: function (shell, steps, statusList, runtime) {
             if (!shell || !shell.plan || !shell.planList) return;
@@ -1943,6 +1975,7 @@
             self.currentShell = shell;
             shell.prompt = message;             // #5 重新生成：记录原始诉求，供 ↻ 复用
             self._thinkCount = 0;
+            self._startSilence(shell);          // #231 首事件静默期即时占位（首个事件到达即移除）
             var fullAnswer = '';
             var toolNames = [];
             var clarified = false;
@@ -1976,6 +2009,7 @@
             function onEvent(ev) {
                 // 归属校验：本次请求归属的对话若已被切换走，丢弃晚期事件（竞态隔离）
                 if (self.currentConvoId !== runConvoId || self.sessionId !== runSessionId) return;
+                if (self._silenceStep) self._stopSilence();   // #231 首个真实事件到达 → 撤占位
                 var t = ev.type;
                 if (t === 'plan') {
                     // P1-1 Plan 面板：渲染执行计划（带初始 plan_status：pending/running/done），随思考面板折叠/展开
@@ -2116,6 +2150,7 @@
 
             this._chatStream(message, this.sessionId, ctrl.signal, onEvent)
             .catch(function (err) {
+                self._stopSilence();   // #231 请求失败/中断也要撤占位
                 // 仅当本次请求仍归属于当前对话时做清理，避免污染已切换走的对话
                 var owns = (self.currentConvoId === runConvoId && self.sessionId === runSessionId);
                 if (err && err.name === 'AbortError') {

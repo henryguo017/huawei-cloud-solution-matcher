@@ -1937,6 +1937,15 @@ body.view-agent .theme-label { margin-bottom: 8px; }
 }
 .ws-think-text { white-space: pre-wrap; word-break: break-word; }
 
+/* #231 首事件静默期占位：等待首个 SSE 事件期间的即时反馈（首个事件到达即被 JS 移除） */
+.ws-silence-step .ws-silence-text {
+    animation: ws-silence-breathe 2s ease-in-out infinite;
+}
+@keyframes ws-silence-breathe {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1; }
+}
+
 /* 工具调用芯片 */
 .ws-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
 .ws-tools-label { font-size: var(--font-size-xs); color: var(--text-muted); }

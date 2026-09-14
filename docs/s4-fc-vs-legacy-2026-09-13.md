@@ -271,3 +271,31 @@
 30/30 ok、0 超时、0 错误；elapsed_avg 55.1s（run1 22.3s——任务做得更深，非劣化）。A8 另有专项套件 7/7（§8）。
 
 **S4 结论更新**：A1/A7/A2/A8/A9/A11 全 PASS，A10 维持配置驱动证据。**本地验证无遗留项，剩余唯一门槛 = 生产灰度（5%×7 天或单用户头部账号）无回退后转默认。**
+
+---
+
+## 8. A10 补验（2026-09-14，task #229）—— 真实窗口压缩证据落地 ✅
+
+**方法**：构造天然长任务（12 家竞品 × 双品类检索 + 6 行业 KB 检索 + Python 汇总矩阵，预期 30+ 工具调用），
+窗口用默认 `AGENT_CONTEXT_WINDOW=64000 × AGENT_COMPACT_AT=0.75`（**非配置驱动**），联网关闭排除外网抖动。
+脚本 `.workbuddy/Temp/a10_longtask.py`，本地 uvicorn + 真 DeepSeek。
+
+**结果（main 例一次通过）**：
+
+| 指标 | 值 |
+|---|---|
+| compactions（真实触发） | **5** |
+| success / stopped_by | True / **model**（19 轮自主收尾） |
+| 工具调用总数 | 61（register_dynamic_tool 组合 dyn_competitor_dual×12 + list_dir×23 + read_customer_file×19 + search_competitor×3 + search_kb×2 + memory_search×1） |
+| 累计 token | 507,081 / 预算 2,000,000 |
+| plan_open_at_final / drift_rejections | 0 / 0 |
+| 终稿 | 4898 字，逐条引用真实 KB 文件名 |
+
+**A10 判定：PASS**（C1 压缩≥1 ✅ / C2 model 自主终止 ✅ / C3 终稿≥1000 字 ✅）。
+
+**附加观察**（超出 A10 本身的证据）：
+1. 模型自发 `register_dynamic_tool` 组合 `dyn_competitor_dual` 复用工具（12 次）——工作准则 #4 的提效路径在长任务中真实发生；
+2. 模型未盲从我给的竞品名单，而是 list_dir+read_customer_file 自行核实知识库实际竞品（AWS/微软 Azure 等），终稿按真实库存作答——反幻觉行为；
+3. 5 次压缩全程无信息丢失可感知（终稿仍引用早期轮次文件名）。
+
+**S4 结论更新**：A8 已闭（n=12）+ A10 真实窗口证据落地 → **本地验证证据链完整**。剩余唯一门槛 = 生产灰度（9-13~9-20）无回退后转默认。
