@@ -251,6 +251,12 @@
             this.pendingDocs = [];                      // 当前对话附带的文档附件（随对话持久化，2026-09-09）
             this.prevNarrow = window.innerWidth < DRAWER_BREAKPOINT;
             this.drawerOpen = false;                     // 默认收起，点击方案预览再以浮层覆盖方式展开
+            /* 方案A（2026-09-16）：登出/匿名时清理本地会话缓存残影。
+               侧栏历史来自 localStorage(agent_convos_v1)，无 token 时服务端同步跳过但缓存仍在，
+               退出登录后残影会暴露上一账号的对话标题/正文。匿名进入时先清一次（安全阀见方法注释）。 */
+            this._authHadToken = !!this.userToken();
+            if (!this._authHadToken) this._clearLocalConvosIfSafe();
+            this._startAuthWatch();                      // 常驻 1s 轮询：token 消失（登出/过期/被顶号）即清缓存 + 复位 UI
             this._render();
             this._bind();
             this._renderTasks();
@@ -3293,6 +3299,44 @@
             try { var v = localStorage.getItem(STORE_KEY); return v ? JSON.parse(v) : []; } catch (e) { return []; }
         },
 
+        /* ---------------- 方案A（2026-09-16）：登出/匿名清理本地会话缓存 ----------------
+           背景：侧栏历史是 localStorage 缓存（服务端为事实源，无 token 时同步跳过但缓存残留），
+           退出登录后未登录状态仍能看到上一账号的对话标题与已缓存正文。
+           安全阀：仅当所有「有正文」的本地会话都已确认在服务端（MIG_KEY=1 成功迁移 /
+           -1 服务端确认无需迁移）才清；有从未上传成功的纯本地对话时宁可不清理也不丢数据。
+           服务端已有的会话在 _syncFromServer 合并时统一补标 migrated，保证阀门判定准确。 */
+        _clearLocalConvosIfSafe: function () {
+            var list = this._loadConvos();
+            if (!list.length) return true;
+            var mig = this._migratedAll();
+            for (var i = 0; i < list.length; i++) {
+                var c = list[i];
+                if (c.messages && c.messages.length && mig[c.id] !== 1 && mig[c.id] !== -1) return false;
+            }
+            try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+            try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}   // 草稿仅本机，随会话缓存一并清（防公用机残留）
+            return true;
+        },
+        /* 登录态哨兵：1s 轮询（单次 localStorage 读，开销可忽略）。
+           只在 token 「有→无」跳变时动作（登出 / token 过期 / 被顶号）：
+           清本地会话缓存 + 中断在途流式 + 复位到欢迎态（侧栏立即变空，不留残影）。
+           不读写经典全局对象、不 query 经典元素，符合分支隔离铁律。 */
+        _startAuthWatch: function () {
+            if (this._authWatchTimer) return;
+            var self = this;
+            this._authWatchTimer = setInterval(function () {
+                var has = !!self.userToken();
+                var had = self._authHadToken;
+                self._authHadToken = has;
+                if (!had || has) return;   // 无跳变（一直匿名 / 一直登录）不动作
+                self._clearLocalConvosIfSafe();
+                if (self.currentCtrl) { try { self.currentCtrl.abort(); } catch (_) {} self.currentCtrl = null; }
+                self._streamConvoId = null;
+                self._streamFullAnswer = '';
+                self._newChat();
+            }, 1000);
+        },
+
         /* ---------------- 跨设备历史同步（2026-09-09 方案A'） ----------------
            服务端为唯一事实源，localStorage 降级为缓存：
            1) 登录后每次进入 Agent 视图拉 /agent/conv/list 与本地合并
@@ -3334,6 +3378,7 @@
                             local.archived = !!s.archived;
                             if (Array.isArray(s.docs) && s.docs.length && !(local.docs && local.docs.length)) local.docs = s.docs;
                             if (s.updated_ts && s.updated_ts > (local.updatedAt || 0)) local.updatedAt = s.updated_ts;
+                            self._markMigrated(s.session_id);   // 方案A（2026-09-16）：服务端已确认有此会话，登出清理安全阀据此放行
                             changed = true;
                         }
                     });
