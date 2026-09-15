@@ -1,0 +1,37 @@
+# 微软Azure智慧教育解决方案
+
+## 公司概况
+微软在全球教育市场影响力极强，Microsoft 365 Education 覆盖数亿师生用户，Microsoft Teams for Education 是在线课堂与协作核心。近年微软将生成式 AI 引入教育：Copilot Chat（面向 13 岁以上学生免费且带企业数据保护）、Khanmigo 助教、Learning Accelerators，以及 Azure for Education 科研与实验云，覆盖 K12 到高校全学段。
+
+## 智慧教育核心方案
+
+### 1. Microsoft 365 Education 与 Teams 教育版
+- Teams for Education：在线课堂、作业、评分与班级协作，新增 AI 起草评估量规、作业说明与阅读材料。
+- OneNote Class Notebook：数字课堂笔记本；Whiteboard 实时协作白板。
+- Learning Accelerators：朗读教练（Reading Coach）、搜素教练（Search Coach）、演讲教练（Speaker Coach）培养 AI 时代基础素养。
+
+### 2. 教育生成式 AI
+- Microsoft 365 Copilot Chat：免费、带企业数据保护的 AI 对话（基于 GPT-4o），支持文件上传与图像生成。
+- Khanmigo 助教：无需提示即可简化备课，已惠及 40+ 国家教育工作者（微软合作）。
+- Copilot 教学功能：在 Microsoft 365 Copilot App 中按 35+ 国家教育标准生成课程计划、测验与量规。
+
+### 3. Azure for Education 与编程教育
+- Azure for Education / Azure Lab Services：科研计算、虚拟实验室与课程实验环境。
+- Minecraft Education：基于游戏的问题解决与 AI 素养教学。
+- GitHub Education / GitHub Copilot：编程教学与代码辅助。
+
+## 竞争优势
+- Microsoft 365 在全球教育机构（K12 与高校）的统治级渗透率。
+- Teams 在线教育与协作生态成熟，与 Office 无缝整合。
+- 生成式 AI（Copilot、Khanmigo）率先规模化进入教学场景。
+- 编程教育（GitHub、Minecraft）校企生态完整。
+
+## 主要客户案例
+- Brisbane Catholic Education 与 Miami Dade College：早期应用 Copilot Chat 与教育智能体，提升教学与管理效率（微软官方 EDU 更新披露）。
+- 全球众多高校采用 Azure for Education 与 Azure Lab Services 支撑科研与实验教学。
+
+## 核心劣势（中国市场）
+- 中国教育信息化（含中小学）由国内厂商主导，微软在 K12 市场被国产替代。
+- 数据合规与未成年人数据保护下，Copilot/ChatGPT 类能力在华落地受限。
+- 缺乏本地教育内容与符合课标（如中国中小学课程标准）的本地化 AI 能力。
+- 无自有硬件终端，智慧教室、考试与校园物联网场景由本土厂商覆盖。

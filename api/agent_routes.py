@@ -1,0 +1,1430 @@
+"""
+Agent 对话端点 — POST /api/agent/chat (SSE, require_login)
+
+将 app/agent SolutionAgent 的 ReAct 循环事件（step / thought / tool_start /
+tool_end / final / final_answer / clarify）桥接为 SSE 流式推送，供前端 Agent
+视图消费。
+
+设计要点：
+- 鉴权 require_login（get_current_user）：满足"Agent 与经典作用于同一账号"。
+- 引擎事件经 asyncio.Queue 桥接为 SSE，避免回调内直接 yield 的协程冲突。
+- 收尾 event:result 带 {answer, steps, elapsed, tool_calls, success} 供前端定稿。
+- 客户端断开（前端 abort / 切换守卫中断）→ generator CancelledError → 取消
+  Agent 任务，后端自然停止，配合前端 TaskGuard 中断形成完整反向链路。
+
+2026-08-26 路由收拢：/agent/match、/agent/match/stream、/agent/clarify 三个路由
+从 api/routes.py 迁入本文件（经典与 Agent 代码物理隔离）。共享辅助：
+- _sse_json_default → api/sse_utils（两模式共用）
+- _build_client_context_block → 仍留在 api/routes.py（依赖经典侧 4 个内部 helper），
+  本文件单向 import（routes 不 import agent_routes，无循环）。
+"""
+import json
+import os
+import re
+import base64
+import asyncio
+import logging
+import time
+from datetime import datetime
+from typing import Optional, List
+
+from fastapi import APIRouter, Request, Depends, HTTPException, status, BackgroundTasks
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from api.auth_dependencies import get_current_user, require_login
+from api.dependencies import get_usage_logger, get_achievement_service_dep
+from api.models import MatchRequest, MatchResponse, ClarifyRequest, SourceDocument
+from api.sse_utils import sse_json_default as _sse_json_default
+from api.routes import _build_client_context_block
+from app.agent import get_agent
+from app.config import (SSE_HEARTBEAT_ENABLED, SSE_HEARTBEAT_INTERVAL, SSE_TIMEOUT, MATCH_LLM_MODEL,
+                        USER_DOCS_BASE_DIR, AGENT_RUN_HARD_TIMEOUT)
+from app.services.knowledge_base import set_kb_user_context
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+# 图片输入白名单（2026-09-09）：仅 customer_uploads 内的图片，防路径穿越读任意文件
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+_IMAGE_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+
+
+def _load_user_images_as_data_urls(user_id, rel_paths):
+    """校验并读取用户上传的图片 → base64 data URL 列表。
+
+    安全校验：拒绝绝对路径/..；resolve 后必须落在 user_docs/{uid}/customer_uploads/ 内
+    （upload 接口返回的 rel 是相对 user_docs/{uid}/ 的路径，已含 customer_uploads/ 前缀）；
+    扩展名白名单；单张 ≤10MB。任一不合法抛 HTTPException(400)。
+    """
+    user_base = os.path.realpath(os.path.join(USER_DOCS_BASE_DIR, str(user_id)))
+    uploads_dir = os.path.realpath(os.path.join(user_base, "customer_uploads"))
+    out = []
+    for rel in rel_paths:
+        rel = str(rel or "").strip()
+        if not rel or rel.startswith(("/", "\\")) or ":" in rel:
+            raise HTTPException(status_code=400, detail="非法图片路径")
+        abs_path = os.path.realpath(os.path.join(user_base, rel))
+        if not abs_path.startswith(uploads_dir + os.sep):
+            raise HTTPException(status_code=400, detail="图片路径越界")
+        ext = os.path.splitext(abs_path)[1].lower()
+        if ext not in _IMAGE_EXTS:
+            raise HTTPException(status_code=400, detail=f"不支持的图片格式: {ext}")
+        if not os.path.isfile(abs_path):
+            raise HTTPException(status_code=404, detail="图片不存在或已失效")
+        if os.path.getsize(abs_path) > _IMAGE_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="单张图片超过 10MB 上限")
+        with open(abs_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+        out.append(f"data:{_IMAGE_MIME[ext]};base64,{b64}")
+    return out
+
+
+# 文档附件白名单（2026-09-09）：与 read_customer_file 工具可解析格式对齐（图片走 vision 链路，不在此列）
+_DOC_EXTS = {".docx", ".xlsx", ".pdf", ".pptx", ".txt", ".csv", ".md"}
+_DOC_MAX_BYTES = 100 * 1024 * 1024
+_DOC_MAX_COUNT = 5
+
+
+def _validate_user_doc_paths(user_id, rel_paths):
+    """校验对话携带的文档附件路径（只校验不读内容，读取交给 Agent 的 read_customer_file 工具）。
+
+    安全校验与图片一致：拒绝绝对路径/..；resolve 后必须落在 user_docs/{uid}/customer_uploads/ 内；
+    扩展名白名单；单文件 ≤100MB；≤5 个。任一不合法抛 HTTPException(400)。
+    """
+    if not rel_paths:
+        return []
+    if len(rel_paths) > _DOC_MAX_COUNT:
+        raise HTTPException(status_code=400, detail=f"每个对话最多附带 {_DOC_MAX_COUNT} 个文档附件")
+    user_base = os.path.realpath(os.path.join(USER_DOCS_BASE_DIR, str(user_id)))
+    uploads_dir = os.path.realpath(os.path.join(user_base, "customer_uploads"))
+    out = []
+    for rel in rel_paths:
+        rel = str(rel or "").strip()
+        if not rel or rel.startswith(("/", "\\")) or ":" in rel:
+            raise HTTPException(status_code=400, detail="非法附件路径")
+        abs_path = os.path.realpath(os.path.join(user_base, rel))
+        if not abs_path.startswith(uploads_dir + os.sep):
+            raise HTTPException(status_code=400, detail="附件路径越界")
+        ext = os.path.splitext(abs_path)[1].lower()
+        if ext not in _DOC_EXTS:
+            raise HTTPException(status_code=400, detail=f"不支持的附件格式: {ext}")
+        if not os.path.isfile(abs_path):
+            raise HTTPException(status_code=404, detail="附件不存在或已失效")
+        if os.path.getsize(abs_path) > _DOC_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="单个附件超过 100MB 上限")
+        out.append(rel)
+    return out
+
+# 本地工具名缓存（首次枚举后复用，避免每次请求重建 ToolRegistry）
+_LOCAL_TOOL_NAMES = None
+
+
+def _local_tool_names():
+    global _LOCAL_TOOL_NAMES
+    if _LOCAL_TOOL_NAMES is None:
+        try:
+            from app.agent.tools import create_default_tools
+            _LOCAL_TOOL_NAMES = create_default_tools().get_tool_names()
+        except Exception as e:  # pragma: no cover - 防御性
+            logger.warning("[agent/tools] 本地工具枚举失败（已忽略）: %s", e)
+            _LOCAL_TOOL_NAMES = []
+    return _LOCAL_TOOL_NAMES
+
+
+class AgentChatRequest(BaseModel):
+    message: str
+    session_id: str = ""
+    client_id: Optional[int] = None  # 方案 B：客户上下文透传（前端选择器选定；后端暂透传，语义注入随 Plan A 推进）
+    model: Optional[str] = None      # Agent 用户临时切换的模型（Pro/Flash），None 走 config 默认
+    thinking: Optional[str] = None   # "enabled" 启用深度思考 / "disabled" 关闭；None 走 config 默认
+    rerun_plan_index: Optional[int] = None  # P2-D5：Plan 单步重跑（后端从 _step_results 取原参数重跑该步并重新汇总）
+    tool_permissions: Optional[dict] = None  # #3 工具权限策略 {tool: "allow"|"ask"|"deny"}，None 走 harness 默认
+    disable_web_search: bool = False         # #6 联网搜索开关：True 时 Agent 不调用 web_search
+    images: Optional[List[str]] = None       # 2026-09-09 图片输入：customer_uploads 内的相对路径，≤4 张
+    image_meta: Optional[List[dict]] = None  # 2026-09-09 图片元数据 [{path,name}]：随消息落库，跨设备恢复历史徽标
+    customer_files: Optional[List[str]] = None  # 2026-09-09 文档附件：customer_uploads 内的相对路径，≤5 个，随对话每轮携带
+    autonomy: Optional[str] = None  # L4-P1/T1.4：自主模式开关（"high"=跳过固定路由纯自主规划，失败自动回退 standard）
+    runtime: Optional[str] = None   # L4-P2：执行引擎（"fc"=原生 function calling 运行时 / "legacy"=老两阶段文本管线）；None 走服务端 AGENT_RUNTIME 默认
+
+
+@router.get("/agent/tools", tags=["Agent 工具发现"])
+async def agent_tools(user: dict = Depends(get_current_user)):
+    """P1-C 工具发现/调试只读端点（需登录）：返回本地工具数与已注册远端工具名。
+
+    不暴露任何密钥（webhook/secret 等）；远端工具仅在 AGENT_MCP_CLIENT=1 且配置后才有列表。
+    """
+    remote = []
+    try:
+        from app.agent import mcp_client
+        remote = mcp_client.get_registered_names()
+    except Exception as e:  # pragma: no cover - 防御性
+        logger.warning("[agent/tools] 远端工具枚举失败（已忽略）: %s", e)
+    return {
+        "local_tool_count": len(_local_tool_names()),
+        "local_tool_names": _local_tool_names(),
+        "remote_tool_names": remote,
+        "mcp_enabled": (os.getenv("AGENT_MCP_CLIENT", "0") or "0").strip() == "1",
+    }
+
+
+class EpisodeFeedbackRequest(BaseModel):
+    """L4-P1/T2.2：情景记忆反馈（👍/👎）。value：1 点赞 / -1 点踩 / 0 清除。"""
+    session_id: str
+    value: int
+
+
+@router.post("/agent/episode/feedback", tags=["Agent 经验记忆"])
+async def agent_episode_feedback(
+    body: EpisodeFeedbackRequest,
+    user: dict = Depends(get_current_user),
+):
+    """回写用户对本会话最近一条方案经验的反馈，驱动经验记忆的信任度权重。
+
+    点踩的经验后续以「教训警示」参与注入（帮 Agent 避坑），点赞的经验优先注入。
+    """
+    user_id = user.get("id") or user.get("user_id")
+    if not isinstance(user_id, int) or user_id <= 0:
+        raise HTTPException(status_code=401, detail="请先登录")
+    if not (body.session_id or "").strip():
+        raise HTTPException(status_code=400, detail="session_id 不能为空")
+    if body.value not in (1, -1, 0):
+        raise HTTPException(status_code=400, detail="value 只能为 1 / -1 / 0")
+    from app.agent.memory_profiles import set_episode_feedback
+    ok = await asyncio.to_thread(set_episode_feedback, user_id, body.session_id.strip(), body.value)
+    return {"status": "ok" if ok else "empty", "message": "反馈已记录" if ok else "该会话暂无可反馈的方案记忆"}
+
+
+@router.post("/agent/playbooks/refresh", tags=["Agent 经验记忆"])
+async def agent_playbooks_refresh(user: dict = Depends(get_current_user)):
+    """L4-P2/T2.4：从该用户最近的成功经验中蒸馏可复用打法（全量重建，幂等）。
+
+    成功经验不足 3 条时返回 skip（防 LLM 编造）。前端可在方案完成后引导用户点"提炼打法"。
+    """
+    user_id = user.get("id") or user.get("user_id")
+    if not isinstance(user_id, int) or user_id <= 0:
+        raise HTTPException(status_code=401, detail="请先登录")
+    from app.agent.memory_profiles import refresh_playbooks
+    result = await refresh_playbooks(user_id)
+    return result
+
+
+@router.get("/agent/playbooks", tags=["Agent 经验记忆"])
+async def agent_playbooks_list(user: dict = Depends(get_current_user)):
+    """列出该用户全部可复用打法（不含向量，供前端展示）。"""
+    user_id = user.get("id") or user.get("user_id")
+    if not isinstance(user_id, int) or user_id <= 0:
+        raise HTTPException(status_code=401, detail="请先登录")
+    from app.agent.memory_profiles import list_playbooks
+    items = await asyncio.to_thread(list_playbooks, user_id)
+    return {"status": "ok", "count": len(items), "playbooks": items}
+
+
+@router.post("/agent/chat", tags=["Agent 对话"])
+async def agent_chat(
+    request: Request,
+    body: AgentChatRequest,
+    user: dict = Depends(get_current_user),
+):
+    user_id = user.get("id") or user.get("user_id") or "anon"
+    session_id = body.session_id or f"agent_{user_id}"
+    message = (body.message or "").strip()
+    if not message and not body.images:
+        raise HTTPException(status_code=400, detail="message 不能为空")
+
+    # API Key 配额门（2026-09-15，公开分发护栏）：仅 API Key 身份计数，
+    # 网页 JWT 用户与只读查询接口不受限；上限 env API_KEY_DAILY_LIMIT（默认 20）。
+    if user.get("_auth_via") == "api_key":
+        from app.services.api_key_service import ApiKeyService
+        allowed, used, limit = ApiKeyService.consume_quota(user.get("_api_key_id"))
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"今日免费额度已用完（{used}/{limit} 次/天），次日 0 点重置；"
+                       f"网页版使用不受影响。",
+            )
+        logger.info("[agent/chat] API Key 配额 key_id=%s %s/%s",
+                    user.get("_api_key_id"), used, limit)
+
+    # 图片视觉预处理（2026-09-09）：v4-flash/pro 不支持图片（flash 静默丢弃 / pro 幻觉编造，
+    # 2026-09-08 spike 实测），统一先由 deepseek-v4-flash-vision-exp 转成文字描述，
+    # 再把描述块拼进消息进 harness —— 工具循环 / RAG / 记忆链路保持原架构零改动。
+    llm_message = message
+    if body.images:
+        if len(body.images) > 4:
+            raise HTTPException(status_code=400, detail="每轮最多附带 4 张图片")
+        if not isinstance(user_id, int) or user_id <= 0:
+            raise HTTPException(status_code=401, detail="请先登录后再使用图片输入")
+        data_urls = _load_user_images_as_data_urls(user_id, body.images)
+        try:
+            from app.services import vision_describe
+            desc = await asyncio.wait_for(
+                asyncio.to_thread(vision_describe.describe_images, data_urls),
+                timeout=120.0,
+            )
+            llm_message = (
+                f"[客户在本轮附带了 {len(data_urls)} 张图片，图片内容如下]\n"
+                f"{desc}\n[/图片内容结束]\n\n" + message
+            )
+            logger.info("[agent/chat] 图片预处理完成 images=%s session=%s", len(data_urls), session_id)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("[agent/chat] 图片描述失败（降级为纯文本继续）: %s", e)
+            llm_message = (
+                f"[客户附带了 {len(body.images)} 张图片，但图片识别失败，请基于文字回答]\n\n" + message
+            )
+    if not llm_message.strip():
+        raise HTTPException(status_code=400, detail="message 不能为空")
+
+    # 文档附件预处理（2026-09-09 简历案例）：服务端直接提取附件文本、注入消息——
+    # 与图片 vision 预处理同一架构。这样"聊着天传个简历让它看看"走通用直答也能
+    # 真实读到内容，而不是被强制拉进方案两阶段还弹澄清表；真方案诉求（消息含
+    # 方案动词）依旧自然进两阶段，extra_context 的 read_customer_file 引导保留。
+    if body.customer_files:
+        if not isinstance(user_id, int) or user_id <= 0:
+            raise HTTPException(status_code=401, detail="请先登录后再使用附件")
+        doc_rels = _validate_user_doc_paths(user_id, body.customer_files)
+        if doc_rels:
+            from app.agent.parsers.read_file import extract_text
+
+            def _extract_all():
+                parts = []
+                for rel in doc_rels:
+                    abs_path = os.path.realpath(os.path.join(USER_DOCS_BASE_DIR, str(user_id), rel))
+                    try:
+                        txt = (extract_text(abs_path) or "").strip()
+                    except Exception as ex:
+                        txt = f"（附件读取失败: {ex}）"
+                    if len(txt) > 15000:
+                        txt = txt[:15000] + "\n…（内容过长已截断，完整内容可让我用 read_customer_file 工具读取）"
+                    parts.append(f"【附件 {rel} 内容】\n{txt}")
+                return "\n\n".join(parts)
+
+            doc_content = await asyncio.to_thread(_extract_all)
+            if doc_content.strip():
+                llm_message = (
+                    f"[客户在本轮上传了 {len(doc_rels)} 个附件，内容如下]\n"
+                    f"{doc_content}\n[/附件内容结束]\n\n" + llm_message
+                )
+                logger.info("[agent/chat] 文档附件预处理完成 files=%s session=%s", len(doc_rels), session_id)
+
+    event_queue: "asyncio.Queue" = asyncio.Queue()
+
+    async def emit(event: dict) -> None:
+        await event_queue.put(event)
+
+    async def run_agent() -> None:
+        try:
+            # 设置用户上下文：Agent 文件工具（list_dir/read_customer_file）依赖
+            # get_kb_user_context()（ContextVar）判断登录态与用户目录
+            if isinstance(user_id, int) and user_id > 0:
+                from app.services.knowledge_base import set_kb_user_context
+                set_kb_user_context(user_id)
+            # 工具栏选择的模型/思考开关：透传到 harness（None 时走 config 默认）
+            model_override = body.model if body.model else None
+            thinking_override = body.thinking if body.thinking in ("enabled", "disabled") else None
+            # Plan A 收尾：对话模式同样注入客户上下文（此前 client_id 仅接收未消费；
+            # 与 /agent/match 同一构建逻辑，背景+top-5 相关历史方案注入提示词）
+            extra_context = ""
+            if body.client_id and isinstance(user_id, int) and user_id > 0:
+                try:
+                    client_block, _client_meta = await _build_client_context_block(
+                        body.client_id, user_id, message
+                    )
+                    if client_block:
+                        extra_context = client_block
+                        logger.info(f"[Agent/chat] 已注入客户上下文 client_id={body.client_id}")
+                except Exception as e:
+                    logger.warning(f"[Agent/chat] 客户上下文构建失败（忽略，不影响对话）: {e}")
+            # 文档附件注入（2026-09-09）：路径白名单校验后引导 Agent 用 read_customer_file 读取
+            if body.customer_files:
+                if not isinstance(user_id, int) or user_id <= 0:
+                    raise HTTPException(status_code=401, detail="请先登录后再使用附件")
+                doc_rels = _validate_user_doc_paths(user_id, body.customer_files)
+                if doc_rels:
+                    file_list = "\n".join(f"- {p}" for p in doc_rels)
+                    from app.agent.harness import DOC_ATTACH_MARKER
+                    doc_block = (
+                        DOC_ATTACH_MARKER + "，如与本次需求相关，"
+                        "请先用 read_customer_file 工具读取并提取要点，再综合回答]\n" + file_list
+                    )
+                    extra_context = (extra_context + "\n\n" if extra_context else "") + doc_block
+                    logger.info(f"[Agent/chat] 已注入文档附件 files={len(doc_rels)} session={session_id}")
+            result = None
+            try:
+                # 硬超时兜底（L4-P2 长程化改为配置项 AGENT_RUN_HARD_TIMEOUT，原写死 480s）：
+                # 语义是"超此值必是某个无超时 await 卡死（线程池耗尽/底层调用挂起）"，而非正常任务时长。
+                # 与守卫的关系（不变式，config 导入期已归一化保证）：AGENT_WALL_BUDGET < 本值 < SSE_TIMEOUT。
+                # 守卫先软收敛并收口；只有"守卫也收不了口"的病态卡死才轮到这里。
+                result = await asyncio.wait_for(
+                    get_agent().run(
+                        llm_message,
+                        session_id=session_id,
+                        extra_context=extra_context,
+                        event_callback=emit,
+                        user_id=user_id,
+                        user_info=user,
+                        model=model_override,
+                        thinking=thinking_override,
+                        rerun_plan_index=body.rerun_plan_index,
+                        tool_permissions=body.tool_permissions,
+                        disable_web_search=body.disable_web_search,
+                        client_id=(body.client_id if isinstance(body.client_id, int) and body.client_id > 0 else None),
+                        intent_text=message,  # 意图分类只看用户原话，不看不带图片描述的增强文本（2026-09-09）
+                        images_meta=body.image_meta,  # 图片元数据随用户消息落库（跨设备同步 2026-09-09）
+                        autonomy=(body.autonomy if body.autonomy in ("standard", "high") else None),  # L4-P1/T1.4
+                        runtime=(body.runtime if body.runtime in ("fc", "legacy") else None),  # L4-P2：引擎选择（None→AGENT_RUNTIME）
+                    ),
+                    timeout=float(AGENT_RUN_HARD_TIMEOUT),
+                )
+            except asyncio.TimeoutError:
+                logger.critical(
+                    "[agent/chat] 运行硬超时(%ss) session=%s message=%s —— 存在无超时阻塞 await，"
+                    "请结合 to_thread 硬超时日志定位卡点",
+                    AGENT_RUN_HARD_TIMEOUT,
+                    session_id, message[:80],
+                )
+                await event_queue.put({
+                    "type": "error",
+                    "message": "方案生成超时（服务端已终止本次运行），请重试；若反复出现请联系管理员查看日志。",
+                })
+                return
+            logger.info(
+                "[agent/chat] 运行完成 session=%s 耗时=%.1fs success=%s",
+                session_id, float(result.get("elapsed") or 0), bool(result.get("success")),
+            )
+            await event_queue.put({
+                "type": "result",
+                "answer": result.get("answer", ""),
+                "steps": result.get("steps"),
+                "elapsed": result.get("elapsed"),
+                "tool_calls": result.get("tool_calls", []),
+                "success": result.get("success", False),
+                "plan": result.get("plan") or [],           # P0：执行计划（前端 Plan 面板用）
+                "format_mode": result.get("format_mode", "solution"),  # P0：导出时决定 report_type
+                "plan_status": result.get("plan_status") or [],       # P1-1：plan 每步终态（result 后保留面板点亮）
+                "reflexion_used": result.get("reflexion_used", False),     # P1-3：是否触发过反思
+                "reflexion_success": result.get("reflexion_success", False),  # P1-3：反思是否成功注入
+                "runtime": result.get("runtime", "legacy"),  # L4-P2：本轮真实产出终稿的引擎（fc/legacy，FC 失败回退后为 legacy）
+                "fc_meta": result.get("fc_meta"),  # L4-P2：FC 运行元数据（轮次/终止原因/压缩/计划改写次数）；legacy 为 None
+            })
+
+            # P1 飞书/钉钉群机器人通知（按用户推送，默认关；仅 success 时触发；失败吞掉，不阻塞主链路）
+            if result.get("success"):
+                try:
+                    from app.services.notify import notify_for_user
+                    notify_for_user(
+                        user_id,
+                        demand=message,
+                        share_payload={
+                            "kind": "agent",
+                            "title": (message or "Agent 方案")[:60],
+                            "demand": message,
+                            "solution": result.get("answer", ""),
+                            "industry": "",
+                            "sources": [],
+                            "created_at": datetime.now().isoformat(),
+                        },
+                    )
+                except Exception as _nerr:
+                    logger.warning("[agent/chat] 通知发送失败（已忽略）: %s", _nerr)
+        except Exception as e:
+            logger.exception("[agent/chat] 运行失败 session=%s", session_id)
+            await event_queue.put({"type": "error", "message": str(e)})
+        finally:
+            await event_queue.put(None)  # 结束哨兵
+
+    async def generate():
+        task = asyncio.create_task(run_agent())
+        # L4-P2 长程化（2026-09-13）：本端点此前 `await queue.get()` **无超时 → 无心跳**。
+        # nginx 的 proxy_read_timeout 是"两次读之间"的超时（300s）：只要流里有字节就不会断；
+        # 但 FC 长程会出现静默期（单轮深度思考 / run_python 长执行），一旦 >300s 无字节，
+        # 网关掐断连接 —— 客户端看到网络错误，**后端却还在继续烧 token**。故与其他三个 SSE
+        # 端点对齐：30s 无事件就发 `: ping` 注释行保活，并受 SSE_TIMEOUT 总时长上限治理。
+        _start = time.time()
+        try:
+            while True:
+                if SSE_HEARTBEAT_ENABLED:
+                    try:
+                        event = await asyncio.wait_for(event_queue.get(), timeout=SSE_HEARTBEAT_INTERVAL)
+                    except asyncio.TimeoutError:
+                        if time.time() - _start > SSE_TIMEOUT:
+                            yield (
+                                "event: error\n"
+                                f"data: {json.dumps({'type': 'error', 'message': '方案生成超时，请重试。'}, ensure_ascii=False)}\n\n"
+                            )
+                            break
+                        yield ": ping\n\n"  # SSE 注释行，客户端忽略，仅保活
+                        continue
+                else:
+                    event = await event_queue.get()
+                if event is None:
+                    break
+                yield (
+                    f"event: {event.get('type', 'message')}\n"
+                    f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
+                )
+        except asyncio.CancelledError:
+            # 客户端断开（前端 abort / 切换守卫中断）→ 取消 Agent 任务，后端自然停止
+            task.cancel()
+            raise
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+# ========== Agent 智能匹配（单 Agent + Tool Calling） ==========
+
+# ========== P2 生态交互：IM 机器人内部端点（钉钉/飞书 bot 经 127.0.0.1 环回调用） ==========
+
+class InternalChatRequest(BaseModel):
+    message: str
+    session_id: str = ""
+
+
+@router.post("/agent/chat-internal", tags=["Agent 内部接口"])
+async def agent_chat_internal(request: Request, body: InternalChatRequest):
+    """IM 机器人专用内部端点（非 SSE、同步返回终稿）。
+
+    安全模型：
+      - 仅 INTERNAL_API_TOKEN 非空且请求头 X-Internal-Token 精确匹配时放行；
+        令牌未配置 = 端点整体禁用（403），默认关闭。
+      - 生产 uvicorn 监听 127.0.0.1:8000，公网无法直达；双重防线。
+      - 绕过验证码登录与用户权限闸门（无头环境无人点确认）：
+        高风险工具在此显式 allow（generate_doc/read_customer_file/mcp__ 成本工具）。
+      - v1 单账号绑定：以 IM_BOT_USER_ID 身份执行（KB 上下文/成就/通知归属），
+        未配置则匿名（无个人知识库上下文）。
+    成功时顺带生成临时分享页（匿名可读 30 天），返回 share_id 供 bot 拼卡片链接。
+    """
+    from app.config import INTERNAL_API_TOKEN, IM_BOT_USER_ID
+    token = request.headers.get("X-Internal-Token", "")
+    if not INTERNAL_API_TOKEN or not token or token != INTERNAL_API_TOKEN:
+        raise HTTPException(status_code=403, detail="内部接口未启用或令牌不匹配")
+
+    message = (body.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="message 不能为空")
+    session_id = body.session_id or f"imbot_{int(time.time())}"
+
+    uid = 0
+    try:
+        uid = int(IM_BOT_USER_ID)
+    except (TypeError, ValueError):
+        uid = 0
+    if uid > 0:
+        set_kb_user_context(uid)
+
+    # 无头放行：IM 场景无人点权限确认，mcp 成本工具/文档生成/客户资料读取显式 allow
+    headless_permissions = {
+        "generate_doc": "allow",
+        "read_customer_file": "allow",
+        "mcp__cost__cost_calc": "allow",
+        "mcp__cost__cost_reference_list": "allow",
+        # P2 CRM：只读工具放行（无副作用）；写入类 client_add/client_update 保持
+        # mcp__ 默认 "ask" —— 需人工确认才落库，避免模型幻觉写入脏客户档案。
+        "mcp__crm__client_list": "allow",
+        "mcp__crm__match_history": "allow",
+    }
+    result = await get_agent().run(
+        message,
+        session_id=session_id,
+        extra_context="",
+        event_callback=None,
+        user_id=(uid if uid > 0 else None),
+        tool_permissions=headless_permissions,
+    )
+    answer = result.get("answer", "")
+    success = bool(result.get("success"))
+
+    share_id = None
+    if success and answer:
+        try:
+            from app.services.share_service import ShareService
+            share_id = ShareService().create_share(
+                (message or "IM 方案")[:60],
+                {
+                    "kind": "agent",
+                    "title": (message or "IM 方案")[:60],
+                    "demand": message,
+                    "solution": answer,
+                    "industry": "",
+                    "sources": [],
+                    "created_at": datetime.now().isoformat(),
+                },
+            )
+        except Exception as e:
+            logger.warning("[agent/chat-internal] 分享页生成失败（忽略）: %s", e)
+
+    return {
+        "success": success,
+        "answer": answer,
+        "share_id": share_id,
+        "elapsed": result.get("elapsed"),
+        "tool_calls": result.get("tool_calls", []),
+    }
+
+
+@router.delete("/agent/memory", tags=["Agent 记忆"])
+async def clear_agent_memory(user: dict = Depends(get_current_user)):
+    """P2-2：清空当前用户的长程情景记忆（agent_episodes）。"""
+    try:
+        from app.agent.memory_profiles import clear_episodes, count_episodes
+        uid = user.get("id") or user.get("user_id") or 0
+        before = count_episodes(uid)
+        removed = clear_episodes(uid)
+        return {"ok": True, "removed": removed, "before": before}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"清空记忆失败: {e}")
+
+
+@router.get("/agent/memory/stats", tags=["Agent 记忆"])
+async def agent_memory_stats(user: dict = Depends(get_current_user)):
+    """P2-2：查询当前用户长程情景记忆条数（设置页展示用）。"""
+    try:
+        from app.agent.memory_profiles import count_episodes
+        uid = user.get("id") or user.get("user_id") or 0
+        return {"ok": True, "episodes": count_episodes(uid)}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"查询记忆失败: {e}")
+
+
+# ========== Agent 工具栏能力（上下文用量 / 提示词优化 / 工具权限确认） ==========
+
+@router.get("/agent/gray-summary", tags=["Agent 灰度观测"])
+async def agent_gray_summary(date: str = "", user: dict = Depends(get_current_user)):
+    """L4 灰度观测（2026-09-14，task #228）：按天聚合 FC 指标。
+
+    返回：FC 运行数 / 回退率 / stopped_by 分布 / drift_rejections /
+    A11 计划收敛率 / 平均轮次与 token。date 为空=今天（YYYY-MM-DD）。
+    """
+    from fastapi import HTTPException
+    if date and not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+        raise HTTPException(status_code=422, detail="date 格式须为 YYYY-MM-DD")
+    try:
+        from app.agent.metrics import daily_summary
+        return {"ok": True, **daily_summary(date)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"灰度观测聚合失败: {e}")
+
+
+@router.get("/agent/context-usage", tags=["Agent 上下文"])
+async def agent_context_usage(session_id: str = "", client_id: str = "", user: dict = Depends(get_current_user)):
+    """#1 上下文用量预估：返回 system/tools/memory/conversation 各桶 token 估算与总占用百分比。
+
+    client_id：前端选中客户时传入——把该客户的背景+历史方案块计入统计，
+    否则不同客户的用量看起来一模一样（客户块此前不在四桶里）。
+    """
+    try:
+        from app.agent import get_agent
+        uid = user.get("id") or user.get("user_id") or 0
+        sid = session_id or f"agent_{uid}"
+        agent = get_agent()
+        if uid and isinstance(uid, int):
+            try:
+                from app.services.knowledge_base import set_kb_user_context
+                set_kb_user_context(uid)
+            except Exception:
+                pass
+            agent._user_id = uid
+        extra_text = ""
+        cid = int(client_id) if str(client_id).strip().isdigit() else 0
+        if cid and uid and isinstance(uid, int) and uid > 0:
+            try:
+                client_block, _meta = await _build_client_context_block(cid, uid, "")
+                extra_text = client_block or ""
+            except Exception:
+                extra_text = ""
+        data = agent.harness.estimate_context_usage(sid, extra_text=extra_text)
+        return {"ok": True, **data}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"上下文用量统计失败: {e}")
+
+
+@router.get("/agent/history", tags=["Agent 对话"])
+async def agent_history(session_id: str = "", user: dict = Depends(get_current_user)):
+    """会话历史补全接口：返回该 session 的结构化对话（[{role, content}]，时间正序）。
+
+    用途：前端 localStorage 曾因"每轮覆写最后一条 agent 消息"的 bug 丢失多轮回答，
+    打开老对话时前端比对本地与服务端条数，服务端更全则回填修复。
+    单条 content 受落库 500 字截断限制。归属校验：session_id 解析出的 uid 必须是
+    当前用户（或匿名 0），防止拉别人的对话。
+    """
+    from fastapi import HTTPException
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id 必填")
+    uid = user.get("id") or user.get("user_id") or 0
+    from app.agent.memory import ConversationMemory
+    sid_uid = ConversationMemory._parse_user_id(session_id)
+    if sid_uid not in (0, uid):
+        raise HTTPException(status_code=403, detail="无权访问该会话历史")
+    try:
+        from app.agent.memory import ConversationMemory
+        memory = ConversationMemory()
+        msgs = memory.get_history_messages(session_id)
+        return {"ok": True, "session_id": session_id, "messages": msgs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取会话历史失败: {e}")
+
+
+# ===== 会话管理端点（2026-09-08 对话管理真服务端化） =====
+# 前端右上角 归档/重命名/删除 此前只写 localStorage（服务端无感），此处提供真身。
+# 归属校验与 /agent/history 同口径：session_id 解析出的 uid ∈ {0, 当前用户}。
+
+class ConvManageRequest(BaseModel):
+    session_id: str = ""
+    title: str = ""
+    archived: bool = False
+
+
+def _conv_manage_guard(session_id: str, user: dict) -> int:
+    from fastapi import HTTPException
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id 必填")
+    uid = user.get("id") or user.get("user_id") or 0
+    from app.agent.memory import ConversationMemory
+    sid_uid = ConversationMemory._parse_user_id(session_id)
+    if sid_uid not in (0, uid):
+        raise HTTPException(status_code=403, detail="无权操作该会话")
+    return uid
+
+
+@router.post("/agent/conv/rename", tags=["Agent 对话"])
+async def agent_conv_rename(body: ConvManageRequest, user: dict = Depends(get_current_user)):
+    _conv_manage_guard(body.session_id, user)
+    title = (body.title or "").strip()[:80]
+    if not title:
+        raise HTTPException(status_code=400, detail="title 不能为空")
+    from app.agent.memory import ConversationMemory
+    ok = ConversationMemory().set_session_title(body.session_id, title)
+    if not ok:
+        raise HTTPException(status_code=500, detail="改名落库失败")
+    return {"ok": True, "session_id": body.session_id, "title": title}
+
+
+@router.post("/agent/conv/archive", tags=["Agent 对话"])
+async def agent_conv_archive(body: ConvManageRequest, user: dict = Depends(get_current_user)):
+    _conv_manage_guard(body.session_id, user)
+    from app.agent.memory import ConversationMemory
+    ok = ConversationMemory().set_session_archived(body.session_id, bool(body.archived))
+    if not ok:
+        raise HTTPException(status_code=500, detail="归档标记落库失败")
+    return {"ok": True, "session_id": body.session_id, "archived": bool(body.archived)}
+
+
+@router.post("/agent/conv/delete", tags=["Agent 对话"])
+async def agent_conv_delete(body: ConvManageRequest, user: dict = Depends(get_current_user)):
+    _conv_manage_guard(body.session_id, user)
+    from app.agent.memory import ConversationMemory
+    deleted = ConversationMemory().delete_session(body.session_id)
+    return {"ok": True, "session_id": body.session_id, "deleted_messages": deleted}
+
+
+# ===== 跨设备历史同步（2026-09-09 方案A'：服务端为唯一事实源 + localStorage 缓存） =====
+# 背景：消息早已落 agent_memory，但没有读侧接口，前端只读 localStorage，
+# 换设备后历史全部"消失"。以下三个读/写端点 + /agent/conv/rename|archive|delete
+# 构成完整的会话服务端真身。匿名模式不走这些接口（前端匿名仍纯 localStorage）。
+
+class ConvMetaRequest(BaseModel):
+    session_id: str = ""
+    title: Optional[str] = None
+    cap: Optional[str] = None
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
+    docs: Optional[list] = None
+
+
+def _conv_meta_guard(session_id: str, user: dict) -> int:
+    """元数据/迁移写入的归属校验：比 _conv_manage_guard 更严——
+    session_id 解析出的 uid 必须等于当前用户（guest 会话不允许跨设备同步写入）。"""
+    from fastapi import HTTPException
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id 必填")
+    uid = user.get("id") or user.get("user_id") or 0
+    from app.agent.memory import ConversationMemory
+    sid_uid = ConversationMemory._parse_user_id(session_id)
+    if not uid or sid_uid != uid:
+        raise HTTPException(status_code=403, detail="无权操作该会话")
+    return uid
+
+
+@router.get("/agent/conv/list", tags=["Agent 对话"])
+async def agent_conv_list(user: dict = Depends(get_current_user)):
+    """跨设备同步读侧①：返回当前用户全部会话元数据（含孤儿恢复）。
+
+    孤儿恢复：agent_memory 里有消息但没有 agent_sessions 元数据行的会话
+    （2026-09-08 之前的历史）自动补齐 title/updated_at 并回填元数据表。
+    """
+    uid = user.get("id") or user.get("user_id") or 0
+    if not uid:
+        raise HTTPException(status_code=403, detail="匿名模式不支持跨设备同步")
+    from app.agent.memory import ConversationMemory
+    try:
+        convs = ConversationMemory().list_sessions(uid)
+        return {"ok": True, "convs": convs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取会话列表失败: {e}")
+
+
+@router.get("/agent/conv/messages", tags=["Agent 对话"])
+async def agent_conv_messages(session_id: str = "", user: dict = Depends(get_current_user)):
+    """跨设备同步读侧②：懒加载会话全量消息（主表+归档表并集，时间正序）。
+
+    前端打开对话时按条数比对决定是否回填；归属校验沿用会话管理口径。
+    """
+    uid = _conv_manage_guard(session_id, user)
+    from app.agent.memory import ConversationMemory
+    msgs = ConversationMemory().get_session_messages(session_id, uid)
+    return {"ok": True, "session_id": session_id, "messages": msgs}
+
+
+@router.post("/agent/conv/meta", tags=["Agent 对话"])
+async def agent_conv_meta(body: ConvMetaRequest, user: dict = Depends(get_current_user)):
+    """跨设备同步写侧①：会话元数据 upsert（建对话/附件变更时前端推送）。
+
+    只更新传入字段；rename/archive 仍走 /agent/conv/rename|archive。
+    """
+    uid = _conv_meta_guard(body.session_id, user)
+    from app.agent.memory import ConversationMemory
+    ok = ConversationMemory().upsert_session_meta(
+        body.session_id,
+        title=body.title, cap=body.cap,
+        client_id=body.client_id, client_name=body.client_name,
+        docs=body.docs,
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail="会话元数据落库失败")
+    return {"ok": True, "session_id": body.session_id}
+
+
+class ConvImportRequest(BaseModel):
+    session_id: str = ""
+    title: str = ""
+    messages: List[dict] = []
+    cap: str = ""
+    client_id: Optional[int] = None
+    client_name: str = ""
+    docs: Optional[list] = None
+
+
+@router.post("/agent/conv/import", tags=["Agent 对话"])
+async def agent_conv_import(body: ConvImportRequest, user: dict = Depends(get_current_user)):
+    """跨设备同步写侧②：一次性迁移——把纯本地会话（同步上线前的历史）上传服务端。
+
+    幂等 append-only：服务端已有 N 条则只补插尾部，重复调用不产生重复消息。
+    上限 200 条/次、单条 4000 字（超出部分由服务端截断）。
+    """
+    uid = _conv_meta_guard(body.session_id, user)
+    from app.agent.memory import ConversationMemory
+    msgs = [
+        m for m in (body.messages or [])
+        if isinstance(m, dict) and str(m.get("content") or "").strip()
+    ][:200]
+    if not msgs:
+        raise HTTPException(status_code=400, detail="messages 为空")
+    res = ConversationMemory().import_session(
+        body.session_id, (body.title or "")[:80], msgs,
+        cap=(body.cap or "")[:80],
+        client_id=body.client_id,
+        client_name=(body.client_name or "")[:80],
+        docs=body.docs,
+    )
+    return {"ok": True, "session_id": body.session_id, **res}
+
+
+class EnhancePromptRequest(BaseModel):
+    prompt: str
+    session_id: str = ""
+
+
+@router.post("/agent/enhance-prompt", tags=["Agent 提示词"])
+async def agent_enhance_prompt(
+    body: EnhancePromptRequest,
+    user: dict = Depends(get_current_user),
+):
+    """#2 提示词优化：把用户原始诉求改写为更清晰、结构化、可执行的指令，便于 Agent 检索与生成。"""
+    raw = (body.prompt or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="prompt 不能为空")
+    if len(raw) > 2000:
+        raw = raw[:2000]
+    optimizer_prompt = (
+        "你是华为云售前方案助手的「提示词优化器」。请把用户的原始诉求改写为更清晰、结构化、可执行的指令，"
+        "让方案 Agent 能更精准地检索知识库、匹配竞品并生成落地方案。\n"
+        "改写要求：\n"
+        "1. 若原话缺失行业/场景/规模/目标，基于常识合理补全，并用 [假设: ...] 标注你的推断；\n"
+        "2. 用一句话明确「希望得到什么产出」（如方案书/竞品对比/架构建议）；\n"
+        "3. 保留用户原意，不擅自扩大范围，不添加无关要求；\n"
+        "4. 输出语言与用户输入一致（中文需求用中文输出）；\n"
+        "5. 只输出优化后的提示词本身，不要任何解释、不要代码围栏、不要前缀。\n\n"
+        f"原始提示词：\n\"\"\"\n{raw}\n\"\"\"\n\n优化后提示词："
+    )
+    try:
+        from app.models.llm import get_llm_response
+        enhanced = await get_llm_response(optimizer_prompt, model=MATCH_LLM_MODEL)
+        enhanced = (enhanced or "").strip()
+        # 去除可能的代码围栏（模型偶有违规包裹）
+        if enhanced.startswith("```"):
+            enhanced = enhanced.strip("`")
+            if enhanced.startswith("json") or enhanced.startswith("markdown") or enhanced.startswith("text"):
+                enhanced = enhanced.split("\n", 1)[-1] if "\n" in enhanced else enhanced
+            enhanced = enhanced.strip("`").strip()
+        if not enhanced:
+            return {"ok": True, "enhanced": raw, "unchanged": True}
+        return {"ok": True, "enhanced": enhanced, "unchanged": False}
+    except Exception as e:
+        logger.warning("[agent/enhance-prompt] 优化失败: %s", e)
+        # 优化失败不阻断用户：原样返回，前端按原 prompt 发送
+        return {"ok": True, "enhanced": raw, "unchanged": True, "error": str(e)}
+
+
+class PermissionDecisionRequest(BaseModel):
+    decision: str  # "allow" | "deny"
+
+
+@router.post("/agent/permission/{request_id}", tags=["Agent 权限"])
+async def agent_permission_resolve(request_id: str, body: PermissionDecisionRequest):
+    """#3 工具权限确认：前端用户点击「允许/拒绝」后回传决策，唤醒 Agent 阻塞的 Future。"""
+    try:
+        from app.agent.permission_gate import resolve_permission
+        hit = resolve_permission(request_id, body.decision or "deny")
+        return {"ok": True, "hit": hit}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"权限确认失败: {e}")
+
+
+def _resolve_agent_session_id(user: dict, client_id: Optional[int]) -> str:
+    """Agent 记忆的 session_id：提供 client_id 时按 用户:客户 维度隔离，避免多客户串味；否则沿用全局（按用户）。"""
+    if client_id:
+        return f"{user['id']}:{client_id}"
+    return str(user['id'])
+
+
+async def _process_and_emit_agent_result(queue, result: dict, user: dict, original_demand: str, is_quick_demo: bool, group_id=None, client_id=None, client_context_meta: Optional[dict] = None):
+    """
+    Agent 流式结束后统一处理：保存历史（含版本化）、成就检测、提取来源文档、推送 result 事件。
+    供 /agent/match/stream 与 /agent/clarify 共用，单一事实来源避免逻辑分叉。
+
+    - 澄清暂停（result.paused=True）：不保存历史、不触发成就，直接下发 result（前端据此保留提问卡等待作答）；
+    - 正常完成：保存历史并回填版本元信息(group_id/version/is_final/title)到 result。
+    """
+    # 澄清暂停或会话过期：不落库、不触发成就，直接下发 result 事件
+    if result.get("paused") or result.get("expired"):
+        result["newly_unlocked"] = []
+        result["history_id"] = None
+        result["source_documents"] = []
+        await queue.put({"type": "result", "data": result})
+        return
+
+    history_id = None
+    if user and user.get('id'):
+        try:
+            usage_logger = get_usage_logger()
+            usage_logger.log_match(original_demand or "", user_id=user['id'], mode="agent")
+            # 提取行业信息
+            industry_hint = ""
+            for tc in result.get("tool_calls", []):
+                if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
+                    try:
+                        rd = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
+                        for doc in rd.get("results", []):
+                            ind = doc.get("industry", "")
+                            if ind:
+                                industry_hint = ind
+                                break
+                    except Exception:
+                        pass
+                if industry_hint:
+                    break
+            history_id = usage_logger.save_match_history(
+                demand_text=original_demand or "",
+                solution=result.get("answer", ""),
+                industry=industry_hint,
+                sources=[],
+                user_id=user['id'],
+                group_id=group_id,
+                client_id=client_id,
+            )
+            # 回填版本元信息
+            meta = usage_logger.get_match_history_meta(history_id, user_id=user['id'])
+            if meta:
+                result["group_id"] = meta["group_id"]
+                result["version"] = meta["version"]
+                result["is_final"] = meta["is_final"]
+                result["title"] = meta["title"]
+        except Exception as log_err:
+            logger.warning(f"[Agent SSE] 保存历史失败: {log_err}")
+
+    # ── 成就检测 ──
+    newly_unlocked = []
+    if user and user.get('id') and not is_quick_demo:
+        try:
+            achievement_svc = get_achievement_service_dep()
+            industry_hint = ""
+            for tc in result.get("tool_calls", []):
+                if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
+                    try:
+                        rd = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
+                        for doc in rd.get("results", []):
+                            ind = doc.get("industry", "")
+                            if ind:
+                                industry_hint = ind
+                                break
+                    except Exception:
+                        pass
+                if industry_hint:
+                    break
+            newly_unlocked = achievement_svc.check_after_match(
+                user_id=user['id'],
+                demand_text=original_demand,
+                mode="agent",
+                industry=industry_hint,
+            )
+        except Exception as ach_err:
+            logger.warning(f"[Agent SSE] 成就检测失败: {ach_err}")
+
+    result["newly_unlocked"] = newly_unlocked
+    result["history_id"] = history_id
+    result["client_context_used"] = client_context_meta
+
+    # 从 tool_calls 中提取 source_documents（与非流式 /agent/match 保持一致）
+    _sdocs = []
+    for _tc in result.get("tool_calls", []):
+        if _tc.get("tool") in ("search_kb", "search_competitor") and _tc.get("result"):
+            try:
+                _rd = json.loads(_tc["result"]) if isinstance(_tc["result"], str) else _tc["result"]
+                for _d in _rd.get("results", []):
+                    _sdocs.append(SourceDocument(
+                        page_content=_d.get("content", ""),
+                        metadata={
+                            "source": _d.get("source", ""),
+                            "industry": _d.get("industry", ""),
+                        }
+                    ).model_dump())
+            except (json.JSONDecodeError, TypeError):
+                pass
+    result["source_documents"] = _sdocs
+
+    await queue.put({"type": "result", "data": result})
+
+
+@router.post("/agent/match", response_model=MatchResponse, tags=["解决方案匹配"])
+async def agent_match_solution(
+    request: MatchRequest,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    user: dict = Depends(require_login)
+):
+    """
+    Agent 智能匹配接口（ReAct + Tool Calling）
+
+    先分析意图，再检索知识库，最后生成方案——适合模糊输入场景。
+    """
+    try:
+        # 设置用户上下文，Agent 工具可使用用户独立知识库
+        user_id = user['id']
+        set_kb_user_context(user_id)
+
+        # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
+        original_demand = request.demand
+
+        # 空输入处理
+        if not request.demand or not request.demand.strip():
+            request.demand = "（用户未输入需求，请介绍华为云的核心解决方案和产品体系）"
+            logger.info("[Agent] 检测到空输入，使用默认 prompt")
+
+        agent = get_agent()
+        session_id = _resolve_agent_session_id(user, request.client_id)
+
+        # 方案 A：关联客户时构造『背景 + 历史方案』上下文
+        client_block, client_meta = "", None
+        if request.client_id and user_id > 0:
+            client_block, client_meta = await _build_client_context_block(
+                request.client_id, user_id, request.demand
+            )
+
+        # 阶段1：把上传的客户文件路径注入 Agent，引导其用 read_customer_file 读取
+        extra_context = ""
+        if request.customer_files:
+            file_list = "\n".join(f"- {p}" for p in request.customer_files)
+            extra_context = (
+                "\n\n[用户上传了以下客户资料文件，请务必先用 read_customer_file 工具逐一读取并提取需求要点，"
+                "再综合生成方案]\n" + file_list
+            )
+            logger.info(f"[Agent] 注入 {len(request.customer_files)} 个客户资料文件路径")
+
+        # 方案 A：把客户背景上下文拼进 Agent 提示词（不与文件注入冲突）
+        if client_block:
+            extra_context = (extra_context + "\n\n" if extra_context else "") + client_block
+
+        result = await agent.run(
+            user_input=request.demand,
+            session_id=str(session_id),
+            extra_context=extra_context,
+            user_id=user.get('id') if user else None,
+            user_info=user,
+            runtime="legacy",  # L4-P2 端点隔离：经典模式端点显式锁老引擎，不受 AGENT_RUNTIME 默认值影响
+        )
+
+        # 阶段2：后台异步更新用户画像（best-effort，不阻断主响应）
+        background_tasks.add_task(agent.update_user_profile, user['id'], str(session_id))
+
+        answer = result.get("answer", "Agent 未能生成有效方案")
+        tool_calls = result.get("tool_calls", [])
+        steps = result.get("steps", 0)
+
+        # 从工具调用中提取 source_documents
+        source_docs = []
+        for tc in tool_calls:
+            if tc.get("tool") in ("search_kb", "search_competitor") and tc.get("result"):
+                try:
+                    result_data = json.loads(tc["result"]) if isinstance(tc["result"], str) else tc["result"]
+                    for doc in result_data.get("results", []):
+                        source_docs.append(SourceDocument(
+                            page_content=doc.get("content", ""),
+                            metadata={
+                                "source": doc.get("source", ""),
+                                "industry": doc.get("industry", ""),
+                            }
+                        ))
+                except (json.JSONDecodeError, TypeError):
+                    pass  # 无法解析的跳过
+
+        logger.info(f"[Agent] 匹配完成: {steps} 步, {len(tool_calls)} 次工具调用")
+
+        # 记录使用日志
+        history_id = None
+        if user and user.get('id'):
+            try:
+                usage_logger = get_usage_logger()
+                usage_logger.log_match(original_demand or "", user_id=user['id'], mode="agent")
+                industry_hint = ""
+                for doc in source_docs:
+                    ind = doc.metadata.get("industry", "")
+                    if ind:
+                        industry_hint = ind
+                        break
+                history_id = usage_logger.save_match_history(
+                    demand_text=original_demand or "",
+                    solution=answer,
+                    industry=industry_hint,
+                    sources=[{"source": d.metadata.get("source", ""), "industry": d.metadata.get("industry", "")} for d in source_docs],
+                    user_id=user['id'],
+                    client_id=request.client_id,
+                )
+            except Exception as log_err:
+                logger.warning(f"[Agent] 保存历史失败: {log_err}")
+
+        # 成就检测（Agent 模式）
+        achievement_result = []
+        if user and user.get('id') and not request.is_quick_demo:
+            try:
+                achievement_svc = get_achievement_service_dep()
+                industry_hint = ""
+                for doc in source_docs:
+                    ind = doc.metadata.get("industry", "")
+                    if ind:
+                        industry_hint = ind
+                        break
+                achievement_result = achievement_svc.check_after_match(
+                    user_id=user['id'],
+                    demand_text=original_demand,
+                    mode="agent",
+                    industry=industry_hint,
+                )
+            except Exception as ach_err:
+                logger.warning(f"[Agent] 成就检测失败: {ach_err}")
+
+        return MatchResponse(
+            answer=answer,
+            source_documents=source_docs,
+            solution_json=result.get("solution_json"),
+            history_id=history_id,
+            newly_unlocked=achievement_result if user and user.get('id') else None,
+            client_context_used=client_meta,
+        )
+    except Exception as e:
+        logger.error(f"[Agent] 智能匹配失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Agent 匹配失败: {str(e)}"
+        )
+
+
+# ========== Agent SSE 流式匹配（实时进度推送） ==========
+
+@router.post("/agent/match/stream", tags=["解决方案匹配"])
+async def agent_match_stream(
+    request: MatchRequest,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    user: dict = Depends(require_login)
+):
+    """
+    Agent 智能匹配 SSE 流式接口
+
+    通过 Server-Sent Events 实时推送 ReAct 循环的每一步进度：
+    - event: step     → 新步骤开始
+    - event: tool_start → 开始执行工具
+    - event: tool_end   → 工具执行完成
+    - event: final      → Agent 完成
+    - event: result     → 最终结果（answer, steps, elapsed, tool_calls）
+    """
+    session_id = _resolve_agent_session_id(user, request.client_id)
+
+    async def generate():
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def event_callback(event):
+            await queue.put(event)
+
+        async def run_agent():
+            try:
+                # 设置用户上下文，Agent 工具可使用用户独立知识库
+                set_kb_user_context(user['id'])
+
+                # 保存原始 demand（用于成就检测，不被默认 prompt 覆盖）
+                original_demand = request.demand
+
+                # 空输入处理
+                if not request.demand or not request.demand.strip():
+                    request.demand = "（用户未输入需求，请介绍华为云的核心解决方案和产品体系）"
+
+                agent = get_agent()
+
+                # 方案 A：关联客户时构造『背景 + 历史方案』上下文
+                client_block, client_meta = "", None
+                if request.client_id and user.get('id'):
+                    client_block, client_meta = await _build_client_context_block(
+                        request.client_id, user['id'], request.demand
+                    )
+
+                # 阶段1：注入客户文件路径，引导 Agent 用 read_customer_file 读取
+                extra_context = ""
+                if request.customer_files:
+                    file_list = "\n".join(f"- {p}" for p in request.customer_files)
+                    extra_context = (
+                        "\n\n[用户上传了以下客户资料文件，请务必先用 read_customer_file 工具逐一读取并提取需求要点，"
+                        "再综合生成方案]\n" + file_list
+                    )
+
+                # 方案 A：把客户背景上下文拼进 Agent 提示词
+                if client_block:
+                    extra_context = (extra_context + "\n\n" if extra_context else "") + client_block
+
+                result = await agent.run(
+                    user_input=request.demand,
+                    session_id=session_id,
+                    extra_context=extra_context,
+                    event_callback=event_callback,
+                    user_id=user.get('id') if user else None,
+                    user_info=user,
+                    runtime="legacy",  # L4-P2 端点隔离：经典模式流式端点显式锁老引擎，保证零影响
+                )
+
+                # 阶段2：后台异步更新用户画像（best-effort，不阻断流式响应）
+                if user and user.get('id'):
+                    background_tasks.add_task(agent.update_user_profile, user['id'], session_id)
+
+                # ── 统一后处理：保存历史（含版本化）+ 成就检测 + 来源文档 + 下发 result ──
+                await _process_and_emit_agent_result(
+                    queue, result, user, original_demand, request.is_quick_demo,
+                    group_id=request.group_id,
+                    client_id=request.client_id,
+                    client_context_meta=client_meta,
+                )
+            except Exception as e:
+                logger.error(f"[Agent SSE] 执行失败: {e}")
+                await queue.put({"type": "error", "message": str(e)})
+            finally:
+                try:
+                    await queue.put(None)  # 结束信号
+                except Exception:
+                    pass
+
+        task = asyncio.ensure_future(run_agent())
+
+        start_time = time.time()
+        try:
+            while True:
+                if SSE_HEARTBEAT_ENABLED:
+                    # 受控路径：心跳保活 + 超时主动结束（防止悬挂连接拖垮 worker）
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_INTERVAL)
+                    except asyncio.TimeoutError:
+                        if time.time() - start_time > SSE_TIMEOUT:
+                            logger.info("[Agent SSE] 流式超过超时上限,主动结束")
+                            break
+                        yield ": ping\n\n"  # SSE 注释行,客户端忽略,仅保活
+                        continue
+                else:
+                    # 默认路径：与原行为完全一致
+                    event = await queue.get()
+                if event is None:
+                    break
+                event_type = event.get("type", "message")
+                yield f"event: {event_type}\ndata: {json.dumps(event, ensure_ascii=False, default=_sse_json_default)}\n\n"
+        except asyncio.CancelledError:
+            logger.info("[Agent SSE] 客户端断开连接")
+            task.cancel()
+        except Exception as gen_err:
+            logger.error(f"[Agent SSE] 生成器异常(连接将中断): {gen_err}")
+            try:
+                yield f"event: error\ndata: {json.dumps({'type':'error','message':f'内部错误: {gen_err}'}, ensure_ascii=False)}\n\n"
+            except Exception:
+                pass
+        finally:
+            await task
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        background=background_tasks,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 禁用 Nginx 缓冲
+        },
+    )
+
+
+@router.post("/agent/clarify", tags=["解决方案匹配"])
+async def agent_clarify(
+    request: ClarifyRequest,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    user: dict = Depends(require_login)
+):
+    """
+    Agent 交互式澄清续跑接口（阶段 2.5）
+
+    用户回答完 Agent 暂停时提出的问题后，带上 clarify_id 与答案调此接口，
+    后端恢复到暂停时的 ReAct 循环状态，把答案作为 Observation 接回并继续生成方案（不是重头再来）。
+    """
+    session_id = _resolve_agent_session_id(user, request.client_id)
+
+    async def generate():
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def event_callback(event):
+            await queue.put(event)
+
+        async def run_agent():
+            result_emitted = False
+            try:
+                from app.agent.clarify_store import ClarifySessionStore
+                set_kb_user_context(user['id'])
+                agent = get_agent()
+
+                # 恢复原始需求（用于历史落库与成就检测）
+                state = ClarifySessionStore.get(request.clarify_id)
+                original_demand = state.get("user_input", "") if state else ""
+
+                logger.info(f"[Agent Clarify] 续跑开始 clarify_id={request.clarify_id} answers_count={len(request.answers or [])}")
+
+                result = await agent.run(
+                    user_input="",
+                    session_id=session_id,
+                    event_callback=event_callback,
+                    clarify_id=request.clarify_id,
+                    answers=request.answers,
+                    user_id=user.get('id') if user else None,
+                    user_info=user,
+                    runtime="legacy",  # L4-P2 端点隔离：经典模式澄清续跑显式锁老引擎（与首次请求同引擎）
+                )
+
+                logger.info(f"[Agent Clarify] agent.run 返回 success={result.get('success')} paused={result.get('paused')} expired={result.get('expired')}")
+
+                if user and user.get('id'):
+                    background_tasks.add_task(agent.update_user_profile, user['id'], session_id)
+
+                # 安全包装：即使落库/成就检测失败，也保证发出 result 事件
+                try:
+                    await _process_and_emit_agent_result(
+                        queue, result, user, original_demand, is_quick_demo=False, group_id=None,
+                        client_id=request.client_id,
+                    )
+                    result_emitted = True
+                except Exception as proc_err:
+                    logger.warning(f"[Agent Clarify] 落库处理失败（仍下发结果）: {proc_err}")
+                    result["newly_unlocked"] = []
+                    result["history_id"] = None
+                    result["source_documents"] = []
+                    await queue.put({"type": "result", "data": result})
+                    result_emitted = True
+
+            except asyncio.CancelledError:
+                logger.warning("[Agent Clarify] 任务被取消")
+                await queue.put({"type": "error", "message": "请求被取消"})
+                result_emitted = True
+            except Exception as e:
+                logger.error(f"[Agent Clarify] 执行失败: {e}", exc_info=True)
+                await queue.put({"type": "error", "message": str(e)})
+                result_emitted = True
+            finally:
+                if not result_emitted:
+                    logger.error("[Agent Clarify] 未发出任何结果事件！发送兜底错误")
+                    try:
+                        await queue.put({"type": "error", "message": "内部异常：未生成结果"})
+                    except Exception:
+                        pass
+                try:
+                    await queue.put(None)
+                except Exception:
+                    pass
+
+        task = asyncio.ensure_future(run_agent())
+
+        start_time = time.time()
+        try:
+            while True:
+                if SSE_HEARTBEAT_ENABLED:
+                    # 受控路径：心跳保活 + 超时主动结束（防止悬挂连接拖垮 worker）
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_INTERVAL)
+                    except asyncio.TimeoutError:
+                        if time.time() - start_time > SSE_TIMEOUT:
+                            logger.info("[Agent Clarify] 流式超过超时上限,主动结束")
+                            break
+                        yield ": ping\n\n"  # SSE 注释行,客户端忽略,仅保活
+                        continue
+                else:
+                    # 默认路径：与原行为完全一致
+                    event = await queue.get()
+                if event is None:
+                    break
+                event_type = event.get("type", "message")
+                yield f"event: {event_type}\ndata: {json.dumps(event, ensure_ascii=False, default=_sse_json_default)}\n\n"
+        except asyncio.CancelledError:
+            logger.info("[Agent Clarify] 客户端断开连接")
+            task.cancel()
+        except Exception as gen_err:
+            logger.error(f"[Agent Clarify] 生成器异常: {gen_err}")
+            try:
+                yield f"event: error\ndata: {json.dumps({'type':'error','message':f'内部错误: {gen_err}'}, ensure_ascii=False)}\n\n"
+            except Exception:
+                pass
+        finally:
+            await task
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        background=background_tasks,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

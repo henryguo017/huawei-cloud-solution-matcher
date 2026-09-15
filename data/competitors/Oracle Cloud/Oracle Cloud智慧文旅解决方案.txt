@@ -1,0 +1,42 @@
+# Oracle Cloud智慧文旅解决方案
+
+## 公司概况
+Oracle在文旅（酒店、餐饮、景区、博彩）行业深耕数十年，通过Oracle Hospitality套件（OPERA Cloud、Simphony POS、Reporting与Nor1增值销售等）为全球酒店与文旅企业提供行业领先的数字化运营方案。2025年，Oracle被IDC MarketScape评为"全球酒店物业管理系统（PMS）"领导者；其OPERA Cloud已部署于233个国家与地区，支持21种语言与全球币种，全球累计超过7.3万次实施、约520万间客房。
+
+## 智慧文旅核心方案
+
+### 1. Oracle OPERA Cloud（酒店物业管理系统PMS）
+- 全球领先的云化PMS，支持多物业、多品牌、多币种统一集团化管理
+- 预订、前台接待、客房管理、账务结算全流程；Look to Book智能房价与房型组合推荐以最大化收益
+- 嵌入式AI：行业唯一在入住流程中内嵌AI的PMS，CheckIn Merchandising在登记时个性化推荐
+- 移动端OPERA Cloud Mobile（12种语言）支持客房状态、任务与维修请求管理
+
+### 2. Oracle OPERA Cloud Central与集成
+- 统一集团级预订、销售、忠诚度与分销，单一平台界面，实时数据支撑敏捷决策
+- 与Simphony餐饮云深度集成：住客饮食偏好、过敏信息在登记时即同步至餐厅，提供个性化用餐
+- OPERA Cloud Central在上个财年新增20个酒店连锁集团客户
+
+### 3. Oracle Simphony与餐饮（Food & Beverage）
+- 餐饮POS与后厨显示系统（KDS），支持桌台、菜单、库存与多地点企业级菜单管理
+- GloriaFood数字点餐平台与OPERA Cloud无缝集成，住客扫码/App点餐并挂账至房间
+- 餐饮数据分析与成本管控，提升文旅企业餐饮利润率
+
+### 4. Oracle Nor1增值销售与生态平台
+- Nor1 PRIME驱动的Guest Engagement & Merchandising，在上个财年为全球酒店业创造近3亿美元增值销售需求，入住路径内嵌AI推荐带来约20%增值收入提升
+- Oracle Hospitality Integration Platform（OHIP）已聚集1200+合作伙伴，其中650+在Oracle Cloud Marketplace上线
+
+## 竞争优势
+- OPERA在全球高端与连锁酒店PMS市场占据绝对领先地位，品牌与信任度极高
+- 数十年专注文旅，产品功能深度匹配行业；AI原生工作流持续交付新能力
+- 全球化产品，多语言、多币种、多税制与财税合规，适合国际文旅集团
+
+## 主要客户案例
+- 万豪国际集团（Marriott）：长期采用OPERA PMS管理全球大量酒店
+- 2025年新增/扩展采用OPERA Cloud的酒店品牌：Hyatt、Omni、Rotana、Orascom Hotels Management、Sercotel、Absolute Hotel Service
+- 迪士尼等大型主题乐园采用Oracle餐饮与零售系统
+
+## 核心劣势（中国市场）
+- 价格昂贵，对国内中低端酒店与景区性价比不足
+- 本地化能力有限，与国内OTA（携程、美团）、微信支付、本地财税等深度集成不如国内厂商
+- 国产化与自主可控趋势下，在国有文旅企业与政府文旅平台项目中处于劣势
+- 产品操作复杂度较高，对国内中小文旅企业用户不够友好

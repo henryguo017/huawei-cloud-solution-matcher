@@ -1,0 +1,48 @@
+# 微软Azure智能制造解决方案
+
+## 公司概况
+微软Azure依托Microsoft Cloud for Manufacturing（微软制造云）、Azure Digital Twins、Azure IoT与Azure AI，面向离散制造、流程制造与工业元宇宙提供从工厂边缘到云端的一站式解决方案，服务Schaeffler、Volkswagen、Mercedes-Benz、Rockwell Automation、ZEISS、Mars等全球制造企业。
+
+## 智能制造核心方案
+
+### 1. Microsoft Cloud for Manufacturing 制造云
+- 面向智能工厂、弹性供应链、产品生命周期与互联产品的行业云
+- 集成Dynamics 365 Supply Chain Management（需求预测、仓储履约）、Dynamics 365 Field Service（混合现实远程协助）
+- 提供行业数据解决方案、Copilot模板与连接器，打通IT与OT数据
+
+### 2. Azure Digital Twins + 工业元宇宙
+- 构建工厂、产线、供应链的数字孪生模型，实时映射物理状态
+- 运营孪生（operations twin）可视化设备实时遥测；仿真孪生（simulation twin）用于产品设计与工艺优化
+- 结合Azure Synapse整合IT/OT数据，实现OEE（设备综合效率）优化与"what-if"预测
+
+### 3. Azure IoT + 边缘计算
+- IoT Hub统一连接工厂设备，支持MQTT/AMQP，结合IoT Edge本地实时处理
+- 与Azure Stream Analytics、Data Explorer实现时序数据分析
+- Microsoft Defender for IoT提供从芯片到云的安全防护
+
+### 4. AI驱动的工厂运维
+- Azure Machine Learning用于预测性维护、AI质检
+- Azure OpenAI Service用于工程知识问答；HARTING借助Azure OpenAI将连接器配置时间减少95%
+- Power Platform连接一线工人，Teams+Power Platform形成数字反馈闭环
+
+### 5. 工程仿真与HPC（与Ansys合作）
+- Azure HPC承载CAE/PLM大规模仿真，Ansys Cloud基于Azure提供按需算力
+- Azure Digital Twins与Ansys Twin Builder集成，运行时数字孪生原生呈现
+
+## 竞争优势
+- 工业元宇宙与数字孪生技术领先，端到端PaaS能力成熟
+- Microsoft Cloud for Manufacturing整合Dynamics 365、M365、Azure、Fabric，生态完整
+- 全球制造业客户基础深厚，AI与数据能力突出
+
+## 主要客户案例
+- 玛氏（Mars）：在124家工厂部署Microsoft Defender for IoT管理运营技术（OT）设备（微软官方案例）
+- Schaeffler：基于Microsoft Cloud for Manufacturing与Microsoft Fabric释放工厂洞察
+- Volkswagen：借助Microsoft与PTC提升工程效率
+- Rockwell Automation：云原生迁移至Azure，现代化工厂软件
+- Mercedes-Benz：以数据洞察赋能一线工人与工厂经理驱动流程创新
+
+## 核心劣势（中国市场）
+- 在中国大陆无自营公有云，由世纪互联（21Vianet）运营Azure中国，节点与全球版本存在功能差异，部分服务（如部分AI/行业云）未落地
+- 缺乏工业OT端侧硬件、传感器与产线控制设备，重平台轻硬件，需依赖第三方集成
+- 与树根互联、海尔卡奥斯、华为云等本土工业平台相比，国内工厂落地案例少，本地化交付与伙伴生态薄弱
+- 政企信创与国产化适配较弱，难以进入对自主可控要求高的关键制造国企

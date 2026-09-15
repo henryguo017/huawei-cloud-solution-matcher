@@ -1,0 +1,42 @@
+# Oracle Cloud智能汽车解决方案
+
+## 公司概况
+Oracle在汽车行业的方案并非独立的"智能汽车"垂直套件，而是通过IoT、供应链（SCM）、制造（Manufacturing）与ERP的组合覆盖汽车价值链。其最贴近"智能网联"的产品是Oracle IoT Fleet Monitoring Cloud Service（车队/联网车辆监控），面向物流车队与车联网远程信息处理；整车制造环节则由Fusion Cloud Manufacturing/SCM/ERP支撑。需要明确的是，Oracle不提供车载操作系统、智能座舱、自动驾驶（ADAS）或车规级边缘能力，在车端软件与端侧硬件上覆盖有限。
+
+## 智能汽车核心方案
+
+### 1. Oracle IoT Fleet Monitoring Cloud Service（联网车队）
+- 实时车辆位置、状态、健康可视，支持地图交互式查看车辆、行程与货运订单
+- 内置KPI：车队状态、利用率、可用性、燃油成本、速度违规等
+- 通过认证伙伴设备（OBD-II/J1939车载终端）安全采集并传输车载传感器数据
+- ETA预测与潜在故障预测、事件管理（incident management）移动端通知
+- 地理围栏（geo-fence）：越界即告警，监控闲置时间以降低燃油成本
+- 规则引擎监测油耗、胎压、机油、发动机温度、急刹与路线偏离，影响安全驾驶行为
+
+### 2. Oracle IoT Connected Worker Cloud Service
+- 监测与管理作业人员安全，常用于车企与零部件厂现场人员防护
+
+### 3. 汽车供应链与制造（依托Fusion Cloud SCM/Manufacturing）
+- 供应链计划、库存、全球物流与运输管理（Transportation Management、Logistics Cloud）
+- 离散制造MES、混合制造、合同制造，支撑整车与零部件企业排产与质量
+- Fusion Cloud ERP：汽车企业财务、采购、项目与资产一体化
+
+### 4. OCI数据底座与AI
+- Autonomous Database、OCI Data Science、Fusion Data Intelligence提供车联网数据汇聚、分析与机器学习
+- 与Transportation Management/Loftics数据集成，对运输时间做基于特征的机器学习预测
+
+## 竞争优势
+- 车队/车联网遥测与供应链一体化：车辆数据可直接触发供应链事件与维修工单，闭环能力强
+- 全球合规云底座（OCI）与自治数据库，适合跨区域车队与跨国车企数据汇聚
+- 在物流车队、远程信息处理（telematics）场景成熟，已服务出行即服务（MaaS）客户
+
+## 主要客户案例
+- SoftBank：其出行即服务（Mobility as a Service）由Oracle IoT Cloud驱动（Oracle IoT官网客户故事）
+- Lochbridge：借助Oracle IoT Cloud实现联网车辆预测性服务，判断车辆何时需要维护、调整运营、避免停机（Oracle IoT官网客户故事）
+- 典型行业实践：汽车零部件与整车企业普遍采用Oracle Fusion ERP/SCM作为后端系统，但车联网前装可核实项目以海外客户为主
+
+## 核心劣势（中国市场）
+- 无独立智能汽车/车联网平台：缺车载OS、智能座舱、ADAS、车规级边缘与5G能力，仅能覆盖车队监控与后台ERP/SCM
+- 中国大陆无云区域：OCI在华无自建区域，车联网数据出境与低时延要求难以满足，无法承接中国车厂前装车云
+- 中国市场竞争劣势：智能汽车/网联化由华为、阿里、腾讯及OEM自建车云主导，Oracle在本地车厂生态与合规适配薄弱
+- 重后端、轻车端：强在企业管理与车队遥测，弱在端侧算法、车路协同与自动驾驶数据闭环

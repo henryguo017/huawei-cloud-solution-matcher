@@ -1,0 +1,48 @@
+# Oracle Cloud智慧零售解决方案
+
+## 公司概况
+Oracle在零售行业拥有完整的"软件+硬件"产品组合，以Oracle Retail套件为核心，覆盖门店、全渠道、商品运营、计划定价、营销与供应链。其优势在于服务全球大型连锁零售商的全渠道一体化与商品精细化管理，并通过MICROS系列POS硬件占据餐饮与零售收银终端市场。在中国大陆，Oracle Retail多为外资/大型连锁采用，本地化与云端交付受OCI在华区域缺失限制。
+
+## 智慧零售核心方案
+
+### 1. 门店与全渠道（Store & Omnichannel）
+- Xstore Point of Service：强大POS功能，让店员实时了解顾客与库存，支持全渠道履约
+- MICROS Workstation 6/8系列、Compact Workstation 310：零售POS硬件终端，耐用、触摸交互
+- Store Inventory Operations Cloud：即时准确的门店库存数据，统一店内作业流程
+- Collect and Receive：解决"最后一英里"资产（顾客、库存、货架）就近移动与放置
+- CX Commerce（电商）、Payment（固定费率支付，无额外服务费）
+
+### 2. 商品运营管理（Merchandising）
+- Oracle Retail Merchandising System：采购、配送、订单履约与财务结账的日常商品执行
+- Retail Allocation（分配）、Invoice Matching（发票匹配对账）
+- Oracle Retail Data Store：低成本、低代码环境，零售商可自主掌控并扩展数据
+
+### 3. 计划、定价与优化
+- Merchandise Financial Planning（商品财务计划）、Assortment Planning（品类/本地化组合）
+- Category Management、Assortment and Space Optimization（货架空间优化）、Science Platform Cloud（零售专属AI/ML：需求转移、尺码画像、陈列绩效）
+- Enterprise Performance Management（企业绩效管理）
+
+### 4. 营销与客户互动（Marketing & CX）
+- Consumer Insights（细分/购物篮/产品亲和力洞察）、Customer Loyalty（忠诚度）、Campaign Management（Responsys全渠道营销）
+- Infinity Behavioral Intelligence（在线行为实时优化）、Content Management（AI个性化内容）、B2C Marketing
+
+### 5. 订单与供应链
+- Order Management Suite：全渠道订单可视、售前售后顾客安抚
+- 依托Oracle Fusion Cloud SCM（供应链计划、库存、物流）打通零售供应链
+
+## 竞争优势
+- 门店POS（Xstore/MICROS）+商品运营+计划优化+营销全链路一体化，全球大型零售商验证成熟
+- 零售专属AI/ML（Science Platform）在品类、定价、空间优化上积累深
+- IDC MarketScape零售AI驱动品类规划2025领导者；CRM软件2024供应商评估领先
+- 软硬件一体交付，MICROS在餐饮/零售收银终端占有率高
+
+## 主要客户案例
+- Kroger：Oracle官网以Kroger零售转型经验作为零售标杆案例分享（官方客户故事可查）
+- Red Bull Racing：Oracle在Milton Keynes举办"Retail Executive Experience"零售高管活动，作为零售数字化标杆场景
+- 典型行业实践：全球食品、服饰、连锁与餐饮零售广泛采用Oracle Retail，但具体可核实的单一中国项目公开资料有限
+
+## 核心劣势（中国市场）
+- 中国大陆云端区域缺失：OCI在华无自建区域，Oracle Retail多依赖海外云或本地部署，时延、合规与数据出境受限
+- 本地化生态弱：中国零售数字化由阿里/腾讯/有赞/本地POS与中台厂商主导，Oracle Retail在中小与区域零售商渗透低
+- 交付重、成本高：大型套件实施复杂、许可证模式（多年订阅/模块计费）争议多，对敏捷迭代的新零售不友好
+- 缺新一代小程序/直播/社交电商原生能力，需集成第三方补足

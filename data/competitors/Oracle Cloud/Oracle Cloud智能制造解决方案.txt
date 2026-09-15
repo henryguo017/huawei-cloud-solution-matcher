@@ -1,0 +1,43 @@
+# Oracle Cloud智能制造解决方案
+
+## 公司概况
+Oracle以数据库与企业管理软件起家，近年来将制造能力统一到Oracle Fusion Cloud Applications旗下的Supply Chain & Manufacturing（SCM）套件中。其智能制造定位是"连接数字供应链与物理工厂"，强调以云原生的ERP、SCM、MES、质量与维护一体化平台支撑离散、流程及混合制造，并通过内置AI与IoT实现智能运营。Oracle不具备工业控制、PLC与端侧硬件能力，核心竞争力集中在云端应用软件与数据底座。
+
+## 智能制造核心方案
+
+### 1. Oracle Fusion Cloud Manufacturing（制造执行）
+- 支持离散制造、流程制造、混合制造、按单生产、按项目生产、合同制造等多种模式
+- 内置制造执行系统（MES）能力，结合供应链、库存、成本与质量协同
+- Smart Operations for Manufacturing：连接车间设备、员工与供应链数据，提供实时推荐、自动调整排产、闭环质量控制
+- 2026年新增流程制造能力：配方/配方同步、批次执行、电子批记录（eBR）、物料批次追溯与效期管理，面向生命科学、化工、食品饮料等强监管行业
+
+### 2. Oracle Fusion Cloud SCM（供应链规划与物流）
+- 供应链计划：需求管理、供应计划、销售与运营计划（S&OP）、供应链协同
+- 库存管理（Advanced Inventory）、订单管理（Order Management）、全球物流与运输管理
+- 产品生命周期管理（PLM）打通从创新到量产的"数字主线"（digital thread）
+
+### 3. Oracle Fusion Cloud Maintenance（预测性维护）
+- 企业资产管理（EAM），结合Industry 4.0与预测性分析预测资产故障、估算可靠寿命
+- Smart Operations for Maintenance将维护数据与实时资产、员工、供应链数据融合，持续监测性能并触发预防性工单
+
+### 4. Oracle Fusion Cloud Quality Management（闭环质量）
+- 覆盖设计、采购、库存、制造、现场服务的闭环质量管理
+- 内置质量检验、缺陷识别、纠正与预防措施（CAPA），支持合规与持续改善
+
+### 5. OCI数据底座
+- 自治数据库（Autonomous Database）、OCI IoT、OCI Data Science与Fusion Data Intelligence提供AI/ML与实时分析支撑
+
+## 竞争优势
+- 制造、供应链、财务、质量、维护一体化套件，数据天然贯通，避免多系统割裂
+- 内置AI Agent与预测分析，行业云成熟度高，近两年在Gartner供应链计划、运输管理、仓储管理魔力象限持续领先
+- 流程制造与强监管行业合规能力（批次、电子批记录、追溯）扎实
+
+## 主要客户案例
+- Precision Group：官方客户视频展示其采用Oracle Cloud Manufacturing提升车间绩效与质量（Oracle官网可查）
+- 典型行业实践：全球流程制造、生命科学、消费品与汽车零部件企业广泛使用Oracle Fusion Cloud SCM/MES，但具体可核实的单一项目公开资料有限，建议以Oracle客户故事库为准
+
+## 核心劣势（中国市场）
+- 缺乏工业OT与端侧能力：Oracle不做PLC、工业网关、边缘控制器、产线设备，需依赖第三方集成，难以像西门子、华为提供"云-边-端"一体化
+- 中国大陆本地化弱：OCI在中国大陆无自建主权云区域，制造与工业互联网信创（去IOE）趋势下，数据库与核心系统被国产替代压力增大
+- IaaS全球份额较小，重应用软件、轻基础设施，大型工厂私有化/混合部署门槛与许可证复杂度高
+- 智能制造落地的现场集成、OPC UA/设备协议对接需大量实施伙伴，交付周期与成本偏高

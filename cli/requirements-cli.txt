@@ -1,0 +1,3 @@
+# cloudsol CLI 独立依赖（不影响主 requirements.txt）
+# 安装：venv/Scripts/pip install -r cli/requirements-cli.txt
+rich>=13.0          # 可选增强：spinner / 彩色 JSON / 面板；未安装自动降级纯文本

@@ -1,0 +1,640 @@
+# -*- coding: utf-8 -*-
+"""L4-P2 Agent Runtime · 主循环（runner.py）
+
+**model-in-the-loop 的心脏**：模型通过原生 tool_calls 自选工具、自决终止；
+宿主只做四件事 —— 喂 schema、拦权限、执行、把 observation 回填。
+
+判据落地对照：
+  C1 控制流在模型 → 无工具白名单、无步序约束；终止条件 = 模型不再请求工具
+  C2 工具接口结构化 → schema.build_tool_schemas + tool_calls（无文本解析）
+  C3 失败恢复在模型 → 工具错误结构化回填，模型自行调整；宿主只做预算熔断
+  C4 计划所有权   → todo.update_plan 由模型调用；L4-P0 加「闭合门」：终稿前计划须每步闭合
+                     （宿主只查计划状态，**不做**步归属推导、**不改**顺序）
+
+宿主边界（不越界）：
+  - 权限闸门复用 harness._gate_tool（human-in-the-loop）
+  - 上下文压缩走 context.compact_messages（窗口保护）
+  - 不可委托计算不在此层：金额仍由程序化成本表产出
+  - 交付质量门与终稿组装在 harness._run_fc_runtime
+
+thinking 按轮分档（实测依据见 config 注释）：
+  - 决策轮 → AGENT_THINKING_DECISION（enabled），拿 reasoning_content 上屏
+  - 模型已用 update_plan 把计划**全部闭合**（done/skipped）→ 下一次调用按 AGENT_THINKING_FINAL（disabled），
+    **这是模型自己给出的"要收口了"信号**，不是宿主猜测
+  - 宿主主动索要终稿（预算收口 / 完成态自纠）→ AGENT_THINKING_FINAL
+"""
+
+import asyncio
+import logging
+import re
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+from app.config import (
+    AGENT_MAX_TURNS, AGENT_TOKEN_BUDGET, AGENT_TOKEN_BUDGET_BY_INTENT,
+    AGENT_WALL_BUDGET, AGENT_ADVISORY_AT,
+    AGENT_THINKING_DECISION, AGENT_THINKING_FINAL, AGENT_PARALLEL_READONLY,
+    AGENT_COMPACT_AT, AGENT_COMPACT_KEEP_TURNS, MAX_PARALLEL, AGENT_CONTEXT_WINDOW,
+    AGENT_PLAN_CLOSE_ENFORCE, AGENT_PLAN_CLOSE_MAX_RETRY, AGENT_TOOL_HEAL_STREAK,
+)
+from app.agent.runtime import events as ev
+from app.agent.runtime import verify as vf
+from app.agent.runtime.context import compose_system_prompt, messages_tokens, compact_messages
+from app.agent.runtime.guards import RunGuards
+from app.agent.runtime.schema import (
+    build_tool_schemas, is_readonly, parse_tool_arguments, sanitize_messages,
+    to_assistant_message, to_tool_message, message_shape,
+)
+from app.agent.runtime.todo import (
+    TODO_TOOL_NAME, TODO_TOOL_SCHEMA, handle_update_plan, normalize_items,
+    open_steps, closure_summary, build_close_instruction,
+)
+
+logger = logging.getLogger(__name__)
+
+# 熔断收口提示（宿主主动索要终稿）
+_CLOSE_INSTRUCTION = (
+    "【宿主预算提示】本次任务的预算已到上限，现在必须收口。"
+    "请立即基于你已经获得的信息输出最终答案，不要再调用任何工具；"
+    "若某些信息确实缺失，请在答案中如实说明缺口。"
+)
+
+
+def build_heal_instruction(tool_name: str, fail_count: int, last_reason: str) -> str:
+    """P2-3 错误自愈：同工具连续失败后给模型的**建议性**信号。
+
+    宿主边界：只陈述事实（连败次数 + 最近一次报错）并给出可选路径，
+    **不指定**必须换哪个工具、也不替模型判断该不该放弃 —— 决策权归模型。
+    """
+    reason = (last_reason or "").strip().replace("\n", " ")[:200] or "（无报错详情）"
+    return (
+        f"【宿主自愈提示】工具 `{tool_name}` 已连续失败 {fail_count} 次。最近一次报错：{reason}\n"
+        "同一个调用方式大概率还会失败。请考虑：\n"
+        "1) 修正参数后重试（例如换更精确的关键词 / 缩小范围）；\n"
+        "2) 改用其他工具获得同等信息（例如 search_kb 换 web_search，或用 run_python 处理数据）；\n"
+        "3) 若确认没有可用路径，请**如实**在最终答案中说明该信息缺口，不要编造结果。\n"
+        "选择哪条路由你决定；宿主只提醒你不要重复同一动作。"
+    )
+
+
+def _collect_facts(tool_calls_log: List[Dict[str, Any]], pending_export: Optional[str] = None) -> List[Dict[str, str]]:
+    """收集「宿主核验事实」：在真实写操作之外，把宿主**已受理的导出**也计为事实。
+
+    generate_doc 在本运行时是**延迟执行**（终稿产出后才落文件），因此工具调用记录里
+    不会有它的成功条目；但宿主已受理即等同承诺完成。若不计入，完成态核验会把模型
+    「已为你生成 Word 文档」误判为幻觉，触发一次无谓的自纠回合。
+    """
+    facts = vf.collect_write_facts(tool_calls_log)
+    if pending_export:
+        facts.append({
+            "tool": "generate_doc",
+            "kind": vf.FACT_KIND_BY_TOOL.get("generate_doc", "doc_export"),
+            "summary": f"宿主已受理导出请求（格式 {pending_export}），将在终稿产出后生成文件",
+        })
+    return facts
+
+
+class _TurnRecord:
+    """单轮轨迹（供 trace / 评估指标 A7/A8/A9 统计）。"""
+    __slots__ = ("index", "reasoning_chars", "content_chars", "tool_calls", "tokens", "thinking")
+
+    def __init__(self, index: int, thinking: str):
+        self.index = index
+        self.thinking = thinking
+        self.reasoning_chars = 0
+        self.content_chars = 0
+        self.tool_calls: List[str] = []
+        self.tokens = 0
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "turn": self.index,
+            "thinking": self.thinking,
+            "reasoning_chars": self.reasoning_chars,
+            "content_chars": self.content_chars,
+            "tools": list(self.tool_calls),
+            "tokens": self.tokens,
+        }
+
+
+async def run_loop(
+    harness,
+    user_input: str,
+    session_id: str,
+    event_callback,
+    tool_calls_log: list,
+    extra_blocks: Optional[List[str]] = None,
+    model: Optional[str] = None,
+    budget_override: Optional[Dict[str, int]] = None,
+) -> Optional[Dict[str, Any]]:
+    """执行 model-in-the-loop 主循环。
+
+    budget_override（L4-P3-3 子体用）：{"turns_max", "token_budget", "wall_budget"}，
+    键缺省走全局默认。父体不受影响。
+    返回：成功 → {"final", "turns", "guards", "trace", "pending_export"}；
+          无法产出终稿（LLM 异常等）→ None，由上层回退 legacy 管线。
+    """
+    from app.models.llm import get_llm_with_tools
+
+    t0 = time.time()
+    # 预算按意图分档（L4-P1）：轻意图窄档控成本，重工具链意图宽档防掐断；未列出的意图取基线宽档。
+    _budget_intent = (getattr(harness, "_intent", "") or "").strip()
+    _token_budget = AGENT_TOKEN_BUDGET_BY_INTENT.get(_budget_intent, AGENT_TOKEN_BUDGET)
+    _bo = budget_override or {}
+    guards = RunGuards(
+        turns_max=int(_bo.get("turns_max", AGENT_MAX_TURNS)),
+        token_budget=int(_bo.get("token_budget", _token_budget)),
+        wall_budget=int(_bo.get("wall_budget", AGENT_WALL_BUDGET)),
+        advisory_at=AGENT_ADVISORY_AT,
+        start_time=t0,
+    )
+
+    blocks = list(extra_blocks or [])
+    blocks.append(vf.build_fact_block([]))          # 初始事实块：明确"尚无写操作"
+    # 政策块按意图切姿态（L4-P1）：solution/competitor 出方案，general/knowledge_q 直接作答 ——
+    # 否则"你会玩王者荣耀吗？"会被套成 14 章方案书（2026-09-09 线上实锤）。
+    system_prompt = compose_system_prompt(blocks, getattr(harness, "_intent", "solution"))
+    messages: List[Dict[str, Any]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_input},
+    ]
+
+    # ── 业务闭环 E2E 修复（2026-09-13）：FC 多轮会话上下文丢失 ──
+    # 此前 messages 只含 system + 当前用户消息 → 同会话前几轮的上下文（"基于这些情况
+    # 出方案"的"这些情况"）完全落空，模型只能去历史经验块里抓场景——真实场景实测：
+    # 用户本轮明确在谈汽车零部件，产出却是历史会话的"3 园区 380 家企业"方案。
+    # 修复 = 把本会话最近几轮真实对话（user/assistant）插到 system 之后、当前消息之前。
+    try:
+        _hist = harness.memory.get_history_messages(session_id, limit=12)
+        # 去掉当前这条用户消息（调用方已写入会话历史；超长入库只留前 500 字，用前缀匹配）
+        while _hist and _hist[-1].get("role") == "user":
+            _c = (_hist[-1].get("content") or "").strip()
+            if _c and (user_input or "").strip().startswith(_c[:100]):
+                _hist.pop()
+            else:
+                break
+        _hist = _hist[-6:]   # 最近 6 轮足够锚定场景，控制 token
+        if _hist:
+            _hist_msgs = [
+                {"role": "user" if h.get("role") == "user" else "assistant",
+                 "content": str(h.get("content") or "")[:800]}
+                for h in _hist if (h.get("content") or "").strip()
+            ]
+            if _hist_msgs:
+                messages = messages[:1] + _hist_msgs + messages[1:]
+                trace["session_history_turns"] = len(_hist_msgs)
+                harness._log("system", f"[FC] 已注入本会话前 {len(_hist_msgs)} 轮对话作为上下文")
+    except Exception as e:  # noqa: BLE001 - 历史注入失败不阻断任务
+        harness._log("warn", f"[FC] 会话历史注入失败（忽略）: {e}")
+
+    trace: Dict[str, Any] = {"turns": [], "compactions": 0, "stopped_by": "", "plan_drift_rejections": 0}
+    draft = ""
+    active_step = -1
+    pending_export: Optional[str] = None
+    plan_all_done = False
+    plan_close_retries = 0    # L4-P0：闭合门交回模型的次数（上限防死锁）
+    closed_by = "model"        # model=模型自主终止 / turns|tokens|wall=宿主熔断
+    # L4-P2-3 错误自愈（2026-09-13）：按**工具名**记连续失败次数与最近一次原因。
+    # 语义：宿主不判断"该怎么修"，只把"你已经撞同一面墙 N 次"这个事实**作为信号**交给模型；
+    # 换工具/换参数/如实说明缺口，全部由模型自决（与 guards.advisory 同构，符合宿主边界）。
+    tool_fail_streak: Dict[str, int] = {}
+    tool_fail_reason: Dict[str, str] = {}
+    tool_heal_advised: set = set()
+    # 业务闭环 E2E 修复（2026-09-13）：终稿缩水保护——记录本轮 loop 中最长的正文消息。
+    # 真实场景实测：模型在中间轮流式输出了完整方案正文（带 tool_calls 的消息），最后一轮
+    # 只说"终稿已在上一条交付"→ result.answer 变成缩水回顾，用户看到的最终内容严重缺斤短两。
+    _best_content = ""
+    _META_DRAFT_RE = re.compile(r"(已在上一条|上一条正文|交付要点回顾|计划已全部闭合|方案终稿已在|上文已完整)")
+
+    for _ in range(guards.turns_max):
+        state, advisory = guards.check()
+        if state == "stop":
+            closed_by = guards.stopped_by or "budget"
+            break
+        if advisory:
+            messages.append({"role": "system", "content": advisory})
+
+        # ── P2-3 错误自愈信号：同一工具连续失败 ≥ 阈值 → 注入一次换策略建议（每工具只注入一次）──
+        if tool_fail_streak:
+            for _hname, _hcnt in tool_fail_streak.items():
+                if _hcnt < AGENT_TOOL_HEAL_STREAK or _hname in tool_heal_advised:
+                    continue
+                tool_heal_advised.add(_hname)
+                _hreason = tool_fail_reason.get(_hname, "")
+                trace.setdefault("heal_events", []).append({
+                    "turn": guards.turns, "tool": _hname, "fails": _hcnt, "reason": _hreason[:200],
+                })
+                messages.append({
+                    "role": "system",
+                    "content": build_heal_instruction(_hname, _hcnt, _hreason),
+                })
+                harness._log(
+                    "system",
+                    f"[FC] 工具 {_hname} 连续失败 {_hcnt} 次 → 已注入换策略建议（决策权归模型）",
+                )
+
+        # ── 窗口保护：超阈值先压缩早期轮次 ──
+        if messages_tokens(messages) >= int(AGENT_CONTEXT_WINDOW * AGENT_COMPACT_AT):
+            messages, did = await compact_messages(
+                messages, AGENT_COMPACT_KEEP_TURNS, summarize=harness._call_llm,
+            )
+            if did:
+                trace["compactions"] += 1
+
+        # ── 每轮重建 schema：本步注册的 dyn_* 下一步即可见（与 T1.2 对齐）──
+        schemas = build_tool_schemas(harness.tools, extra=[TODO_TOOL_SCHEMA])
+
+        # ── thinking 分档：模型已把所有步骤标 done → 这一轮很可能在写终稿 ──
+        thinking = AGENT_THINKING_FINAL if plan_all_done else AGENT_THINKING_DECISION
+        turn = guards.tick_turn()
+        rec = _TurnRecord(turn, thinking)
+
+        try:
+            resp = await get_llm_with_tools(
+                sanitize_messages(messages), schemas, model=model, thinking=thinking,
+            )
+        except Exception as e:  # noqa: BLE001
+            harness._log("error", f"[FC] 第{turn}轮 LLM 调用失败，运行时放弃: {e}")
+            # P1 诊断：harness._log 受 verbose 门控**不落盘**，主循环失败（run_loop_none 的主因）
+            # 此前在磁盘上完全不可见。此处独立 WARNING 出口，把真实异常文本（含 4xx 响应正文）留痕。
+            logger.warning(
+                "[FC] 主循环 LLM 调用失败（诊断）：turn=%s thinking=%s msgs=%s tools=%s "
+                "plan_all_done=%s safe_len=%s shape=%s err=%s",
+                turn, thinking, len(messages), len(schemas), plan_all_done,
+                len(sanitize_messages(messages)), message_shape(messages), e,
+            )
+            trace["stopped_by"] = "llm_error"
+            try:
+                harness._fc_fail_info = {
+                    "reason": "llm_error",
+                    "turn": turn,
+                    "msgs": len(messages),
+                    "tools": len(schemas),
+                    "shape": message_shape(messages)[:400],
+                    "error": f"{type(e).__name__}: {e}",
+                }
+            except Exception:  # noqa: BLE001 - 诊断失败绝不影响回退
+                pass
+            return None
+
+        guards.add_usage(resp.get("usage"))
+        try:
+            rec.tokens = int((resp.get("usage") or {}).get("total_tokens") or 0)
+        except (TypeError, ValueError):
+            rec.tokens = 0
+
+        reasoning = (resp.get("reasoning_content") or "").strip()
+        content = (resp.get("content") or "").strip()
+        calls = resp.get("tool_calls") or []
+        rec.reasoning_chars = len(reasoning)
+        rec.content_chars = len(content)
+        rec.tool_calls = [(c.get("function") or {}).get("name", "") for c in calls]
+        trace["turns"].append(rec.as_dict())
+        # 终稿缩水保护：记录本轮内最长的正文消息（含带 tool_calls 的中间轮）
+        if len(content) > len(_best_content):
+            _best_content = content
+
+        # 真实推理上屏（思考面板不再是"模型写的台词"，而是模型自己的推理）
+        if reasoning:
+            await ev.emit_thought(harness, event_callback, reasoning, step=turn)
+
+        # ── 终止条件：模型不再请求工具 → 这条消息本来要作为终稿 ──
+        if not calls:
+            # L4-P0 计划闭合门：终稿前，**模型自己发布的计划**必须每步闭合（done/skipped）。
+            # 有未闭合项 → 不接收终稿，把未闭合项交回模型自决（补做 / 标 skipped+原因）。
+            # 边界：宿主只看计划状态，不做"工具属于哪步"的归属推导，也不改顺序 —— 控制权仍在模型。
+            if AGENT_PLAN_CLOSE_ENFORCE and plan_close_retries < AGENT_PLAN_CLOSE_MAX_RETRY:
+                _open = open_steps(harness._plan_status)
+                if _open:
+                    plan_close_retries += 1
+                    trace["plan_drift_rejections"] += 1
+                    harness._log(
+                        "system",
+                        f"[FC][P0] 计划闭合门拦截（第 {plan_close_retries} 次）："
+                        f"{closure_summary(harness._plan, harness._plan_status)} → 交回模型自决",
+                    )
+                    if content:
+                        # reasoning 必须随 assistant 回传（thinking 模式硬校验，见 schema.to_assistant_message）
+                        messages.append({
+                            "role": "assistant",
+                            "content": content,
+                            "reasoning_content": reasoning or "",
+                        })
+                    messages.append({
+                        "role": "system",
+                        "content": build_close_instruction(harness._plan, harness._plan_status),
+                    })
+                    continue
+            draft = content
+            closed_by = "model"
+            harness._log("system", f"[FC] 模型自主终止于第 {turn} 轮（终稿 {len(content)} 字）")
+            break
+
+        if content:
+            await ev.emit_thought(harness, event_callback, content, step=turn)
+        # reasoning 必须随 assistant 回传（thinking 模式硬校验，缺失 → 400 → run_loop_none）
+        messages.append(to_assistant_message(content, calls, reasoning))
+        plan_all_done = False   # 只要还在调工具，就不算收口
+
+        # ── 执行工具 ──
+        results, active_step, pend, plan_done, wrote, tool_outcomes = await _execute_calls(
+            harness, calls, event_callback, session_id, tool_calls_log, active_step,
+        )
+        if pend:
+            pending_export = pend
+        plan_all_done = plan_done
+        for call_id, obs in results:
+            messages.append(to_tool_message(call_id, obs))
+
+        # ── P2-3 自愈统计：按工具名累计连续失败（成功即清零）──
+        for _tname, _tok, _tobs in tool_outcomes:
+            if not _tname:
+                continue
+            if _tok:
+                tool_fail_streak.pop(_tname, None)
+                tool_fail_reason.pop(_tname, None)
+            else:
+                tool_fail_streak[_tname] = tool_fail_streak.get(_tname, 0) + 1
+                tool_fail_reason[_tname] = _tobs
+
+        # 写操作发生后刷新事实块，避免模型基于过时认知做完成态表述
+        if wrote:
+            messages.append({
+                "role": "system",
+                "content": vf.build_fact_block(_collect_facts(tool_calls_log, pending_export)),
+            })
+    else:
+        # for 正常跑满（未 break）→ 视为熔断
+        closed_by = closed_by if closed_by != "model" else "turns"
+        guards.stopped_by = guards.stopped_by or "turns"
+
+    # ── 熔断收口：给模型一次产出终稿的机会（宿主索要终稿 → thinking 关闭）──
+    _close_err = ""
+    if not draft:
+        try:
+            # L4-P0 缺口修补（活测 2026-09-13 发现）：熔断路径绕过了闭合门 —— 计划可能仍有
+            # 未闭合步，而预算/轮次已到上限、不允许再来一轮。此时**不改指标口径**（该样本
+            # 在 A11 里如实算失败），但要求模型在终稿里**如实说明缺口**，避免"计划没做完却
+            # 看起来完成了"。这正是"宿主只做核验、不替模型粉饰"的边界。
+            _close_txt = _CLOSE_INSTRUCTION
+            _open_now = open_steps(harness._plan_status)
+            if _open_now:
+                _close_txt += (
+                    "\n\n（宿主补充）注意：你计划里仍有未闭合的步骤（"
+                    + closure_summary(harness._plan, harness._plan_status)
+                    + "）。本次因预算/轮次已到上限无法继续执行，"
+                    "请务必在答案中**如实说明**哪些部分尚未完成或未核实，不要谎称已经完成。"
+                )
+                harness._log(
+                    "system",
+                    f"[FC][P0] 熔断收口时计划未闭合（{closure_summary(harness._plan, harness._plan_status)}）"
+                    "→ 已要求模型如实说明缺口",
+                )
+            close_msgs = messages + [{"role": "system", "content": _close_txt}]
+            # 收口重试（P1 活测发现）：模型跑满轮次时对话末尾是 tool 消息，且本次不声明任何
+            # 工具 schema —— DeepSeek 偶尔会返回**空 content**。这是可恢复的偶发态，故重试一次；
+            # 仍为空才判定失败（交上层回退 legacy），并把诊断信息留在 harness 上供排障。
+            for _attempt in (1, 2):
+                try:
+                    resp = await get_llm_with_tools(
+                        sanitize_messages(close_msgs), [], model=model,
+                        thinking=AGENT_THINKING_FINAL,
+                    )
+                    guards.add_usage(resp.get("usage"))
+                    draft = (resp.get("content") or "").strip()
+                except Exception as e:  # noqa: BLE001
+                    _close_err = f"{type(e).__name__}: {e}"
+                    draft = ""
+                if draft:
+                    harness._log(
+                        "system",
+                        f"[FC] 宿主收口产出终稿（{len(draft)} 字，第 {_attempt} 次尝试）",
+                    )
+                    break
+                harness._log("warn", f"[FC] 收口返回空（第 {_attempt} 次）")
+        except Exception as e:  # noqa: BLE001
+            harness._log("warn", f"[FC] 收口失败: {e}")
+
+    if not draft:
+        harness._log("system", "[FC] 运行时未产出终稿 → 交回上层回退")
+        # P1 诊断：把失败时的真实运行态留痕（否则只知道"失败了"，不知道"为什么"）。
+        # 双通道：① 结构化 fail_info 交给 harness 的 fc_meta（供前端/测试读取）；
+        #        ② 直接 WARNING 落盘（harness._log 受 verbose 门控不落盘，此处必须有独立出口）。
+        _fail = {
+            "reason": "no_draft_after_close",
+            "turns": guards.turns,
+            "tokens": guards.tokens,
+            "token_budget": guards.token_budget,
+            "stopped_by": guards.stopped_by,
+            "compactions": int((trace or {}).get("compactions", 0) or 0),
+            "plan_steps": len(harness._plan or []),
+            "open_at_fail": len(open_steps(harness._plan_status)),
+            "close_error": _close_err,
+        }
+        logger.warning(
+            "[FC] 未产出终稿（诊断）：turns=%s tokens=%s/%s stopped_by=%s compactions=%s "
+            "plan_steps=%s open=%s close_error=%s",
+            _fail["turns"], _fail["tokens"], _fail["token_budget"], _fail["stopped_by"],
+            _fail["compactions"], _fail["plan_steps"], _fail["open_at_fail"],
+            _fail["close_error"] or "(空)",
+        )
+        try:
+            harness._fc_fail_info = _fail
+        except Exception:  # noqa: BLE001 - 诊断失败绝不能影响回退
+            pass
+        return None
+
+    # ── 终稿缩水保护（业务闭环 E2E 2026-09-13）：最终消息是"回顾/已在上一条交付"
+    # 类元话语、且本轮存在明显更长的正文 → 用长正文作终稿，杜绝交付物缺斤短两。
+    # 双条件防误伤：draft 明显更短（<50%）+ draft 命中元话语特征。
+    if draft and _best_content and len(draft) < len(_best_content) * 0.5 \
+            and len(_best_content) >= 600 and _META_DRAFT_RE.search(draft):
+        harness._log(
+            "system",
+            f"[FC] 终稿缩水保护生效：最终消息 {len(draft)} 字为回顾性元话语，"
+            f"回填本轮最长正文 {len(_best_content)} 字作为终稿",
+        )
+        trace["final_from"] = "longest_content"
+        draft = _best_content
+
+    # ── 完成态核验：不符时把修正权交回模型（一次）──
+    facts = _collect_facts(tool_calls_log, pending_export)
+    missing = vf.scan_false_write_claims(draft, facts)
+    if missing:
+        harness._log("system", f"[FC] 完成态核验未通过（缺失：{missing}），交回模型自纠")
+        try:
+            fix_msgs = messages + [
+                {"role": "assistant", "content": draft},
+                {"role": "system", "content": vf.build_correction_instruction(missing, facts)},
+            ]
+            resp = await get_llm_with_tools(
+                sanitize_messages(fix_msgs), [], model=model, thinking=AGENT_THINKING_FINAL,
+            )
+            guards.add_usage(resp.get("usage"))
+            fixed = (resp.get("content") or "").strip()
+            if fixed:
+                draft = fixed
+        except Exception as e:  # noqa: BLE001
+            harness._log("warn", f"[FC] 完成态自纠失败（保留原稿并告警）: {e}")
+
+    trace["stopped_by"] = closed_by
+    snap = guards.snapshot()
+    snap["stopped_by"] = closed_by
+    harness._log(
+        "system",
+        f"[FC] 运行结束 轮次={snap['turns']} tokens={snap['tokens']} "
+        f"耗时={snap['elapsed']}s 终止={closed_by} 压缩={trace['compactions']}",
+    )
+    return {
+        "final": draft,
+        "turns": snap["turns"],
+        "guards": snap,
+        "trace": trace,
+        "pending_export": pending_export,
+    }
+
+
+# ───────────────────────── 工具执行 ─────────────────────────
+
+async def _exec_one(
+    harness, name: str, args: Dict[str, Any], call_id: str,
+    event_callback, session_id: str, tool_calls_log: list, plan_index: int,
+) -> str:
+    """执行单个工具调用（统一的事件/记忆/轨迹/摘要处理）。
+
+    与 legacy `_exec_one_action` 语义对齐，但**不再受步级工具集限制**（C1）。
+    """
+    harness._step_count += 1
+    step = harness._step_count
+    await ev.emit_tool_start(harness, event_callback, name, step, plan_index)
+    harness.memory.add_action(session_id, name, str(args))
+    try:
+        observation = await harness._execute_tool(name, args, event_callback)
+    except Exception as e:  # noqa: BLE001 - 工具层异常也回填为 observation（C3）
+        observation = f"工具 '{name}' 执行异常：{e}"
+    harness.memory.add_observation(session_id, observation)
+    tool_calls_log.append({
+        "step": step, "tool": name, "input": args, "result": observation,
+    })
+    if "Error:" in observation:
+        harness._consecutive_tool_failures += 1
+    else:
+        harness._consecutive_tool_failures = 0
+    harness._record_trajectory("", name, observation)
+    summary = harness._summarize_tool_result(name, observation)
+    await ev.emit_tool_end(harness, event_callback, name, step, summary, plan_index)
+    return observation
+
+
+def _is_error_obs(observation: str) -> bool:
+    """判定一次工具产出是否为**失败**（P2-3 自愈统计口径，与 _exec_one 的既有判定保持一致）。"""
+    text = observation or ""
+    return ("Error:" in text) or text.startswith("错误") or text.startswith("Error")
+
+
+async def _execute_calls(
+    harness, calls: List[Dict[str, Any]], event_callback, session_id: str,
+    tool_calls_log: list, active_step: int,
+) -> Tuple[List[Tuple[str, str]], int, Optional[str], bool, bool, List[Tuple[str, bool, str]]]:
+    """按模型给出的 tool_calls 逐个/并发执行。
+
+    返回 (results, active_step, pending_export, plan_all_done, wrote, tool_outcomes)：
+      results        → [(call_id, observation), ...]，供回填 messages（顺序与 calls 一致）
+      active_step    → update_plan 声明的"进行中"步索引（供 Plan 面板点亮）
+      pending_export → 待终稿产出后执行的导出格式（None 表示无）
+      plan_all_done  → 模型是否已把计划**全部闭合**（done/skipped），作为收口信号
+      wrote          → 本轮是否发生写操作（触发事实块刷新）
+      tool_outcomes  → [(工具名, 是否成功, observation), ...]（P2-3 自愈统计用，顺序与 results 一致）
+    """
+    results: List[Tuple[str, str]] = []
+    tool_outcomes: List[Tuple[str, bool, str]] = []
+    pending_export: Optional[str] = None
+    plan_all_done = False
+    wrote = False
+
+    # ① update_plan 优先处理：它决定本轮 tool 事件的 plan_index
+    deferred: List[Dict[str, Any]] = []
+    for tc in calls:
+        fn = tc.get("function") or {}
+        if fn.get("name") == TODO_TOOL_NAME:
+            args, err = parse_tool_arguments(fn.get("arguments"))
+            if err:
+                results.append((tc.get("id"), f"错误：{err}"))
+                tool_outcomes.append((TODO_TOOL_NAME, False, f"错误：{err}"))
+                continue
+            obs, idx = await handle_update_plan(harness, event_callback, args)
+            _, statuses, _ = normalize_items(args)
+            # L4-P0：闭合即收口信号 —— done 与 skipped 都算闭合（skipped 是模型显式放弃）
+            plan_all_done = bool(statuses) and not open_steps(statuses)
+            if idx >= 0:
+                active_step = idx
+            results.append((tc.get("id"), obs))
+            tool_outcomes.append((TODO_TOOL_NAME, not _is_error_obs(obs), obs))
+        else:
+            deferred.append(tc)
+
+    # ② generate_doc：先过权限闸门，实际落文件推迟到终稿产出之后
+    normal: List[Dict[str, Any]] = []
+    for tc in deferred:
+        fn = tc.get("function") or {}
+        if fn.get("name") == "generate_doc":
+            args, err = parse_tool_arguments(fn.get("arguments"))
+            if err:
+                results.append((tc.get("id"), f"错误：{err}"))
+                tool_outcomes.append(("generate_doc", False, f"错误：{err}"))
+                continue
+            gate = await harness._gate_tool("generate_doc", args, event_callback)
+            if gate is not None:
+                results.append((tc.get("id"), gate))
+                tool_outcomes.append(("generate_doc", False, str(gate)))
+                continue
+            fmt = str((args or {}).get("format") or (args or {}).get("fmt") or "word").lower()
+            if fmt not in ("word", "pdf", "pptx"):
+                fmt = "word"
+            pending_export = fmt
+            _gd_obs = (
+                f"导出请求已受理（格式 {fmt}）：宿主会在终稿产出后生成文件并给出下载链接。"
+            )
+            results.append((tc.get("id"), _gd_obs))
+            tool_outcomes.append(("generate_doc", True, _gd_obs))
+        else:
+            # 参数解析失败也要回填结构化错误（不让模型拿到空参数静默失败）
+            args, err = parse_tool_arguments(fn.get("arguments"))
+            if err:
+                _pe_obs = f"错误：工具 {fn.get('name')} {err}"
+                results.append((tc.get("id"), _pe_obs))
+                tool_outcomes.append((str(fn.get("name") or ""), False, _pe_obs))
+                continue
+            normal.append({"tc": tc, "name": fn.get("name"), "args": args})
+
+    # ③ 并行分流：全部只读且开关开启 → gather；否则串行（高风险工具逐个走权限弹窗）
+    # L4-P3-3：spawn_subagent 也可并行——子体写独立影子实例，不触碰共享可变状态；
+    # 多子体并行正是 A16 编排判据的执行路径。
+    _PARALLEL_OK_EXTRA = {"spawn_subagent"}
+    can_parallel = (
+        (AGENT_PARALLEL_READONLY or "1").strip() == "1"
+        and len(normal) >= 2
+        and len(normal) <= MAX_PARALLEL
+        and all(is_readonly(item["name"]) or item["name"] in _PARALLEL_OK_EXTRA for item in normal)
+    )
+    if can_parallel:
+        harness._log("system", f"[FC] 并发执行 {len(normal)} 个只读工具")
+        obs_list = await asyncio.gather(*[
+            _exec_one(harness, item["name"], item["args"], item["tc"].get("id"),
+                      event_callback, session_id, tool_calls_log, active_step)
+            for item in normal
+        ])
+        for item, obs in zip(normal, obs_list):
+            results.append((item["tc"].get("id"), obs))
+            tool_outcomes.append((str(item["name"] or ""), not _is_error_obs(obs), obs))
+    else:
+        for item in normal:
+            obs = await _exec_one(
+                harness, item["name"], item["args"], item["tc"].get("id"),
+                event_callback, session_id, tool_calls_log, active_step,
+            )
+            results.append((item["tc"].get("id"), obs))
+            tool_outcomes.append((str(item["name"] or ""), not _is_error_obs(obs), obs))
+
+    wrote = any(item["name"] in vf.FACT_KIND_BY_TOOL for item in normal)
+    return results, active_step, pending_export, plan_all_done, wrote, tool_outcomes

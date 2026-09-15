@@ -1,0 +1,33 @@
+# 微软Azure工业互联网解决方案
+
+## 公司概况
+Azure是全球第二大公有云，在工业领域有深厚积累，特别是与OT厂商的合作。
+
+## 工业互联网核心方案
+
+### 1. Azure IoT Hub/Edge
+- 工业设备连接和管理
+- 边缘计算方案（Azure IoT Edge支持容器化部署）
+- OPC-UA协议原生支持
+
+### 2. Azure Digital Twins
+- 工业数字孪生平台
+- 工厂、产线、设备的虚拟建模和仿真
+
+### 3. Azure AI工业应用
+- 预测性维护（Azure Machine Learning）
+- 工业视觉质检（Azure Cognitive Services）
+
+### 4. 混合云
+- Azure Stack/Azure Arc实现工厂本地+云端的混合部署
+- 满足数据驻留需求
+
+## 竞争优势
+- 全球第二大云服务商，企业客户基础深厚
+- 与西门子、罗克韦尔等OT巨头的深度合作
+- Azure Digital Twins技术领先
+- Dynamics 365与ERP/MES集成
+
+## 核心劣势（中国市场）
+- 由世纪互联运营，服务范围受限
+- 不如中国本土云商灵活

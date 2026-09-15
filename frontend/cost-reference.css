@@ -1,0 +1,380 @@
+/* ===== 成本参考卡片（方案成本估算器） ===== */
+/* 主题跟随全局变量 --primary-color (#C7000B 华为红)，白底细边框、无发光，与网站一致 */
+.cost-reference-card {
+    margin-top: 16px;
+    padding: 18px 20px 16px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    border-radius: 12px;
+    background: #fff;
+}
+.cr-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.cr-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1d2129;
+}
+.cr-title .icon {
+    width: 18px;
+    height: 18px;
+    color: var(--primary-color);
+}
+.cr-badge {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: var(--primary-light, rgba(199,0,11,0.08));
+    border-radius: 6px;
+    padding: 2px 8px;
+    margin-left: 4px;
+}
+.cr-sub {
+    font-size: 12px;
+    color: #86909c;
+    flex-basis: 100%;
+    margin-top: 2px;
+}
+.cr-tier-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.cr-tier-label {
+    font-size: 13px;
+    color: #4e5969;
+    margin-right: 2px;
+}
+.cr-tier-btn {
+    font-size: 13px;
+    padding: 5px 14px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    background: #fff;
+    color: #4e5969;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.cr-tier-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+.cr-tier-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    font-weight: 600;
+}
+/* 档位 + 周期控件同排 */
+.cr-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.cr-controls .cr-tier-tabs {
+    margin-bottom: 0;
+}
+.cr-view-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.cr-view-btn {
+    font-size: 13px;
+    padding: 5px 14px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    background: #fff;
+    color: #4e5969;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.cr-view-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+.cr-view-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    font-weight: 600;
+}
+.cr-view-hint {
+    font-size: 11px;
+    color: #a9aeb8;
+    margin-left: 2px;
+}
+.cr-table {
+    border: 1px solid var(--border-color, #e6e8eb);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.cr-row {
+    display: grid;
+    grid-template-columns: 1fr 90px 140px 110px;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f1f3;
+    font-size: 13px;
+}
+.cr-row:last-child {
+    border-bottom: none;
+}
+.cr-row-head {
+    background: #f7f8fa;
+    color: #86909c;
+    font-weight: 600;
+    font-size: 12px;
+}
+.cr-row-biz {
+    grid-template-columns: 1fr auto;
+    background: #fafafa;
+    color: #86909c;
+}
+.cr-row-noprice {
+    grid-template-columns: 1fr auto;
+    background: #fcfcfd;
+    color: #a9aeb8;
+}
+.cr-row-noprice .cr-c-product b {
+    color: #4e5969;
+    font-weight: 600;
+}
+.cr-row-free {
+    grid-template-columns: 1fr auto;
+    background: #f0fdf4;
+    color: #047857;
+}
+.cr-c-product b {
+    color: #1d2129;
+    font-weight: 600;
+}
+.cr-c-product small {
+    display: block;
+    color: #86909c;
+    font-size: 11px;
+    margin-top: 2px;
+}
+.cr-bill {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #4e5969;
+    background: #f2f3f5;
+    border-radius: 4px;
+    padding: 1px 6px;
+}
+.cr-warn {
+    color: #d4380d;
+    font-weight: 700;
+    margin-left: 4px;
+    cursor: help;
+}
+.cr-c-qty, .cr-c-price {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.cr-input {
+    width: 100%;
+    min-width: 0;
+    padding: 5px 7px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    border-radius: 6px;
+    font-size: 13px;
+    color: #1d2129;
+    background: #fff;
+}
+.cr-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--primary-light, rgba(199,0,11,0.08));
+}
+.cr-unit {
+    font-size: 11px;
+    color: #86909c;
+    white-space: nowrap;
+}
+.cr-c-sub {
+    text-align: right;
+    font-weight: 600;
+    color: #1d2129;
+    font-variant-numeric: tabular-nums;
+}
+.cr-c-biz-note {
+    font-size: 12px;
+    color: #d4380d;
+    text-align: right;
+}
+/* 自定义产品：添加按钮 + 内联表单 */
+.cr-add-row {
+    margin-top: 10px;
+}
+.cr-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    padding: 7px 14px;
+    border: 1px dashed var(--border-color, #d4d7dc);
+    background: #fff;
+    color: #4e5969;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+.cr-add-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+.cr-add-plus {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+}
+.cr-add-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid var(--border-color, #e6e8eb);
+    border-radius: 10px;
+    background: #fafbfc;
+}
+.cr-add-form .cr-add-name { flex: 2 1 160px; }
+.cr-add-form .cr-add-spec { flex: 2 1 160px; }
+.cr-add-form .cr-add-price { flex: 1 1 110px; }
+.cr-add-form .cr-add-qty { flex: 0 1 80px; }
+.cr-add-confirm, .cr-add-cancel {
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid var(--border-color, #e6e8eb);
+    transition: all .15s ease;
+}
+.cr-add-confirm {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    font-weight: 600;
+}
+.cr-add-confirm:hover { opacity: .9; }
+.cr-add-cancel {
+    background: #fff;
+    color: #86909c;
+}
+.cr-add-cancel:hover { color: #4e5969; }
+/* 自定义行标记 + 删除按钮 */
+.cr-tag-custom {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--primary-color);
+    background: var(--primary-light, rgba(199,0,11,0.08));
+    border-radius: 4px;
+    padding: 1px 5px;
+    vertical-align: middle;
+}
+.cr-del {
+    margin-left: 8px;
+    border: none;
+    background: transparent;
+    color: #c9cdd4;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+    transition: color .15s ease;
+}
+.cr-del:hover { color: var(--primary-color); }
+.cr-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--primary-light, rgba(199,0,11,0.06));
+    border-radius: 10px;
+}
+.cr-total-label {
+    font-size: 13px;
+    color: #4e5969;
+}
+.cr-total-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--primary-color);
+    font-variant-numeric: tabular-nums;
+}
+.cr-disclaimer {
+    margin-top: 10px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #a9aeb8;
+}
+@media (max-width: 600px) {
+    .cr-row {
+        grid-template-columns: 1fr;
+        gap: 4px 12px;
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+    .cr-row-head {
+        display: none; /* 移动端隐藏表头，每行自解释 */
+    }
+    /* 移动端：产品名左，价格右 */
+    .cr-c-product {
+        grid-column: 1 / -1;
+    }
+    .cr-c-product b {
+        font-size: 14px;
+    }
+    .cr-c-product small {
+        font-size: 12px;
+    }
+    .cr-c-qty, .cr-c-price {
+        grid-column: 1;
+        justify-content: flex-start;
+        font-size: 12px;
+        color: #86909c;
+    }
+    .cr-c-qty::before { content: '数量 '; color: #86909c; }
+    .cr-c-price::before { content: '单价 '; color: #86909c; }
+    .cr-c-sub {
+        grid-column: 2;
+        justify-content: flex-end;
+        font-weight: 600;
+        color: var(--primary-color, #C7000B);
+        font-size: 14px;
+    }
+    /* 商务/免费/无价行移动端适配 */
+    .cr-row-biz, .cr-row-noprice, .cr-row-free {
+        grid-template-columns: 1fr;
+    }
+    .cr-c-biz-note {
+        grid-column: 1 / -1;
+        font-size: 12px;
+    }
+    .cr-total-value { font-size: 20px; }
+    /* 成本卡片整体内边距收窄 */
+    .cost-reference-card { padding: 12px !important; }
+}

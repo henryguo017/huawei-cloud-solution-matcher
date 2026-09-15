@@ -1,0 +1,28 @@
+# Google Cloud 智能汽车解决方案
+
+## 公司概况
+Google Cloud 在汽车行业布局三层：车载 OS Android Automotive OS（AAOS）、整车软件定义汽车平台 AAOS SDV，以及云端自动驾驶/网联车数据平台；Alphabet 旗下 Waymo 是全球领先自动驾驶 Robotaxi 运营商。定位为"软件定义汽车 + AI 定义汽车"的开放平台与云底座。
+
+## 核心方案
+
+### 1. 车载与 SDV 平台 AAOS
+AAOS 是开源车载信息娱乐平台；AAOS SDV 将 Android 延伸到仪表盘、空调、灯光、座椅、摄像头、遥测等车身控制域，采用模块化、SOA 与精细化 OTA。已与雷诺合作（Trafic e-Tech 计划 2026 年底量产），并与高通在 Snapdragon 数字底盘上提供预集成方案。
+
+### 2. 网联车与自动驾驶云
+Bigtable 作 PB 级车联网遥测中枢；Edge TPU 将 ML 下沉车端；支持 OTA 与车辆健康监测。Vertex AI（含 NAS 用于 ADAS）、数据标注与大规模 GPU/CPU 扩展（单 VM 16×A100）及 HPC 仿真支撑自动驾驶研发（Cruise 曾测试其 AV）。
+
+### 3. 客户体验与营销
+Dialogflow、Recommendations AI、Apigee、Workspace 打通发现—购买—用车—换购全生命周期；沉浸 3D/AR 看车（如 BMW i4/iX）。
+
+## 竞争优势
+- AAOS 生态成熟开放，已有大量车企与高通等芯片伙伴，车载体验差异化强。
+- Waymo 提供全球最先进自动驾驶技术与真实路测数据反哺。
+- Bigtable + Vertex AI + HPC 构成从遥测到训练到仿真的完整云端能力。
+
+## 主要客户案例
+可核实案例：Waymo 累计自动驾驶里程超 2 亿英里，周付费订单超 50 万次，覆盖多座美国城市；雷诺采用 AAOS SDV 开发软件定义商用车；Geotab 基于 Google Cloud 将车队数据转为洞察；三菱汽车以网联车提升客户互动；宝马以 AR 展示 i4/iX。
+
+## 核心劣势
+- 在中国大陆无本地云运营，且 Android Automotive 在华受生态与合规限制，难服务中国车企与自动驾驶监管数据要求。
+- 不提供整车制造、芯片或完整自动驾驶全栈（Waymo 主攻 Robotaxi 而非前装方案），车企需自行整合。
+- 相比华为（车云一体、MDC、鸿蒙座舱）等本土厂商，缺乏本地车联网合规、数据出境方案与信创适配，且云端方案成本高、数据主权顾虑大。

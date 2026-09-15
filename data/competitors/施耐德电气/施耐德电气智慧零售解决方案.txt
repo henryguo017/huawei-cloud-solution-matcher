@@ -1,0 +1,45 @@
+# 施耐德电气智慧零售解决方案
+
+## 公司概况
+施耐德电气以旗舰方案 EcoStruxure for Retail 切入零售业，聚焦于门店与连锁网络的能源、制冷、暖通空调（HVAC）、IT 与安防的一体化能效管理。其价值在于降低多网点运营成本、保障业务连续性、提升顾客体验与可持续形象，而非电商、全渠道交易或零售中台等纯 IT/云业务系统。涉及零售上层业务云时通常需与生态伙伴协同。
+
+## 核心方案
+
+### 1. EcoStruxure for Retail 旗舰零售方案
+- 基于物联网的门店管理平台，在单店或整个物业组合中统一接入并控制制冷、HVAC、能源、IT 与安防
+- 远程监控与集中运维，在故障演变为停机前预警，减少库存损耗与营业中断
+- 覆盖超市、便利店、专卖店、餐饮、物流中心与奢侈品零售等业态
+
+### 2. 制冷与暖通能效（HER 架构）
+- 专有 HER（HVAC、Energy、Refrigeration）架构，针对食品零售与小型门店监控并控制暖通、能源与制冷设备
+- Eliwell by Schneider 制冷控制器与无线温度监测，满足 HACCP 等温控合规报告要求
+- 依据营业时间与店内人数自动调节空气温度，联动门窗、二氧化碳、湿度、漏水等传感器实现实时能耗洞察
+
+### 3. 云端软件与服务
+- EcoStruxure Facility Expert：门店能源与制冷的移动/网页可视化平台，支持多网点能耗基准对比与节能优化
+- EcoStruxure Facility Advisor / Building Advisor：远程主动运维与楼宇性能优化
+- EcoStruxure Resource Advisor：跨物业组合的能源与可持续发展数据统一云平台
+- EcoStruxure Microgrid Advisor：整合现场光伏与储能，优化门店能源成本与减碳
+
+### 4. 互联互通产品与现场基础设施
+- PowerTag 无线电能传感器、Smart Panels 智能盘柜、Micro Data Centre 边缘微数据中心
+- EcoStruxure Building Operation / Security Expert / TelevisGo：楼宇运营与安防集成
+- 智能照明、EVlink 充电桩等，支撑门店低碳与电动化配套
+
+## 竞争优势
+- 在门店制冷、暖通与电力能效管理领域具备全球领先的产品与软件组合
+- EcoStruxure for Retail 支持多网点统一远程管理，显著降低连锁运营复杂度与能耗成本
+- 与制冷合规（HACCP）、减碳法规高度契合，助力零售商 ESG 与品牌形象
+- 开放架构便于与第三方零售系统及微网、EV 方案集成
+
+## 主要客户案例
+- 法国 Carrefour（家乐福）：采用 EcoStruxure for Retail 优化多网点运营、提升顾客体验并降低运营成本
+- 埃及家乐福 19 家门店：部署 EcoStruxure Facility Expert，每年节省约 7% 能源费用
+- 芬兰 Lidl：新配送中心采用 EcoStruxure 微网与 Building Operation 方案，实现 100% 可再生能源高效运行
+- 印度 Tanishq 珠宝：借助 EcoStruxure for Retail 实现 7×24 小时互联、提升顾客体验并降低运营成本
+
+## 核心劣势
+- 非零售业务云/全渠道中台厂商，缺乏电商、会员、供应链、POS 等上层零售 IT 系统能力
+- 无自有公有云，门店级大数据与 AI 个性化推荐能力弱于阿里云、华为云、腾讯云等本土云厂商
+- 方案重心在"能耗/制冷/建筑运维"，对零售核心交易与营销数字化覆盖有限，需借力伙伴补全
+- 中国零售数字化高度本土化且竞争激烈，本土设备与 SaaS 厂商在成本与交付上更具优势，外资品牌渗透受限

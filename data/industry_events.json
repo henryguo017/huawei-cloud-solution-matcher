@@ -1,0 +1,26 @@
+[
+  {
+    "name": "华为全联接大会（HUAWEI CONNECT）",
+    "city": "上海",
+    "date_range": "2026年9月（以官方发布为准）",
+    "location": "上海（以官方发布为准）",
+    "url": "https://www.huawei.com/cn/events",
+    "note": "华为年度旗舰大会。官网 huawei.com/cn/events 为官方活动目录页，2026 届具体日程以官方发布为准"
+  },
+  {
+    "name": "2026 云栖大会（阿里云年度峰会）",
+    "city": "杭州",
+    "date_range": "2026年9月下旬（以官方发布为准）",
+    "location": "杭州云栖小镇",
+    "url": "https://yunqi.aliyun.com/",
+    "note": "阿里云年度技术大会。官网当前为 2025 届页面，2026 届官网发布后更新链接与时间"
+  },
+  {
+    "name": "2026 腾讯全球数字生态大会",
+    "city": "深圳",
+    "date_range": "2026年9月中旬（以官方发布为准）",
+    "location": "深圳（以官方发布为准）",
+    "url": "https://des.cloud.tencent.com/",
+    "note": "腾讯年度生态大会。官网当前为 2025 届页面，2026 届官网发布后更新链接与时间"
+  }
+]

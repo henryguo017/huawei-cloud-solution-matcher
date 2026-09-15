@@ -1,0 +1,38 @@
+# 微软Azure智慧交通解决方案
+
+## 公司概况
+微软以 "Microsoft for Mobility" 面向汽车、出行与制造行业，依托 Azure、Azure Maps、Azure IoT 与 Microsoft Connected Vehicle Platform（互联车辆平台），聚焦软件定义汽车（SDV）、智能驾驶（ADAS/AD）、数字座舱与车队互联。CES 2025 上微软重点展示了设计、工程与车内体验四大领域的 AI 能力与行业参考架构。
+
+## 智慧交通核心方案
+
+### 1. 互联车辆与软件定义汽车
+- Microsoft Connected Vehicle Platform：实时车辆数据采集、OTA 更新与远程诊断；非车载操作系统，OEM 可自定义。
+- 软件定义汽车（SDV）参考架构：解耦软硬件，支持车载服务持续迭代。
+- Azure Maps 与 TomTom、Moovit 集成：实时路径优化、交通仿真与位置智能。
+
+### 2. 智能驾驶与工程
+- 自动驾驶（AD）/ADAS 数据与仿真平台：基于 Azure 的安全中立环境运行数据驱动开发管线。
+- PLM on Azure：产品生命周期管理上云，缩短研发周期、提升质量。
+- Azure Innovation Accelerator（Azure IX）：多团队与伙伴协作的 AI 云平台，构建自动驾驶训练与验证链路。
+
+### 3. 数字座舱与出行服务
+- 数字座舱（Digital Cockpit）AI Agent：车载语音助手与个性化体验（集成 Azure OpenAI）。
+- 车队管理：基于 Azure IoT 的故障、能耗、安全看板与预测性维护。
+- Mobility Agents / Connected Mobility：面向出行与客货运输的互联服务。
+
+## 竞争优势
+- 与全球顶级车企深度合作（丰田、宝马、大众、福特、沃尔沃等）。
+- Azure OpenAI 在车载助手与工程智能体的先发应用。
+- 开放生态：OEM 可自由选择硬件/软件供应商，集成既有方案与第三方能力。
+
+## 主要客户案例
+- BMW 集团：借助 Azure 实现效率提升 10 倍的数据交付（微软 CES 2025 披露）。
+- Toyota：部署 AI 智能体，汇聚工程师集体智慧加速创新。
+- ZF（采埃孚）：基于 Azure 构建可扩展的云 IoT 出行平台，整合车队管理与共享出行。
+- Bosch：与微软合作以生成式 AI 探索更安全的道路方案。
+
+## 核心劣势（中国市场）
+- 中国车联网与智能座舱市场由本土云厂商（阿里、腾讯、华为）与车企自研主导。
+- 数据出境与本地化合规下，国际版 Connected Vehicle Platform 在华难合规落地（由世纪互联运营受限）。
+- 缺乏车载 OS、端侧芯片与车规级硬件，方案偏云端与软件层。
+- 智能驾驶数据闭环需本地算力与合规，微软在华无完整车云一体化能力。

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>L4 完全自主售前 Agent · 设计定稿</title>
+<style>
+:root{--red:#C7000B;--ink:#1a1a1a;--mut:#5b6470;--bd:#e3e6ea;--bg:#f6f7f9;--card:#fff;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:15px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;}
+.wrap{max-width:1080px;margin:0 auto;padding:40px 32px 80px;background:var(--card);
+ box-shadow:0 1px 3px rgba(0,0,0,.06);min-height:100vh;}
+h1{font-size:26px;line-height:1.35;margin:0 0 6px;padding-bottom:16px;border-bottom:3px solid var(--red);}
+h2{font-size:20px;margin:38px 0 12px;padding-left:12px;border-left:4px solid var(--red);}
+h3{font-size:16.5px;margin:26px 0 10px;color:#222;}
+p{margin:10px 0;}
+ul,ol{margin:10px 0;padding-left:26px;}
+li{margin:5px 0;}
+code{background:#f0f2f5;border:1px solid var(--bd);border-radius:4px;padding:1px 6px;
+ font-family:ui-monospace,Consolas,"Courier New",monospace;font-size:13px;color:#b4000a;}
+strong{color:#111;}
+hr{border:0;border-top:1px solid var(--bd);margin:26px 0;}
+table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px;}
+th,td{border:1px solid var(--bd);padding:8px 11px;text-align:left;vertical-align:top;}
+th{background:#f2f4f7;font-weight:600;white-space:nowrap;}
+tbody tr:nth-child(even){background:#fafbfc;}
+blockquote{margin:16px 0;padding:12px 16px;background:#fff8f8;border-left:4px solid var(--red);
+ border-radius:0 6px 6px 0;color:#333;}
+blockquote table{font-size:13.5px;background:#fff;}
+blockquote p{margin:6px 0;}
+</style></head><body><div class="wrap">
+<h1>完全自主售前 Agent · 设计定稿（L4 垂直版）</h1>
+<blockquote><p>定稿日期：2026-09-13 ｜ 状态：<strong>P0 已实现（离线验证通过，待活测）</strong> 前置文档：<code>docs/agent-architecture-fc-2026-09-11.md</code>（FC 运行时与 L4 判据）、<code>docs/s4-fc-vs-legacy-2026-09-13.md</code>（当前引擎验收）</p></blockquote>
+<hr>
+<h2>1. 定位：两层都要 —— 通用底座 + 垂直售前包</h2>
+<p>目标是<strong>完全自主的售前 Agent</strong>：不是"能力面铺得很宽的通用助手"，也不是"只能按固定流程跑的脚本"。 落地形态是<strong>双层</strong>：</p>
+<table><thead><tr><th>层</th><th>是什么</th><th>与行业的关系</th></tr></thead><tbody><tr><td><strong>通用底座</strong></td><td>自主循环、计划/待办机制、子体派生、记忆 API、工具注册与自扩展、守卫与审计</td><td><strong>行业无关</strong>。换包即另一个垂直</td></tr><tr><td><strong>垂直售前包</strong></td><td>售前资产、售前工具、售前角色子体、售前阶段语义</td><td><strong>只服务售前</strong></td></tr></tbody></table>
+<p><strong>判据：自主度是手段，售前闭环是本体。</strong> 一个任务从线索到交付物 + 推进建议，全程不需要人喂下一步。</p>
+<h3>自主度阶梯（现状 → 目标）</h3>
+<table><thead><tr><th>档</th><th>特征</th><th>位置</th></tr></thead><tbody><tr><td>L0 流水线</td><td>宿主写死步骤（legacy 两阶段，今天线上默认）</td><td>—</td></tr><tr><td><strong>L1 模型选工具</strong></td><td>仅 <code>solution</code>/<code>competitor</code> 进循环；短程（均 5 轮）；计划<strong>不绑定</strong></td><td><strong>← 现状（S4 验证到此）</strong></td></tr><tr><td>L2 计划绑定 + 全意图</td><td>计划成为有齿的待办；所有意图进循环</td><td>目标 P0/P1</td></tr><tr><td>L3 长程自愈</td><td>压缩后续跑；错误自愈；自写记忆</td><td>目标 P2</td></tr><tr><td>L4 自扩展委派</td><td>自建工具/技能；派生子 agent；按需挂 MCP</td><td>目标 P3</td></tr></tbody></table>
+<hr>
+<h2>2. 决策记录（2026-09-13）</h2>
+<table><thead><tr><th>#</th><th>决策</th><th>选定</th></tr></thead><tbody><tr><td>D-A</td><td>自主边界</td><td><strong>全开</strong>：内部写入 + 扩只读工具面 + 改自身代码 + 对外动作（后两项<strong>分级放权</strong>，不一步到位）</td></tr><tr><td>D-B</td><td>第一刀</td><td><strong>P0 计划绑定</strong></td></tr><tr><td>D-C</td><td>模型底座</td><td><strong>先实测 DeepSeek 上限</strong>，不先换模型（避免换模型掩盖架构问题）</td></tr><tr><td>D-D</td><td>架构形态</td><td><strong>通用底座 + 垂直售前包，两层都要</strong></td></tr><tr><td>D-E</td><td>垂直终点</td><td><strong>(a) 交付物 + (c) 商机推进建议</strong>；<code>(b) 对外发送</code> 单独分级放权</td></tr></tbody></table>
+<h3>分级放权（针对可回滚性）</h3>
+<table><thead><tr><th>能力</th><th>放权方式</th></tr></thead><tbody><tr><td>内部写入、扩只读工具面</td><td><strong>直接开</strong>（有副作用但可回滚）</td></tr><tr><td>改自身代码</td><td>能力先建：改前强制 全量 diff + 跑测试 + 自动备份 + 一键回滚；灰度期内<strong>每次改动仍需人工确认</strong></td></tr><tr><td>对外动作（邮件/IM/CRM 外发）</td><td><strong>白名单 + 速率上限 + 发送前预览</strong>；首次必确认；先只对内部账号</td></tr></tbody></table>
+<hr>
+<h2>3. 双层边界（什么属于哪一层）</h2>
+<table><thead><tr><th>能力</th><th>归属层</th><th>理由</th></tr></thead><tbody><tr><td>自主循环 / 终止判定 / 预算熔断</td><td>通用底座</td><td>与任务内容无关</td></tr><tr><td><strong>计划/待办机制 + 闭合门（P0）</strong></td><td><strong>通用底座</strong></td><td>"做事有始有终"是任何任务的通则</td></tr><tr><td>子体派生、记忆读写 API、工具注册与自扩展</td><td>通用底座</td><td>引擎能力</td></tr><tr><td><strong>售前阶段语义</strong>（客户画像→需求识别→方案匹配→竞品对标→报价/TCO→交付物+跟进）</td><td><strong>垂直包</strong></td><td>由包注入默认骨架，模型可改写</td></tr><tr><td>售前资产（客户档案 / 行业包 / 竞品库 / 成本报价模型 / 案例库 / 打法库）</td><td><strong>垂直包</strong></td><td>领域知识</td></tr><tr><td>售前工具（<code>search_kb</code> / <code>search_competitor</code> / <code>cost_calc</code> / CRM / 招标线索）</td><td><strong>垂直包</strong>（经 MCP + 工具注册表挂载）</td><td>领域动作</td></tr><tr><td>售前角色子体（客户分析师 / 竞品分析师 / 方案撰写 / 报价）</td><td><strong>垂直包</strong></td><td>领域分工</td></tr></tbody></table>
+<p><strong>挂载机制复用既有资产</strong>：技能包（<code>match_pack</code> / <code>match_capability</code>）+ MCP（<code>cost_calc</code> / <code>crm</code>）已经是"插拔"的雏形，不需要新造。</p>
+<hr>
+<h2>4. P0 详细设计（计划绑定）—— 已实现</h2>
+<h3>4.1 语义变更</h3>
+<p>计划从<strong>叙述性</strong>（给用户看的进度视图，明确"不约束执行"）改为<strong>有齿的待办</strong>：</p>
+<ul><li>终稿交付前，计划里<strong>每一步必须闭合</strong>：<code>done</code>，或 <code>skipped</code>（<strong>必须带原因</strong>）。</li><li>有未闭合项时，宿主<strong>不接收终稿</strong>，把未闭合项退回给模型，由模型自决：<strong>补做</strong>，或<strong>如实标 skipped</strong>。</li><li>新增 <code>skipped</code> 状态 = 允许放弃，但必须<strong>显式声明</strong>——不允许"默默不收尾"。</li></ul>
+<h3>4.2 边界纪律（这不是宿主夺权）</h3>
+<p>宿主<strong>只做一件事</strong>：查「模型自己发布的计划有没有未闭合项」这一个事实。然后给模型<strong>两个选项</strong>。</p>
+<p>宿主<strong>不做</strong>：</p>
+<ul><li>❌ "某工具属于哪一步"的归属推导（那正是架构文档 §8 要删的 <code>_tool_to_plan_index</code>）</li><li>❌ 规定执行顺序（顺序仍完全由模型决定）</li><li>❌ 替模型决定补做还是跳过</li></ul>
+<h3>4.3 实现清单</h3>
+<table><thead><tr><th>文件</th><th>改动</th></tr></thead><tbody><tr><td><code>app/config.py</code></td><td><code>AGENT_PLAN_CLOSE_ENFORCE=1</code>、<code>AGENT_PLAN_CLOSE_MAX_RETRY=2</code></td></tr><tr><td><code>app/agent/runtime/todo.py</code></td><td>状态词表加 <code>skipped</code> 及近义词；schema 描述改为"待办 + 收尾前须闭合"；新增 <code>open_steps()</code> / <code>closure_summary()</code> / <code>build_close_instruction()</code></td></tr><tr><td><code>app/agent/runtime/runner.py</code></td><td>终稿分支加<strong>闭合门</strong>：未闭合且未达上限 → 注入交回提示并 <code>continue</code>；<code>plan_all_done</code> 改为<strong>闭合</strong>判定（done/skipped）；<code>trace.plan_drift_rejections</code> 计数</td></tr><tr><td><code>app/agent/runtime/context.py</code></td><td>POLICY 两条硬性要求：①连续工具调用 ≥2 次无计划必须补发；②<strong>交付前计划必须闭合</strong>，禁止虚标 done</td></tr><tr><td><code>app/agent/harness.py</code></td><td><code>fc_meta</code> 增 <code>drift_rejections</code> / <code>plan_open_at_final</code></td></tr></tbody></table>
+<h3>4.4 防死锁</h3>
+<p>最多交回 <code>AGENT_PLAN_CLOSE_MAX_RETRY</code>（默认 2）次；超出则<strong>接受终稿并打告警标记</strong>—— 原则：<strong>宁可告警，不可卡死</strong>。代价：仅在发生漂移时多 1–2 次 LLM 调用。</p>
+<h3>4.5 验收</h3>
+<ul><li><strong>离线</strong>：<code>.workbuddy/Temp/fc_runtime_smoke.py</code> <strong>44/44 通过</strong>（新增 8 项 P0 检查）</li><ul><li><code>T10</code> 计划留 1 步未闭合 → 断言：拦截 1 次、模型改为 <code>skipped</code> 后交付、共 5 次 LLM 调用</li><li><code>T10b</code> 模型死不闭合 → 断言：拦截恰为上限 2 次、<strong>仍产出终稿</strong>（不死锁）</li><li>附带验证：计划全闭合后 thinking 自动降档（<code>enabled → disabled</code>），证明 <code>skipped</code> 被正确当作闭合信号</li></ul><li><strong>新增指标 A11 计划收敛率</strong> = 交付时计划全闭合的运行 / 发布过计划的 FC 运行，目标 <strong>≥0.90</strong></li><li><strong>待办</strong>：本地活测（需拉起重启服务）——给一个多步售前任务，确认出现「模型<strong>自己</strong>发现漏步并补上」的行为，而不是靠改提示词</li></ul>
+<h3>4.6 回退</h3>
+<p><code>AGENT_PLAN_CLOSE_ENFORCE=0</code> + restart → 行为回到今天。<strong>经典模式与 legacy 管线一行未动。</strong></p>
+<hr>
+<h2>5. 后续路线</h2>
+<table><thead><tr><th>阶段</th><th>内容</th><th>判它做完的标准</th><th>动生产</th><th>状态</th></tr></thead><tbody><tr><td><strong>P1 取消范围门</strong></td><td>全意图进循环（含 data/knowledge/闲聊），由模型判断"要不要动手"；确定性分支降级为"模型选择不调工具"</td><td>50 题路由 0 回归；闲聊不退化成流水线</td><td>否</td><td>✅ <strong>已实现</strong>（见 §5.1）</td></tr><tr><td><strong>P2 长程</strong></td><td>轮次上限 16→64；压缩真正跑通（A10 有证据）；任务状态持久化 + 服务重启续跑</td><td>跑通一个 ≥30 轮、触发 ≥2 次压缩的任务</td><td>否</td><td>待办</td></tr><tr><td><strong>P3 子体 + 自记忆 + 自评收尾</strong></td><td><strong>并行子体从 legacy 迁进 FC 并工具化</strong>（<code>harness.py:853</code> 已有实现，改造成"虚拟售前小组"）；任务中可自写记忆；质量门由"宿主告警"改"模型自评 + 宿主审计"</td><td>同一任务模型自行派生 2 个子体并汇总；第二次同类任务明显复用上次经验</td><td>否</td><td>待办</td></tr><tr><td><strong>P4 垂直包成型</strong></td><td>售前资产 + 售前角色子体预设 + 售前阶段模板 + 售前指标接入</td><td>一条商机端到端无人喂</td><td>否</td><td>待办</td></tr><tr><td><strong>P5 分级放权</strong></td><td>改自身代码 / 对外发送按 §2 逐级放开</td><td>每级灰度无事故</td><td>是（灰度）</td><td>待办</td></tr></tbody></table>
+<h3>5.1 P1 实现记录（2026-09-13）</h3>
+<p><strong>为什么不能直接删掉那道 <code>if</code>。</strong> 旧实现 <code>if _fc_kind in ("solution", "competitor")</code> 是一道<strong>内容门</strong>：用意图分类结果决定"这个需求配不配进自主循环"。它存在的唯一原因是<strong>政策提示词是静态的</strong>——<code>POLICY_PROMPT</code> 写死了售前方案姿态（「客户痛点→华为云方案→实施路径→价值收益，1500-3500 字」）。若不改政策就放开意图，会立刻重犯 2026-09-09 的线上实锤 bug：问"你会玩王者荣耀吗？"产出 14 章游戏行业方案书。</p>
+<p><strong>正解：把门从"内容判断"降级为"路径判断"，姿态改由意图切换。</strong></p>
+<table><thead><tr><th>层</th><th>旧</th><th>新</th></tr></thead><tbody><tr><td>是否进 FC</td><td>意图 ∈ {solution, competitor}</td><td>意图 ∉ {greeting, account, export}（<code>context.fc_takes_over</code>）</td></tr><tr><td>写成什么样</td><td>恒定方案契约</td><td><code>build_policy_prompt(intent)</code> 按意图出契约（<code>_CONTRACTS</code>）</td></tr><tr><td>通用部分</td><td>与契约混在一个字符串里</td><td><code>_AUTONOMY_BLOCK</code>（自主性 + 计划机制 + 工作准则 8 条）恒定注入</td></tr></tbody></table>
+<p><strong>排除 greeting/account/export 的理由</strong>（它们是路径问题，不是内容问题）：</p>
+<ul><li><code>greeting</code>：礼节寒暄，legacy 有模板直答，进 FC 只是白烧一次 LLM 调用；</li><li><code>account</code>：账户信息查询，确定性查库，不需要模型自主规划；</li><li><code>export</code>：导出是一次<strong>确定性文件动作</strong>（绑 <code>_last_draft</code>），不该由模型即兴发挥。</li></ul>
+<p><strong>抗分类偏差兜底。</strong> 分类器本身有已知偏差（实测 30 题里「50 台 4核8G 服务器每台月费 380 元…」被规模词截进 <code>solution</code>、「帮我为一家连锁药店做数字化转型的方案框架」落 <code>general</code>）。因为放开门之后分类错误不再决定"是否自主"、只影响"姿态"，所以通用块加了一条：<strong>「交付姿态以用户实际诉求为准……你的判断优先于预判」</strong> —— 模型读得到原文，理应有最终发言权。</p>
+<p><strong>收口重试（兜底，非主因）。</strong> 收口调用改为<strong>重试一次</strong>（仍空才判失败），并在失败时把真实运行态写进 <code>fc_meta</code>，使"从未进 FC"与"进了但失败"可区分。<strong>注意</strong>：当时把 27% 硬回退归因于"收口返回空 content"，此判断已被 §5.2 证伪——真因是 thinking 模式的 <code>reasoning_content</code> 回传硬校验，与收口无关。</p>
+<p><strong>回退</strong>：<code>AGENT_RUNTIME=legacy</code> / 前端 ⚡ 开关（代码层零改动）；预算分档可用 env 覆盖（<code>AGENT_TOKEN_BUDGET_SOLUTION</code> / <code>_COMPETITOR</code>）。</p>
+<h3>5.2 真因定位：<code>reasoning_content</code> 回传硬校验（2026-09-13 收尾）</h3>
+<p><strong>现象。</strong> P1 放开范围门后跑 30 例，出现 8 例 FC 硬回退（<code>run_loop_none</code>）：<code>FC 尝试 30（成功 22 / 失败回退 8）</code>。特征是<strong>间歇的</strong>——同一 query 重跑常成功（8 例里 6 例重跑正常），只有 #9/#29 曾连续复现，且随后又自愈。</p>
+<p><strong>排除法与证据链。</strong></p>
+<table><thead><tr><th>步骤</th><th>做法</th><th>结果</th></tr></thead><tbody><tr><td>① 找异常出口</td><td>发现旧代码所有失败路径只走 <code>harness._log</code>（受 <code>verbose</code> 门控<strong>不落盘</strong>）→ 磁盘上完全不可见</td><td>加独立 <code>logger.warning</code> 出口</td></tr><tr><td>② 定位到 HTTP 层</td><td>服务日志出现成对的 <code>HTTP/1.1 400 Bad Request</code>（2 次 = <code>MAX_RETRIES=2</code>，间隔 2s）</td><td>400 属<strong>请求侧</strong>错误，重试纯属浪费</td></tr><tr><td>③ 穷举消息形状</td><td>9 种可疑形状打真实 DeepSeek（<code>.workbuddy/Temp/llm_400_probe.py</code>）</td><td>只有「孤儿 tool_calls / 回填不足」会 400 —— 但生产形状签名（T16 检测器）显示<strong>回填是足的</strong></td></tr><tr><td>④ 抓到响应正文</td><td>主循环 WARNING 落盘，拿到真实 body</td><td><strong><code>The reasoning_content in the thinking mode must be passed back to the API.</code></strong></td></tr><tr><td>⑤ 确定规则边界</td><td><code>.workbuddy/Temp/reasoning_probe*.py</code>：thinking 开/关 × 历史是否带该字段</td><td>见下表</td></tr></tbody></table>
+<p><strong>规则（实测，非文档推断）：</strong></p>
+<table><thead><tr><th>场景</th><th>结果</th></tr></thead><tbody><tr><td><code>thinking=enabled</code> + 历史 assistant <strong>缺</strong> <code>reasoning_content</code> 字段</td><td>❌ 400</td></tr><tr><td><code>thinking=enabled</code> + 历史 assistant 有该字段（值为<strong>空串</strong>）</td><td>✅ 200</td></tr><tr><td><code>thinking=enabled</code> + 历史 assistant 有真实推理</td><td>✅ 200</td></tr><tr><td><code>thinking=disabled</code> + 历史带/不带该字段</td><td>✅ 均 200</td></tr><tr><td><code>thinking=enabled</code> + 一段有、一段缺字段（混合）</td><td>❌ 400</td></tr></tbody></table>
+<p><strong>结论：该字段必须"在场"，值可为空串。</strong> 本项目 <code>to_assistant_message</code> 只保留 <code>content</code>/<code>tool_calls</code>，把 <code>reasoning_content</code> 剥掉了 → 决策轮（<code>AGENT_THINKING_DECISION=enabled</code>）进入第 2 轮起就可能 400。</p>
+<p><strong>为什么间歇。</strong> 轮次 thinking 分档是 <code>plan_all_done ? FINAL(disabled) : DECISION(enabled)</code>；<code>plan_all_done</code> 会在任何工具调用后复位为 False。于是出现「disabled 轮写入了一条不带 reasoning 的 assistant → 下一轮又回到 enabled」的混合历史 → 400。走不走得到这个序列取决于模型是否恰好在"计划全闭合"那轮还调工具，故表现为间歇。</p>
+<p><strong>修复（三处，均为最小改动）：</strong></p>
+<table><thead><tr><th>文件</th><th>改动</th></tr></thead><tbody><tr><td><code>runtime/schema.py</code> <code>to_assistant_message</code></td><td>新增 <code>reasoning_content</code> 参数并<strong>恒置该键</strong>（有真实推理传真实值，否则空串）；不编造内容</td></tr><tr><td><code>runtime/schema.py</code> <code>sanitize_messages</code></td><td>保留并兜底补齐 <code>reasoning_content</code>（原实现重建 assistant 消息时会把它丢掉，等于修复被抹掉）</td></tr><tr><td><code>runtime/runner.py</code></td><td>两处 assistant 入栈（工具轮 / 计划闭合门拦截轮）传入 <code>reasoning</code></td></tr></tbody></table>
+<p><strong>顺带修掉的真实缺陷（<code>models/llm.py</code>）：</strong></p>
+<ul><li><code>_retry_request</code> 是 <code>except Exception</code> 宽口重试器，会把 <code>chat_with_tools</code> 为 4xx 抛出的 <code>RuntimeError</code> <strong>无差别重试</strong> —— 与该方法文档承诺的"4xx 不重试"完全相反，每次非法请求白烧 2s + 2 倍计费。</li><li>修复：新增 <code>NonRetryableLLMError</code> + <code>_is_retryable()</code>（<strong>鸭子类型</strong>读 <code>response.status_code</code>，兼容 provider 包装层），4xx / 显式不可重试异常立即抛出；5xx / 429 / 传输超时保持原有重试。</li></ul>
+<p><strong>新增诊断设施（排障资产，非业务逻辑）：</strong></p>
+<ul><li><code>schema.message_shape(messages)</code>：把消息序列压成一行形状签名（<code>system,user,assistant+tc(2),tool,tool</code>），并标记 <code>!!orphan_tool_calls@[idx]</code>。用于定位 400 唯一的结构性成因，可安全落盘（不含正文）。</li><li><code>runner</code> 主循环 catch 与收口失败路径各加一条 <code>logger.warning</code> 落盘诊断（含 <code>turn/thinking/msgs/safe_len/shape/err</code>）；<code>safe_len</code> 用于发现 <code>sanitize_messages</code> 丢消息。</li><li><code>fc_meta</code> 现含更具体 <code>reason</code>（<code>llm_error</code> / <code>no_draft_after_close</code>）与形状签名。</li></ul>
+<p><strong>验证。</strong> 离线套件 98/98（新增 T15 重试策略、T16 形状检测器、T17 reasoning 直通）；本地回归门禁 100/100 意图 + 16/16 沙箱 PASS。活测复验见 §5.3。</p>
+<h3>5.3 活测复验：修复前 8/30 回退 → 修复后 0/30（2026-09-13）</h3>
+<p>同一套 30 例裸目标，真 DeepSeek，<code>runtime=fc</code> + <code>autonomy=high</code>。</p>
+<table><thead><tr><th>指标</th><th>修复前</th><th>修复后</th></tr></thead><tbody><tr><td>进入 FC</td><td>22 / 30</td><td><strong>30 / 30</strong></td></tr><tr><td>FC 失败回退</td><td><strong>8</strong>（<code>run_loop_none</code>）</td><td><strong>0</strong></td></tr><tr><td>主循环 400 次数</td><td>18（9 对重试）</td><td><strong>0</strong></td></tr><tr><td>宿主熔断</td><td>0</td><td>0</td></tr><tr><td>A11 计划收敛率</td><td>1.000（13/13）</td><td><strong>1.000（21/21）</strong></td></tr><tr><td>计划闭合门累计拦截</td><td>—</td><td>4（全部由模型自行补闭合）</td></tr></tbody></table>
+<p><strong>意图 × 引擎覆盖（范围门彻底放开的直接证据）：</strong></p>
+<table><thead><tr><th>分类意图</th><th>fc</th><th>legacy</th></tr></thead><tbody><tr><td>solution</td><td>18</td><td>0</td></tr><tr><td>general</td><td>6</td><td>0</td></tr><tr><td>competitor</td><td>4</td><td>0</td></tr><tr><td>knowledge_q</td><td>2</td><td>0</td></tr></tbody></table>
+<p>此前只有 <code>solution</code>/<code>competitor</code> 能进 FC（12 例里 4 例被 D5 分流），现在<strong>四类意图全部 100% 进自主循环、零回退</strong>。</p>
+<p><strong>预算分档的实测依据（修复后重标定）：</strong></p>
+<table><thead><tr><th>意图</th><th>n</th><th>min</th><th>median</th><th>max</th><th>档位</th><th>余量</th></tr></thead><tbody><tr><td>solution</td><td>18</td><td>7,874</td><td>87,775</td><td>133,921</td><td>200,000</td><td>1.5×</td></tr><tr><td>competitor</td><td>4</td><td>67,607</td><td>209,376</td><td><strong>384,311</strong></td><td>500,000</td><td>1.3×</td></tr><tr><td>general</td><td>6</td><td>4,816</td><td>6,821</td><td>81,822</td><td>500,000</td><td>6.1×</td></tr><tr><td>knowledge_q</td><td>2</td><td>37,270</td><td>55,447</td><td>73,624</td><td>500,000</td><td>6.8×</td></tr></tbody></table>
+<p><strong>诚实口径提醒</strong>：分档最初是基于<strong>修复前</strong>的 token 数据定的（当时 reasoning 被剥掉、不回传，输入 token 系统性偏低）。修复后 reasoning 随每轮回传，solution 峰值由 ≤95k 抬到 <strong>133,921（+41%）</strong>、competitor 由 316k 抬到 <strong>384,311（+22%）</strong>。两档仍有余量（1.5× / 1.3×），故<strong>沿用 200k / 500k 不调</strong>；但这条"预算是在坏数据上校准的、修复后重新验过"必须写清楚，不能当成一次独立的调参成果。</p>
+<hr>
+<h2>6. 验收指标：agent-ness + 销售口径</h2>
+<h3>6.1 agent-ness（已有，沿用 §6 门禁）</h3>
+<table><thead><tr><th>指标</th><th>线</th><th>当前</th></tr></thead><tbody><tr><td>A1 自主拆解率（FC 引擎口径）</td><td>≥0.70</td><td>0.727 ✅</td></tr><tr><td>A2 工具链深度</td><td>≥2.0</td><td>5.43 ✅</td></tr><tr><td>A7 自主终止率</td><td>≥0.90</td><td>0.955 ✅</td></tr><tr><td>A8 错误自愈率</td><td>≥0.60</td><td>1/1 ⚠️ 样本不足</td></tr><tr><td>A9 计划自治度</td><td>&gt;0</td><td>0.533 ✅</td></tr><tr><td>A10 压缩保真</td><td>≥0.90</td><td>未触发 ⚠️</td></tr><tr><td><strong>A11 计划收敛率（P0 新增）</strong></td><td><strong>≥0.90</strong></td><td>待活测</td></tr></tbody></table>
+<h3>6.2 销售口径（新增，垂直版必须补）</h3>
+<p>A1–A11 只回答"它是不是真 agent"，<strong>回答不了"它是不是称职的售前"</strong>。垂直版必须加：</p>
+<table><thead><tr><th>指标</th><th>定义</th><th>为什么重要</th></tr></thead><tbody><tr><td><strong>S1 交付物可直用率</strong></td><td>交付的方案/对比矩阵，无需人工改写即可对客的比例</td><td>售前只看"能不能直接发出去"</td></tr><tr><td><strong>S2 商机推进步数</strong></td><td>一次会话中模型自主推进的售前阶段数（无需人喂下一步）</td><td>直接度量"自主"的业务价值</td></tr><tr><td><strong>S3 资产复用率</strong></td><td>同类客户第二次会话相对第一次的耗时/工具调用下降幅度</td><td>证明客户与打法记忆真的生效</td></tr></tbody></table>
+<hr>
+<h2>7. 风险与前提</h2>
+<table><thead><tr><th>#</th><th>风险 / 前提</th><th>对策</th></tr></thead><tbody><tr><td>R1</td><td><strong>模型是天花板</strong>：L1 均 22s/5 轮；L3/L4 是分钟级 + 几十轮，DeepSeek 长程稳定性未知</td><td>D-C 先实测；必要时换底座或加"自检-重规划"回路</td></tr><tr><td>R2</td><td><strong>成本与时延</strong></td><td>预算守卫 + 分级放权；长任务单列预算策略</td></tr><tr><td>R3</td><td><strong>公开站 + 写权限 = 真实攻击面</strong>（cloudsol.cn）</td><td>守卫不可省：预算熔断、权限门、全量 trace、一键关闭</td></tr><tr><td>R4</td><td><strong>计划闭合门可能被"虚标 done"绕过</strong></td><td>POLICY 明确禁止 + 提示词要求如实标 skipped；后续可用"工具序列 vs 计划"抽检（需谨慎，勿变成宿主夺权）</td></tr><tr><td>R5</td><td>改自身代码 / 对外发送不可回滚</td><td>§2 分级放权，绝不一步到位</td></tr><tr><td>R6</td><td>垂直包与底座耦合，日后换垂直被污染</td><td>§3 边界纪律：领域语义只准进包，不准进底座</td></tr></tbody></table>
+<p><strong>回退（全局）</strong>：<code>AGENT_RUNTIME=legacy</code> + restart，或前端 ⚡ 自主开关关闭（双门禁 <code>runtime=fc</code> 且 <code>autonomy=high</code>）。</p>
+</div></body></html>

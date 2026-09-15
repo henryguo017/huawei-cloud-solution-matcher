@@ -1,0 +1,38 @@
+# 西门子智慧医疗解决方案
+
+## 公司概况
+西门子医疗（Siemens Healthineers）是西门子集团控股、独立上市的医疗技术公司，全球领先的影像诊断、临床诊疗与数字化医疗供应商。需说明：西门子医疗是独立上市主体，与集团战略协同有限；其数字化能力集中于设备互联、影像 AI 与 teamplay 云平台，并非医院 HIS/EMR 等核心业务云，不与华为云医疗形成直接云 IaaS 竞争。
+
+## 行业核心方案
+
+### 1. 医疗影像诊断设备
+- MAGNETOM 系列磁共振（MRI）、SOMATOM 系列 CT（含 NAEOTOM Alpha 光子计数 CT）。
+- ACUSON 系列超声、Multix 系列数字化 X 光（DX）。
+- 放疗专用 CT：SOMATOM go.Sim、go.Open Pro（带 DirectSetup Notes）。
+
+### 2. AI 辅助影像与数字医疗平台
+- AI-Rad Companion 家族（基于 teamplay 云）：Chest CT、Brain MR（脑体积量化）、Prostate MR、Chest X-ray、Organs RT 等，自动量化与结构化报告，SaaS 订阅模式。
+- teamplay 数字医疗平台：设备管理与数据洞察，符合 HIPAA/GDPR，云上安全处理临床数据。
+- Syngo.via 影像后处理与诊断平台。
+
+### 3. 实验室诊断自动化
+- Aptio Automation 轨道式实验室自动化、Atellica Solution 化学免疫分析系统。
+- 全自动样本处理与实验室工作流管理。
+
+### 4. 放射治疗（瓦里安 Varian）
+- 瓦里安（西门子医疗旗下）：TrueBeam、Ethos 自适应放疗、HyperSight 快速成像、ARIA CORE 肿瘤管理、AI-Rad Companion Organs RT 自动勾画。
+
+## 竞争优势
+- 全球医学影像设备市场份额领先，CT/MRI/放疗产品组合完整。
+- AI-Rad Companion 与 teamplay 构成成熟的数字医疗与影像 AI 生态。
+- 影像+实验室+放疗一体化，覆盖从诊断到治疗全链路。
+
+## 主要客户案例（可核实）
+- 官方披露：University Hospital Munich 使用 AI-Rad Companion Chest CT；Basel University Hospital、Hospital del Mar（巴塞罗那）应用 AI-Rad Companion Organs RT。
+- 中国大量三甲医院广泛部署 MAGNETOM、SOMATOM 等影像设备（具体院名以公开招标为准）。
+
+## 核心劣势（中国市场）
+- 西门子医疗已独立上市，与集团工业/基础设施业务战略协同有限。
+- 高端设备价格高，在国产替代（联影、东软等）趋势下市场压力增大。
+- 数字化以设备与影像 AI 为主，不提供医院核心 HIS/EMR 云，难独立承接区域医疗云/全民健康平台等华为云主导项目。
+- 售后服务本土化与响应速度待提升，部分备件受供应链与地缘因素影响。

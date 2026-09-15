@@ -1,0 +1,46 @@
+# 微软Azure智慧零售解决方案
+
+## 公司概况
+微软依托Microsoft Cloud for Retail（微软零售云），整合Dynamics 365 Commerce、Azure AI、Microsoft Fabric与Microsoft 365，覆盖全渠道零售、供应链、门店运营与客户体验，服务GNC、Żabka、Threads等零售企业。
+
+## 智慧零售核心方案
+
+### 1. Microsoft Cloud for Retail 零售云
+- 统一连接客户、员工与数据的行业云，横跨Azure、Dynamics 365、M365、Fabric
+- 零售数据解决方案（Retail Data Solutions，基于Microsoft Fabric）整合、丰富并建模行业数据
+- 提供Copilot模板与连接器，加速业务增长
+
+### 2. Dynamics 365 Commerce 全渠道商务
+- 统一线上线下库存、支付、促销与物流，减少缺货与订单错误
+- Dynamics 365 Intelligent Order Management将订单履约转化为竞争优势
+- Dynamics 365 Customer Insights实现360度客户画像与超个性化
+
+### 3. Azure AI 智能营销与体验
+- Azure AI Search与Azure AI Foundry构建个性化购物代理（Personalized Shopping Agent）与门店运营代理（Store Operations Agent）
+- 计算机视觉、语音服务赋能智能导购与虚拟客服
+- Microsoft Retail Media（由PromoteIQ提供）帮助零售商拓展零售媒体广告收入
+
+### 4. 智能供应链
+- Dynamics 365 Supply Chain Management中的Copilot辅助需求预测与规划
+- Azure AI与IoT优化补货、路径与库存，实现敏捷弹性供应链
+
+### 5. 智慧门店与一线赋能
+- Smart Store Analytics应用模板结合AI优化货架布局、商品目录与库存
+- Teams与Power Platform连接门店一线员工、经理与企业员工，提升协同
+
+## 竞争优势
+- 微软零售云贯通整个零售价值链数据，AI能力（含生成式Copilot）领先
+- Dynamics 365 Commerce全渠道运营成熟，与M365、Fabric无缝集成
+- 全球零售客户基础广，生态与合作伙伴完善
+
+## 主要客户案例
+- GNC：以Dynamics 365与Azure驱动客户体验与业务成果（微软官方案例）
+- Żabka Group：借助AiFi与Microsoft Cloud for Retail推出无人便利店（Nano Store）
+- Threads：采用Dynamics 365 Commerce统一ERP、CRM与电商，提升实时洞察
+- 玛氏（Mars）：作为大型快消零售品牌，广泛采用微软云与AI能力
+
+## 核心劣势（中国市场）
+- 由世纪互联运营的Azure中国功能与全球零售云存在差距，部分AI/行业云能力（如Retail Media、部分Copilot）未完全落地
+- 与中国本土零售数字化需求（如微信生态、小程序、本地支付、直播电商）集成弱，缺乏本土流量入口
+- 相比阿里云、腾讯云、京东云等本土厂商，国内零售客户案例少，对本地零售业态（生鲜、社区团购等）理解不足
+- 缺乏端到端零售硬件（POS、电子价签、客流传感）与重资产交付能力

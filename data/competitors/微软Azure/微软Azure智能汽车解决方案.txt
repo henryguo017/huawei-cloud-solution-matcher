@@ -1,0 +1,49 @@
+# 微软Azure智能汽车解决方案
+
+## 公司概况
+微软面向汽车、出行与运输行业提供软件定义汽车（SDV）参考架构、互联出行（Connected Mobility）、自动驾驶运行（AvOps）、数字座舱（Digital Cockpit）与Mobility Agents等解决方案，服务BMW、Mercedes-Benz、Ford、Volvo、NIO、XPeng、SAIC等车企，并与Ansys、PTC、Bosch等建立生态合作。
+
+## 智能汽车核心方案
+
+### 1. 软件定义汽车（SDV）参考架构
+- 云原生的SDV软件开发工具链，覆盖开发、测试与高质量软件交付
+- 基于Eclipse基金会SDV工作组贡献的开源车载软件组件与堆栈
+- 与PTC、Vector、AVL等伙伴集成，管理软件复杂度
+
+### 2. 互联出行（Connected Mobility）
+- 整合车辆与资产数据、分析与地理信息，优化车队与车辆运营
+- 结合Azure IoT、Maps与后台系统，将原始数据转化为运营洞察
+- 客户包括Volvo、Daimler Trucks、BMW、Porsche Motorsports、Navistar等
+
+### 3. 数字座舱（Digital Cockpit）
+- 集成AI服务打造个性化车内体验，提升人机交互
+- 客户包括Mercedes-Benz、Audi、SAIC、MG、NIO、XPeng、Sony Honda Mobility、Lynk & Co等
+- 与TomTom、Cerence等伙伴共建语音与导航体验
+
+### 4. 自动驾驶运行（AvOps）参考架构
+- 面向自动驾驶开发的统一数字试验台，整合设计到测试全流程
+- 借助AI优化各阶段性能与安全；客户包括Wayve、Bosch、NVIDIA、Ansys、Denso等
+- 与Ansys合作：Ansys VRXPERIENCE在Azure上可虚拟测试数百万英里场景，加速安全验证；Ansys Cloud基于Azure HPC承载CAE仿真
+
+### 5. Mobility Agents 与车企AI
+- 基于行业AI模型，覆盖研发到售后全链路的Copilot与AI助手
+- BMW、Porsche、Mercedes-Benz、Audi、Volvo、Nissan等已采用
+- BMW利用Azure IoT Hub与Microsoft Foundry提升大规模数据分发效率
+
+## 竞争优势
+- 软件定义汽车与自动驾驶工具链（SDV/AvOps）具备先发与生态优势
+- Azure HPC与Ansys等工程仿真深度结合，算力与合规工具链完整
+- 车企客户基础广泛，数字座舱与互联出行落地客户众多
+
+## 主要客户案例
+- BMW：采用Azure IoT Hub与Microsoft Foundry进行互联车队与MDR数据分发（微软官方案例）；并与Ansys合作在Azure上验证自动驾驶仿真
+- Mercedes-Benz：数字座舱与Mobility Agents落地客户
+- Ford：借助Microsoft Entra、Purview构建网络安全防护
+- Continental：基于Foundry Tools以AI需求工程缩短开发时间
+
+## 核心劣势（中国市场）
+- 在中国大陆由世纪互联运营Azure中国，自动驾驶所需的海量数据跨境、合规存算受限，车云一体方案难以完全落地
+- 缺乏车规级硬件、车载OS与路侧基础设施（如路侧单元RSU），重云端软件轻车端硬件
+- 与中国本土车企的"车云一体"深度定制（如与华为、百度Apollo、阿里云汽车云合作）相比，本地化适配与国内生态偏弱
+- 在智能驾驶数据合规（测绘资质、数据出境）方面无本土主体优势，难以满足国内强监管要求
+- 政企信创与国产化适配弱，难以进入对自主可控要求高的场景

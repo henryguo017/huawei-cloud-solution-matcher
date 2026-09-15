@@ -1,0 +1,20 @@
+[Unit]
+Description=cloudsol DingTalk IM bot (dingtalk-stream mode)
+# 依赖主 API：bot 经 127.0.0.1:8000 环回调内部端点跑 Agent
+After=network.target huawei-cloud-api.service
+Wants=huawei-cloud-api.service
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/huawei-cloud-solution-matcher
+ExecStart=/var/www/huawei-cloud-solution-matcher/venv/bin/python -m app.services.dingtalk_bot
+Restart=on-failure
+RestartSec=10
+# 凭证缺失时 main() 返回 0（干净退出）→ on-failure 不会反复拉起，避免刷日志
+SuccessExitStatus=0
+# 日志进 journald：journalctl -u cloudsol-im-bot -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

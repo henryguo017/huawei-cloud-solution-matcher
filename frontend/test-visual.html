@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视觉改进测试</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .test-container {
+            max-width: 1200px;
+            margin: 80px auto;
+            padding: 32px;
+        }
+        
+        .test-section {
+            margin-bottom: 48px;
+        }
+        
+        .test-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--neutral-800);
+        }
+        
+        .color-palette {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+        
+        .color-box {
+            width: 100px;
+            height: 100px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        
+        .animation-test {
+            padding: 24px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--neutral-100);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="particle-canvas"></canvas>
+    
+    <header class="navbar">
+        <div class="navbar-container">
+            <div class="navbar-brand">
+                <span class="brand-icon">☁️</span>
+                <span class="brand-text">华为云解决方案匹配系统</span>
+            </div>
+            
+            <nav class="navbar-menu">
+                <button class="navbar-item active">
+                    <span class="nav-icon">🔍</span>
+                    <span class="nav-text">解决方案匹配</span>
+                </button>
+                <button class="navbar-item">
+                    <span class="nav-icon">⚔️</span>
+                    <span class="nav-text">竞争分析</span>
+                </button>
+                <button class="navbar-item">
+                    <span class="nav-icon">📚</span>
+                    <span class="nav-text">知识库</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+    
+    <main class="test-container">
+        <section class="test-section">
+            <h2 class="test-title">1. 色彩系统测试</h2>
+            <div class="color-palette">
+                <div class="color-box" style="background: var(--primary-color);">主色 #C7000B</div>
+                <div class="color-box" style="background: var(--primary-hover);">主色深 #A30009</div>
+                <div class="color-box" style="background: var(--secondary-color);">次色 #4A90E2</div>
+                <div class="color-box" style="background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);">渐变混合</div>
+            </div>
+        </section>
+        
+        <section class="test-section">
+            <h2 class="test-title">2. 卡片效果测试</h2>
+            <div class="content-card" style="max-width: 600px;">
+                <h3 style="margin-bottom: 12px;">卡片标题</h3>
+                <p style="color: var(--neutral-600);">这是一个测试卡片，鼠标悬停时应该看到渐变顶部边框动画。</p>
+            </div>
+        </section>
+        
+        <section class="test-section">
+            <h2 class="test-title">3. 按钮效果测试</h2>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                <button class="btn btn-primary">
+                    <span class="btn-text">主要按钮</span>
+                </button>
+                <button class="btn btn-secondary">
+                    <span class="btn-text">次要按钮</span>
+                </button>
+                <button class="btn btn-danger">
+                    <span class="btn-text">危险按钮</span>
+                </button>
+            </div>
+        </section>
+        
+        <section class="test-section">
+            <h2 class="test-title">4. 粒子动画测试</h2>
+            <div class="animation-test">
+                <p>✅ 粒子数量: 45个 (原70个)</p>
+                <p>✅ 粒子速度: 0.3 (原0.4)</p>
+                <p>✅ 连接距离: 120px (原140px)</p>
+                <p>✅ 画布透明度: 0.20 (原0.35)</p>
+                <p>✅ 使用品牌色渐变绘制粒子</p>
+            </div>
+        </section>
+    </main>
+    
+    <script>
+        const Config = {
+            ANIMATION: {
+                PARTICLE_COUNT: 45,
+                CONNECTION_DISTANCE: 120,
+                PARTICLE_SPEED: 0.3
+            }
+        };
+        
+        class ParticleSystem {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.particles = [];
+                this.init();
+            }
+            
+            init() {
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                
+                for (let i = 0; i < Config.ANIMATION.PARTICLE_COUNT; i++) {
+                    this.particles.push({
+                        x: Math.random() * this.canvas.width,
+                        y: Math.random() * this.canvas.height,
+                        vx: (Math.random() - 0.5) * Config.ANIMATION.PARTICLE_SPEED,
+                        vy: (Math.random() - 0.5) * Config.ANIMATION.PARTICLE_SPEED,
+                        radius: Math.random() * 2 + 1,
+                        hue: Math.random() < 0.6 ? 0 : 210
+                    });
+                }
+                
+                this.animate();
+            }
+            
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+            
+            update() {
+                this.particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0 || p.x > this.canvas.width) p.vx *= -1;
+                    if (p.y < 0 || p.y > this.canvas.height) p.vy *= -1;
+                });
+            }
+            
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                this.particles.forEach((p1, i) => {
+                    this.particles.slice(i + 1).forEach(p2 => {
+                        const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                        if (dist < Config.ANIMATION.CONNECTION_DISTANCE) {
+                            const opacity = 0.3 * (1 - dist / Config.ANIMATION.CONNECTION_DISTANCE);
+                            const gradient = this.ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
+                            gradient.addColorStop(0, `rgba(199, 0, 11, ${opacity})`);
+                            gradient.addColorStop(0.5, `rgba(127, 72, 118, ${opacity * 0.8})`);
+                            gradient.addColorStop(1, `rgba(74, 144, 226, ${opacity})`);
+                            this.ctx.beginPath();
+                            this.ctx.strokeStyle = gradient;
+                            this.ctx.lineWidth = 1;
+                            this.ctx.moveTo(p1.x, p1.y);
+                            this.ctx.lineTo(p2.x, p2.y);
+                            this.ctx.stroke();
+                        }
+                    });
+                });
+                
+                this.particles.forEach(p => {
+                    const gradient = this.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * 3);
+                    if (p.hue === 0) {
+                        gradient.addColorStop(0, 'rgba(199, 0, 11, 0.6)');
+                        gradient.addColorStop(0.5, 'rgba(199, 0, 11, 0.3)');
+                        gradient.addColorStop(1, 'rgba(199, 0, 11, 0)');
+                    } else {
+                        gradient.addColorStop(0, 'rgba(74, 144, 226, 0.5)');
+                        gradient.addColorStop(0.5, 'rgba(74, 144, 226, 0.25)');
+                        gradient.addColorStop(1, 'rgba(74, 144, 226, 0)');
+                    }
+                    this.ctx.beginPath();
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.arc(p.x, p.y, p.radius * 2, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+            }
+            
+            animate() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+        
+        const canvas = document.getElementById('particle-canvas');
+        new ParticleSystem(canvas);
+    </script>
+</body>
+</html>

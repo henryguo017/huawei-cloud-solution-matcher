@@ -1,0 +1,994 @@
+"""
+工具定义 + 注册中心
+
+每个 Tool 封装一个现有 Service，暴露给 Agent 的 ReAct 循环调用。
+设计原则：
+- 零改动现有代码，通过 import 对接
+- 每个工具自描述（name + description + parameters），供 LLM 理解
+- execute() 返回字符串 Observation，直接喂给下一轮 LLM
+"""
+
+import os
+import re
+import json
+import asyncio
+import inspect
+import logging
+from typing import Any, Callable, Dict, List, Optional
+
+from app.services.knowledge_base import get_kb_user_context
+
+logger = logging.getLogger(__name__)
+
+
+async def to_thread_limited(fn: Callable, *args, _timeout: float = 120.0, **kwargs):
+    """asyncio.to_thread + 硬超时守护。
+
+    背景：裸 asyncio.to_thread 无超时——若默认线程池被耗尽（如先前异常运行遗留的
+    僵尸任务占满 worker）或底层调用（ChromaDB/BGE 编码）卡死，协程会静默永久等待，
+    表现为 SSE 零日志挂起、事件循环却存活。加 wait_for 后：超时必抛异常并留日志，
+    协程得以解除阻塞（注意：线程本身无法杀死，仅解除 await 等待）。
+    """
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn, *args, **kwargs), timeout=_timeout)
+    except asyncio.TimeoutError:
+        logger.error(
+            "[to_thread] 硬超时(%.0fs) fn=%s —— 疑似线程池耗尽或底层调用卡死，已解除阻塞",
+            _timeout, getattr(fn, "__name__", fn),
+        )
+        raise
+
+
+def _get_kb():
+    """根据当前上下文获取知识库实例（用户上下文或全局）"""
+    user_id = get_kb_user_context()
+    if user_id > 0:
+        from app.services.knowledge_base import get_user_knowledge_base as _get_user_kb
+        return _get_user_kb(user_id)
+    from app.services.knowledge_base import get_knowledge_base as _get_global_kb
+    return _get_global_kb()
+
+
+class Tool:
+    """单个工具定义"""
+
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        parameters: Dict[str, Any],
+        func: Callable,
+    ):
+        self.name = name
+        self.description = description
+        self.parameters = parameters  # JSON Schema 格式的参数定义
+        self.func = func
+
+    def to_prompt_desc(self) -> str:
+        """生成给 LLM 看的工具描述"""
+        params_str = json.dumps(self.parameters, ensure_ascii=False, indent=2)
+        return f"- {self.name}: {self.description}\n  Parameters: {params_str}"
+
+    def _normalize_args(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """吸收 LLM 偶发的参数名漂移，按函数真实签名对齐，避免 TypeError 让检索整段失败。
+
+        已知漂移：search_competitor 收到 query（应为 competitor）、list_dir 收到 path（应为 dir）、
+        search_kb 收到 top_k/limit（函数无此参数）。统一在分发层处理，工具函数本身保持干净。
+        """
+        try:
+            sig = inspect.signature(self.func)
+        except (TypeError, ValueError):
+            return kwargs
+        # **kwargs 型函数（如 L4-P1 动态组合工具的闭包）接受任意参数名，跳过对齐，
+        # 否则所有参数会被下面的白名单过滤误丢弃
+        for p in sig.parameters.values():
+            if p.kind is inspect.Parameter.VAR_KEYWORD:
+                return kwargs
+        accepted = set(sig.parameters.keys())
+        # 仅当目标参数未被显式传入时才做别名映射，避免覆盖真实参数
+        alias_map = {"query": "competitor", "path": "dir"}
+        norm: Dict[str, Any] = {}
+        for k, v in kwargs.items():
+            if k in accepted:
+                norm[k] = v
+            elif k in alias_map and alias_map[k] in accepted and alias_map[k] not in kwargs:
+                norm[alias_map[k]] = v
+            # 其余未知参数（top_k/limit 等）直接丢弃
+        return norm
+
+    async def execute(self, **kwargs) -> str:
+        """执行工具，返回 Observation 字符串"""
+        try:
+            kwargs = self._normalize_args(kwargs)
+            result = self.func(**kwargs)
+            if asyncio.iscoroutine(result):
+                result = await result
+            # 统一转为字符串
+            if isinstance(result, str):
+                return result
+            return json.dumps(result, ensure_ascii=False, default=str)
+        except Exception as e:
+            logger.error(f"Tool [{self.name}] execution error: {e}")
+            return f"Error: {str(e)}"
+
+
+class ToolRegistry:
+    """工具注册中心"""
+
+    def __init__(self):
+        self._tools: Dict[str, Tool] = {}
+
+    def register(self, tool: Tool) -> None:
+        self._tools[tool.name] = tool
+        logger.info(f"Registered tool: {tool.name}")
+
+    def remove(self, name: str) -> bool:
+        """移除工具（L4-P1/T1.2 动态工具单任务 TTL 清理用）。返回是否确实移除了。"""
+        removed = self._tools.pop(name, None) is not None
+        if removed:
+            logger.info(f"Removed tool: {name}")
+        return removed
+
+    def get(self, name: str) -> Optional[Tool]:
+        return self._tools.get(name)
+
+    def list_tools(self) -> List[Tool]:
+        return list(self._tools.values())
+
+    def get_tools_prompt(self) -> str:
+        """生成所有工具的 Prompt 描述"""
+        if not self._tools:
+            return "（无可用工具）"
+        lines = []
+        for tool in self._tools.values():
+            lines.append(tool.to_prompt_desc())
+        return "\n".join(lines)
+
+    def get_tool_names(self) -> List[str]:
+        return list(self._tools.keys())
+
+
+# ============================================================
+# 四个核心工具的具体实现
+# ============================================================
+
+async def _tool_analyze_demand(raw_input: str) -> str:
+    """
+    工具: analyze_demand
+    作用: 将模糊的用户输入 → 结构化的需求分析（行业、场景、痛点、关键词）
+    实现: 委托共享服务 app/services/demand_analyzer.analyze_demand（2026-08-26 解耦：
+         经典匹配链路也调用同一服务，Agent 包内改动不再波及经典链路）
+    """
+    from app.services.demand_analyzer import analyze_demand
+    return await analyze_demand(raw_input)
+
+
+async def _tool_search_kb(query: str, industry: str = "") -> str:
+    """
+    工具: search_kb
+    作用: 用结构化关键词搜索华为云知识库
+    实现: 对接 KnowledgeBaseService.search()
+    """
+    kb = _get_kb()
+    try:
+        logger.info(f"[search_kb] 开始查询, query={query[:50]}...")
+        t0 = __import__('time').time()
+        # A修复：召回 6 篇（与标准模式 4+2 对齐），并按行业过滤收敛到客户行业
+        docs = await to_thread_limited(kb.search_huawei, query, 6, filter_industry=(industry or None))
+        elapsed = round(__import__('time').time() - t0, 1)
+        logger.info(f"[search_kb] 查询完成, 耗时={elapsed}s, 结果数={len(docs)}")
+        if not docs:
+            # 关键优化：空结果时给出明确的换关键词引导，避免 LLM 直接放弃
+            return json.dumps({
+                "status": "no_match",
+                "query": query,
+                "message": (
+                    "用当前关键词「" + query + "」未检索到匹配的解决方案文档。"
+                    "请务必换一组不同的关键词重试。建议：\n"
+                    "1. 提取更核心的技术术语（如：工业物联网、预测性维护、数字孪生）\n"
+                    "2. 使用更宽泛的行业词（如：制造业→工业互联网）\n"
+                    "3. 尝试不同的产品角度（如：IoT平台、边缘计算、AI质检）\n"
+                    "不要放弃，用新关键词再调用一次 search_kb！"
+                ),
+                "results": []
+            }, ensure_ascii=False, indent=2)
+
+        results = []
+        for i, doc in enumerate(docs[:6]):  # A修复：最多返回 6 条，提升召回覆盖
+            results.append({
+                "index": i + 1,
+                # A修复：截断到 1000 字（原 300 字丢失过多方案细节），平衡上下文量与信息完整度
+                "content": doc.page_content[:1000],
+                "source": doc.metadata.get("source", "unknown"),
+                "industry": doc.metadata.get("industry", ""),
+            })
+        return json.dumps({
+            "status": "ok",
+            "query": query,
+            "total_hits": len(docs),
+            "results": results
+        }, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
+
+
+async def _tool_search_competitor(competitor: str, industry: str = "") -> str:
+    """
+    工具: search_competitor
+    作用: 搜索竞品在特定行业的方案信息
+    实现: 对接 CompetitorAnalyzerService 的检索逻辑
+    """
+    kb = _get_kb()
+    try:
+        stats = kb.get_stats()
+        if stats.get("total_documents", 0) == 0:
+            return json.dumps({
+                "status": "empty",
+                "message": "知识库为空，无法检索竞品信息。",
+                "results": []
+            }, ensure_ascii=False)
+
+        # 先检索华为方案
+        hw_query = "华为云" + (f"在{industry}行业的解决方案 竞争优势" if industry else "解决方案")
+        hw_docs = await to_thread_limited(kb.search_huawei, hw_query, 6)
+
+        # 再检索竞品方案
+        comp_query = f"{competitor}" + (f"在{industry}行业的解决方案 产品 优势" if industry else "解决方案")
+        comp_docs = await to_thread_limited(kb.search_competitor, comp_query, 6)
+
+        hw_results = []
+        for i, doc in enumerate(hw_docs[:6]):  # A修复：6 篇 + 1000 字
+            hw_results.append({
+                "type": "华为云",
+                "content": doc.page_content[:1000],
+                "source": doc.metadata.get("source", ""),
+            })
+
+        comp_results = []
+        for i, doc in enumerate(comp_docs[:6]):  # A修复：6 篇 + 1000 字
+            comp_results.append({
+                "type": competitor,
+                "content": doc.page_content[:1000],
+                "source": doc.metadata.get("source", ""),
+            })
+
+        if not hw_results and not comp_results:
+            return json.dumps({
+                "status": "no_match",
+                "competitor": competitor,
+                "industry": industry,
+                "message": (
+                    "未检索到「" + competitor + "」在「" + (industry or "全行业") + "」的相关资料。"
+                    "请尝试：\n"
+                    "1. 去掉行业限制，用更宽的搜索范围\n"
+                    "2. 换一个竞品名称（如：阿里云 → AWS）\n"
+                    "3. 用不同的技术角度搜索（如：云原生、大数据、AI平台）\n"
+                    "不要放弃，调整参数后再试一次！"
+                ),
+                "results": []
+            }, ensure_ascii=False, indent=2)
+
+        return json.dumps({
+            "status": "ok",
+            "competitor": competitor,
+            "industry": industry,
+            "huawei_docs_count": len(hw_docs),
+            "competitor_docs_count": len(comp_docs),
+            "results": hw_results + comp_results
+        }, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
+
+
+# ============================================================
+# 阶段1 新增：文件交互工具（读取/落盘/列举）
+# ============================================================
+
+async def _tool_read_customer_file(path: str) -> str:
+    """
+    工具: read_customer_file
+    作用: 读取客户上传的任意格式文件（docx/xlsx/pdf/pptx/txt/csv/md/图片），
+          提取纯文本供需求分析。图片经 OCR 转文字。
+    实现: 复用 file_security 白名单校验 + parsers 多格式解析
+    """
+    from app.services.knowledge_base import get_kb_user_context
+    from app.agent.file_security import safe_resolve
+    from app.agent.parsers.read_file import extract_text, chunk_text
+
+    user_id = get_kb_user_context()
+    if user_id <= 0:
+        return "Error: 未登录用户无法读取文件"
+
+    try:
+        abs_path = safe_resolve(user_id, path)
+    except ValueError as e:
+        return f"Error: {e}"
+
+    if not os.path.exists(abs_path):
+        return f"Error: 文件不存在: {path}"
+
+    text = extract_text(abs_path)
+    if text.startswith("Error:"):
+        return text
+
+    # 不盲截断：返回全量；超长文本按重叠窗口分块，确保全部内容进入上下文、零丢弃
+    chunks = chunk_text(text)
+    if len(chunks) == 1:
+        return f"【客户文件内容 {path}】\n{text}"
+    return (
+        f"【客户文件内容 {path}（共 {len(chunks)} 段，已全量保留）】\n"
+        + "\n---\n".join(f"第{i + 1}段:\n{c}" for i, c in enumerate(chunks))
+    )
+
+
+
+
+async def _tool_list_dir(dir: str = "") -> str:
+    """
+    工具: list_dir
+    作用: 列出用户白名单目录下的文件，供 Agent 选择/确认
+    """
+    from app.services.knowledge_base import get_kb_user_context
+    from app.agent.file_security import safe_resolve, get_user_root
+
+    user_id = get_kb_user_context()
+    if user_id <= 0:
+        return "Error: 未登录用户无法列举文件"
+
+    try:
+        target = safe_resolve(user_id, dir) if dir else str(get_user_root(user_id))
+    except ValueError as e:
+        return f"Error: {e}"
+
+    if not os.path.isdir(target):
+        return f"Error: 目录不存在: {dir}"
+
+    try:
+        entries = []
+        for name in sorted(os.listdir(target)):
+            full = os.path.join(target, name)
+            kind = "目录" if os.path.isdir(full) else "文件"
+            entries.append(f"- [{kind}] {name}")
+        if not entries:
+            return f"（目录为空: {dir or '用户根目录'}）"
+        return "用户目录文件列表：\n" + "\n".join(entries)
+    except Exception as e:
+        return f"Error: 列举失败: {e}"
+
+
+async def _tool_generate_doc(fmt: str = "word", content: str = "", report_type: str = "solution",
+                             metadata: dict = None) -> str:
+    """
+    工具: generate_doc（P1-2）
+    作用: 把当前 Agent 终稿导出为 Word/PDF 方案书（做成 Agent 工具，用户说「导出成 Word」时调用）。
+    实现: 复用 ReportGeneratorService.generate_report（统一单例 get_report_generator，下载路由同源可查）。
+    注意: content 由 harness._intercept_generate_doc 从 self._last_draft 注入（LLM 没有终稿文本，不靠它传参）。
+    metadata: harness 传入的封面元数据（如 customer 客户名，2026-09-14 v2 闭环补充）。
+    """
+    from app.services.report_generator import get_report_generator, ReportType, ExportFormat
+    rg = get_report_generator()
+    if not content or len(content.strip()) < 30:
+        return json.dumps({"status": "no_draft", "message": "当前还没有可导出的方案内容，请先生成方案。"}, ensure_ascii=False)
+    try:
+        ef = ExportFormat.PDF if str(fmt).lower() == "pdf" else (
+            ExportFormat.PPTX if str(fmt).lower() == "pptx" else ExportFormat.WORD
+        )
+        rt = ReportType.COMPETITOR if str(report_type).lower() == "competitor" else ReportType.SOLUTION
+        task = await to_thread_limited(rg.generate_report, rt, content, ef,
+                                       metadata or {}, None, _timeout=180.0)
+        if getattr(task.status, "value", str(task.status)) != "completed":
+            return json.dumps({"status": "error", "message": getattr(task, "error_message", "生成失败")}, ensure_ascii=False)
+        return json.dumps({
+            "status": "ok",
+            "download_url": task.download_url,
+            "file_name": task.file_name,
+            "task_id": task.task_id,
+        }, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
+
+
+async def _tool_web_search(query: str, topic: str = "general") -> str:
+    """
+    工具: web_search（P1-2）
+    作用: 补充知识库之外的联网检索（华为云官网/白皮书/新闻/竞品动态）。
+    实现: 可插拔 provider（Tavily 默认），未配置 WEB_SEARCH_PROVIDER 时优雅降级（仅基于知识库作答）。
+    调优（2026-09-08）:
+    - 新闻语义查询自动走 topic=news（Tavily 新闻索引 + 近 30 天时间窗），减少命中栏目页
+    - 脱敏结果保留 snippet 摘要（此前只留 domain+title，模型拿到的是"空壳结果"）
+    """
+    from app.config import WEB_SEARCH_PROVIDER, WEB_SEARCH_MAX_PER_SESSION
+    provider = (WEB_SEARCH_PROVIDER or "").strip().lower()
+    if not provider:
+        return json.dumps({
+            "status": "disabled",
+            "message": "当前未配置联网搜索，仅基于本地知识库作答。",
+            "results": [],
+        }, ensure_ascii=False)
+    # 2026-09-14 优化（用户实测反馈：单轮思考中 3 次预算被重复查询烧光后无法联网）：
+    # ① 查询去重——同一轮内相同查询词直接返回缓存结果，不消耗联网预算。
+    #    去重检查放在限流**之前**：预算烧光后模型重复旧查询仍能拿到已有结果，
+    #    避免陷入"limited→再试→limited"的死循环浪费轮次。
+    _q_norm = " ".join(re.split(r"\s+", (query or "").strip())).lower()
+    _qcache = getattr(_tool_web_search, "_query_cache", None)
+    if _qcache is None:
+        _qcache = _tool_web_search._query_cache = {}
+    if _q_norm and _q_norm in _qcache:
+        try:
+            cached = json.loads(_qcache[_q_norm])
+            cached["cached"] = True
+            cached["message"] = "（本轮已检索过相同查询词，以下为缓存结果，不消耗联网预算）"
+            return json.dumps(cached, ensure_ascii=False)
+        except Exception:
+            pass  # 缓存损坏则按新查询处理
+    # ② 限流：本轮联网检索次数上限（计数器由 harness.run() 每轮 reset）
+    if getattr(_tool_web_search, "_count", 0) >= int(WEB_SEARCH_MAX_PER_SESSION or 8):
+        return json.dumps({
+            "status": "limited",
+            "message": (
+                f"已达本轮联网检索上限（{WEB_SEARCH_MAX_PER_SESSION} 次）。"
+                "请基于已有检索结果与本地知识库（search_kb）作答，不要继续调用 web_search；"
+                "确有信息缺口则在最终答案中如实说明。"
+            ),
+            "results": [],
+        }, ensure_ascii=False)
+    # 新闻语义判定：查询带时效词时走新闻索引（provider 侧映射为 topic=news + days=30）
+    if topic == "general" and re.search(r"新闻|最新|动态|近期|最近|今天|实时|发布", query or ""):
+        topic = "news"
+    try:
+        from app.agent.tools_search import get_web_search_provider
+        p = get_web_search_provider(provider)
+        results = await to_thread_limited(p.search, query, top_n=5, topic=topic, _timeout=60.0)
+        _tool_web_search._count = getattr(_tool_web_search, "_count", 0) + 1
+        # 原始结果（含完整 url）挂函数属性供 harness 程序化读取（如 Extract 精读）；
+        # LLM 可见的 observation 仍不含 url（防幻觉外链，见下）
+        _tool_web_search._last_results = results or []
+        # URL 脱敏：只留来源域名+标题+摘要，不在 observation 暴露完整外链（防幻觉外链；LLM 只引来源名）。
+        # snippet 必须保留——它是模型作答的唯一内容依据，只给标题会导致空洞转述。
+        slim = [{
+            "domain": r.get("domain", ""),
+            "title": r.get("title", ""),
+            "snippet": (r.get("snippet") or "")[:220],
+            "published": r.get("published", ""),
+        } for r in (results or [])]
+        _resp = json.dumps({
+            "status": "ok",
+            "count": len(slim),
+            "results": slim,
+        }, ensure_ascii=False)
+        if _q_norm:
+            _tool_web_search._query_cache[_q_norm] = _resp
+        return _resp
+    except Exception as e:
+        logger.warning(f"[web_search] 检索失败: {e}")
+        return json.dumps({"status": "error", "message": str(e), "results": []}, ensure_ascii=False)
+
+
+def reset_web_search_budget():
+    """每轮 harness.run() 开始时重置联网检索计数（修复进程级不重置导致联网永久失效的 bug）。
+    2026-09-14：同时清空查询去重缓存（缓存只在本轮内有效，跨轮必须重新联网取新数据）。"""
+    _tool_web_search._count = 0
+    _tool_web_extract._count = 0
+    _tool_web_search._query_cache = {}
+
+
+async def _tool_web_extract(url: str) -> str:
+    """
+    工具: web_extract（Tavily Extract，2026-09-07 集成）
+    作用: 抽取指定网页 URL 的干净正文全文（去导航/广告噪音），供深入阅读。
+    场景: web_search 命中新闻/文章后需要正文细节；用户给出具体链接要求阅读总结。
+    实现: 复用已配置的联网 provider（Tavily /extract），未配置时诚实降级。
+    """
+    from app.config import WEB_SEARCH_PROVIDER
+    provider = (WEB_SEARCH_PROVIDER or "").strip().lower()
+    if not provider:
+        return json.dumps({
+            "status": "disabled",
+            "message": "当前未配置联网抽取，仅基于本地知识库作答。",
+            "content": "",
+        }, ensure_ascii=False)
+    # 限流：本会话正文抽取上限（与 web_search 计数独立，随 run() 一并重置）
+    if getattr(_tool_web_extract, "_count", 0) >= 5:
+        return json.dumps({
+            "status": "limited",
+            "message": "已达本会话网页抽取上限（5 次）。",
+            "content": "",
+        }, ensure_ascii=False)
+    u = (url or "").strip()
+    if not re.match(r"^https?://", u):
+        return json.dumps({
+            "status": "error",
+            "message": "需要一个完整的 http(s) 网页链接。",
+            "content": "",
+        }, ensure_ascii=False)
+    try:
+        from app.agent.tools_search import get_web_search_provider
+        p = get_web_search_provider(provider)
+        results = await to_thread_limited(p.extract, u, max_chars=2000, _timeout=60.0)
+        _tool_web_extract._count = getattr(_tool_web_extract, "_count", 0) + 1
+        if not results:
+            return json.dumps({
+                "status": "no_content",
+                "message": "该网页未能抽取到正文（可能是动态渲染页或反爬）。",
+                "content": "",
+            }, ensure_ascii=False)
+        r = results[0]
+        # 脱敏：正文 + 来源域名，不暴露完整外链
+        return json.dumps({
+            "status": "ok",
+            "domain": r.get("domain", ""),
+            "title": r.get("title", ""),
+            "content": r.get("content", ""),
+        }, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"[web_extract] 抽取失败: {e}")
+        return json.dumps({"status": "error", "message": str(e), "content": ""}, ensure_ascii=False)
+
+
+# ============================================================
+# 工厂函数：创建默认工具集
+# ============================================================
+
+def create_default_tools() -> ToolRegistry:
+    """创建包含 3 个核心工具的注册中心"""
+    registry = ToolRegistry()
+
+    # 1. analyze_demand — 需求分析
+    registry.register(Tool(
+        name="analyze_demand",
+        description="分析模糊的用户需求，提取行业、场景、痛点和搜索关键词。当用户输入模糊、不明确时优先使用。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "raw_input": {
+                    "type": "string",
+                    "description": "用户的原始输入文本"
+                }
+            },
+            "required": ["raw_input"]
+        },
+        func=_tool_analyze_demand,
+    ))
+
+    # 2. search_kb — 知识库检索
+    registry.register(Tool(
+        name="search_kb",
+        description="搜索华为云知识库，获取解决方案文档。使用从 analyze_demand 提取的关键词进行检索；"
+                    "已知行业时传入 industry 可收敛检索到该行业，提升相关性。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "搜索查询字符串，建议包含行业+场景+技术关键词，如 '制造业 工业物联网 预测性维护 华为云'"
+                },
+                "industry": {
+                    "type": "string",
+                    "description": "行业名称（可选）。传入后检索会收敛到该行业（如：制造业、智慧医疗、工业互联网），不传则全行业检索。"
+                }
+            },
+            "required": ["query"]
+        },
+        func=_tool_search_kb,
+    ))
+
+    # 3. search_competitor — 竞品检索
+    registry.register(Tool(
+        name="search_competitor",
+        description="搜索指定竞品在特定行业的方案资料。当用户提到竞品名称或需要对比时使用。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "competitor": {
+                    "type": "string",
+                    "description": "竞品厂商名称，如：阿里云、腾讯云、AWS、微软Azure、西门子等"
+                },
+                "industry": {
+                    "type": "string",
+                    "description": "行业名称（可选），如：制造业、智慧医疗、工业互联网"
+                }
+            },
+            "required": ["competitor"]
+        },
+        func=_tool_search_competitor,
+    ))
+
+    # 4. read_customer_file — 读取客户上传的任意格式文件（含图片 OCR）
+    registry.register(Tool(
+        name="read_customer_file",
+        description="读取客户上传的需求资料文件，提取纯文本供需求分析。支持 Word/Excel/PDF/PPT/TXT/CSV/MD，以及图片（自动 OCR 识别文字）。当用户提到客户资料、上传文件、招标书、需求文档时使用。输入为相对路径（如 customer_uploads/xxx.docx）。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "文件的相对路径，如 customer_uploads/客户需求.docx"
+                }
+            },
+            "required": ["path"]
+        },
+        func=_tool_read_customer_file,
+    ))
+
+    # 5. list_dir — 列举用户目录文件
+    registry.register(Tool(
+        name="list_dir",
+        description="列出用户文件目录下的文件，确认有哪些上传资料可用。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "dir": {
+                    "type": "string",
+                    "description": "相对目录路径，留空表示用户根目录"
+                }
+            }
+        },
+        func=_tool_list_dir,
+    ))
+
+    # 6. generate_doc — 导出方案书（Word/PDF）
+    registry.register(Tool(
+        name="generate_doc",
+        description="将已生成的方案导出为 Word 或 PDF 文档。当用户明确要求「导出/生成 Word/PDF 方案书」或说「导出成 Word」时调用。format 可选 word/pdf（默认 word）。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "format": {
+                    "type": "string",
+                    "description": "导出格式：word 或 pdf（默认 word）",
+                }
+            },
+        },
+        func=_tool_generate_doc,
+    ))
+
+    # 7. web_search — 联网检索（知识库之外的互联网资料）
+    registry.register(Tool(
+        name="web_search",
+        description="检索知识库之外的互联网最新资料（华为云产品页/白皮书/官方新闻/竞品动态）。当用户要求查官网、查最新资讯、或本地知识库覆盖不到时调用。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "联网检索关键词，建议包含产品名+资料类型，如「华为云 ModelArts 最新特性」「阿里云 2026 发布」",
+                }
+            },
+            "required": ["query"],
+        },
+        func=_tool_web_search,
+    ))
+
+    # 8. web_extract — 联网抽取指定网页正文（Tavily Extract）
+    registry.register(Tool(
+        name="web_extract",
+        description="抽取指定网页链接的正文全文（去导航/广告噪音）。当 web_search 结果需要深入阅读正文细节，或用户给出具体网页链接要求阅读/总结时调用。每次调用抽取 1 个链接。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "要抽取正文的网页完整链接（http/https 开头）",
+                }
+            },
+            "required": ["url"],
+        },
+        func=_tool_web_extract,
+    ))
+
+    # 9. run_python — 沙箱代码执行（L4 P0-T1.1，默认 ask 权限走弹窗）
+    from app.agent.sandbox import run_python as _sandbox_run_python
+    registry.register(Tool(
+        name="run_python",
+        description="在受限沙箱中执行 Python 代码片段，print 输出即结果。用于精确计算（复利/统计/单位换算）、"
+                    "数据整理（CSV/JSON 变换）、把知识库检索结果做二次计算等现有工具覆盖不到的任务。"
+                    "代码经安全预检后在隔离子进程中运行（无网络、无文件写入、≤5 秒），只能 import "
+                    "json/re/math/statistics/datetime/itertools/collections/csv 等纯计算标准库。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": "要执行的 Python 代码（≤8000 字符）。用 print() 输出结果；"
+                                   "不要请求用户输入；不要访问文件系统或网络（会被拒绝）。"
+                }
+            },
+            "required": ["code"]
+        },
+        func=_sandbox_run_python,
+    ))
+
+    # 10. register_dynamic_tool — 元工具（L4-P1/T1.2）：按需组合只读原语为动态工具
+    #     安全边界：pipeline DSL 仅组合 SAFE_BASE_TOOLS 白名单（本地只读检索类），
+    #     dyn_* 工具由 harness.run() 每轮启动时清除（单任务 TTL），不污染注册表。
+    from app.agent.dynamic_tools import make_register_func
+    registry.register(Tool(
+        name="register_dynamic_tool",
+        description="（元工具）把现有只读检索工具按流水线组合成一个新工具（dyn_ 前缀），"
+                    "本任务内可反复调用以减少步骤。适用于：同一套「分析→检索」流程需重复执行、"
+                    "或需要把多步检索固化为一键调用的场景。仅支持组合白名单原语："
+                    "analyze_demand/search_kb/search_competitor/list_dir。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "新工具名，必须以 dyn_ 开头的小写下划线命名，如 dyn_kb_deep_search",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "这个组合工具解决什么问题（3-500 字）",
+                },
+                "params": {
+                    "type": "object",
+                    "description": "输入参数定义 {参数名: 说明}，如 {\"topic\": \"要检索的主题\"}",
+                },
+                "pipeline": {
+                    "type": "array",
+                    "description": "执行流水线，每步 {\"tool\": 原语名, \"args\": {参数: 字面量或 \"$引用\"}, \"as\": 结果别名}。"
+                                   "引用语法：$参数名 取输入参数；$别名.字段 取上游结果字段；$别名 取上游完整结果。",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "tool": {"type": "string"},
+                            "args": {"type": "object"},
+                            "as": {"type": "string"},
+                        },
+                        "required": ["tool", "args", "as"],
+                    },
+                },
+            },
+            "required": ["name", "description", "pipeline"],
+        },
+        func=make_register_func(registry),
+    ))
+
+    # 11. memory_write / memory_search — 自写记忆（L4-P2-4）
+    #     语义：模型在任务**进行中**主动记录/检索"它决定要记住的东西"。
+    #     memory_write 是写操作 → DEFAULT_TOOL_POLICY 设为 ask（弹窗确认）+ 纳入完成态核验；
+    #     memory_search 是只读 → allow。返回值一律是**宿主确认的落库/检索结果**（反幻觉）。
+    from app.agent import agent_notes as _notes
+
+    async def _tool_memory_write(scope: str = "session", title: str = "", content: str = "",
+                                 tags: str = "", **_kw) -> str:
+        # 上下文来源：harness.run() 设置的 contextvar 为主（Tool.execute 不传 kwargs），
+        # _kw 兜底（将来若分发路径显式注入则自动优先级生效——同名键在 _kw 里覆盖）。
+        from app.agent.agent_notes import get_run_context as _grc
+        ctx = _grc()
+        user_id = _kw.get("user_id") or ctx["user_id"] or 0
+        session_id = _kw.get("session_id") or ctx["session_id"] or ""
+        client_id = _kw.get("client_id") or ctx["client_id"]
+        if not (isinstance(user_id, int) and user_id > 0):
+            return "错误：无法确定当前用户身份（user_id 缺失），笔记未保存。请登录后重试。"
+        tag_list = [t for t in (tags or "").replace("，", ",").split(",") if t.strip()]
+        res = _notes.save_note(int(user_id), str(session_id), scope, title, content,
+                               tag_list, client_id if isinstance(client_id, int) else None)
+        if not res.get("ok"):
+            # 失败必须如实上报 —— 绝不让模型以为"已记住"（与"声称已建档实则没落库"同类事故）
+            return f"错误：笔记未保存。{res.get('message', '')}"
+        return (
+            f"{res['message']}。该笔记已可被后续任务检索（scope={scope}）。"
+            "请勿在正文里宣称超出此范围的记忆能力。"
+        )
+
+    async def _tool_memory_search(query: str = "", scope: str = "", top_k: int = 5, **_kw) -> str:
+        from app.agent.agent_notes import get_run_context as _grc
+        ctx = _grc()
+        user_id = _kw.get("user_id") or ctx["user_id"] or 0
+        session_id = _kw.get("session_id") or ctx["session_id"] or ""
+        client_id = _kw.get("client_id") or ctx["client_id"]
+        if not (isinstance(user_id, int) and user_id > 0):
+            return "错误：无法确定当前用户身份（user_id 缺失），无法检索笔记。"
+        rows = _notes.search_notes(
+            int(user_id), query,
+            scope=(scope or None) or None,
+            client_id=client_id if isinstance(client_id, int) else None,
+            session_id=session_id or None,
+            top_k=top_k,
+        )
+        if not rows:
+            return "（没有检索到相关笔记。可先用 memory_write 记录本次的关键结论。）"
+        lines = []
+        for r in rows:
+            tags = "、".join(r.get("tags") or [])
+            tag_s = f"（{tags}）" if tags else ""
+            lines.append(f"[#{r['note_id']}|{r['scope']}|相关度{r['score']}] {r['title']}{tag_s}：{r['content']}")
+        return "检索到以下笔记（引用时请注明「据我的记录」）：\n" + "\n".join(lines)
+
+    registry.register(Tool(
+        name="memory_write",
+        description="（自写记忆）把**可复用**的结论 / 客户事实 / 方法论口径写入你的长期笔记，"
+                    "后续任务（含新会话）可检索复用。只在确有复用价值时使用 —— 不要记录过程性噪音"
+                    "（如「我检索了一次知识库」）。scope 取值：session=仅本会话；"
+                    "client=绑定客户档案（必须提供 client_id，否则拒绝）；global=用户级口径（跨会话生效）。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "scope": {"type": "string", "enum": ["session", "client", "global"],
+                          "description": "笔记可见范围"},
+                "title": {"type": "string", "description": "一句话标题（≤120 字），如「该客户要求报价含 3 年维保」"},
+                "content": {"type": "string", "description": "笔记正文（≤4000 字），写成可直接复用的事实/结论，不要写过程"},
+                "tags": {"type": "string", "description": "逗号分隔的标签，便于归类，如 \"制造业,报价口径\""},
+            },
+            "required": ["scope", "title", "content"],
+        },
+        func=_tool_memory_write,
+    ))
+
+    registry.register(Tool(
+        name="memory_search",
+        description="（自写记忆·只读）按语义检索你此前用 memory_write 记下的笔记。"
+                    "在开始新任务、或怀疑此前记录过相关口径/客户事实时先检索一次，避免重复询问用户。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "要检索的主题/问题"},
+                "scope": {"type": "string", "enum": ["session", "client", "global"],
+                          "description": "可选；不填则跨 scope 检索（client/session 笔记仍按当前客户/会话过滤）"},
+                "top_k": {"type": "integer", "description": "返回条数，默认 5"},
+            },
+            "required": ["query"],
+        },
+        func=_tool_memory_search,
+    ))
+
+    # 12. create_tool — 自建工具元工具（L4-P3-1，AGENT_AUTO_TOOLS=1 才开放）
+    #     语义：模型写受限 Python 函数体造新工具；执行一律走子进程沙箱（进程内零执行），
+    #     注册时静态检查 + 试跑验证；用户级持久化，后续任务自动加载。
+    from app.config import AGENT_AUTO_TOOLS
+    if (AGENT_AUTO_TOOLS or "0").strip() == "1":
+        from app.agent.auto_tools import make_create_tool_func
+
+        async def _tool_create_tool_wrapper(**kwargs) -> str:
+            from app.agent.agent_notes import get_run_context as _grc
+            uid = (kwargs.pop("user_id", None) or _grc()["user_id"])
+            fn = make_create_tool_func(registry, user_id=uid)
+            return await fn(**kwargs)
+
+        registry.register(Tool(
+            name="create_tool",
+            description="（自建工具）把一段受限 Python 函数体注册为可复用工具（仅限纯计算/文本处理："
+                        "无网络、无文件读写、≤5 秒，白名单标准库）。函数体必须在顶层定义 "
+                        "def run(params): 并 return 可 JSON 序列化的结果；注册前会用样例参数试跑验证，"
+                        "通过后本任务即可调用，并持久化为用户级工具供后续任务复用。"
+                        "适合：固定的换算/试算/格式化逻辑（如 TCO 公式、单位换算、字段抽取）。",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "工具名，dyn_ 前缀，如 dyn_tco_calc"},
+                    "description": {"type": "string", "description": "工具用途说明（3-500 字）"},
+                    "params": {"type": "object", "description": "{参数名: 说明}，调用时按名传入（全部字符串）"},
+                    "body": {"type": "string", "description": "Python 函数体（顶层 def run(params): ... return 结果）"},
+                    "sample_params": {"type": "object", "description": "试跑用的样例参数（推荐提供）"},
+                    "persist": {"type": "boolean", "description": "是否持久化为用户级工具，默认 true"},
+                },
+                "required": ["name", "description", "params", "body"],
+            },
+            func=_tool_create_tool_wrapper,
+        ))
+
+    # 13. mcp_list_servers / mcp_mount / mcp_unmount — 按需挂 MCP（L4-P3-4，AGENT_MCP_ONDEMAND=1 才开放）
+    #     语义：从服务端白名单按需挂载/卸载 MCP Server（模型不能创建 server）；mount 为 ask 闸门动作。
+    from app.config import AGENT_MCP_ONDEMAND
+    if (AGENT_MCP_ONDEMAND or "0").strip() == "1":
+        from app.agent import mcp_on_demand as _mod
+
+        async def _tool_mcp_list_servers() -> str:
+            return _mod.fmt_servers_json(_mod.list_servers_state(registry))
+
+        async def _tool_mcp_mount(label: str = "") -> str:
+            ok, msg = await _mod.mount_server(registry, label)
+            return json.dumps({"status": "ok" if ok else "error", "message": msg}, ensure_ascii=False)
+
+        async def _tool_mcp_unmount(label: str = "") -> str:
+            ok, msg = await _mod.unmount_server(registry, label)
+            return json.dumps({"status": "ok" if ok else "error", "message": msg}, ensure_ascii=False)
+
+        registry.register(Tool(
+            name="mcp_list_servers",
+            description="（按需挂 MCP·只读）列出服务端允许清单中的全部 MCP Server 及挂载状态。"
+                        "当任务需要某类外部能力（如成本精算）而当前工具集没有时，先查这里。",
+            parameters={"type": "object", "properties": {}},
+            func=_tool_mcp_list_servers,
+        ))
+        registry.register(Tool(
+            name="mcp_mount",
+            description="（按需挂 MCP）把允许清单中的一个 MCP Server 挂载进工具集（下一轮即可调用其工具）。"
+                        "只能挂载清单内已有的 server——调用前先用 mcp_list_servers 查看可选项。"
+                        "任务结束后会自动卸载。",
+            parameters={"type": "object",
+                        "properties": {"label": {"type": "string", "description": "server 标识（来自清单）"}},
+                        "required": ["label"]},
+            func=_tool_mcp_mount,
+        ))
+        registry.register(Tool(
+            name="mcp_unmount",
+            description="（按需挂 MCP）提前卸载一个已挂载的 MCP Server（移除其工具并断开连接）。",
+            parameters={"type": "object",
+                        "properties": {"label": {"type": "string", "description": "server 标识"}},
+                        "required": ["label"]},
+            func=_tool_mcp_unmount,
+        ))
+
+    # 14. spawn_subagent — 真子体派生（L4-P3-3，AGENT_SUBAGENTS=1 才开放）
+    from app.config import AGENT_SUBAGENTS
+    if (AGENT_SUBAGENTS or "0").strip() == "1":
+        from app.agent.subagents import make_spawn_func, parent_slot, SUBAGENT_TOOL_NAME
+
+        registry.register(Tool(
+            name=SUBAGENT_TOOL_NAME,
+            description="（子体派生）把一个**自包含**的子任务交给独立运行的子代理：它有自己的"
+                        "上下文与预算，看不到你们的对话，只拿到 goal。适合可并行的独立子任务"
+                        "（如「分别调研 A/B/C 三家竞品」「对三个候选方案各算一版 TCO」）。"
+                        "goal 必须写清：要做什么、依据什么、交付什么。子任务结果以摘要返回，"
+                        "由你汇总为最终交付物。一轮内可同时派生多个子任务。",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "goal": {"type": "string", "description": "子任务目标（自包含，含背景与要求）"},
+                    "deliverable": {"type": "string", "description": "交付要求，如「300 字内对比结论，含 3 条关键差异」"},
+                    "budget_turns": {"type": "integer", "description": "子任务轮次预算，默认 8"},
+                    "budget_tokens": {"type": "integer", "description": "子任务 token 预算，默认 300000"},
+                },
+                "required": ["goal"],
+            },
+            func=make_spawn_func(parent_slot),
+        ))
+
+    # 15. save_skill_pack / delete_skill_pack — 自建技能（L4-P3-2，AGENT_AUTO_SKILLS=1 才开放）
+    from app.config import AGENT_AUTO_SKILLS
+    if (AGENT_AUTO_SKILLS or "0").strip() == "1":
+        from app.agent import auto_skills as _ask
+
+        async def _tool_save_skill_pack(slug: str = "", display_name: str = "",
+                                        trigger_intents: list = None,
+                                        trigger_keywords: list = None,
+                                        role_blocks: dict = None,
+                                        playbook: list = None,
+                                        source_summary: str = "") -> str:
+            ok, msg = _ask.save_pack(slug, display_name, trigger_intents or [],
+                                     trigger_keywords or [], role_blocks or {},
+                                     playbook or [], source_summary)
+            return json.dumps({"status": "ok" if ok else "error", "message": msg,
+                               "hint": "" if ok else "请按错误信息修正后重试（技能包未保存）"},
+                              ensure_ascii=False)
+
+        async def _tool_delete_skill_pack(slug: str = "") -> str:
+            ok, msg = _ask.delete_pack(slug)
+            return json.dumps({"status": "ok" if ok else "error", "message": msg}, ensure_ascii=False)
+
+        registry.register(Tool(
+            name="save_skill_pack",
+            description="（自建技能）把本次任务验证有效的**工作流方法论**固化为能力包：声明触发条件"
+                        "（意图/关键词）+ 四段提示词（需求分析/方案架构/质量校验/终稿口径，至少两段非空）"
+                        "+ 终稿必备要点（≥2 条）。保存后热加载——后续命中触发条件的任务自动挂载。"
+                        "只沉淀**可复用的口径与要点**，不要保存一次性内容或过程记录。",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string", "description": "包标识，user_ 前缀，如 user_bidding_checklist（同名即更新）"},
+                    "display_name": {"type": "string", "description": "展示名，如「投标检查清单」"},
+                    "trigger_intents": {"type": "array", "items": {"type": "string"},
+                                        "description": "触发意图列表（可选值：solution/competitor/knowledge_q/general/file_ops/export）"},
+                    "trigger_keywords": {"type": "array", "items": {"type": "string"},
+                                         "description": "触发关键词列表（用户原文含其一即命中，≤12 个）"},
+                    "role_blocks": {"type": "object",
+                                    "description": "四段提示词：demand_analyst/solution_architect/quality_reviewer/synthesize，至少两段非空"},
+                    "playbook": {"type": "array", "items": {"type": "string"},
+                                 "description": "终稿必备要点（≥2 条，≤20 条）"},
+                    "source_summary": {"type": "string", "description": "一句话说明该技能源自哪类任务"},
+                },
+                "required": ["slug", "display_name", "role_blocks", "playbook"],
+            },
+            func=_tool_save_skill_pack,
+        ))
+        registry.register(Tool(
+            name="delete_skill_pack",
+            description="（自建技能·维护）删除一个自建能力包（仅 user_ 前缀，预置包受保护）。",
+            parameters={"type": "object",
+                        "properties": {"slug": {"type": "string", "description": "包标识（user_ 前缀）"}},
+                        "required": ["slug"]},
+            func=_tool_delete_skill_pack,
+        ))
+
+    return registry

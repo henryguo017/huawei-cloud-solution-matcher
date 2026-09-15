@@ -1,0 +1,51 @@
+# Google Cloud智慧能源解决方案
+
+## 公司概况
+Google Cloud通过Google Cloud for Energy行业框架，结合Google在AI、大数据与可持续发展领域的领先技术，为全球能源与公用事业企业提供电网优化、可再生能源管理、能源预测与碳管理解决方案。Google DeepMind的AI节能技术、Earth Engine地理空间分析能力以及Carbon Sense碳管理套件是其独特优势。
+
+## 智慧能源核心方案
+
+### 1. Google Cloud for Energy 能源行业专属框架
+- 面向电力、石油天然气、可再生能源等领域的云解决方案框架
+- 提供能源数据平台、电网优化、资产管理与客户体验等核心能力
+- 满足NERC CIP、FERC等能源行业安全合规要求
+- 联合Google Cloud Partner Network中的能源科技公司提供端到端方案
+
+### 2. Google DeepMind AI节能技术
+- DeepMind AI将Google数据中心冷却能耗降低约40%，显著降低运营成本与碳排放
+- 利用机器学习优化能源设备运行参数，实现能效最大化
+- 该技术已应用于Google全球数据中心能源管理，并可推广至其他能源场景
+
+### 3. BigQuery + Earth Engine 地理空间能源分析
+- 2025年Google Cloud Next大会发布Geospatial Analytics新类别：Earth Engine in BigQuery（公开预览），新增20个源自卫星影像的分析就绪数据集（如野火风险、森林砍伐）
+- 支持风电场、光伏电站选址与环境影响评估（EIA），整合气象、设备、电网等多源数据
+- BigQuery提供近乎无限扩展的能源数据存储与实时分析能力
+
+### 4. TensorFlow & Vertex AI 能源预测与电网优化
+- 构建负荷预测、发电预测、电价预测等模型，支撑电网优化调度与新能源消纳
+- 提供AI赋能的虚拟电厂（VPP）与需求响应方案，支撑微电网与分布式能源管理
+- Cloud IoT Core（历史产品）思路可由IoT + 数据分析方案延续，整合SCADA数据上云
+
+### 5. Carbon Sense 碳管理与可持续发展套件
+- Carbon Footprint工具：测量、追踪、分析各项目碳排放，已支持范围1/2/3与Scope 2市场基准排放数据
+- Region Picker：引导工作负载迁移至高可再生能源占比区域（CFE>75%）
+- Unattended Project Recommender：AI识别闲置项目，Google估算全部用户清理可节省约60万千克CO2e
+- LEO ESG数据平台（与ESG Book、BCG共建，面向银行）：已被NatWest、Lloyds、ING等大型银行采用
+
+## 竞争优势
+- DeepMind的AI节能技术全球领先，在数据中心节能领域已验证显著效果
+- Earth Engine in BigQuery将全球卫星遥感数据直接融入数据仓库，新能源选址与环境评估能力独特
+- BigQuery无限扩展能力适合海量能源数据；Google自身是全球最大可再生能源企业买家，2030年目标实现全天候无碳运营（24/7 CFE），实践经验丰富
+
+## 主要客户案例
+- NextEra Energy：美国最大可再生能源公司，使用Google Cloud进行能源数据分析
+- NatWest、Lloyds、ING：采用LEO平台管理可持续金融数据报告
+- 全球多家电力公司与公用事业公司采用Google Cloud for Energy方案
+- Google数据中心自用AI节能方案，PUE处于行业领先水平
+
+## 核心劣势（中国市场）
+- 中国大陆无运营实体，无法直接为能源企业提供合规公有云服务
+- 国家电网、南方电网、中石油、中石化等能源央企严格优先选择本土云服务（华为、阿里云等）
+- 能源数据属关键基础设施数据，数据主权与合规要求严格，难以出境或上公有云
+- 与国内能源设备（国电南瑞、许继电气等）及能源管理系统集成能力不足，缺乏针对中国电力市场与政策的本地化方案
+- 在中国市场面临华为、阿里云、腾讯云、国网信通等本土厂商的强势竞争，品牌在政府项目中接受度低
