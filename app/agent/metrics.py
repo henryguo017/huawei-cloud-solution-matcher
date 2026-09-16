@@ -70,11 +70,19 @@ def _init_db(conn: sqlite3.Connection) -> None:
             drift_rejections   INTEGER,
             plan_open_at_final INTEGER,
             heal_events        TEXT,
-            elapsed_s          REAL
+            elapsed_s          REAL,
+            skill_packs        TEXT
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fcgray_date ON fc_gray_runs(created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fcgray_runtime ON fc_gray_runs(runtime)")
+    # 2026-09-16 迁移：存量库补 skill_packs 列（CREATE IF NOT EXISTS 不会改已有表）
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(fc_gray_runs)").fetchall()}
+        if "skill_packs" not in cols:
+            conn.execute("ALTER TABLE fc_gray_runs ADD COLUMN skill_packs TEXT")
+    except sqlite3.Error:
+        pass
 
 
 def record_fc_gray_run(
@@ -99,8 +107,8 @@ def record_fc_gray_run(
                 """INSERT INTO fc_gray_runs
                    (user_id, session_id, intent, runtime, success, attempted, failed, fail_reason,
                     turns, stopped_by, compactions, plan_updates, plan_steps, tokens, token_budget,
-                    drift_rejections, plan_open_at_final, heal_events, elapsed_s)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    drift_rejections, plan_open_at_final, heal_events, elapsed_s, skill_packs)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     user_id if isinstance(user_id, int) and user_id > 0 else None,
                     (session_id or "")[:80],
@@ -116,6 +124,8 @@ def record_fc_gray_run(
                     _int(m.get("drift_rejections")), _int(m.get("plan_open_at_final")),
                     json.dumps(m.get("heal_events") or [], ensure_ascii=False)[:2000],
                     round(float(elapsed_s or 0), 2),
+                    # 技能包挂载记录（slug 列表，2026-09-16）：挂载率×交付质量分析源
+                    json.dumps(_pack_slugs(m.get("skill_packs")), ensure_ascii=False)[:500],
                 ),
             )
             conn.commit()
@@ -132,6 +142,35 @@ def _int(v) -> int:
         return int(v or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _pack_slugs(v) -> list:
+    """fc_meta.skill_packs 容错归一：仅保留非空字符串 slug。"""
+    if not isinstance(v, (list, tuple)):
+        return []
+    return [str(s).strip() for s in v if str(s or "").strip()][:10]
+
+
+def skill_pack_summary(date: str = "") -> Dict[str, int]:
+    """技能包挂载统计（date 为空=今天）：包 slug → 挂载次数。供挂载率×质量分析。"""
+    conn = _get_connection()
+    try:
+        _init_db(conn)
+        if date:
+            rows = conn.execute(
+                "SELECT skill_packs FROM fc_gray_runs WHERE date(created_at) = ?", [date]
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT skill_packs FROM fc_gray_runs WHERE date(created_at) = date('now', 'localtime')"
+            ).fetchall()
+    finally:
+        conn.close()
+    dist: Dict[str, int] = {}
+    for r in rows:
+        for slug in _safe_loads(r["skill_packs"]):
+            dist[slug] = dist.get(slug, 0) + 1
+    return dict(sorted(dist.items(), key=lambda kv: -kv[1]))
 
 
 def daily_summary(date: str = "") -> Dict[str, Any]:
@@ -191,6 +230,11 @@ def daily_summary(date: str = "") -> Dict[str, Any]:
         "success_rate_fc": (
             round(sum(1 for r in fc_runs if r["success"]) / len(fc_runs), 3) if fc_runs else None
         ),
+        # 技能包观测（2026-09-16）：挂载运行数 + 包分布（15 包从"存在"到"可度量"）
+        "skill_pack_mounted_runs": sum(
+            1 for r in rows if _safe_loads(r["skill_packs"])
+        ),
+        "skill_pack_usage": skill_pack_summary(date or ""),
     }
 
 

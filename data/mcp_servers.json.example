@@ -8,5 +8,10 @@
     "command": ["python", "-m", "app.agent.mcp_server_cost_calc"],
     "label": "cost",
     "comment": "P0 自带成本测算 Server（stdio 形态）"
+  },
+  {
+    "command": ["python", "-m", "mcp_server_time", "--local-timezone", "Asia/Shanghai"],
+    "label": "time",
+    "comment": "第三方真实 MCP Server（pip install mcp-server-time）。2026-09-16 本地实测：握手/tools-list/真实调用全通过，注册 mcp__time__get_current_time 与 mcp__time__convert_time"
   }
 ]

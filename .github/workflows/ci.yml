@@ -1,0 +1,36 @@
+# cloudsol.cn CI — 离线冒烟层
+# 跑 tests/run_all.py --layer smoke（意图路由/工具归一化/MCP 客户端/自检 Gate/重规划等，
+# 全部无 LLM、无服务器依赖，秒~分钟级）。e2e 层需真实服务与 LLM Key，不入 CI，本地/部署后手动跑。
+name: smoke
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Install smoke dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Run offline smoke tests
+        env:
+          # 冒烟不需要真实 Key；置空值防止脚本因缺 env 走非预期分支
+          DEEPSEEK_API_KEY: smoke-dummy
+          AGENT_METRICS_DB: /tmp/smoke_metrics.db
+        run: |
+          python tests/run_all.py --layer smoke --fail-fast

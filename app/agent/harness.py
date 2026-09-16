@@ -238,12 +238,20 @@ class AgentHarness:
         self._multi_agent_enabled = True   # P2：多智能体开关
         self._memory_context_injected = False  # P2-2：长程记忆注入标记（仅首轮注入一次）
         self._remote_tool_names: list = []     # P2-3：已注册远端 MCP 工具名（plan 步工具集的逃生舱）
+        self._mounted_packs: list = []         # 灰度观测：本轮实际挂载的技能包 slug（fc_meta 落库）
 
     # ---- 主入口 ----
 
     def set_remote_tool_names(self, names: list) -> None:
         """P2-3：注入已注册远端 MCP 工具名（由 SolutionAgent 在 _ensure_mcp_tools 后调用）。"""
         self._remote_tool_names = list(names) if names else []
+
+    def _track_pack(self, pack) -> None:
+        """灰度观测（2026-09-16）：记录本轮实际挂载的技能包 slug（去重，fc_meta 透传落库）。
+        把 15 包从"配置里存在"变成"按轮可观测"——挂载率与交付质量相关性的数据源。"""
+        slug = str((pack or {}).get("slug") or "").strip()
+        if slug and slug not in self._mounted_packs:
+            self._mounted_packs.append(slug)
 
     async def _emit(self, event_callback, event: Dict[str, Any]) -> None:
         """安全调用事件回调"""
@@ -547,6 +555,7 @@ class AgentHarness:
                 _pack = match_pack(intent.get("industries") or [])
                 if _pack:
                     self._active_pack = _pack
+                    self._track_pack(_pack)
                     await ev.emit_skill_pack(self, event_callback, _pack)
                     self._log("system", f"[FC][SKILL_PACK] 行业包 {_pack.get('industry')} (v{_pack.get('version', 'n/a')})")
                     blk = pack_synthesize_block(_pack)
@@ -555,6 +564,7 @@ class AgentHarness:
                 _cap = match_capability(self._intent, user_input)
                 if _cap:
                     self._active_capability = _cap
+                    self._track_pack(_cap)
                     await ev.emit_skill_pack(self, event_callback, _cap, kind="capability")
                     self._log("system", f"[FC][SKILL_PACK] 能力包 {_cap.get('industry')} (v{_cap.get('version', 'n/a')})")
                     blk = pack_synthesize_block(_cap)
@@ -585,6 +595,7 @@ class AgentHarness:
             # "从未进 FC" 与 "进了 FC 但失败回退"）。前端据此不受影响（读法见文档）。
             self._fc_meta = {"attempted": True, "failed": True, "reason": "run_loop_none",
                              "intent": self._intent,
+                             "skill_packs": list(getattr(self, "_mounted_packs", []) or []),
                              **(getattr(self, "_fc_fail_info", None) or {})}
             return None
 
@@ -592,7 +603,8 @@ class AgentHarness:
         if not draft:
             self._log("warn", "[FC] 运行时返回空终稿 → 回退 legacy")
             self._fc_meta = {"attempted": True, "failed": True, "reason": "empty_draft",
-                             "intent": self._intent}
+                             "intent": self._intent,
+                             "skill_packs": list(getattr(self, "_mounted_packs", []) or [])}
             return None
 
         # ⑤ 交付质量门：自检 Gate **降级为仅告警不重写**（决策 D1-B：终稿归模型所有，
@@ -657,6 +669,8 @@ class AgentHarness:
             "plan_open_at_final": _open_at_final,
             # P2-3 错误自愈事件（A13 数据源）：同工具连败→宿主注入换策略信号的记录
             "heal_events": list(_trace.get("heal_events") or []),
+            # 灰度观测（2026-09-16）：本轮实际挂载的技能包 slug（挂载率×交付质量分析源）
+            "skill_packs": list(getattr(self, "_mounted_packs", []) or []),
         }
         return self._make_result(
             draft, tool_calls_log, success=True,
@@ -1227,6 +1241,8 @@ class AgentHarness:
         self._active_pack = None
         # P1-B：能力包复位（按"动作"维度挂载，与行业包正交、可同时生效）
         self._active_capability = None
+        # 灰度观测：技能包挂载记录复位（本轮重新挂载时由 _track_pack 追加）
+        self._mounted_packs = []
         # L4-P1/T1.4：自主模式标记（high=跳过意图路由与确定性强制步；默认 standard）
         self._autonomy = (autonomy or "standard").strip() if isinstance(autonomy, str) else "standard"
         # L4-P2：执行引擎选择（"fc"=原生 function calling 运行时 / "legacy"=老两阶段文本管线）。
@@ -1497,6 +1513,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     _pack = match_pack(intent.get("industries") or [])
                     if _pack:
                         self._active_pack = _pack
+                        self._track_pack(_pack)
                         await self._emit(event_callback, {
                             "type": "skill_pack",
                             "industry": _pack.get("industry", ""),
@@ -1515,6 +1532,7 @@ Observation: 用户补充信息（第 {self._clarify_round} 轮澄清后）：
                     _cap = match_capability(self._intent, user_input)
                     if _cap:
                         self._active_capability = _cap
+                        self._track_pack(_cap)
                         await self._emit(event_callback, {
                             "type": "skill_pack",
                             "kind": "capability",

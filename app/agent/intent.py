@@ -105,6 +105,17 @@ _PPT_QUESTION_RE = re.compile(r"(怎么做|如何做|怎么写|如何写|怎么�
 _FILE_OPS_RE = re.compile(
     r"(列出|读取|打开|解析|总结|归纳|看看|查看)[^。]{0,8}(我上传|上传的|客户资料|客户文件|资料文件|文件列表|文件)"
 )
+# CRM 档案查询语义（与 harness._CLIENT_QUERY_RE 同向的窄投影）：命中则**不进 file_ops**，
+# 落 general 由 CRM 拦截链确定性查询（client_list / match_history）。
+# 修复实例（2026-09-16，挂账最久的"查档案"缺口）："看看海康威视的客户资料" 被
+# _FILE_OPS_RE 的「客户资料」分支抢成文件操作管线（list_dir/read_customer_file），答非所问；
+# 档案查询语义让位 CRM。刻意只收窄到「查询动词 + 客户档案名词」句式：
+# "总结一下客户资料文件"（上传文件总结）不受影响，仍走 file_ops。
+_CRM_QUERY_SEMANTIC_RE = re.compile(
+    r"(查一?下?|看看|看下|查看|调出?|打开)[^。]{0,12}(客户档案|档案|客户资料|客户详情|客户信息|客户名单|客户列表)"
+    r"|我的客户|有哪些客户",
+    re.I,
+)
 
 # 产品知识问答意图（harness knowledge_q 分支依赖此分类）：华为云产品/服务概念提问，走 search_kb 结构化作答
 _PRODUCT_WORDS = (
@@ -221,8 +232,10 @@ def classify_intent(text: str) -> Dict[str, Any]:
     if _KNOWLEDGE_Q_RE.search(t) and not re.search(r"多少钱|费用|报价|预算|价格|测算|成本", t):
         return _mk("knowledge_q", competitors, industries, 0.85)
 
-    # 4.6) 文件操作（咨询句式"怎么上传/如何查看"仍归 general，不抢）
-    if _FILE_OPS_RE.search(t) and not _FILE_CONSULT_RE.search(t):
+    # 4.6) 文件操作（咨询句式"怎么上传/如何查看"仍归 general，不抢；
+    #      CRM 档案查询语义让位 general → CRM 拦截链，见 _CRM_QUERY_SEMANTIC_RE）
+    if (_FILE_OPS_RE.search(t) and not _FILE_CONSULT_RE.search(t)
+            and not _CRM_QUERY_SEMANTIC_RE.search(t)):
         return _mk("file_ops", competitors, industries, 0.85)
 
     # 5) 通用兜底

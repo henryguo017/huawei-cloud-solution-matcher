@@ -131,14 +131,45 @@ def serve_http(registry=None, host: str = "127.0.0.1", port: int = 8001) -> None
     纯标准库 http.server：POST /mcp 接收 JSON-RPC，_handle_request 处理后以
     text/event-stream（SSE）返回 data: {...}，客户端据此按 id 解析。零新依赖。
     启动：python app/agent/mcp_server.py --http --port 8001   （⚠️ 务必脚本模式，禁止 python -m）
+
+    鉴权（2026-09-16，P1-6 升级为可分享 endpoint）：
+      - 环境变量 MCP_HTTP_TOKEN 配置后，所有请求必须带 `Authorization: Bearer <token>`；
+      - 未配置 token 时仅允许回环地址访问（host 必须为 127.0.0.1/localhost），
+        绑定非回环地址且无 token → 拒绝启动（防裸奔暴露工具面）。
     """
     import asyncio
+    import os
+
+    token = (os.getenv("MCP_HTTP_TOKEN") or "").strip()
+    if host not in ("127.0.0.1", "localhost", "::1") and not token:
+        raise SystemExit(
+            "[MCP] 拒绝启动：绑定非回环地址（%s）必须先配置 MCP_HTTP_TOKEN "
+            "（所有请求需带 Authorization: Bearer <token>）" % host
+        )
     if registry is None:
         from app.agent.tools import create_default_tools
         registry = create_default_tools()
 
     class _Handler(BaseHTTPRequestHandler):
+        def _authorized(self) -> bool:
+            if not token:
+                return True  # 回环模式（启动时已强制 host=127.0.0.1）
+            auth = self.headers.get("Authorization") or ""
+            return auth == f"Bearer {token}"
+
         def do_POST(self):
+            if not self._authorized():
+                body = json.dumps({
+                    "jsonrpc": JSONRPC_VERSION, "id": None,
+                    "error": {"code": -32001, "message": "Unauthorized: missing or invalid Bearer token"},
+                }, ensure_ascii=False).encode("utf-8")
+                self.send_response(401)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("WWW-Authenticate", "Bearer")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             n = int(self.headers.get("Content-Length", 0) or 0)
             raw = self.rfile.read(n) if n else b""
             try:
@@ -161,7 +192,10 @@ def serve_http(registry=None, host: str = "127.0.0.1", port: int = 8001) -> None
             pass
 
     srv = HTTPServer((host, port), _Handler)
-    logger.info(f"[MCP] HTTP server 启动: http://{host}:{port}/mcp ，工具数={len(registry.get_tool_names())}")
+    logger.info(
+        f"[MCP] HTTP server 启动: http://{host}:{port}/mcp ，工具数={len(registry.get_tool_names())}，"
+        f"鉴权={'Bearer token' if token else '回环免鉴权'}"
+    )
     srv.serve_forever()
 
 

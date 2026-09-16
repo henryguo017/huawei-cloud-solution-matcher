@@ -1,0 +1,7 @@
+# CI 冒烟层最小依赖（tests/run_all.py --layer smoke，GitHub Actions 用）
+# 原则：只装冒烟脚本 import 链真正需要的包。sentence-transformers（torch）/chromadb
+# 在 app 内均为函数内懒加载，冒烟不触发，绕开 ~2GB 重量级安装。
+numpy>=1.24.0,<3.0
+python-dotenv==1.0.1
+httpx>=0.27.0
+openai==1.30.1

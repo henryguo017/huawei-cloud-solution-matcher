@@ -39,8 +39,10 @@ CASES = [
     ("能根据华为云最新消息给我整理一份文档吗", "general", {"doc", "web"}),
     ("那ppt可以吗", "general", {"doc"}),
     ("需要ppt文件", "general", {"doc"}),
-    ("转成word", "general", {"doc"}),
-    ("把刚才那份华为云动态整理成PPT并导出", "general", {"doc"}),
+    # 2026-09-16 对齐：口语格式词（转成word/并导出）已被 export 意图收编走确定性导出链
+    # （与"做个PPT呗→export"同族），export 分支同样从 _session_drafts 取上一轮终稿真出文件
+    ("转成word", "export", set()),
+    ("把刚才那份华为云动态整理成PPT并导出", "export", set()),
     ("把刚才的内容导出", "general", {"doc"}),
     ("给我生成PPT", "export", set()),
     ("导出成 PDF", "export", set()),
@@ -57,6 +59,12 @@ CASES = [
     ("我们合作过哪些客户", "general", {"crm_q"}),
     ("客户海康威视现在处于什么商机阶段", "general", {"crm_q"}),
     ("海康威视的历史方案", "general", {"crm_q"}),
+    # 查档案缺口回归（2026-09-16）：CRM 查询语义曾 file_ops 误分类（客户资料分支抢路由），
+    # 修复后落 general 走 CRM 拦截链；上传文件语义（"总结客户资料文件"）保持 file_ops
+    ("看看海康威视的客户资料", "general", {"crm_q"}),
+    ("调出海康威视的档案", "general", {"crm_q"}),
+    ("打开客户档案", "general", {"crm_q"}),
+    ("给我看看档案", "general", {"crm_q"}),
     # ── 账户 ──
     ("我的收藏有哪些", "account", set()),
     ("我的历史方案", "account", set()),

@@ -170,6 +170,54 @@ async def agent_tools(user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/agent/skill_packs", tags=["Agent 技能包"])
+async def agent_skill_packs(user: dict = Depends(get_current_user)):
+    """P2-8 技能包市场只读端点（需登录）：包清单（安全字段）+ 近 7 天挂载统计。
+
+    安全边界：不暴露 prompt_template（提示词资产不下发前端）；playbook 只给要点。
+    挂载统计来自 fc_gray_runs.skill_packs（P0-2 灰度观测），聚合失败静默降级为空。
+    """
+    enabled = (os.getenv("AGENT_SKILL_PACKS", "0") or "0").strip() == "1"
+    packs = []
+    if enabled:
+        from app.agent.skill_packs import list_packs, load_pack
+        for slug in list_packs():
+            p = load_pack(slug) or {}
+            if not p:
+                continue
+            trig = p.get("triggers") or {}
+            packs.append({
+                "slug": slug,
+                "kind": "capability" if p.get("kind") == "capability" else "industry",
+                "name": p.get("industry") or slug,
+                "version": p.get("version") or "",
+                "aliases": [a for a in (p.get("aliases") or []) if a][:6],
+                "triggers": {
+                    "intents": [i for i in (trig.get("intents") or []) if i],
+                    "keywords": [k for k in (trig.get("keywords") or []) if k][:6],
+                },
+                "playbook": [s for s in (p.get("playbook") or []) if s][:3],
+                "playbook_count": len(p.get("playbook") or []),
+            })
+        packs.sort(key=lambda x: (0 if x["kind"] == "industry" else 1, x["name"]))
+    stats_7d = {}
+    try:
+        import datetime as _dt
+        from app.agent.metrics import skill_pack_summary
+        _today = _dt.date.today()
+        for i in range(7):
+            for slug, cnt in (skill_pack_summary((_today - _dt.timedelta(days=i)).isoformat()) or {}).items():
+                stats_7d[slug] = stats_7d.get(slug, 0) + int(cnt)
+    except Exception as e:  # noqa: BLE001 - 观测数据失败不影响包清单
+        logger.warning("[agent/skill_packs] 挂载统计聚合失败（已忽略）: %s", e)
+    return {
+        "enabled": enabled,
+        "count": len(packs),
+        "packs": packs,
+        "mount_stats_7d": stats_7d,
+    }
+
+
 class EpisodeFeedbackRequest(BaseModel):
     """L4-P1/T2.2：情景记忆反馈（👍/👎）。value：1 点赞 / -1 点踩 / 0 清除。"""
     session_id: str

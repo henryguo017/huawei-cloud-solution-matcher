@@ -17,17 +17,20 @@ from typing import Any, Dict, List, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
-# 写操作工具 → 事实类别
+# 写操作工具 → 事实类别（crm_read：只读查询也纳入核验——防"未查询却报出客户数据"）
 FACT_KIND_BY_TOOL: Dict[str, str] = {
     "mcp__crm__client_add": "crm_write",
     "mcp__crm__client_update": "crm_write",
     "mcp__crm__client_delete": "crm_write",
+    "mcp__crm__client_list": "crm_read",
+    "mcp__crm__match_history": "crm_read",
     "generate_doc": "doc_export",
     "memory_write": "memory_write",   # L4 P2-4：自写记忆落库也是写操作，纳入完成态核验
 }
 
 KIND_LABEL = {
     "crm_write": "客户档案写入",
+    "crm_read": "客户档案查询",
     "doc_export": "文档导出",
     "memory_write": "笔记写入",
 }
@@ -43,6 +46,12 @@ _CLAIM_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"(?:已经|已)(?:为你|把它)?(?:把[^，。\n]{0,12})?(?:写入|记入|存入)(?:了)?(?:长期)?(?:笔记|记忆)"), "memory_write"),
     (re.compile(r"已(?:经|为你)?(?:记住|记下)(?:了)?(?:这|该|此)[^。；\n]{0,12}(?:条|信息|口径|事实|偏好)"), "memory_write"),
     (re.compile(r"(?:笔记)(?:已经|已)(?:保存|写入|落库)"), "memory_write"),
+    # crm_read（2026-09-16）：客户档案/历史方案的**数据性断言**——声称查到了具体数据，
+    # 但工具记录里没有成功的 CRM 读调用＝编造客户数据（比写幻觉更隐蔽）。刻意收窄到
+    # 第二人称占有/呈现句式，避免把"华为云客户案例显示…"这类公共资料表述误判。
+    (re.compile(r"你的?客户(?:档案|列表|名单|名录|资料)[^。；\n]{0,16}(?:共有|一共|包括|显示)"), "crm_read"),
+    (re.compile(r"(?:客户档案|客户列表|客户名单|历史方案|匹配记录|方案历史)[^。；\n]{0,6}(?:显示|如下)"), "crm_read"),
+    (re.compile(r"你(?:曾|曾经)?(?:给|为|向)[^。；\n]{0,12}(?:做|生成|提供|输出)过方案"), "crm_read"),
 ]
 
 _NEGATIVE_MARKERS = ("Error:", '"status": "error"', "你拒绝", "已跳过", "不允许", "参数不正确", "执行失败",
@@ -79,9 +88,12 @@ def build_fact_block(facts: List[Dict[str, str]]) -> str:
     """注入 system 的「宿主核验事实」块。空清单也要注入 —— 明确告诉模型"什么都还没执行"。"""
     if not facts:
         return (
-            "【宿主核验事实】本次运行**尚未**真实执行任何写操作（客户档案写入 / 文档导出 / 笔记写入均未发生）。\n"
+            "【宿主核验事实】本次运行**尚未**真实执行任何写操作或客户档案查询"
+            "（客户档案写入/查询、文档导出、笔记写入均未发生）。\n"
             "因此你**不得**在正文中表述「已保存」「已建档」「已生成文件」「已写入笔记/记忆」等完成态；"
-            "如需这些动作，应调用对应工具（会请用户确认），或表述为「待你确认后执行」。"
+            "也**不得**虚构「你的客户档案/历史方案」的具体数据（如需引用客户数据，"
+            "应调用 mcp__crm__client_list / mcp__crm__match_history 真实查询）；"
+            "如需这些动作，应调用对应工具（写操作会请用户确认），或表述为「待你确认后执行」。"
         )
     lines = []
     for f in facts:
@@ -113,6 +125,8 @@ def build_correction_instruction(missing: List[str], facts: List[Dict[str, str]]
         "【宿主完成态核验未通过】你在上一轮给出的正文中声称已完成：" + names
         + "，但宿主记录显示这些操作**并未真实执行**。\n"
         + ("本次真实执行成功的写操作：\n" + "\n".join(f"- {f.get('tool')}" for f in facts) + "\n" if facts else "本次没有任何写操作真实执行成功。\n")
-        + "请立即修正正文：把不实的完成态表述改为如实描述（例如「我可以为你导出 / 建档，确认后执行」），"
+        + "请立即修正正文：把不实的完成态表述改为如实描述"
+          "（写操作如「我可以为你导出 / 建档，确认后执行」；"
+          "客户数据如「我可以为你查询客户档案」，或改用真实工具结果），"
           "其余内容保持不变。只输出修正后的完整正文。"
     )

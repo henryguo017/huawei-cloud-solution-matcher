@@ -421,6 +421,10 @@
                                     '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-mail"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">通知</span>' +
                                 '</button>' +
+                                '<button class="ws-tool-btn" id="ws-pack-market" type="button" title="技能包市场（行业/能力包清单与挂载统计）" aria-label="技能包市场">' +
+                                    '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-gem"></use></svg></span>' +
+                                    '<span class="ws-tool-btn-label">技能包</span>' +
+                                '</button>' +
                             '</div>' +
                         '</div>' +
                         '<div class="ws-context-picker" id="ws-context-picker">' +
@@ -493,7 +497,8 @@
                 webToggleBtn: this.root.querySelector('#ws-web-toggle'),
                 autonomyToggleBtn: this.root.querySelector('#ws-autonomy-toggle'),
                 permSettingsBtn: this.root.querySelector('#ws-perm-settings'),
-                notifySettingsBtn: this.root.querySelector('#ws-notify-settings')
+                notifySettingsBtn: this.root.querySelector('#ws-notify-settings'),
+                packMarketBtn: this.root.querySelector('#ws-pack-market')
             };
             this._renderWelcome();
         },
@@ -651,6 +656,9 @@
             }
             if (this.els.notifySettingsBtn) {
                 this.els.notifySettingsBtn.addEventListener('click', function () { self._openNotifySettings(); });
+            }
+            if (this.els.packMarketBtn) {
+                this.els.packMarketBtn.addEventListener('click', function () { self._openSkillPacks(); });
             }
 
             // 方案 B：客户上下文选择器（放在主区输入框下方，点击展开下拉）
@@ -2735,6 +2743,88 @@
                 document.addEventListener('click', close, true);
             }, 0);
         },
+        /* 技能包市场（P2-8，2026-09-15）：行业/能力包清单 + 近 7 天挂载统计。
+           只读展示（挂载由 Agent 按意图自动匹配），不暴露 prompt_template。 */
+        _openSkillPacks: function () {
+            var self = this;
+            var root = this.root;
+            var old = root.querySelector('#ws-pack-pop');
+            if (old) { old.remove(); return; }
+            var token = this.userToken();
+            if (!token) { this._toast('请先登录', 'warning'); return; }
+
+            var pop = document.createElement('div');
+            pop.id = 'ws-pack-pop';
+            pop.className = 'ws-pack-pop';
+            pop.innerHTML = '<div class="ws-notify-bar-top"></div>' +
+                '<div class="ws-notify-inner">' +
+                    '<div class="ws-notify-head">' +
+                        '<div class="ws-notify-head-title"><span class="ws-notify-head-icon"><svg class="icon" aria-hidden="true"><use href="#i-gem"></use></svg></span>技能包市场</div>' +
+                        '<span class="ws-notify-close" id="ws-pack-close" title="关闭">×</span>' +
+                    '</div>' +
+                    '<div class="ws-notify-desc">行业包按客户行业自动挂载，能力包按任务动作（PPT/战局/T测算）自动挂载，两者可叠加生效。挂载由 Agent 在生成方案时自主完成，无需手动开关。</div>' +
+                    '<div id="ws-pack-body"><div class="ws-notify-loading">加载中…</div></div>' +
+                '</div>';
+            root.appendChild(pop);
+            pop.querySelector('#ws-pack-close').addEventListener('click', function () { pop.remove(); });
+
+            function kindBadge(kind) {
+                return kind === 'capability'
+                    ? '<span class="ws-pack-badge ws-pack-badge-cap">能力包</span>'
+                    : '<span class="ws-pack-badge ws-pack-badge-ind">行业包</span>';
+            }
+            function triggerTxt(p) {
+                var parts = [];
+                if (p.aliases && p.aliases.length) parts.push('行业词：' + p.aliases.join(' / '));
+                var t = p.triggers || {};
+                if (t.intents && t.intents.length) parts.push('意图：' + t.intents.join('/'));
+                if (t.keywords && t.keywords.length) parts.push('关键词：' + t.keywords.join(' / '));
+                return parts.join('<br>') || '（自动匹配）';
+            }
+            function cardHtml(p, mounts) {
+                var mountBadge = mounts > 0
+                    ? '<span class="ws-pack-mount">近7日挂载 ' + mounts + ' 次</span>'
+                    : '<span class="ws-pack-mount ws-pack-mount-zero">近7日未挂载</span>';
+                var pb = (p.playbook || []).map(function (s) {
+                    return '<li>' + escHtml(s) + '</li>';
+                }).join('');
+                var more = p.playbook_count > 3
+                    ? '<div class="ws-pack-more">等 ' + p.playbook_count + ' 条行业要点</div>'
+                    : '';
+                return '<div class="ws-pack-card" data-kind="' + p.kind + '">' +
+                    '<div class="ws-pack-card-head">' +
+                        '<span class="ws-pack-name">' + escHtml(p.name) + '</span>' +
+                        kindBadge(p.kind) + mountBadge +
+                    '</div>' +
+                    '<div class="ws-pack-meta">触发：' + triggerTxt(p) +
+                        (p.version ? '<br>版本：' + escHtml(p.version) : '') + '</div>' +
+                    (pb ? '<ul class="ws-pack-pb">' + pb + '</ul>' + more : '') +
+                '</div>';
+            }
+
+            fetch('/api/agent/skill_packs', { method: 'GET', headers: { 'Authorization': 'Bearer ' + token } })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
+            .then(function (d) {
+                var body = pop.querySelector('#ws-pack-body');
+                if (!d.enabled) {
+                    body.innerHTML = '<div class="ws-pack-empty">技能包功能未开启（服务端 AGENT_SKILL_PACKS=0）。开启后，行业与能力包会在方案生成时自动挂载。</div>';
+                    return;
+                }
+                if (!d.packs || !d.packs.length) {
+                    body.innerHTML = '<div class="ws-pack-empty">暂无可用技能包。</div>';
+                    return;
+                }
+                var stats = d.mount_stats_7d || {};
+                body.innerHTML = d.packs.map(function (p) {
+                    return cardHtml(p, stats[p.slug] || 0);
+                }).join('');
+            })
+            .catch(function (e) {
+                var body = pop.querySelector('#ws-pack-body');
+                if (body) body.innerHTML = '<div class="ws-pack-empty">加载失败：' + escHtml(String(e && e.message || e)) + '</div>';
+            });
+        },
+
         /* 消息通知绑定（飞书/钉钉，按账号隔离）：GET 列表 → 两张卡片 → 保存/测试/解绑 */
         _openNotifySettings: function () {
             var self = this;
