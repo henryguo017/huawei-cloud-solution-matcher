@@ -432,8 +432,14 @@
                                     '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-gem"></use></svg></span>' +
                                     '<span class="ws-tool-btn-label">技能包</span>' +
                                 '</button>' +
+                                /* 手机端「更多工具」入口（桌面 display:none）：低频按钮（用量/权限/通知/技能包）
+                                   由 _layoutToolbar() 移入浮层，行内只留高频 4 个，全部可见无横滑 */
+                                '<button class="ws-tool-btn ws-toolbar-more-btn" id="ws-toolbar-more" type="button" title="更多工具" aria-label="更多工具">' +
+                                    '<span class="ws-tool-icon"><svg class="icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg></span>' +
+                                '</button>' +
                             '</div>' +
                         '</div>' +
+                        '<div class="ws-toolbar-pop" id="ws-toolbar-pop" style="display:none;"></div>' +
                         '<div class="ws-context-picker" id="ws-context-picker">' +
                             '<span class="ws-context-picker-label">客户上下文</span>' +
                             '<button class="ws-context-pick-btn" id="ws-context-pick-btn" type="button">' +
@@ -579,6 +585,29 @@
                     setTimeout(function () { self._closeMobileSidebar(); }, 120);
                 }
             });
+
+            // ===== 手机端「更多工具」浮层（2026-09-24）：低频按钮收进 ⋯，行内只留高频 =====
+            var tbMore = root.querySelector('#ws-toolbar-more');
+            if (tbMore) tbMore.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var pop = root.querySelector('#ws-toolbar-pop');
+                if (pop) pop.style.display = (pop.style.display === 'none') ? 'flex' : 'none';
+            });
+            var tbPop = root.querySelector('#ws-toolbar-pop');
+            if (tbPop) tbPop.addEventListener('click', function (e) {
+                e.stopPropagation();
+                // 点浮层内任一动作按钮后自动收起（原 handler 走 els 绑定不受移动影响）
+                if (e.target.closest('.ws-tool-btn')) { var p = this; setTimeout(function () { p.style.display = 'none'; }, 150); }
+            });
+            if (!this._toolbarDocBound) {
+                this._toolbarDocBound = true;
+                document.addEventListener('click', function () {
+                    // 点浮层外任意处收起（init 可多次触发，旗标防重复监听）
+                    var pop = document.getElementById('ws-toolbar-pop');
+                    if (pop && pop.style.display !== 'none') pop.style.display = 'none';
+                });
+            }
+            this._layoutToolbar();
 
             root.querySelector('#ws-drawer-toggle').addEventListener('click', function () { self._toggleDrawer(); });
             root.querySelector('#ws-drawer-close').addEventListener('click', function () { self._toggleDrawer(); });
@@ -887,6 +916,7 @@
             if (narrow && !this.prevNarrow) this.drawerOpen = false;   // 进入窄屏自动折叠
             this.prevNarrow = narrow;
             this._updateDrawerState();
+            this._layoutToolbar();                                     // 跨越 820px 时重排工具栏（低频按钮进出浮层）
         },
         _toggleSidebar: function () {
             this.sidebarCollapsed = !this.sidebarCollapsed;
@@ -908,6 +938,23 @@
             var mask = this.root.querySelector('#ws-mobile-mask');
             if (sidebar) sidebar.classList.remove('mobile-open');
             if (mask) mask.classList.remove('show');
+        },
+        // ===== 工具栏布局（2026-09-24）：≤820px 把低频按钮移入「⋯」浮层，行内只留高频 4 个 =====
+        // 直接移动原按钮 DOM：事件绑定与 els 引用均保留；桌面端恢复回 toolbar（插回 ⋯ 之前）。
+        _layoutToolbar: function () {
+            var toolbar = this.root.querySelector('#ws-toolbar');
+            var pop = this.root.querySelector('#ws-toolbar-pop');
+            if (!toolbar || !pop) return;
+            var moreBtn = toolbar.querySelector('#ws-toolbar-more');
+            var lowIds = ['ws-ctx-usage', 'ws-perm-settings', 'ws-notify-settings', 'ws-pack-market'];
+            var mobile = window.innerWidth <= 820;
+            lowIds.forEach(function (id) {
+                var btn = document.getElementById(id);
+                if (!btn) return;
+                if (mobile && btn.parentElement !== pop) pop.appendChild(btn);
+                else if (!mobile && btn.parentElement !== toolbar && moreBtn) toolbar.insertBefore(btn, moreBtn);
+            });
+            if (!mobile) pop.style.display = 'none';   // 桌面强制收起浮层
         },
         _toggleDrawer: function () {
             this.drawerOpen = !this.drawerOpen;

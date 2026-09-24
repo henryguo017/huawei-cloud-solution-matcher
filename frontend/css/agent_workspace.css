@@ -2573,6 +2573,8 @@ body.view-agent .welcome-page {
 
 /* ---- 汉堡按钮：桌面端隐藏（默认态），≤820px 显示 ---- */
 .ws-mobile-menu-btn { display: none; }
+/* 「⋯更多工具」按钮：桌面工具栏一行 8 个放得下，仅 ≤820px 显示 */
+.ws-toolbar-more-btn { display: none; }
 .ws-chat-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 @media (max-width: 820px) {
@@ -2661,17 +2663,35 @@ body.view-agent .welcome-page {
     .ws-welcome-client { margin: 6px auto 0; }
     .ws-compose-hint, .ws-kb-status { font-size: 12px; }
 
-    /* ===== 工具栏：两行折行 → 单行横滑（省一行 ~46px，8 个按钮都可触达） ===== */
-    .ws-toolbar {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
-        -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
-        mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
-    }
-    .ws-toolbar::-webkit-scrollbar { display: none; }
+    /* ===== 工具栏：单行固定（2026-09-24 三轮：弃横滑——藏住的按钮不可见）
+       行内高频：附件/优化/联网/自主 + ⋯更多；低频（用量/权限/通知/技能包）由 JS 移入浮层 ===== */
+    .ws-toolbar { flex-wrap: nowrap; gap: 4px; }
     .ws-tool-btn { flex: none; }
+    /* ON 徽章行内隐藏：active 红底白字已承载开关状态，省 ~30px/个 防 375px 溢出（浮层内徽章保留） */
+    .ws-toolbar > .ws-tool-btn .ws-tool-badge { display: none !important; }
+    .ws-toolbar-more-btn { display: inline-flex; }
+
+    /* 「⋯更多工具」浮层：低频按钮竖排，右下弹出 */
+    .ws-toolbar-pop {
+        position: fixed;
+        right: 12px;
+        bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+        z-index: 1300;
+        flex-direction: column; gap: 2px;
+        min-width: 148px;
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+        padding: 6px;
+        animation: ws-perm-pop-in 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .ws-toolbar-pop .ws-tool-btn {
+        width: 100%; justify-content: flex-start;
+        height: 40px; border: none; background: transparent; border-radius: 9px;
+    }
+    .ws-toolbar-pop .ws-tool-btn:hover { background: rgba(0, 0, 0, 0.04); transform: none; box-shadow: none; }
+    .ws-toolbar-pop .ws-tool-badge { margin-left: auto; }
 
     /* ===== 消息流：留白收窄（气泡 max-width 78% 不变，天然适配） ===== */
     .ws-msg-wrap { padding: 12px 14px; }
@@ -2684,9 +2704,9 @@ body.view-agent .welcome-page {
     .ws-input-actions .voice-mic-btn svg { width: 18px; height: 18px; }
     .ws-input-bar { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
 
-    /* ===== 工具栏：触屏目标 40px，快捷场景条可横滑 ===== */
-    .ws-tool-btn { height: 40px; padding: 0 14px; font-size: 13px; border-radius: 20px; }
-    .ws-tool-btn .ws-tool-icon { width: 24px; height: 24px; }
+    /* ===== 工具栏：触屏目标 40px（2026-09-24 四轮压缩 padding 防 375px 行内溢出） ===== */
+    .ws-tool-btn { height: 40px; padding: 0 6px; gap: 4px; font-size: 12px; border-radius: 20px; }
+    .ws-tool-btn .ws-tool-icon { width: 22px; height: 22px; }
     .ws-quick-scene-chip { padding: 8px 14px; font-size: 13px; border-radius: 18px; }
 
     /* ===== 预览浮层：手机全屏化（顶部仍让位顶栏，胶囊切换可见） ===== */
