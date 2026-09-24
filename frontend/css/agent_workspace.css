@@ -14,6 +14,9 @@ body.view-agent   .classic-solution   { display: none !important; }
 body.view-agent   .main-content       { display: none !important; }
 body.view-agent   .site-footer        { display: none !important; }
 body.view-agent   .sidebar            { display: none !important; }
+/* 经典模式移动端底部导航（匹配/竞品/仪表盘…）在 Agent 视图无意义：
+   Agent 的导航在侧栏抽屉（汉堡菜单），底部导航残留会挤占一屏空间（2026-09-24 用户反馈） */
+body.view-agent   .mobile-bottom-nav  { display: none !important; }
 body.view-classic .workspace-solution { display: none !important; }
 
 /* ---------- Agent 模式专属皮肤微调（与经典模式共用 data-skin，同一套四主题色） ----------
@@ -2622,18 +2625,53 @@ body.view-agent .welcome-page {
     .ws-header-icon-btn { width: 40px; height: 40px; }
     .ws-header-icon-btn .icon { width: 18px; height: 18px; }
 
-    /* ===== 欢迎页：字号收敛、一屏放得下 ===== */
-    .ws-welcome { padding: 20px 14px; }
-    .ws-welcome-title { font-size: 1.5rem; }
-    .ws-welcome-sub { font-size: 0.9rem; }
+    /* ===== 欢迎页：一屏化压缩（2026-09-24 二轮：新对话页禁止上下翻滚） =====
+       预算（375×812）：顶栏 56 + 横幅 28 + 头部 46 + 输入区 ~110 ≈ 240，
+       欢迎区可用 ~570px，内容压到 ~380px 后垂直居中且无滚动 */
+    .ws-welcome { padding: 12px 16px; }
+    .ws-welcome-inner { gap: 14px; }
+    .ws-welcome-title { font-size: 1.35rem; margin-bottom: 4px; }
+    .ws-welcome-sub { font-size: 0.85rem; line-height: 1.55; }
     .ws-compose-card { padding: 14px 14px 12px; }
     .ws-compose-input { min-height: 48px; }
     .ws-compose-send { padding: 12px 26px; font-size: 15px; }
-    .ws-cap-pill {
-        padding: 12px 18px;
-        font-size: 14px;
-        border-radius: 22px;
+
+    /* 能力胶囊：3+1 换行 → 2×2 等宽网格，整齐且省高 */
+    .ws-caps-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        width: 100%;
+        max-width: 420px;
     }
+    .ws-cap-pill {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        padding: 11px 10px;
+        font-size: 13.5px;
+        border-radius: 20px;
+    }
+    .ws-cap-pill .icon { width: 15px; height: 15px; flex: none; }
+
+    /* 快捷场景条单行横滑（欢迎区如有渲染） */
+    .ws-scenes-row { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; scrollbar-width: none; }
+    .ws-scenes-row::-webkit-scrollbar { display: none; }
+    .ws-scene { flex: none; padding: 9px 14px; }
+
+    /* 客户条与提示行收窄 */
+    .ws-welcome-client { margin: 6px auto 0; }
+    .ws-compose-hint, .ws-kb-status { font-size: 12px; }
+
+    /* ===== 工具栏：两行折行 → 单行横滑（省一行 ~46px，8 个按钮都可触达） ===== */
+    .ws-toolbar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+        mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+    }
+    .ws-toolbar::-webkit-scrollbar { display: none; }
+    .ws-tool-btn { flex: none; }
 
     /* ===== 消息流：留白收窄（气泡 max-width 78% 不变，天然适配） ===== */
     .ws-msg-wrap { padding: 12px 14px; }
