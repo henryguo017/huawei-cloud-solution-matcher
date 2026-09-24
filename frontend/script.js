@@ -911,9 +911,10 @@ const ViewManager = {
     VIEW_KEY: 'huawei_view_preference',
     _current: undefined, // 运行时当前视图，用于生命周期判断
 
-    // 移动端锁定经典模式（2026-09-02 范式）：UA 命中手机关键词 或 视口 ≤820px 即判为移动端。
-    // 平板（含横屏）、手机一律只走经典模式，不显示切换胶囊、不可进入 Agent 视图。
-    // 单一判定源：PC 端才允许切换 Agent / 经典。
+    // 移动端判定（2026-09-24 解锁后保留）：UA 命中手机关键词 或 视口 ≤820px 即判为移动端。
+    // 历史：2026-09-02 范式曾用本判定把移动端锁死在经典模式；2026-09-24 起手机端开放
+    // Agent 视图（Agent 工作台自带 ≤820px 抽屉式响应式布局），本判定保留为单一判定源，
+    // 供后续移动端体验逻辑复用（当前 ViewManager 自身不再据此拦截）。
     isMobile() {
         const ua = navigator.userAgent || '';
         const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Windows Phone|HarmonyOS/i.test(ua);
@@ -922,14 +923,12 @@ const ViewManager = {
     },
 
     getView() {
-        // 移动端强制经典：忽略历史偏好，避免 PC 端曾选 Agent 后手机端误入 Agent
-        if (this.isMobile()) return 'classic';
+        // 2026-09-24 解锁：移动端不再强制经典，尊重历史偏好（无偏好仍默认经典）。
+        // 手机端进入 Agent 视图由 agent_workspace.css 的 ≤820px 断点负责布局适配。
         return localStorage.getItem(this.VIEW_KEY) || 'classic';
     },
 
     async setView(v) {
-        // 移动端锁定：任何切到 Agent 的尝试直接拦截（胶囊在移动端已被 CSS 隐藏，这里双保险）
-        if (this.isMobile() && v === 'agent') return;
         if (v === this._current) return; // 已是当前视图（点击当前胶囊项），跳过守卫不重复触发
         // 切换守卫：当前模式有长任务在跑则弹提醒，用户确认后才切（详见 shared_runtime.js）
         if (window.TaskGuard) {
@@ -974,17 +973,14 @@ const ViewManager = {
     },
 
     init() {
-        // 移动端锁定：加 body 类（CSS 据此隐藏胶囊）+ 强制经典视图（绕过守卫直接 _apply）
-        if (this.isMobile()) {
-            document.body.classList.add('mobile-lock-classic');
-            this._apply('classic');
-        } else {
-            // 硬刷后必须无条件应用：即便目标视图 == 已存值，也要确保 body 类已设置
-            // （setView 会在 v===_current 时早退，故这里直接走 _apply 绕过守卫）
-            this._apply(this.getView());
-        }
+        // 2026-09-24 解锁：移动端不再加 mobile-lock-classic / 强制经典视图，
+        // 统一按历史偏好应用视图（无偏好默认 classic）。手机端 Agent 布局由
+        // agent_workspace.css ≤820px 断点（侧栏抽屉化）承接。
+        // 硬刷后必须无条件应用：即便目标视图 == 已存值，也要确保 body 类已设置
+        // （setView 会在 v===_current 时早退，故这里直接走 _apply 绕过守卫）
+        this._apply(this.getView());
 
-        // 顶栏切换胶囊：点击对应选项 → 切换视图（移动端胶囊已被 CSS 隐藏，点击实际不会发生）
+        // 顶栏切换胶囊：点击对应选项 → 切换视图（移动端胶囊紧凑化显示，点击可切换）
         document.querySelectorAll('.view-option').forEach(btn => {
             btn.addEventListener('click', () => this.setView(btn.dataset.view));
         });

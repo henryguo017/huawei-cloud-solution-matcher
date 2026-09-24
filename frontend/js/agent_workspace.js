@@ -352,7 +352,12 @@
                     '</div>' +
                     '<div class="ws-main">' +
                         '<div class="ws-chat-header">' +
-                            '<span class="ws-title" id="ws-title">新对话</span>' +
+                            '<div class="ws-chat-header-left">' +
+                                '<button class="ws-mobile-menu-btn" id="ws-mobile-menu" type="button" title="菜单" aria-label="打开菜单">' +
+                                    '<svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>' +
+                                '</button>' +
+                                '<span class="ws-title" id="ws-title">新对话</span>' +
+                            '</div>' +
                             '<span class="ws-readonly-badge" id="ws-readonly-badge" style="display:none;">只读 · 已归档</span>' +
                             '<div class="ws-header-actions">' +
                                 '<button class="ws-header-icon-btn" id="ws-drawer-toggle" type="button" title="方案预览" aria-label="方案预览">' +
@@ -463,6 +468,7 @@
                         '</div>' +
                     '</div>' +
                     '<div class="ws-drawer-mask" id="ws-drawer-mask"></div>' +
+                    '<div class="ws-mobile-mask" id="ws-mobile-mask"></div>' +
                 '</div>';
             this.els = {
                 title: this.root.querySelector('#ws-title'),
@@ -555,6 +561,22 @@
                 this.els.archiveEntry.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); self._openArchiveModal(); } });
             }
             root.querySelector('#ws-sidebar-toggle').addEventListener('click', function () { self._toggleSidebar(); });
+
+            // ===== 手机端抽屉（2026-09-24 一期）：汉堡唤出侧栏，点遮罩/菜单交互后自动收起 =====
+            var mmBtn = root.querySelector('#ws-mobile-menu');
+            if (mmBtn) mmBtn.addEventListener('click', function () { self._toggleMobileSidebar(); });
+            var mmMask = root.querySelector('#ws-mobile-mask');
+            if (mmMask) mmMask.addEventListener('click', function () { self._closeMobileSidebar(); });
+            var wsMenu = root.querySelector('.ws-menu');
+            if (wsMenu) wsMenu.addEventListener('click', function (e) {
+                // 手机抽屉内菜单动作项（新建对话/能力项/历史对话/归档入口）交互后自动收起抽屉；
+                // 能力组折叠头（#ws-cap-toggle）是纯展开交互，不关抽屉（用户还要继续点组内能力项）；
+                // 120ms 延迟让点击反馈先渲染，桌面端（>820px）完全无感知
+                if (window.innerWidth <= 820) {
+                    if (e.target.closest('#ws-cap-toggle')) return;
+                    setTimeout(function () { self._closeMobileSidebar(); }, 120);
+                }
+            });
 
             root.querySelector('#ws-drawer-toggle').addEventListener('click', function () { self._toggleDrawer(); });
             root.querySelector('#ws-drawer-close').addEventListener('click', function () { self._toggleDrawer(); });
@@ -829,7 +851,9 @@
         _hideWelcomeChrome: function () {
             // 欢迎态只隐藏 chat-header（已用 ws-welcome 居中标题替代），不隐藏 inputBar 与 toolbar，
             // 这样新话题页也能看到附件/语音等工具栏；compose 卡仅作欢迎引导填充
-            if (this.els.chatHeader) this.els.chatHeader.style.display = 'none';
+            // 手机端（≤820px）例外：保留 chat-header —— 汉堡菜单是侧栏抽屉唯一入口，
+            // 且透明背景 46px 不破坏全白欢迎页；桌面端维持隐藏
+            if (this.els.chatHeader) this.els.chatHeader.style.display = (window.innerWidth <= 820) ? '' : 'none';
             if (this.els.title) this.els.title.style.display = 'none';
         },
         /* 对话态：显示 Agent 顶栏、底部输入框、上下文选择器与顶栏标题 */
@@ -866,6 +890,22 @@
             this.sidebarCollapsed = !this.sidebarCollapsed;
             var sidebar = this.root.querySelector('.ws-sidebar');
             if (sidebar) sidebar.classList.toggle('collapsed', this.sidebarCollapsed);
+        },
+        // ===== 手机端抽屉（2026-09-24 一期）：≤820px 时侧栏变抽屉 =====
+        // CSS（agent_workspace.css ≤820px 断点）负责把 .ws-sidebar 移出屏幕；
+        // .mobile-open 类控制滑入，遮罩同步显隐。桌面端类名不会被添加。
+        _toggleMobileSidebar: function () {
+            var sidebar = this.root.querySelector('.ws-sidebar');
+            var mask = this.root.querySelector('#ws-mobile-mask');
+            if (!sidebar) return;
+            var open = sidebar.classList.toggle('mobile-open');
+            if (mask) mask.classList.toggle('show', open);
+        },
+        _closeMobileSidebar: function () {
+            var sidebar = this.root.querySelector('.ws-sidebar');
+            var mask = this.root.querySelector('#ws-mobile-mask');
+            if (sidebar) sidebar.classList.remove('mobile-open');
+            if (mask) mask.classList.remove('show');
         },
         _toggleDrawer: function () {
             this.drawerOpen = !this.drawerOpen;

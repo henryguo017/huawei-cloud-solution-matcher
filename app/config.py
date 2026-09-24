@@ -178,9 +178,11 @@ MCP_SERVERS = os.getenv("MCP_SERVERS", "")
 # 设计文档：docs/agent-architecture-fc-2026-09-11.md
 #
 # AGENT_RUNTIME：服务端默认引擎（"fc"=原生运行时 / "legacy"=老两阶段文本管线）。
-#   默认 legacy —— 任何未显式声明 runtime 的调用方（如经典模式 /agent/match*）行为与今天完全一致。
-#   Agent 工作台（/agent/chat）由前端显式下发 runtime 覆盖，故翻此默认值不会波及经典模式。
-AGENT_RUNTIME = os.getenv("AGENT_RUNTIME", "legacy")
+#   2026-09-24 灰度收官：默认值 legacy → fc。依据：前端 9-16 起 Agent 工作台全量下发
+#   runtime=fc（线上事实全量 8 天+，A8=6/6、A10=1.0 门禁证据齐），且 FC 未声明 runtime
+#   的调用方（经典模式 /agent/match*）仍走 legacy 分支不受影响。回退开关保留：
+#   env AGENT_RUNTIME=legacy + restart 即回到老管线。
+AGENT_RUNTIME = os.getenv("AGENT_RUNTIME", "fc")
 
 # 运行时守卫（guards）：只做硬边界保护，不替模型做任务决策。
 # L4-P2（2026-09-13 长程化）：轮次 16 → **64**。依据：L3 判据要求"跑通一个 ≥30 轮的任务"，

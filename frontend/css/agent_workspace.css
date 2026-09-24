@@ -2552,3 +2552,110 @@ body.view-agent .welcome-page {
     background: color-mix(in srgb, var(--primary-color) 14%, transparent);
     color: var(--primary-color);
 }
+
+/* =========================================================================
+ * 手机端适配一期（2026-09-24）：≤820px 断点（与 ViewManager.isMobile() 阈值一致）
+ * ------------------------------------------------------------------------
+ * 范围：对话流全链路可用（欢迎页 / 消息流 / 输入区 / 工具栏 / 侧栏抽屉 / 预览浮层）。
+ * 布局策略：侧栏 220px 常驻列 → 左滑抽屉（汉堡唤出 + 遮罩）；主区全宽。
+ * 触屏纪律：可点目标 ≥40px；输入框字号 ≥16px（防 iOS 聚焦自动放大）；
+ *           底部输入栏预留 safe-area（iPhone Home 指示条）。
+ * 预览抽屉 / 技能包 / 通知弹窗在手机端贴边全宽化。
+ * 注意：本断点只影响 Agent 工作台自身 + Agent 视图下的顶栏缩进，经典模式零改动。
+ * ========================================================================= */
+
+/* ---- 汉堡按钮：桌面端隐藏（默认态），≤820px 显示 ---- */
+.ws-mobile-menu-btn { display: none; }
+.ws-chat-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+@media (max-width: 820px) {
+
+    /* ===== 顶栏缩进清零：Agent 侧栏在手机端是抽屉，不再常驻让位 ===== */
+    body.view-agent .topbar { padding-left: 12px; padding-right: 12px; }
+    body.view-agent #update-ticker { padding-left: 12px; }
+
+    /* ===== 侧栏 → 左滑抽屉 ===== */
+    .ws-sidebar {
+        width: min(80vw, 300px);
+        transform: translateX(-105%);
+        transition: transform .28s cubic-bezier(.22, .61, .36, 1);
+        box-shadow: none;
+    }
+    .ws-sidebar.mobile-open {
+        transform: translateX(0);
+        box-shadow: 8px 0 32px rgba(0, 0, 0, 0.35);
+    }
+    /* 兜底：若用户在 PC 窄窗口折叠过侧栏（collapsed 状态），手机端仍保持抽屉全宽 */
+    .ws-sidebar.collapsed { width: min(80vw, 300px); }
+    /* 抽屉内右上的"收起"按钮无意义（遮罩/菜单交互即关闭），隐藏避免误触 */
+    .ws-sidebar .ws-sidebar-collapse-btn { display: none; }
+
+    /* 遮罩：默认隐藏，抽屉打开时显示（z-index 低于侧栏 1001、高于主区） */
+    .ws-mobile-mask {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 1000;
+    }
+    .ws-mobile-mask.show { display: block; }
+
+    /* 汉堡按钮：触屏 40px，华为红点缀 */
+    .ws-mobile-menu-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 40px; height: 40px; flex: 0 0 auto;
+        background: transparent; border: none; border-radius: 10px;
+        color: var(--text-primary); cursor: pointer;
+        transition: background var(--transition-fast);
+    }
+    .ws-mobile-menu-btn:active { background: rgba(0, 0, 0, 0.06); }
+    .ws-mobile-menu-btn .icon { width: 20px; height: 20px; stroke-width: 2.4; }
+
+    /* ===== 主区与头部 ===== */
+    .ws-main { margin-left: 0; }
+    .ws-sidebar.collapsed ~ .ws-main { margin-left: 0; }
+    .ws-chat-header { height: 46px; padding: 0 8px; }
+    .ws-title { font-size: 0.95rem; }
+    .ws-header-icon-btn { width: 40px; height: 40px; }
+    .ws-header-icon-btn .icon { width: 18px; height: 18px; }
+
+    /* ===== 欢迎页：字号收敛、一屏放得下 ===== */
+    .ws-welcome { padding: 20px 14px; }
+    .ws-welcome-title { font-size: 1.5rem; }
+    .ws-welcome-sub { font-size: 0.9rem; }
+    .ws-compose-card { padding: 14px 14px 12px; }
+    .ws-compose-input { min-height: 48px; }
+    .ws-compose-send { padding: 12px 26px; font-size: 15px; }
+    .ws-cap-pill {
+        padding: 12px 18px;
+        font-size: 14px;
+        border-radius: 22px;
+    }
+
+    /* ===== 消息流：留白收窄（气泡 max-width 78% 不变，天然适配） ===== */
+    .ws-msg-wrap { padding: 12px 14px; }
+
+    /* ===== 输入区：16px 防 iOS 聚焦缩放 + 触屏目标 + 安全区 ===== */
+    .ws-input { font-size: 16px; }               /* 0.95rem≈15.2px 会触发 iOS 自动放大，钉 16px */
+    .ws-send-btn { width: 40px; height: 40px; }
+    .ws-send-btn .icon { width: 18px; height: 18px; }
+    .ws-input-actions .voice-mic-btn { width: 40px; height: 40px; }
+    .ws-input-actions .voice-mic-btn svg { width: 18px; height: 18px; }
+    .ws-input-bar { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+
+    /* ===== 工具栏：触屏目标 40px，快捷场景条可横滑 ===== */
+    .ws-tool-btn { height: 40px; padding: 0 14px; font-size: 13px; border-radius: 20px; }
+    .ws-tool-btn .ws-tool-icon { width: 24px; height: 24px; }
+    .ws-quick-scene-chip { padding: 8px 14px; font-size: 13px; border-radius: 18px; }
+
+    /* ===== 预览浮层：手机全屏化（顶部仍让位顶栏，胶囊切换可见） ===== */
+    .ws-drawer { width: 100vw; }
+    .ws-drawer.closed { right: -102vw; }
+    .ws-drawer-body { padding: 14px; }
+
+    /* ===== 技能包 / 通知弹窗：贴边全宽化 ===== */
+    .ws-pack-pop,
+    .ws-notify-pop {
+        left: 12px; right: 12px; width: auto;
+        bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+    }
+}
