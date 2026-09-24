@@ -385,7 +385,9 @@
                             '<div class="ws-input-row ws-input-row-top">' +
                                 '<div class="ws-input-wrap">' +
                                     '<textarea id="ws-input" class="ws-input" rows="1" autocomplete="off" ' +
-                                        'placeholder="输入需求，Shift+Enter 换行，Enter 发送（如：帮我在制造业客户做设备预测性维护方案匹配）"></textarea>' +
+                                        /* 手机/窄窗（≤820px）placeholder 换短文案：长示例句在窄输入框里
+                                           会被渲染成尾段碎片（"…预测性维护方案匹配)"），观感像残留脏数据 */
+                                        'placeholder="' + (window.innerWidth <= 820 ? '输入需求，Enter 发送' : '输入需求，Shift+Enter 换行，Enter 发送（如：帮我在制造业客户做设备预测性维护方案匹配）') + '"></textarea>' +
                                     '<span class="ws-input-count" id="ws-input-count">0 / ' + MAX_INPUT + '</span>' +
                                     '<div class="ws-input-actions" id="ws-input-actions">' +
                                         /* voice-input.js 注入的 .voice-mic-btn 出现在这里（target=.ws-input-actions），位于发送按钮之前 */

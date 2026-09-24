@@ -12895,5 +12895,9 @@ table tbody tr:hover {
         min-height: 32px;          /* 触屏目标下限 */
     }
     #view-toggle .view-option .icon { width: 12px; height: 12px; }
+
+    /* 滚动横幅紧凑化：窄屏下 0.8rem 长句信息密度过大，缩字号收间距 */
+    .update-ticker { height: 28px; font-size: 12px; gap: 8px; padding: 0 10px; }
+    .update-ticker-item { padding: 0 18px; }
 }
 
