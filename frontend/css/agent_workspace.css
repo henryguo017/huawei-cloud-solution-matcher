@@ -2663,13 +2663,14 @@ body.view-agent .welcome-page {
     .ws-welcome-client { margin: 6px auto 0; }
     .ws-compose-hint, .ws-kb-status { font-size: 12px; }
 
-    /* ===== 工具栏：单行固定（2026-09-24 三轮：弃横滑——藏住的按钮不可见）
+    /* ===== 工具栏：单行固定（2026-09-24 三轮：弃横滑——藏住的按钮不可见；四轮二改：行内铺满整行）
        行内高频：附件/优化/联网/自主 + ⋯更多；低频（用量/权限/通知/技能包）由 JS 移入浮层 ===== */
-    .ws-toolbar { flex-wrap: nowrap; gap: 4px; }
-    .ws-tool-btn { flex: none; }
+    .ws-toolbar { flex-wrap: nowrap; gap: 5px; }
+    /* 带字 4 键均分剩余宽度（铺满不留白），⋯ 固定窄宽；内容居中比例均匀 */
+    .ws-toolbar > .ws-tool-btn { flex: 1 1 0; justify-content: center; min-width: 0; }
+    .ws-toolbar > .ws-toolbar-more-btn { flex: 0 0 44px; display: inline-flex; }
     /* ON 徽章行内隐藏：active 红底白字已承载开关状态，省 ~30px/个 防 375px 溢出（浮层内徽章保留） */
     .ws-toolbar > .ws-tool-btn .ws-tool-badge { display: none !important; }
-    .ws-toolbar-more-btn { display: inline-flex; }
 
     /* 「⋯更多工具」浮层：低频按钮竖排，右下弹出 */
     .ws-toolbar-pop {
