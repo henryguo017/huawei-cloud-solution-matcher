@@ -752,7 +752,8 @@ body.view-agent .theme-label { margin-bottom: 8px; }
     padding: 0 16px;
     flex-shrink: 0;
 }
-.ws-title { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
+/* 标题单行省略：会话标题=问题摘要，窄屏换行会撑破 40px header 盖到消息流上（2026-10-06 线上实拍发现） */
+.ws-title { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
 .ws-header-actions { display: flex; align-items: center; gap: 2px; }
 .ws-header-icon-btn {
     width: 30px; height: 30px;
